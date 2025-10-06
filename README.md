@@ -1,50 +1,169 @@
-# Welcome to your Expo app 👋
+# 📷 Camera App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Um aplicativo de câmera moderno e minimalista desenvolvido com React Native e Expo, com controles intuitivos e interface elegante.
 
-## Get started
+## ✨ Características
 
-1. Install dependencies
+- 📸 Captura de fotos em alta qualidade
+- 🔄 Alternância entre câmera frontal e traseira
+- ⚡ Controle de flash (ligado/desligado)
+- 🎯 Controle de zoom com dial interativo e feedback háptico
+- 💾 Salvamento automático na galeria
+- 🎨 Interface moderna com animações fluidas
+- 📱 Suporte para iOS e Android
 
-   ```bash
-   npm install
-   ```
+## 🎮 Funcionalidades Principais
 
-2. Start the app
+### Controle de Zoom Interativo
+O app possui um dial de zoom único que oferece:
+- Controle preciso de zoom através de gestos de arrastar
+- Feedback háptico ao ajustar o zoom
+- Animações suaves e responsivas
+- Indicador visual com linhas que aumentam conforme a proximidade do centro
 
-   ```bash
-   npx expo start
-   ```
+### Interface Animada
+- Transições suaves entre modos de controle
+- Botão de captura com efeito neon
+- Animações de fade e translação para melhor UX
 
-In the output, you'll find options to open the app in a
+## 🚀 Começando
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Pré-requisitos
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- Node.js (v14 ou superior)
+- npm ou yarn
+- Expo CLI
+- Dispositivo físico ou emulador iOS/Android
 
-## Get a fresh project
+### Instalação
 
-When you're ready, run:
-
+1. Clone o repositório:
 ```bash
-npm run reset-project
+git clone <url-do-repositorio>
+cd camera
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Instale as dependências:
+```bash
+npm install
+```
 
-## Learn more
+3. Inicie o projeto:
+```bash
+npm start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+4. Execute no dispositivo:
+```bash
+# Para Android
+npm run android
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+# Para iOS
+npm run ios
+```
 
-## Join the community
+## 📱 Permissões Necessárias
 
-Join our community of developers creating universal apps.
+O aplicativo requer as seguintes permissões:
+- **Câmera**: Para capturar fotos
+- **Microfone**: Para gravação de áudio (se implementado)
+- **Galeria/Media Library**: Para salvar fotos capturadas
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+As permissões são solicitadas automaticamente na primeira execução.
+
+## 🛠️ Tecnologias Utilizadas
+
+- **React Native** (0.81.4) - Framework principal
+- **Expo** (~54.0.10) - Plataforma de desenvolvimento
+- **expo-camera** (^17.0.8) - API de câmera
+- **expo-haptics** (~15.0.7) - Feedback tátil
+- **expo-media-library** (^18.2.0) - Gerenciamento de mídia
+- **@expo/vector-icons** - Ícones da interface
+- **Animated API** - Animações nativas
+
+## 📂 Estrutura do Projeto
+
+```
+camera/
+├── app/
+│   ├── components/
+│   │   ├── ExposureDialFinal.jsx    # Componente de controle de zoom
+│   │   └── shutter.jsx               # Botão de captura
+│   ├── _layout.tsx                   # Layout principal
+│   └── index.jsx                     # Tela principal da câmera
+├── assets/                           # Imagens e recursos
+├── app.json                          # Configurações do Expo
+└── package.json                      # Dependências do projeto
+```
+
+## 🎯 Componentes Principais
+
+### ExposureDialFinal
+Dial interativo para controle de zoom com:
+- 41 linhas de marcação
+- Escala dinâmica baseada na distância do centro
+- Feedback háptico diferenciado para marcações principais e secundárias
+- Suporte a gestos Pan Responder
+
+### Shutter
+Botão de captura estilizado com:
+- Design minimalista com efeito neon laranja
+- Feedback háptico ao tocar
+- Animação de sombra para destaque visual
+
+## 🎨 Personalização
+
+### Cores do Tema
+As principais cores podem ser ajustadas nos arquivos de estilo:
+- Botão shutter: `#ffaa00ff` (laranja neon)
+- Ponteiro do dial: `#ff006e` (rosa)
+- Background: `#000` (preto)
+
+### Configurações da Câmera
+No arquivo `app.json`, você pode personalizar:
+- Mensagens de permissão
+- Ícones e splash screen
+- Configurações de build para iOS/Android
+
+## 📝 Scripts Disponíveis
+
+```bash
+npm start          # Inicia o servidor de desenvolvimento
+npm run android    # Executa no Android
+npm run ios        # Executa no iOS
+npm run web        # Executa na web
+npm run lint       # Executa o linter
+```
+
+## 🐛 Problemas Conhecidos
+
+- O zoom máximo varia de acordo com o dispositivo
+- Algumas funcionalidades podem ter comportamento diferente entre iOS e Android
+- O controle de zoom não está disponível em todos os dispositivos
+
+## 🤝 Contribuindo
+
+Contribuições são bem-vindas! Sinta-se à vontade para:
+1. Fazer fork do projeto
+2. Criar uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abrir um Pull Request
+
+## 📄 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
+
+## 👤 Autor
+
+Desenvolvido com ❤️ usando Expo e React Native
+
+## 🙏 Agradecimentos
+
+- Expo team pela excelente plataforma
+- Comunidade React Native
+- Todos os contribuidores de bibliotecas open source utilizadas
+
+---
+
+**Nota**: Este aplicativo requer um dispositivo físico para melhor experiência, pois emuladores podem ter limitações com recursos de câmera e feedback háptico.
