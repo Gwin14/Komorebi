@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.camera"
     },
     "android": {
       "adaptiveIcon": {
@@ -37,6 +38,14 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow App massa to access your camera",
+          "microphonePermission": "Allow App massa to access your microphone",
+          "recordAudioAndroid": true
         }
       ]
     ],
