@@ -12,11 +12,16 @@ import {
 } from "react-native";
 import ExposureDialFinal from "./components/ExposureDialFinal";
 import Shutter from "./components/shutter";
+import {
+  applyLUTToImage,
+  loadCubeLUT,
+  LUTProcessor,
+} from "./utils/lutProcessor";
 
 export default function App() {
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
-  const [zoom, setZoom] = useState(0); // valor entre 0 e 1
+  const [zoom, setZoom] = useState(0);
   const cameraRef = useRef(null);
 
   const [dial, setDial] = useState(false);
@@ -25,7 +30,23 @@ export default function App() {
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
 
-  const [maxZoom, setMaxZoom] = useState(1); // zoom máximo do dispositivo
+  const [maxZoom, setMaxZoom] = useState(1);
+  const [lutLoaded, setLutLoaded] = useState(false);
+
+  // Estado para processamento do LUT
+  const [processingData, setProcessingData] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // Carregar o LUT na inicialização
+  useEffect(() => {
+    (async () => {
+      const loaded = await loadCubeLUT(require("../assets/luts/filtro.CUBE"));
+      setLutLoaded(!!loaded);
+      if (loaded) {
+        console.log("LUT carregado com sucesso!");
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -41,7 +62,7 @@ export default function App() {
           const devices = await cameraRef.current.getAvailableCameraDevices();
           const currentDevice = devices.find((d) => d.position === facing);
           if (currentDevice && currentDevice.zoom) {
-            setMaxZoom(currentDevice.zoom.max); // pega limite máximo
+            setMaxZoom(currentDevice.zoom.max);
           }
         } catch (e) {
           console.log("Erro ao obter zoom da câmera:", e);
@@ -70,16 +91,75 @@ export default function App() {
   }
 
   const takePicture = async () => {
-    if (cameraRef.current) {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: false,
-      });
+    if (cameraRef.current && !isProcessing) {
+      try {
+        setIsProcessing(true);
 
-      if (hasMediaPermission) {
-        await MediaLibrary.saveToLibraryAsync(photo.uri);
+        // Tirar a foto
+        const photo = await cameraRef.current.takePictureAsync({
+          quality: 1,
+          skipProcessing: false,
+        });
+
+        console.log("Foto capturada:", photo.uri);
+
+        // Aplicar LUT se estiver carregado
+        if (lutLoaded) {
+          console.log("Preparando para aplicar LUT...");
+          const processingInfo = await applyLUTToImage(photo.uri);
+
+          if (processingInfo.needsProcessing) {
+            // Iniciar processamento via WebView
+            setProcessingData(processingInfo);
+          } else {
+            // Salvar sem LUT
+            if (hasMediaPermission) {
+              await MediaLibrary.saveToLibraryAsync(photo.uri);
+              console.log("Foto salva na galeria (sem LUT)!");
+            }
+            setIsProcessing(false);
+          }
+        } else {
+          // Salvar sem LUT
+          if (hasMediaPermission) {
+            await MediaLibrary.saveToLibraryAsync(photo.uri);
+            console.log("Foto salva na galeria!");
+          }
+          setIsProcessing(false);
+        }
+      } catch (error) {
+        console.error("Erro ao tirar foto:", error);
+        setIsProcessing(false);
       }
     }
+  };
+
+  const handleProcessed = async (processedUri) => {
+    try {
+      console.log("LUT aplicado com sucesso!");
+
+      // Salvar na galeria
+      if (hasMediaPermission) {
+        await MediaLibrary.saveToLibraryAsync(processedUri);
+        console.log("Foto com LUT salva na galeria!");
+      }
+    } catch (error) {
+      console.error("Erro ao salvar foto processada:", error);
+    } finally {
+      setProcessingData(null);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleProcessingError = (error) => {
+    console.error("Erro no processamento:", error);
+    // Salvar foto original em caso de erro
+    if (processingData && processingData.originalUri && hasMediaPermission) {
+      MediaLibrary.saveToLibraryAsync(processingData.originalUri);
+      console.log("Foto original salva após erro no processamento");
+    }
+    setProcessingData(null);
+    setIsProcessing(false);
   };
 
   const toggleDial = () => {
@@ -110,6 +190,15 @@ export default function App() {
 
   return (
     <View style={styles.container}>
+      {/* WebView invisível para processar LUT */}
+      {processingData && (
+        <LUTProcessor
+          imageData={processingData}
+          onProcessed={handleProcessed}
+          onError={handleProcessingError}
+        />
+      )}
+
       {/* Barra superior */}
       <View style={styles.buttonsContainer}>
         <TouchableOpacity style={styles.button} onPress={toggleFlash}>
@@ -131,13 +220,15 @@ export default function App() {
       </View>
 
       {/* Preview da câmera */}
-      <CameraView
-        style={styles.camera}
-        facing={facing}
-        ref={cameraRef}
-        flash={flash}
-        zoom={zoom}
-      />
+      <View style={styles.cameraWrapper}>
+        <CameraView
+          style={styles.camera}
+          facing={facing}
+          ref={cameraRef}
+          flash={flash}
+          zoom={zoom}
+        />
+      </View>
 
       {/* Botões inferiores */}
       <View style={styles.shutterContainer}>
@@ -184,11 +275,22 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000", justifyContent: "center" },
-  camera: {
+  cameraWrapper: {
+    position: "absolute",
+    top: 120,
+    width: "100%",
+    height: undefined,
     aspectRatio: 3 / 4,
-    borderRadius: 10,
     overflow: "hidden",
-    transform: [{ translateY: -40 }],
+    borderRadius: 10,
+  },
+
+  camera: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
   },
   shutterContainer: {
     position: "absolute",
@@ -206,4 +308,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   button: { flex: 1, alignItems: "center" },
+  message: { textAlign: "center", paddingBottom: 10, color: "white" },
+  processingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+  },
+  processingText: {
+    color: "white",
+    marginTop: 16,
+    fontSize: 16,
+  },
 });

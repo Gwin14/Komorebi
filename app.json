@@ -47,7 +47,8 @@
           "microphonePermission": "Allow App massa to access your microphone",
           "recordAudioAndroid": true
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": true,
