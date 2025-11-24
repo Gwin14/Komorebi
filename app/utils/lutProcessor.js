@@ -3,7 +3,38 @@ import * as FileSystem from "expo-file-system/legacy";
 import React, { useRef } from "react";
 import { WebView } from "react-native-webview";
 
-let cachedCubeData = null;
+// Cache para múltiplos LUTs
+const cachedLUTs = {};
+
+// Lista de LUTs disponíveis - adicione seus arquivos aqui
+export const AVAILABLE_LUTS = [
+  {
+    id: "none",
+    name: "Sem Filtro",
+    file: null,
+  },
+  {
+    id: "filtro1",
+    name: "Filtro 1",
+    file: require("../../assets/luts/darkGold.CUBE"),
+  },
+  {
+    id: "filtro2",
+    name: "Filtro 2",
+    file: require("../../assets/luts/wesAnderson.CUBE"),
+  },
+  // Adicione mais LUTs aqui conforme adicionar arquivos na pasta
+  // {
+  //   id: 'vintage',
+  //   name: 'Vintage',
+  //   file: require('../../assets/luts/vintage.CUBE'),
+  // },
+  // {
+  //   id: 'cold',
+  //   name: 'Frio',
+  //   file: require('../../assets/luts/cold.CUBE'),
+  // },
+];
 
 // Parsear arquivo CUBE
 const parseCubeFile = (text) => {
@@ -53,21 +84,45 @@ const parseCubeFile = (text) => {
   return { size, lut, domainMin, domainMax };
 };
 
-// Carregar LUT
+// Carregar um LUT específico
 export const loadCubeLUT = async (cubeFilePath) => {
+  if (!cubeFilePath) return null;
+
   try {
     const asset = Asset.fromModule(cubeFilePath);
     await asset.downloadAsync();
 
     const cubeContent = await FileSystem.readAsStringAsync(asset.localUri);
-    cachedCubeData = parseCubeFile(cubeContent);
+    const lutData = parseCubeFile(cubeContent);
 
-    console.log(`LUT carregado: ${cachedCubeData.size}³ entries`);
-    return cachedCubeData;
+    console.log(`LUT carregado: ${lutData.size}³ entries`);
+    return lutData;
   } catch (error) {
     console.error("Erro ao carregar LUT:", error);
     return null;
   }
+};
+
+// Carregar todos os LUTs disponíveis
+export const loadAllLUTs = async () => {
+  console.log("Carregando todos os LUTs...");
+
+  for (const lut of AVAILABLE_LUTS) {
+    if (lut.file && !cachedLUTs[lut.id]) {
+      const lutData = await loadCubeLUT(lut.file);
+      if (lutData) {
+        cachedLUTs[lut.id] = lutData;
+        console.log(`LUT "${lut.name}" carregado com sucesso`);
+      }
+    }
+  }
+
+  console.log(`Total de LUTs carregados: ${Object.keys(cachedLUTs).length}`);
+};
+
+// Obter um LUT específico do cache
+export const getCachedLUT = (lutId) => {
+  return cachedLUTs[lutId] || null;
 };
 
 // Gerar HTML para processar a imagem com LUT
@@ -123,7 +178,6 @@ const generateProcessingHTML = (base64Image, cube) => {
         const alpha = data[i + 3] / 255;
         if (alpha === 0) continue;
         
-        // Unpremultiply alpha
         let r = data[i] / 255;
         let g = data[i + 1] / 255;
         let b = data[i + 2] / 255;
@@ -134,17 +188,14 @@ const generateProcessingHTML = (base64Image, cube) => {
           b = b / alpha;
         }
         
-        // Aplicar domain
         r = clamp((r - domainMin[0]) / (domainMax[0] - domainMin[0]));
         g = clamp((g - domainMin[1]) / (domainMax[1] - domainMin[1]));
         b = clamp((b - domainMin[2]) / (domainMax[2] - domainMin[2]));
         
-        // Converter para linear
         r = sRGBToLinear(r);
         g = sRGBToLinear(g);
         b = sRGBToLinear(b);
         
-        // Escalar para coordenadas do LUT
         const rScaled = r * (size - 1);
         const gScaled = g * (size - 1);
         const bScaled = b * (size - 1);
@@ -166,7 +217,6 @@ const generateProcessingHTML = (base64Image, cube) => {
           return lut[index] || { r: 0, g: 0, b: 0 };
         };
         
-        // Interpolação trilinear completa
         const c000 = getColor(r0, g0, b0);
         const c001 = getColor(r1, g0, b0);
         const c010 = getColor(r0, g1, b0);
@@ -214,17 +264,14 @@ const generateProcessingHTML = (base64Image, cube) => {
           b: c0.b * (1 - bFrac) + c1.b * bFrac,
         };
         
-        // Clamp LUT output
         finalColor.r = clamp(finalColor.r);
         finalColor.g = clamp(finalColor.g);
         finalColor.b = clamp(finalColor.b);
         
-        // Linear to sRGB
         finalColor.r = linearToSRGB(finalColor.r);
         finalColor.g = linearToSRGB(finalColor.g);
         finalColor.b = linearToSRGB(finalColor.b);
         
-        // Premultiply alpha back
         if (alpha < 1) {
           finalColor.r = finalColor.r * alpha;
           finalColor.g = finalColor.g * alpha;
@@ -240,7 +287,6 @@ const generateProcessingHTML = (base64Image, cube) => {
       
       console.log('Processamento concluído!');
       
-      // Enviar resultado como base64
       canvas.toBlob((blob) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -269,23 +315,23 @@ const generateProcessingHTML = (base64Image, cube) => {
 };
 
 // Aplicar LUT à imagem usando WebView
-export const applyLUTToImage = async (imageUri, cubeData = cachedCubeData) => {
+export const applyLUTToImage = async (imageUri, lutId) => {
+  const cubeData = getCachedLUT(lutId);
+
   if (!cubeData) {
-    console.warn("LUT não carregado, retornando imagem original");
-    return imageUri;
+    console.warn(`LUT "${lutId}" não encontrado, retornando imagem original`);
+    return { needsProcessing: false, originalUri: imageUri };
   }
 
   try {
-    console.log("Iniciando processamento com LUT...");
+    console.log(`Iniciando processamento com LUT "${lutId}"...`);
 
-    // Converter imagem para base64
     const base64 = await FileSystem.readAsStringAsync(imageUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
     console.log("Imagem convertida para base64, tamanho:", base64.length);
 
-    // Retornar dados necessários para o processamento no componente WebView
     return {
       needsProcessing: true,
       base64,
@@ -294,7 +340,7 @@ export const applyLUTToImage = async (imageUri, cubeData = cachedCubeData) => {
     };
   } catch (error) {
     console.error("Erro ao preparar processamento:", error);
-    return imageUri;
+    return { needsProcessing: false, originalUri: imageUri };
   }
 };
 
@@ -314,7 +360,7 @@ export const saveProcessedImage = async (base64Data) => {
   }
 };
 
-// Componente WebView para processar imagem (use isso no seu App)
+// Componente WebView para processar imagem
 export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const webViewRef = useRef(null);
 

@@ -11,10 +11,11 @@ import {
   View,
 } from "react-native";
 import ExposureDialFinal from "./components/ExposureDialFinal";
+import LUTSelector from "./components/LUTSelector";
 import Shutter from "./components/shutter";
 import {
   applyLUTToImage,
-  loadCubeLUT,
+  loadAllLUTs,
   LUTProcessor,
 } from "./utils/lutProcessor";
 
@@ -31,20 +32,22 @@ export default function App() {
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
 
   const [maxZoom, setMaxZoom] = useState(1);
-  const [lutLoaded, setLutLoaded] = useState(false);
+  const [lutsLoaded, setLutsLoaded] = useState(false);
 
   // Estado para processamento do LUT
   const [processingData, setProcessingData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Carregar o LUT na inicialização
+  // Estado para seleção de LUT
+  const [selectedLutId, setSelectedLutId] = useState("none");
+  const [showLutSelector, setShowLutSelector] = useState(false);
+
+  // Carregar todos os LUTs na inicialização
   useEffect(() => {
     (async () => {
-      const loaded = await loadCubeLUT(require("../assets/luts/filtro.CUBE"));
-      setLutLoaded(!!loaded);
-      if (loaded) {
-        console.log("LUT carregado com sucesso!");
-      }
+      await loadAllLUTs();
+      setLutsLoaded(true);
+      console.log("Todos os LUTs foram carregados!");
     })();
   }, []);
 
@@ -90,6 +93,10 @@ export default function App() {
     setFlash((current) => (current === "off" ? "on" : "off"));
   }
 
+  function toggleLutSelector() {
+    setShowLutSelector(!showLutSelector);
+  }
+
   const takePicture = async () => {
     if (cameraRef.current && !isProcessing) {
       try {
@@ -103,10 +110,13 @@ export default function App() {
 
         console.log("Foto capturada:", photo.uri);
 
-        // Aplicar LUT se estiver carregado
-        if (lutLoaded) {
-          console.log("Preparando para aplicar LUT...");
-          const processingInfo = await applyLUTToImage(photo.uri);
+        // Aplicar LUT se um filtro foi selecionado
+        if (selectedLutId !== "none" && lutsLoaded) {
+          console.log(`Preparando para aplicar LUT: ${selectedLutId}`);
+          const processingInfo = await applyLUTToImage(
+            photo.uri,
+            selectedLutId
+          );
 
           if (processingInfo.needsProcessing) {
             // Iniciar processamento via WebView
@@ -199,6 +209,13 @@ export default function App() {
         />
       )}
 
+      {/* Overlay de processamento */}
+      {isProcessing && (
+        <View style={styles.processingOverlay}>
+          <Text style={styles.processingText}>Processando foto...</Text>
+        </View>
+      )}
+
       {/* Barra superior */}
       <View style={styles.buttonsContainer}>
         <TouchableOpacity style={styles.button} onPress={toggleFlash}>
@@ -214,8 +231,12 @@ export default function App() {
         <TouchableOpacity style={styles.button} onPress={toggleDial}>
           <Ionicons name="aperture-outline" size={32} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button}>
-          <Ionicons name="settings-outline" size={32} color="white" />
+        <TouchableOpacity style={styles.button} onPress={toggleLutSelector}>
+          <Ionicons
+            name="color-filter-outline"
+            size={32}
+            color={selectedLutId !== "none" ? "#ffaa00" : "white"}
+          />
         </TouchableOpacity>
       </View>
 
@@ -269,6 +290,13 @@ export default function App() {
           />
         </Animated.View>
       </View>
+
+      {/* Seletor de LUT */}
+      <LUTSelector
+        selectedLutId={selectedLutId}
+        onSelectLut={setSelectedLutId}
+        visible={showLutSelector}
+      />
     </View>
   );
 }
@@ -284,7 +312,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderRadius: 10,
   },
-
   camera: {
     position: "absolute",
     top: 0,
