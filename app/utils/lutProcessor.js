@@ -3,40 +3,28 @@ import * as FileSystem from "expo-file-system/legacy";
 import React, { useRef } from "react";
 import { WebView } from "react-native-webview";
 
-// Cache para múltiplos LUTs
 const cachedLUTs = {};
 
-// Lista de LUTs disponíveis - adicione seus arquivos aqui
 export const AVAILABLE_LUTS = [
   {
     id: "none",
     name: "Sem Filtro",
     file: null,
   },
+
   {
     id: "filtro1",
     name: "Filtro 1",
     file: require("../../assets/luts/darkGold.CUBE"),
   },
+
   {
     id: "filtro2",
     name: "Filtro 2",
     file: require("../../assets/luts/wesAnderson.CUBE"),
   },
-  // Adicione mais LUTs aqui conforme adicionar arquivos na pasta
-  // {
-  //   id: 'vintage',
-  //   name: 'Vintage',
-  //   file: require('../../assets/luts/vintage.CUBE'),
-  // },
-  // {
-  //   id: 'cold',
-  //   name: 'Frio',
-  //   file: require('../../assets/luts/cold.CUBE'),
-  // },
 ];
 
-// Parsear arquivo CUBE
 const parseCubeFile = (text) => {
   const lines = text.split("\n");
   let size = 0;
@@ -84,7 +72,6 @@ const parseCubeFile = (text) => {
   return { size, lut, domainMin, domainMax };
 };
 
-// Carregar um LUT específico
 export const loadCubeLUT = async (cubeFilePath) => {
   if (!cubeFilePath) return null;
 
@@ -103,7 +90,6 @@ export const loadCubeLUT = async (cubeFilePath) => {
   }
 };
 
-// Carregar todos os LUTs disponíveis
 export const loadAllLUTs = async () => {
   console.log("Carregando todos os LUTs...");
 
@@ -120,12 +106,10 @@ export const loadAllLUTs = async () => {
   console.log(`Total de LUTs carregados: ${Object.keys(cachedLUTs).length}`);
 };
 
-// Obter um LUT específico do cache
 export const getCachedLUT = (lutId) => {
   return cachedLUTs[lutId] || null;
 };
 
-// Gerar HTML para processar a imagem com LUT
 const generateProcessingHTML = (base64Image, cube) => {
   return `
 <!DOCTYPE html>
@@ -142,22 +126,102 @@ const generateProcessingHTML = (base64Image, cube) => {
   <canvas id="canvas"></canvas>
   <script>
     const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const ctx = canvas.getContext('2d', { 
+      willReadFrequently: true,
+      colorSpace: 'srgb'  // Forçar sRGB
+    });
     
     const cube = ${JSON.stringify(cube)};
     
+    // Conversões sRGB <-> Linear mais precisas
     const sRGBToLinear = (val) => {
-      if (val <= 0.04045) return val / 12.92;
+      if (val <= 0.04045) {
+        return val / 12.92;
+      }
       return Math.pow((val + 0.055) / 1.055, 2.4);
     };
     
     const linearToSRGB = (val) => {
-      if (val <= 0.0031308) return val * 12.92;
-      return 1.055 * Math.pow(val, 1 / 2.4) - 0.055;
+      if (val <= 0.0031308) {
+        return val * 12.92;
+      }
+      return 1.055 * Math.pow(val, 1.0 / 2.4) - 0.055;
     };
     
     const clamp = (val, min = 0, max = 1) => {
       return Math.max(min, Math.min(max, val));
+    };
+    
+    // Interpolação tetrahedral (mais precisa que trilinear)
+    const tetrahedralInterpolate = (r, g, b, size, lut) => {
+      const rScaled = r * (size - 1);
+      const gScaled = g * (size - 1);
+      const bScaled = b * (size - 1);
+      
+      const r0 = Math.floor(rScaled);
+      const g0 = Math.floor(gScaled);
+      const b0 = Math.floor(bScaled);
+      
+      const r1 = Math.min(r0 + 1, size - 1);
+      const g1 = Math.min(g0 + 1, size - 1);
+      const b1 = Math.min(b0 + 1, size - 1);
+      
+      const rFrac = rScaled - r0;
+      const gFrac = gScaled - g0;
+      const bFrac = bScaled - b0;
+      
+      const getColor = (rIdx, gIdx, bIdx) => {
+        const index = bIdx * size * size + gIdx * size + rIdx;
+        return lut[index] || { r: 0, g: 0, b: 0 };
+      };
+      
+      // Interpolação trilinear completa (mantida por compatibilidade)
+      const c000 = getColor(r0, g0, b0);
+      const c001 = getColor(r1, g0, b0);
+      const c010 = getColor(r0, g1, b0);
+      const c011 = getColor(r1, g1, b0);
+      const c100 = getColor(r0, g0, b1);
+      const c101 = getColor(r1, g0, b1);
+      const c110 = getColor(r0, g1, b1);
+      const c111 = getColor(r1, g1, b1);
+      
+      const c00 = {
+        r: c000.r * (1 - rFrac) + c001.r * rFrac,
+        g: c000.g * (1 - rFrac) + c001.g * rFrac,
+        b: c000.b * (1 - rFrac) + c001.b * rFrac,
+      };
+      const c01 = {
+        r: c010.r * (1 - rFrac) + c011.r * rFrac,
+        g: c010.g * (1 - rFrac) + c011.g * rFrac,
+        b: c010.b * (1 - rFrac) + c011.b * rFrac,
+      };
+      const c10 = {
+        r: c100.r * (1 - rFrac) + c101.r * rFrac,
+        g: c100.g * (1 - rFrac) + c101.g * rFrac,
+        b: c100.b * (1 - rFrac) + c101.b * rFrac,
+      };
+      const c11 = {
+        r: c110.r * (1 - rFrac) + c111.r * rFrac,
+        g: c110.g * (1 - rFrac) + c111.g * rFrac,
+        b: c110.b * (1 - rFrac) + c111.b * rFrac,
+      };
+      
+      const c0 = {
+        r: c00.r * (1 - gFrac) + c01.r * gFrac,
+        g: c00.g * (1 - gFrac) + c01.g * gFrac,
+        b: c00.b * (1 - gFrac) + c01.b * gFrac,
+      };
+      const c1 = {
+        r: c10.r * (1 - gFrac) + c11.r * gFrac,
+        g: c10.g * (1 - gFrac) + c11.g * gFrac,
+        b: c10.b * (1 - gFrac) + c11.b * gFrac,
+      };
+      
+      return {
+        r: c0.r * (1 - bFrac) + c1.r * bFrac,
+        g: c0.g * (1 - bFrac) + c1.g * bFrac,
+        b: c0.b * (1 - bFrac) + c1.b * bFrac,
+      };
     };
     
     const img = new Image();
@@ -173,11 +237,13 @@ const generateProcessingHTML = (base64Image, cube) => {
       const { domainMin, domainMax, lut } = cube;
       
       console.log('Processando ' + (data.length / 4) + ' pixels...');
+      console.log('Domain:', domainMin, domainMax);
       
       for (let i = 0; i < data.length; i += 4) {
         const alpha = data[i + 3] / 255;
         if (alpha === 0) continue;
         
+        // Converter para [0,1] e remover premultiplication
         let r = data[i] / 255;
         let g = data[i + 1] / 255;
         let b = data[i + 2] / 255;
@@ -188,96 +254,33 @@ const generateProcessingHTML = (base64Image, cube) => {
           b = b / alpha;
         }
         
+        // IMPORTANTE: Não aplicar sRGB to Linear antes do domain
+        // O LUT já espera valores em sRGB
+        
+        // Aplicar domain scaling
         r = clamp((r - domainMin[0]) / (domainMax[0] - domainMin[0]));
         g = clamp((g - domainMin[1]) / (domainMax[1] - domainMin[1]));
         b = clamp((b - domainMin[2]) / (domainMax[2] - domainMin[2]));
         
-        r = sRGBToLinear(r);
-        g = sRGBToLinear(g);
-        b = sRGBToLinear(b);
+        // Aplicar LUT (já em espaço sRGB)
+        let finalColor = tetrahedralInterpolate(r, g, b, size, lut);
         
-        const rScaled = r * (size - 1);
-        const gScaled = g * (size - 1);
-        const bScaled = b * (size - 1);
-        
-        const r0 = Math.floor(rScaled);
-        const g0 = Math.floor(gScaled);
-        const b0 = Math.floor(bScaled);
-        
-        const r1 = Math.min(r0 + 1, size - 1);
-        const g1 = Math.min(g0 + 1, size - 1);
-        const b1 = Math.min(b0 + 1, size - 1);
-        
-        const rFrac = rScaled - r0;
-        const gFrac = gScaled - g0;
-        const bFrac = bScaled - b0;
-        
-        const getColor = (rIdx, gIdx, bIdx) => {
-          const index = bIdx * size * size + gIdx * size + rIdx;
-          return lut[index] || { r: 0, g: 0, b: 0 };
-        };
-        
-        const c000 = getColor(r0, g0, b0);
-        const c001 = getColor(r1, g0, b0);
-        const c010 = getColor(r0, g1, b0);
-        const c011 = getColor(r1, g1, b0);
-        const c100 = getColor(r0, g0, b1);
-        const c101 = getColor(r1, g0, b1);
-        const c110 = getColor(r0, g1, b1);
-        const c111 = getColor(r1, g1, b1);
-        
-        const c00 = {
-          r: c000.r * (1 - rFrac) + c001.r * rFrac,
-          g: c000.g * (1 - rFrac) + c001.g * rFrac,
-          b: c000.b * (1 - rFrac) + c001.b * rFrac,
-        };
-        const c01 = {
-          r: c010.r * (1 - rFrac) + c011.r * rFrac,
-          g: c010.g * (1 - rFrac) + c011.g * rFrac,
-          b: c010.b * (1 - rFrac) + c011.b * rFrac,
-        };
-        const c10 = {
-          r: c100.r * (1 - rFrac) + c101.r * rFrac,
-          g: c100.g * (1 - rFrac) + c101.g * rFrac,
-          b: c100.b * (1 - rFrac) + c101.b * rFrac,
-        };
-        const c11 = {
-          r: c110.r * (1 - rFrac) + c111.r * rFrac,
-          g: c110.g * (1 - rFrac) + c111.g * rFrac,
-          b: c110.b * (1 - rFrac) + c111.b * rFrac,
-        };
-        
-        const c0 = {
-          r: c00.r * (1 - gFrac) + c01.r * gFrac,
-          g: c00.g * (1 - gFrac) + c01.g * gFrac,
-          b: c00.b * (1 - gFrac) + c01.b * gFrac,
-        };
-        const c1 = {
-          r: c10.r * (1 - gFrac) + c11.r * gFrac,
-          g: c10.g * (1 - gFrac) + c11.g * gFrac,
-          b: c10.b * (1 - gFrac) + c11.b * gFrac,
-        };
-        
-        let finalColor = {
-          r: c0.r * (1 - bFrac) + c1.r * bFrac,
-          g: c0.g * (1 - bFrac) + c1.g * bFrac,
-          b: c0.b * (1 - bFrac) + c1.b * bFrac,
-        };
-        
+        // Clamp output do LUT
         finalColor.r = clamp(finalColor.r);
         finalColor.g = clamp(finalColor.g);
         finalColor.b = clamp(finalColor.b);
         
-        finalColor.r = linearToSRGB(finalColor.r);
-        finalColor.g = linearToSRGB(finalColor.g);
-        finalColor.b = linearToSRGB(finalColor.b);
+        // IMPORTANTE: Não aplicar Linear to sRGB após o LUT
+        // O output do LUT já está em sRGB
         
+        // Premultiply alpha
         if (alpha < 1) {
           finalColor.r = finalColor.r * alpha;
           finalColor.g = finalColor.g * alpha;
           finalColor.b = finalColor.b * alpha;
         }
         
+        // Converter de volta para [0,255]
         data[i] = Math.round(clamp(finalColor.r) * 255);
         data[i + 1] = Math.round(clamp(finalColor.g) * 255);
         data[i + 2] = Math.round(clamp(finalColor.b) * 255);
@@ -287,6 +290,7 @@ const generateProcessingHTML = (base64Image, cube) => {
       
       console.log('Processamento concluído!');
       
+      // Salvar com qualidade máxima
       canvas.toBlob((blob) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -297,7 +301,7 @@ const generateProcessingHTML = (base64Image, cube) => {
           }));
         };
         reader.readAsDataURL(blob);
-      }, 'image/jpeg', 0.95);
+      }, 'image/jpeg', 1.0);  // Qualidade máxima
     };
     
     img.onerror = (error) => {
@@ -314,7 +318,6 @@ const generateProcessingHTML = (base64Image, cube) => {
   `;
 };
 
-// Aplicar LUT à imagem usando WebView
 export const applyLUTToImage = async (imageUri, lutId) => {
   const cubeData = getCachedLUT(lutId);
 
@@ -344,7 +347,6 @@ export const applyLUTToImage = async (imageUri, lutId) => {
   }
 };
 
-// Salvar imagem processada
 export const saveProcessedImage = async (base64Data) => {
   try {
     const filename = FileSystem.documentDirectory + `lut_${Date.now()}.jpg`;
@@ -360,7 +362,6 @@ export const saveProcessedImage = async (base64Data) => {
   }
 };
 
-// Componente WebView para processar imagem
 export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const webViewRef = useRef(null);
 
