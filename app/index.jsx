@@ -22,7 +22,7 @@ import {
 export default function App() {
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
-  const [zoom, setZoom] = useState(0);
+  const [zoom, setZoom] = useState(0); // 0 a 1 conforme exigido pela Expo Camera
   const cameraRef = useRef(null);
 
   const [dial, setDial] = useState(false);
@@ -30,111 +30,59 @@ export default function App() {
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
-
-  const [maxZoom, setMaxZoom] = useState(1);
   const [lutsLoaded, setLutsLoaded] = useState(false);
 
-  // Estado para processamento do LUT
+  // Estados de Processamento
   const [processingData, setProcessingData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-
-  // Estado para seleção de LUT
   const [selectedLutId, setSelectedLutId] = useState("none");
   const [showLutSelector, setShowLutSelector] = useState(false);
 
-  // Carregar todos os LUTs na inicialização
   useEffect(() => {
     (async () => {
       await loadAllLUTs();
       setLutsLoaded(true);
-      console.log("Todos os LUTs foram carregados!");
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       setHasMediaPermission(status === "granted");
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      if (cameraRef.current) {
-        try {
-          const devices = await cameraRef.current.getAvailableCameraDevices();
-          const currentDevice = devices.find((d) => d.position === facing);
-          if (currentDevice && currentDevice.zoom) {
-            setMaxZoom(currentDevice.zoom.max);
-          }
-        } catch (e) {
-          console.log("Erro ao obter zoom da câmera:", e);
-        }
-      }
-    })();
-  }, [facing]);
-
   if (!cameraPermission) return <View />;
-  if (!cameraPermission.granted)
+  if (!cameraPermission.granted) {
     return (
       <View style={styles.container}>
         <Text style={styles.message}>
-          Precisamos da sua permissão para usar a câmera
+          Precisamos da sua permissão para a câmera
         </Text>
         <Button onPress={requestCameraPermission} title="Dar permissão" />
       </View>
     );
-
-  function toggleCameraFacing() {
-    setFacing((current) => (current === "back" ? "front" : "back"));
-  }
-
-  function toggleFlash() {
-    setFlash((current) => (current === "off" ? "on" : "off"));
-  }
-
-  function toggleLutSelector() {
-    setShowLutSelector(!showLutSelector);
   }
 
   const takePicture = async () => {
     if (cameraRef.current && !isProcessing) {
       try {
         setIsProcessing(true);
-
-        // Tirar a foto
         const photo = await cameraRef.current.takePictureAsync({
           quality: 1,
           skipProcessing: false,
         });
 
-        console.log("Foto capturada:", photo.uri);
-
-        // Aplicar LUT se um filtro foi selecionado
         if (selectedLutId !== "none" && lutsLoaded) {
-          console.log(`Preparando para aplicar LUT: ${selectedLutId}`);
           const processingInfo = await applyLUTToImage(
             photo.uri,
             selectedLutId
           );
-
           if (processingInfo.needsProcessing) {
-            // Iniciar processamento via WebView
             setProcessingData(processingInfo);
           } else {
-            // Salvar sem LUT
-            if (hasMediaPermission) {
+            if (hasMediaPermission)
               await MediaLibrary.saveToLibraryAsync(photo.uri);
-              console.log("Foto salva na galeria (sem LUT)!");
-            }
             setIsProcessing(false);
           }
         } else {
-          // Salvar sem LUT
-          if (hasMediaPermission) {
+          if (hasMediaPermission)
             await MediaLibrary.saveToLibraryAsync(photo.uri);
-            console.log("Foto salva na galeria!");
-          }
           setIsProcessing(false);
         }
       } catch (error) {
@@ -146,30 +94,12 @@ export default function App() {
 
   const handleProcessed = async (processedUri) => {
     try {
-      console.log("LUT aplicado com sucesso!");
-
-      // Salvar na galeria
-      if (hasMediaPermission) {
+      if (hasMediaPermission)
         await MediaLibrary.saveToLibraryAsync(processedUri);
-        console.log("Foto com LUT salva na galeria!");
-      }
-    } catch (error) {
-      console.error("Erro ao salvar foto processada:", error);
     } finally {
       setProcessingData(null);
       setIsProcessing(false);
     }
-  };
-
-  const handleProcessingError = (error) => {
-    console.error("Erro no processamento:", error);
-    // Salvar foto original em caso de erro
-    if (processingData && processingData.originalUri && hasMediaPermission) {
-      MediaLibrary.saveToLibraryAsync(processingData.originalUri);
-      console.log("Foto original salva após erro no processamento");
-    }
-    setProcessingData(null);
-    setIsProcessing(false);
   };
 
   const toggleDial = () => {
@@ -181,6 +111,7 @@ export default function App() {
     setDial(!dial);
   };
 
+  // Interpolações de Animação
   const shutterTranslate = dialAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 100],
@@ -200,38 +131,37 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      {/* WebView invisível para processar LUT */}
       {processingData && (
         <LUTProcessor
           imageData={processingData}
           onProcessed={handleProcessed}
-          onError={handleProcessingError}
+          onError={() => setIsProcessing(false)}
         />
       )}
 
-      {/* Overlay de processamento */}
       {isProcessing && (
         <View style={styles.processingOverlay}>
-          <Text style={styles.processingText}>Processando foto...</Text>
+          <Text style={styles.processingText}>Processando...</Text>
         </View>
       )}
 
-      {/* Barra superior */}
+      {/* Barra Superior */}
       <View style={styles.buttonsContainer}>
-        <TouchableOpacity style={styles.button} onPress={toggleFlash}>
+        <TouchableOpacity
+          onPress={() => setFlash((f) => (f === "off" ? "on" : "off"))}
+        >
           <Ionicons
             name={flash === "off" ? "flash-off-outline" : "flash-outline"}
             size={32}
             color="white"
           />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button}>
-          <Ionicons name="timer-outline" size={32} color="white" />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={toggleDial}>
+
+        <TouchableOpacity onPress={toggleDial}>
           <Ionicons name="aperture-outline" size={32} color="white" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={toggleLutSelector}>
+
+        <TouchableOpacity onPress={() => setShowLutSelector(!showLutSelector)}>
           <Ionicons
             name="color-filter-outline"
             size={32}
@@ -240,7 +170,7 @@ export default function App() {
         </TouchableOpacity>
       </View>
 
-      {/* Preview da câmera */}
+      {/* Preview Câmera */}
       <View style={styles.cameraWrapper}>
         <CameraView
           style={styles.camera}
@@ -251,31 +181,32 @@ export default function App() {
         />
       </View>
 
-      {/* Botões inferiores */}
+      {/* Controles Inferiores */}
       <View style={styles.shutterContainer}>
         <Animated.View
-          style={{
-            flexDirection: "row",
-            transform: [{ translateY: shutterTranslate }],
-            opacity: shutterOpacity,
-            width: "100%",
-            justifyContent: "space-around",
-            position: "absolute",
-            bottom: 0,
-          }}
+          style={[
+            styles.shutterRow,
+            {
+              transform: [{ translateY: shutterTranslate }],
+              opacity: shutterOpacity,
+            },
+          ]}
         >
-          <TouchableOpacity style={styles.button}>
+          <TouchableOpacity style={styles.sideButton}>
             <Ionicons name="images-outline" size={32} color="white" />
           </TouchableOpacity>
 
           <Shutter takePicture={takePicture} />
 
-          <TouchableOpacity style={styles.button} onPress={toggleCameraFacing}>
+          <TouchableOpacity
+            style={styles.sideButton}
+            onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
+          >
             <Ionicons name="camera-reverse-outline" size={32} color="white" />
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Dial */}
+        {/* Dial de Zoom */}
         <Animated.View
           style={{
             transform: [{ translateY: dialTranslate }],
@@ -283,15 +214,10 @@ export default function App() {
             width: "100%",
           }}
         >
-          <ExposureDialFinal
-            value={zoom}
-            maxValue={maxZoom}
-            onChange={(v) => setZoom(v)}
-          />
+          <ExposureDialFinal value={zoom} onChange={(v) => setZoom(v)} />
         </Animated.View>
       </View>
 
-      {/* Seletor de LUT */}
       <LUTSelector
         selectedLutId={selectedLutId}
         onSelectLut={setSelectedLutId}
@@ -302,29 +228,29 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000", justifyContent: "center" },
+  container: { flex: 1, backgroundColor: "#000" },
   cameraWrapper: {
     position: "absolute",
     top: 120,
     width: "100%",
-    height: undefined,
     aspectRatio: 3 / 4,
     overflow: "hidden",
     borderRadius: 10,
   },
-  camera: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    bottom: 0,
-    right: 0,
-  },
+  camera: { flex: 1 },
   shutterContainer: {
     position: "absolute",
     bottom: 64,
     width: "100%",
     alignItems: "center",
-    justifyContent: "center",
+  },
+  shutterRow: {
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-around",
+    alignItems: "center",
+    position: "absolute",
+    bottom: 0,
   },
   buttonsContainer: {
     position: "absolute",
@@ -332,24 +258,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     width: "100%",
     justifyContent: "space-around",
-    alignItems: "center",
+    zIndex: 10,
   },
-  button: { flex: 1, alignItems: "center" },
-  message: { textAlign: "center", paddingBottom: 10, color: "white" },
+  sideButton: { padding: 10 },
   processingOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 1000,
+    zIndex: 2000,
   },
-  processingText: {
-    color: "white",
-    marginTop: 16,
-    fontSize: 16,
-  },
+  processingText: { color: "white", marginTop: 10 },
+  message: { color: "white", textAlign: "center", marginBottom: 20 },
 });
