@@ -14,14 +14,20 @@ export const AVAILABLE_LUTS = [
 
   {
     id: "filtro1",
-    name: "Filtro 1",
+    name: "Dark Gold",
     file: require("../../assets/luts/darkGold.CUBE"),
   },
 
   {
     id: "filtro2",
-    name: "Filtro 2",
+    name: "Wes Anderson",
     file: require("../../assets/luts/wesAnderson.CUBE"),
+  },
+
+  {
+    id: "filtro3",
+    name: "Cinema",
+    file: require("../../assets/luts/cinema.cube"),
   },
 ];
 
