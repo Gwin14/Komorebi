@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -20,6 +21,7 @@ import {
 } from "./utils/lutProcessor";
 
 export default function App() {
+  const router = useRouter();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(0);
@@ -193,6 +195,15 @@ export default function App() {
                 ? "#ffaa00"
                 : "white"
             }
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity>
+          <Ionicons
+            name="settings-outline"
+            size={32}
+            color="white"
+            onPress={() => router.push("components/Settings")}
           />
         </TouchableOpacity>
       </View>
