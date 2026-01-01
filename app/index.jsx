@@ -284,11 +284,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   cameraWrapper: {
     position: "absolute",
+
+    // estilos originais
     top: 120,
     width: "100%",
     aspectRatio: 3 / 4,
     overflow: "hidden",
     borderRadius: 10,
+
+    // estilos retrô
+    // alignSelf: "center",
+    // top: 130,
+    // width: "95%",
   },
   camera: { flex: 1 },
   shutterContainer: {
