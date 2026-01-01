@@ -42,9 +42,9 @@ export default function LUTSelector({ selectedLutId, onSelectLut, visible }) {
         },
       ]}
     >
-      <View style={styles.header}>
+      {/* <View style={styles.header}>
         <Text style={styles.title}>Escolha um filtro</Text>
-      </View>
+      </View> */}
 
       <ScrollView
         horizontal
@@ -91,15 +91,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#1a1a1aee",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingBottom: 32,
+    // backgroundColor: "#1a1a1a",
+    // borderTopLeftRadius: 20,
+    // borderTopRightRadius: 20,
   },
   header: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#333",
+    padding: 10,
+    // borderBottomWidth: 1,
+    // borderBottomColor: "#333",
   },
   title: {
     color: "#fff",

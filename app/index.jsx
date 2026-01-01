@@ -22,11 +22,17 @@ import {
 export default function App() {
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
-  const [zoom, setZoom] = useState(0); // 0 a 1 conforme exigido pela Expo Camera
+  const [zoom, setZoom] = useState(0);
   const cameraRef = useRef(null);
 
-  const [dial, setDial] = useState(false);
-  const dialAnim = useRef(new Animated.Value(0)).current;
+  // --- MUDANÇA 1: Estado Unificado de Controle ---
+  // 'none' = Shutter visível
+  // 'zoom' = Dial de Zoom visível
+  // 'lut'  = Seletor de LUT visível
+  const [activeControl, setActiveControl] = useState("none");
+
+  // Animação controla a transição entre (Shutter) e (Ferramentas)
+  const controlsAnim = useRef(new Animated.Value(0)).current;
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
@@ -36,7 +42,6 @@ export default function App() {
   const [processingData, setProcessingData] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedLutId, setSelectedLutId] = useState("none");
-  const [showLutSelector, setShowLutSelector] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -46,6 +51,22 @@ export default function App() {
       setHasMediaPermission(status === "granted");
     })();
   }, []);
+
+  // --- MUDANÇA 2: Efeito para disparar a animação ---
+  useEffect(() => {
+    const showTools = activeControl !== "none";
+
+    Animated.timing(controlsAnim, {
+      toValue: showTools ? 1 : 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [activeControl]);
+
+  // Função helper para alternar modos
+  const toggleMode = (mode) => {
+    setActiveControl((current) => (current === mode ? "none" : mode));
+  };
 
   if (!cameraPermission) return <View />;
   if (!cameraPermission.granted) {
@@ -102,29 +123,23 @@ export default function App() {
     }
   };
 
-  const toggleDial = () => {
-    Animated.timing(dialAnim, {
-      toValue: dial ? 0 : 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-    setDial(!dial);
-  };
+  // Interpolações de Animação (baseadas no controlsAnim)
+  const shutterTranslate = controlsAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 100], // Desce o shutter
+  });
 
-  // Interpolações de Animação
-  const shutterTranslate = dialAnim.interpolate({
+  const toolsTranslate = controlsAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, 100],
+    outputRange: [100, 0], // Sobe as ferramentas
   });
-  const dialTranslate = dialAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [100, 0],
-  });
-  const dialOpacity = dialAnim.interpolate({
+
+  const toolsOpacity = controlsAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
   });
-  const shutterOpacity = dialAnim.interpolate({
+
+  const shutterOpacity = controlsAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 0],
   });
@@ -157,15 +172,27 @@ export default function App() {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={toggleDial}>
-          <Ionicons name="aperture-outline" size={32} color="white" />
+        {/* Botão Zoom */}
+        <TouchableOpacity onPress={() => toggleMode("zoom")}>
+          <Ionicons
+            name="aperture-outline"
+            size={32}
+            color={activeControl === "zoom" ? "#ffaa00" : "white"}
+          />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => setShowLutSelector(!showLutSelector)}>
+        {/* Botão LUTs */}
+        <TouchableOpacity onPress={() => toggleMode("lut")}>
           <Ionicons
             name="color-filter-outline"
             size={32}
-            color={selectedLutId !== "none" ? "#ffaa00" : "white"}
+            color={
+              activeControl === "lut"
+                ? "#ffaa00"
+                : selectedLutId !== "none"
+                ? "#ffaa00"
+                : "white"
+            }
           />
         </TouchableOpacity>
       </View>
@@ -183,6 +210,7 @@ export default function App() {
 
       {/* Controles Inferiores */}
       <View style={styles.shutterContainer}>
+        {/* GRUPO 1: SHUTTER E BOTÕES LATERAIS (Desaparecem) */}
         <Animated.View
           style={[
             styles.shutterRow,
@@ -196,7 +224,10 @@ export default function App() {
             <Ionicons name="images-outline" size={32} color="white" />
           </TouchableOpacity>
 
-          <Shutter takePicture={takePicture} />
+          {/* O Shutter só é clicável se os controles estiverem fechados para evitar toques acidentais durante a animação */}
+          <View pointerEvents={activeControl === "none" ? "auto" : "none"}>
+            <Shutter takePicture={takePicture} />
+          </View>
 
           <TouchableOpacity
             style={styles.sideButton}
@@ -206,23 +237,45 @@ export default function App() {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Dial de Zoom */}
+        {/* GRUPO 2: FERRAMENTAS (DIAL ou LUT) (Aparecem) */}
         <Animated.View
           style={{
-            transform: [{ translateY: dialTranslate }],
-            opacity: dialOpacity,
+            transform: [{ translateY: toolsTranslate }],
+            opacity: toolsOpacity,
             width: "100%",
+            position: "absolute",
+            bottom: 0,
+            height: 100, // Altura fixa para garantir alinhamento
+            justifyContent: "center",
+            zIndex: 10,
           }}
+          // Importante: Impede toques nas ferramentas quando elas estão invisíveis
+          pointerEvents={activeControl !== "none" ? "auto" : "none"}
         >
-          <ExposureDialFinal value={zoom} onChange={(v) => setZoom(v)} />
+          {activeControl === "zoom" && (
+            <ExposureDialFinal value={zoom} onChange={(v) => setZoom(v)} />
+          )}
+
+          {activeControl === "lut" && (
+            // Assumindo que seu LUTSelector pode ser renderizado inline.
+            // Passamos visible={true} pois a animação do pai cuida de esconder/mostrar
+            <View
+              style={{
+                flex: 1,
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <LUTSelector
+                selectedLutId={selectedLutId}
+                onSelectLut={setSelectedLutId}
+                visible={true}
+              />
+            </View>
+          )}
         </Animated.View>
       </View>
-
-      <LUTSelector
-        selectedLutId={selectedLutId}
-        onSelectLut={setSelectedLutId}
-        visible={showLutSelector}
-      />
     </View>
   );
 }
@@ -243,6 +296,7 @@ const styles = StyleSheet.create({
     bottom: 64,
     width: "100%",
     alignItems: "center",
+    height: 100, // Definir uma altura para o container ajuda na animação de troca
   },
   shutterRow: {
     flexDirection: "row",
@@ -251,6 +305,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     position: "absolute",
     bottom: 0,
+    height: "100%",
   },
   buttonsContainer: {
     position: "absolute",
