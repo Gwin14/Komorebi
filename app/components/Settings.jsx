@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
 import CustomToggle from "./CustoToggle";
+import ExternalLink from "./ExternalLink";
 
 export default function Settings() {
   const router = useRouter();
@@ -42,6 +43,14 @@ export default function Settings() {
           onValueChange={setGridVisible}
         />
       </View>
+
+      <View style={styles.divider} />
+
+      <ExternalLink
+        label="Código fonte"
+        // description="Leia nossa política de privacidade online"
+        url="https://github.com/Gwin14/Komorebi"
+      />
 
       <View style={styles.divider} />
 
