@@ -7,8 +7,8 @@ export default function Settings() {
   const router = useRouter();
 
   const {
-    saveOriginal,
-    setSaveOriginal,
+    retroStyle,
+    setRetroStyle,
     gridVisible,
     setGridVisible,
     loading,
@@ -30,9 +30,9 @@ export default function Settings() {
 
       <View style={{ width: "90%", marginTop: 20 }}>
         <CustomToggle
-          label="Salvar Original"
-          value={saveOriginal}
-          onValueChange={setSaveOriginal}
+          label="Estilo Retrô do Viewfinder"
+          value={retroStyle}
+          onValueChange={setRetroStyle}
         />
 
         <CustomToggle

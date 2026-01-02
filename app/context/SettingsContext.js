@@ -4,24 +4,24 @@ import { createContext, useContext, useEffect, useState } from "react";
 const SettingsContext = createContext(null);
 
 const STORAGE_KEYS = {
-  SAVE_ORIGINAL: "@settings/saveOriginal",
+  RETRO_STYLE: "@settings/retroStyle",
   GRID_VISIBLE: "@settings/gridVisible",
 };
 
 export const SettingsProvider = ({ children }) => {
-  const [saveOriginal, setSaveOriginal] = useState(false);
+  const [retroStyle, setRetroStyle] = useState(false);
   const [gridVisible, setGridVisible] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const savedOriginal = await AsyncStorage.getItem(
-          STORAGE_KEYS.SAVE_ORIGINAL
+        const savedRetroStyle = await AsyncStorage.getItem(
+          STORAGE_KEYS.RETRO_STYLE
         );
         const savedGrid = await AsyncStorage.getItem(STORAGE_KEYS.GRID_VISIBLE);
 
-        if (savedOriginal !== null) setSaveOriginal(savedOriginal === "true");
+        if (savedRetroStyle !== null) setRetroStyle(savedRetroStyle === "true");
 
         if (savedGrid !== null) setGridVisible(savedGrid === "true");
       } catch (e) {
@@ -37,9 +37,9 @@ export const SettingsProvider = ({ children }) => {
   // 💾 Salvar "Salvar Original"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(STORAGE_KEYS.SAVE_ORIGINAL, saveOriginal.toString());
+      AsyncStorage.setItem(STORAGE_KEYS.RETRO_STYLE, retroStyle.toString());
     }
-  }, [saveOriginal, loading]);
+  }, [retroStyle, loading]);
 
   // 💾 Salvar "Grade da Câmera"
   useEffect(() => {
@@ -49,8 +49,8 @@ export const SettingsProvider = ({ children }) => {
   }, [gridVisible, loading]);
 
   const value = {
-    saveOriginal,
-    setSaveOriginal,
+    retroStyle,
+    setRetroStyle,
     gridVisible,
     setGridVisible,
     loading,

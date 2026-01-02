@@ -14,6 +14,7 @@ import {
 import ExposureDialFinal from "./components/ExposureDialFinal";
 import LUTSelector from "./components/LUTSelector";
 import Shutter from "./components/shutter";
+import { useSettings } from "./context/SettingsContext";
 import {
   applyLUTToImage,
   loadAllLUTs,
@@ -21,6 +22,8 @@ import {
 } from "./utils/lutProcessor";
 
 export default function App() {
+  const { retroStyle } = useSettings();
+
   const router = useRouter();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -209,7 +212,7 @@ export default function App() {
       </View>
 
       {/* Preview Câmera */}
-      <View style={styles.cameraWrapper}>
+      <View style={retroStyle ? styles.retroStyle : styles.cameraWrapper}>
         <CameraView
           style={styles.camera}
           facing={facing}
@@ -295,18 +298,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   cameraWrapper: {
     position: "absolute",
-
-    // estilos originais
     top: 120,
     width: "100%",
     aspectRatio: 3 / 4,
     overflow: "hidden",
-    borderRadius: 10,
-
-    // estilos retrô
-    // alignSelf: "center",
-    // top: 130,
-    // width: "95%",
+    
+  },
+  retroStyle: {
+    position: "absolute",
+    alignSelf: "center",
+    top: 130,
+    width: "90%",
+    aspectRatio: 3 / 4,
+    overflow: "hidden",borderRadius: 10,
   },
   camera: { flex: 1 },
   shutterContainer: {
