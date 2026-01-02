@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   track: {
     width: 52,
     height: 28,
-    borderRadius: 15,
+    borderRadius: 10,
     backgroundColor: "#2a2a2a",
     borderWidth: 1,
     borderColor: "#444",
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   thumb: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius:7,
     backgroundColor: "#777",
   },
   thumbActive: {
