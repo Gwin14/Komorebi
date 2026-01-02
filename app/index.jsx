@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Button,
+  Image,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -22,7 +23,7 @@ import {
 } from "./utils/lutProcessor";
 
 export default function App() {
-  const { retroStyle } = useSettings();
+  const { retroStyle, gridVisible } = useSettings();
 
   const router = useRouter();
   const [facing, setFacing] = useState("back");
@@ -220,6 +221,11 @@ export default function App() {
           flash={flash}
           zoom={zoom}
         />
+        <Image
+          source={require("../assets/images/grid.png")}
+          style={gridVisible ? styles.grid : styles.gridHidden}
+          pointerEvents="none"
+        />
       </View>
 
       {/* Controles Inferiores */}
@@ -302,7 +308,6 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 3 / 4,
     overflow: "hidden",
-    
   },
   retroStyle: {
     position: "absolute",
@@ -310,7 +315,8 @@ const styles = StyleSheet.create({
     top: 130,
     width: "90%",
     aspectRatio: 3 / 4,
-    overflow: "hidden",borderRadius: 10,
+    overflow: "hidden",
+    borderRadius: 10,
   },
   camera: { flex: 1 },
   shutterContainer: {
@@ -347,4 +353,14 @@ const styles = StyleSheet.create({
   },
   processingText: { color: "white", marginTop: 10 },
   message: { color: "white", textAlign: "center", marginBottom: 20 },
+  grid: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    width: "100%",
+    height: "100%",
+    resizeMode: "stretch",
+    tintColor: "#7b7b7b3c",
+  },
+  gridHidden: { display: "none" },
 });
