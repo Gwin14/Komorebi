@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import {
   Button,
@@ -52,6 +53,15 @@ export default function Settings() {
         url="https://github.com/Gwin14/Komorebi"
       />
 
+      <TouchableOpacity
+        onPress={() => {
+          router.push("components/ExifFrame");
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+        style={{ width: "100%", alignItems: "center" }}
+      >
+        <ExternalLink label="Gerador de Exif Frame" disabled />
+      </TouchableOpacity>
       <View style={styles.divider} />
 
       <View style={styles.socialContainer}>
@@ -62,6 +72,7 @@ export default function Settings() {
               .catch((e) => {
                 console.error("Erro ao abrir link", e);
               });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
         >
           <Image
@@ -77,6 +88,7 @@ export default function Settings() {
               .catch((e) => {
                 console.error("Erro ao abrir link", e);
               });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
         >
           <Image
@@ -92,6 +104,7 @@ export default function Settings() {
               .catch((e) => {
                 console.error("Erro ao abrir link", e);
               });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
         >
           <Image

@@ -9,10 +9,18 @@ import {
   View,
 } from "react-native";
 
-export default function ExternalLink({ label, url, description }) {
+export default function ExternalLink({
+  label,
+  description,
+  url, // opcional
+  disabled, // opcional (força modo visual)
+}) {
+  const isClickable = !!url && !disabled;
+
   const handlePress = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (!url) return;
+
+    if (!isClickable) return;
 
     try {
       const supported = await Linking.canOpenURL(url);
@@ -21,7 +29,7 @@ export default function ExternalLink({ label, url, description }) {
       } else {
         Alert.alert("Erro", "Não foi possível abrir o link.");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Erro", "Ocorreu um erro ao abrir o navegador.");
     }
   };
@@ -29,9 +37,10 @@ export default function ExternalLink({ label, url, description }) {
   return (
     <Pressable
       onPress={handlePress}
+      pointerEvents={isClickable ? "auto" : "none"}
       style={({ pressed }) => [
         styles.wrapper,
-        pressed && styles.wrapperPressed,
+        pressed && isClickable && styles.wrapperPressed,
       ]}
     >
       <View style={styles.content}>
@@ -40,7 +49,6 @@ export default function ExternalLink({ label, url, description }) {
           {description && <Text style={styles.description}>{description}</Text>}
         </View>
 
-        {/* O ícone substitui o espaço que o Toggle ocupava à direita */}
         <View style={styles.iconWrapper}>
           <Feather name="external-link" size={18} color="#ffaa00" />
         </View>
