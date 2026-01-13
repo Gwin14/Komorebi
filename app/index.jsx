@@ -30,6 +30,8 @@ export default function App() {
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(0);
   const cameraRef = useRef(null);
+  const [pictureSize, setPictureSize] = useState(null);
+  const [cameraReady, setCameraReady] = useState(false);
 
   // --- MUDANÇA 1: Estado Unificado de Controle ---
   // 'none' = Shutter visível
@@ -86,8 +88,24 @@ export default function App() {
     );
   }
 
+  const onCameraReady = async () => {
+    try {
+      if (cameraRef.current) {
+        const sizes = await cameraRef.current.getAvailablePictureSizesAsync();
+        if (sizes && sizes.length > 0) {
+          // Normalmente o primeiro é o maior (resolução máxima)
+          setPictureSize(sizes[0]);
+        }
+        setCameraReady(true);
+      }
+    } catch (e) {
+      console.warn("Erro ao obter pictureSize:", e);
+      setCameraReady(true);
+    }
+  };
+
   const takePicture = async () => {
-    if (cameraRef.current && !isProcessing) {
+    if (cameraRef.current && cameraReady && !isProcessing) {
       try {
         setIsProcessing(true);
         const photo = await cameraRef.current.takePictureAsync({
@@ -220,6 +238,8 @@ export default function App() {
           ref={cameraRef}
           flash={flash}
           zoom={zoom}
+          pictureSize={pictureSize}
+          onCameraReady={onCameraReady}
         />
         <Image
           source={require("../assets/images/grid.png")}
