@@ -111,23 +111,27 @@ export default function App() {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 1,
           skipProcessing: false,
+          exif: true,
         });
+
+        console.log(photo.exif);
 
         if (selectedLutId !== "none" && lutsLoaded) {
           const processingInfo = await applyLUTToImage(
             photo.uri,
-            selectedLutId
+            selectedLutId,
+            photo.exif
           );
           if (processingInfo.needsProcessing) {
             setProcessingData(processingInfo);
           } else {
             if (hasMediaPermission)
-              await MediaLibrary.saveToLibraryAsync(photo.uri);
+              await MediaLibrary.createAssetAsync(photo.uri);
             setIsProcessing(false);
           }
         } else {
           if (hasMediaPermission)
-            await MediaLibrary.saveToLibraryAsync(photo.uri);
+            await MediaLibrary.createAssetAsync(photo.uri);
           setIsProcessing(false);
         }
       } catch (error) {
@@ -139,8 +143,7 @@ export default function App() {
 
   const handleProcessed = async (processedUri) => {
     try {
-      if (hasMediaPermission)
-        await MediaLibrary.saveToLibraryAsync(processedUri);
+      if (hasMediaPermission) await MediaLibrary.createAssetAsync(processedUri);
     } finally {
       setProcessingData(null);
       setIsProcessing(false);

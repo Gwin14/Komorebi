@@ -2,6 +2,7 @@ import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 import React, { useRef } from "react";
 import { WebView } from "react-native-webview";
+import * as piexif from "piexifjs";
 
 const cachedLUTs = {};
 
@@ -324,7 +325,7 @@ const generateProcessingHTML = (base64Image, cube) => {
   `;
 };
 
-export const applyLUTToImage = async (imageUri, lutId) => {
+export const applyLUTToImage = async (imageUri, lutId, exifData) => {
   const cubeData = getCachedLUT(lutId);
 
   if (!cubeData) {
@@ -346,6 +347,7 @@ export const applyLUTToImage = async (imageUri, lutId) => {
       base64,
       cube: cubeData,
       originalUri: imageUri,
+      exifData: exifData || null,
     };
   } catch (error) {
     console.error("Erro ao preparar processamento:", error);
@@ -353,10 +355,106 @@ export const applyLUTToImage = async (imageUri, lutId) => {
   }
 };
 
-export const saveProcessedImage = async (base64Data) => {
+const applyExifToImage = (base64Data, exifData) => {
+  if (!exifData || Object.keys(exifData).length === 0) {
+    return base64Data;
+  }
+
   try {
+    const dataUrl = `data:image/jpeg;base64,${base64Data}`;
+    
+    // Criar objeto EXIF vazio ou carregar existente
+    let exifObj;
+    try {
+      exifObj = piexif.load(dataUrl);
+    } catch (e) {
+      // Se não houver EXIF existente, criar novo objeto
+      exifObj = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": null };
+    }
+
+    // Mapear metadados EXIF do formato Expo para formato piexif
+    if (exifData.Make) {
+      exifObj["0th"][piexif.ImageIFD.Make] = String(exifData.Make);
+    }
+    if (exifData.Model) {
+      exifObj["0th"][piexif.ImageIFD.Model] = String(exifData.Model);
+    }
+    if (exifData.DateTime) {
+      exifObj["0th"][piexif.ImageIFD.DateTime] = String(exifData.DateTime);
+    }
+    if (exifData.DateTimeOriginal) {
+      exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = String(exifData.DateTimeOriginal);
+    }
+    if (exifData.DateTimeDigitized) {
+      exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = String(exifData.DateTimeDigitized);
+    }
+    if (exifData.Orientation !== undefined) {
+      exifObj["0th"][piexif.ImageIFD.Orientation] = exifData.Orientation;
+    }
+    if (exifData.ExposureTime) {
+      exifObj["Exif"][piexif.ExifIFD.ExposureTime] = piexif.helper.toExifFraction(exifData.ExposureTime);
+    }
+    if (exifData.FNumber) {
+      exifObj["Exif"][piexif.ExifIFD.FNumber] = piexif.helper.toExifFraction(exifData.FNumber);
+    }
+    if (exifData.ISO) {
+      exifObj["Exif"][piexif.ExifIFD.ISOSpeedRatings] = [exifData.ISO];
+    }
+    if (exifData.FocalLength) {
+      exifObj["Exif"][piexif.ExifIFD.FocalLength] = piexif.helper.toExifFraction(exifData.FocalLength);
+    }
+    if (exifData.WhiteBalance !== undefined) {
+      exifObj["Exif"][piexif.ExifIFD.WhiteBalance] = exifData.WhiteBalance;
+    }
+    if (exifData.Flash !== undefined) {
+      exifObj["Exif"][piexif.ExifIFD.Flash] = exifData.Flash;
+    }
+    if (exifData.MeteringMode !== undefined) {
+      exifObj["Exif"][piexif.ExifIFD.MeteringMode] = exifData.MeteringMode;
+    }
+    if (exifData.ExposureMode !== undefined) {
+      exifObj["Exif"][piexif.ExifIFD.ExposureMode] = exifData.ExposureMode;
+    }
+    if (exifData.ExposureProgram !== undefined) {
+      exifObj["Exif"][piexif.ExifIFD.ExposureProgram] = exifData.ExposureProgram;
+    }
+    if (exifData.ColorSpace !== undefined) {
+      exifObj["Exif"][piexif.ExifIFD.ColorSpace] = exifData.ColorSpace;
+    }
+    
+    // GPS Data
+    if (exifData.GPSLatitude && exifData.GPSLongitude) {
+      exifObj["GPS"][piexif.GPSIFD.GPSLatitudeRef] = exifData.GPSLatitude >= 0 ? "N" : "S";
+      exifObj["GPS"][piexif.GPSIFD.GPSLatitude] = piexif.helper.degToDmsRational(Math.abs(exifData.GPSLatitude));
+      exifObj["GPS"][piexif.GPSIFD.GPSLongitudeRef] = exifData.GPSLongitude >= 0 ? "E" : "W";
+      exifObj["GPS"][piexif.GPSIFD.GPSLongitude] = piexif.helper.degToDmsRational(Math.abs(exifData.GPSLongitude));
+    }
+    if (exifData.GPSAltitude) {
+      exifObj["GPS"][piexif.GPSIFD.GPSAltitudeRef] = exifData.GPSAltitude >= 0 ? 0 : 1;
+      exifObj["GPS"][piexif.GPSIFD.GPSAltitude] = piexif.helper.toExifFraction(Math.abs(exifData.GPSAltitude));
+    }
+
+    // Converter EXIF para bytes e inserir na imagem
+    const exifBytes = piexif.dump(exifObj);
+    const newDataUrl = piexif.insert(exifBytes, dataUrl);
+    const newBase64 = newDataUrl.split(",")[1];
+
+    console.log("Metadados EXIF aplicados com sucesso");
+    return newBase64;
+  } catch (error) {
+    console.error("Erro ao aplicar EXIF:", error);
+    // Retornar imagem original se houver erro
+    return base64Data;
+  }
+};
+
+export const saveProcessedImage = async (base64Data, exifData) => {
+  try {
+    // Aplicar metadados EXIF se disponíveis
+    const finalBase64 = exifData ? applyExifToImage(base64Data, exifData) : base64Data;
+    
     const filename = FileSystem.documentDirectory + `lut_${Date.now()}.jpg`;
-    await FileSystem.writeAsStringAsync(filename, base64Data, {
+    await FileSystem.writeAsStringAsync(filename, finalBase64, {
       encoding: FileSystem.EncodingType.Base64,
     });
 
@@ -382,7 +480,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
       const message = JSON.parse(event.nativeEvent.data);
 
       if (message.type === "success") {
-        const savedUri = await saveProcessedImage(message.data);
+        const savedUri = await saveProcessedImage(message.data, imageData.exifData);
         if (savedUri && onProcessed) {
           onProcessed(savedUri);
         }

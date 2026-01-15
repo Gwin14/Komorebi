@@ -40,6 +40,7 @@
     "expo-web-browser": "~15.0.7",
     "gl-react": "^5.2.0",
     "gl-react-expo": "^5.2.1",
+    "piexifjs": "^1.0.6",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.4",
