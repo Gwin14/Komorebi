@@ -16,8 +16,15 @@ import ExternalLink from "./ExternalLink";
 export default function Settings() {
   const router = useRouter();
 
-  const { retroStyle, setRetroStyle, gridVisible, setGridVisible, loading } =
-    useSettings();
+  const {
+    retroStyle,
+    setRetroStyle,
+    gridVisible,
+    setGridVisible,
+    loading,
+    shutterSound,
+    setShutterSound,
+  } = useSettings();
 
   if (loading) {
     return (
@@ -42,6 +49,12 @@ export default function Settings() {
           label="Grade da Câmera"
           value={gridVisible}
           onValueChange={setGridVisible}
+        />
+
+        <CustomToggle
+          label="Som do Obturador"
+          value={shutterSound}
+          onValueChange={setShutterSound}
         />
       </View>
 

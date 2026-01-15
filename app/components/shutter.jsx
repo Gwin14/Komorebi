@@ -1,13 +1,21 @@
 import * as Haptics from "expo-haptics";
 import { StyleSheet, TouchableOpacity } from "react-native";
+import { useSettings } from "../context/SettingsContext";
+import useShutterSound from "../utils/useShutterSound";
 
 export default function Shutter({ takePicture }) {
+  const { shutterSound } = useSettings();
+  const playShutterSound = useShutterSound();
+
   return (
     <TouchableOpacity
       style={styles.shutter}
-      onPress={() => {
+      onPress={async () => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        takePicture();
+        if (shutterSound) {
+          await playShutterSound();
+        }
+        await takePicture();
       }}
     ></TouchableOpacity>
   );

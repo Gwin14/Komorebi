@@ -6,12 +6,14 @@ const SettingsContext = createContext(null);
 const STORAGE_KEYS = {
   RETRO_STYLE: "@settings/retroStyle",
   GRID_VISIBLE: "@settings/gridVisible",
+  SHUTTER_SOUND: "@settings/shutterSound",
 };
 
 export const SettingsProvider = ({ children }) => {
   const [retroStyle, setRetroStyle] = useState(false);
-  const [gridVisible, setGridVisible] = useState(true);
+  const [gridVisible, setGridVisible] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [shutterSound, setShutterSound] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -21,9 +23,16 @@ export const SettingsProvider = ({ children }) => {
         );
         const savedGrid = await AsyncStorage.getItem(STORAGE_KEYS.GRID_VISIBLE);
 
+        const savedShutterSound = await AsyncStorage.getItem(
+          STORAGE_KEYS.SHUTTER_SOUND
+        );
+
         if (savedRetroStyle !== null) setRetroStyle(savedRetroStyle === "true");
 
         if (savedGrid !== null) setGridVisible(savedGrid === "true");
+
+        if (savedShutterSound !== null)
+          setShutterSound(savedShutterSound === "true");
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
@@ -48,12 +57,21 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [gridVisible, loading]);
 
+  // 💾 Salvar "Som de shutter"
+  useEffect(() => {
+    if (!loading) {
+      AsyncStorage.setItem(STORAGE_KEYS.SHUTTER_SOUND, shutterSound.toString());
+    }
+  }, [shutterSound, loading]);
+
   const value = {
     retroStyle,
     setRetroStyle,
     gridVisible,
     setGridVisible,
     loading,
+    shutterSound,
+    setShutterSound,
   };
 
   return (

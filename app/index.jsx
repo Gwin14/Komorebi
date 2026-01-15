@@ -180,7 +180,7 @@ export default function App() {
 
       {isProcessing && (
         <View style={styles.processingOverlay}>
-          <Text style={styles.processingText}>Processando...</Text>
+          {/* <Text style={styles.processingText}>Processando...</Text> */}
         </View>
       )}
 
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   sideButton: { padding: 10 },
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.8)",
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 2000,
