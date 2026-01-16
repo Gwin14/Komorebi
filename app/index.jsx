@@ -3,6 +3,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import * as Location from "expo-location";
 import {
   Animated,
   Button,
@@ -57,6 +58,7 @@ export default function App() {
       setLutsLoaded(true);
       const { status } = await MediaLibrary.requestPermissionsAsync();
       setHasMediaPermission(status === "granted");
+      await Location.requestForegroundPermissionsAsync();
     })();
   }, []);
 
@@ -108,10 +110,32 @@ export default function App() {
     if (cameraRef.current && cameraReady && !isProcessing) {
       try {
         setIsProcessing(true);
+
+        let additionalExif = {};
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === "granted") {
+            let location = await Location.getLastKnownPositionAsync({});
+            if (!location) {
+              location = await Location.getCurrentPositionAsync({});
+            }
+            if (location) {
+              additionalExif = {
+                GPSLatitude: location.coords.latitude,
+                GPSLongitude: location.coords.longitude,
+                GPSAltitude: location.coords.altitude,
+              };
+            }
+          }
+        } catch (e) {
+          console.log("Erro ao obter localização:", e);
+        }
+
         const photo = await cameraRef.current.takePictureAsync({
           quality: 1,
           skipProcessing: false,
           exif: true,
+          additionalExif,
         });
 
         console.log(photo.exif);

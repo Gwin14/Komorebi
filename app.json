@@ -14,7 +14,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#E6F4FE"
         // "foregroundImage": "./assets/images/android-icon-foreground.png",
         // "backgroundImage": "./assets/images/android-icon-background.png",
         // "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -24,8 +24,8 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ],
       "package": "com.anonymous.camera"
     },
@@ -51,7 +51,13 @@
           "recordAudioAndroid": true
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permitir que o app acesse sua localização para adicionar GPS às fotos."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
