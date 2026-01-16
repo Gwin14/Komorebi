@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import * as Location from "expo-location";
 import {
   Animated,
   Button,
@@ -138,13 +138,15 @@ export default function App() {
           additionalExif,
         });
 
-        console.log(photo.exif);
+        // Mesclar additionalExif com photo.exif para garantir que o GPS vá para o processamento
+        const completeExif = { ...photo.exif, ...additionalExif };
+        console.log(completeExif);
 
         if (selectedLutId !== "none" && lutsLoaded) {
           const processingInfo = await applyLUTToImage(
             photo.uri,
             selectedLutId,
-            photo.exif
+            completeExif
           );
           if (processingInfo.needsProcessing) {
             setProcessingData(processingInfo);
