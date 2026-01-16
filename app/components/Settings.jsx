@@ -1,13 +1,7 @@
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import {
-  Button,
-  Image,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
 import CustomToggle from "./CustoToggle";
@@ -135,7 +129,9 @@ export default function Settings() {
         </TouchableOpacity>
       </View>
 
-      <Button title="Voltar" onPress={() => router.back()} color="#ffaa00" />
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Ionicons name="chevron-back" size={32} color="white" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -164,5 +160,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     width: "90%",
     marginTop: 20,
+  },
+  backButton: {
+    position: "absolute",
+    top: 59,
+    left: 16,
+    zIndex: 10,
   },
 });
