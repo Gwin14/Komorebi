@@ -25,6 +25,7 @@ export const takePicture = async ({
   lutsLoaded,
   hasMediaPermission,
   setProcessingData,
+  location,
 }) => {
   if (cameraRef.current && cameraReady && !isProcessing) {
     try {
@@ -33,16 +34,16 @@ export const takePicture = async ({
       let additionalExif = {};
       try {
         const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === "granted") {
-          let location = await Location.getLastKnownPositionAsync({});
-          if (!location) {
-            location = await Location.getCurrentPositionAsync({});
+        if (status === "granted" && location) {
+          let gpsLocation = await Location.getLastKnownPositionAsync({});
+          if (!gpsLocation) {
+            gpsLocation = await Location.getCurrentPositionAsync({});
           }
-          if (location) {
+          if (gpsLocation) {
             additionalExif = {
-              GPSLatitude: location.coords.latitude,
-              GPSLongitude: location.coords.longitude,
-              GPSAltitude: location.coords.altitude,
+              GPSLatitude: gpsLocation.coords.latitude,
+              GPSLongitude: gpsLocation.coords.longitude,
+              GPSAltitude: gpsLocation.coords.altitude,
             };
           }
         }
@@ -64,7 +65,7 @@ export const takePicture = async ({
         const processingInfo = await applyLUTToImage(
           photo.uri,
           selectedLutId,
-          completeExif
+          completeExif,
         );
         if (processingInfo.needsProcessing) {
           setProcessingData(processingInfo);
@@ -86,7 +87,7 @@ export const takePicture = async ({
 export const onCameraReady = async (
   cameraRef,
   setPictureSize,
-  setCameraReady
+  setCameraReady,
 ) => {
   try {
     if (cameraRef.current) {

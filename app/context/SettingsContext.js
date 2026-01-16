@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   RETRO_STYLE: "@settings/retroStyle",
   GRID_VISIBLE: "@settings/gridVisible",
   SHUTTER_SOUND: "@settings/shutterSound",
+  LOCATION: "@settings/location",
 };
 
 export const SettingsProvider = ({ children }) => {
@@ -14,18 +15,23 @@ export const SettingsProvider = ({ children }) => {
   const [gridVisible, setGridVisible] = useState(false);
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(false);
+  const [location, setLocation] = useState(true);
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
         const savedRetroStyle = await AsyncStorage.getItem(
-          STORAGE_KEYS.RETRO_STYLE
+          STORAGE_KEYS.RETRO_STYLE,
         );
         const savedGrid = await AsyncStorage.getItem(STORAGE_KEYS.GRID_VISIBLE);
 
         const savedShutterSound = await AsyncStorage.getItem(
-          STORAGE_KEYS.SHUTTER_SOUND
+          STORAGE_KEYS.SHUTTER_SOUND,
         );
+
+        const savedLocation = await AsyncStorage.getItem(STORAGE_KEYS.LOCATION);
+
+        if (savedLocation !== null) setLocation(savedLocation === "true");
 
         if (savedRetroStyle !== null) setRetroStyle(savedRetroStyle === "true");
 
@@ -64,6 +70,13 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [shutterSound, loading]);
 
+  // 💾 Salvar "Localização"
+  useEffect(() => {
+    if (!loading) {
+      AsyncStorage.setItem(STORAGE_KEYS.LOCATION, location.toString());
+    }
+  }, [location, loading]);
+
   const value = {
     retroStyle,
     setRetroStyle,
@@ -72,6 +85,8 @@ export const SettingsProvider = ({ children }) => {
     loading,
     shutterSound,
     setShutterSound,
+    location,
+    setLocation,
   };
 
   return (

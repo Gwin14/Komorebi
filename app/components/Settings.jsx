@@ -24,6 +24,8 @@ export default function Settings() {
     loading,
     shutterSound,
     setShutterSound,
+    location,
+    setLocation,
   } = useSettings();
 
   if (loading) {
@@ -55,6 +57,12 @@ export default function Settings() {
           label="Som do Obturador"
           value={shutterSound}
           onValueChange={setShutterSound}
+        />
+
+        <CustomToggle
+          label="Salvar Localização nas Fotos"
+          value={location}
+          onValueChange={setLocation}
         />
       </View>
 

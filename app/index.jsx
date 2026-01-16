@@ -12,7 +12,7 @@ import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
 import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
 
 export default function App() {
-  const { retroStyle, gridVisible } = useSettings();
+  const { retroStyle, gridVisible, location } = useSettings();
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -64,6 +64,7 @@ export default function App() {
       lutsLoaded,
       hasMediaPermission,
       setProcessingData,
+      location,
     });
   };
 
