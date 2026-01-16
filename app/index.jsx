@@ -25,6 +25,7 @@ import {
 
 export default function App() {
   const { retroStyle, gridVisible } = useSettings();
+  const APP_ALBUM = "Komorebi";
 
   const router = useRouter();
   const [facing, setFacing] = useState("back");
@@ -61,6 +62,18 @@ export default function App() {
       await Location.requestForegroundPermissionsAsync();
     })();
   }, []);
+
+  async function saveToAlbum(uri) {
+    const asset = await MediaLibrary.createAssetAsync(uri);
+
+    let album = await MediaLibrary.getAlbumAsync(APP_ALBUM);
+
+    if (!album) {
+      await MediaLibrary.createAlbumAsync(APP_ALBUM, asset, false);
+    } else {
+      await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+    }
+  }
 
   // --- MUDANÇA 2: Efeito para disparar a animação ---
   useEffect(() => {
@@ -151,13 +164,11 @@ export default function App() {
           if (processingInfo.needsProcessing) {
             setProcessingData(processingInfo);
           } else {
-            if (hasMediaPermission)
-              await MediaLibrary.createAssetAsync(photo.uri);
+            if (hasMediaPermission) await saveToAlbum(photo.uri);
             setIsProcessing(false);
           }
         } else {
-          if (hasMediaPermission)
-            await MediaLibrary.createAssetAsync(photo.uri);
+          if (hasMediaPermission) await saveToAlbum(photo.uri);
           setIsProcessing(false);
         }
       } catch (error) {
@@ -169,7 +180,7 @@ export default function App() {
 
   const handleProcessed = async (processedUri) => {
     try {
-      if (hasMediaPermission) await MediaLibrary.createAssetAsync(processedUri);
+      if (hasMediaPermission) await saveToAlbum(processedUri);
     } finally {
       setProcessingData(null);
       setIsProcessing(false);
