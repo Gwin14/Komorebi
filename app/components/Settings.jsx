@@ -77,6 +77,21 @@ export default function Settings() {
       >
         <ExternalLink label="Gerador de Exif Frame" disabled />
       </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => {
+          router.push("components/Feedback");
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+        style={{ width: "100%", alignItems: "center" }}
+      >
+        <ExternalLink
+          label="Dê seu feedback"
+          description="Ajude a melhorar o app!"
+          disabled
+        />
+      </TouchableOpacity>
+
       <View style={styles.divider} />
 
       <View style={styles.socialContainer}>
