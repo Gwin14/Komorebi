@@ -11,12 +11,19 @@ import { useSettings } from "./context/SettingsContext";
 import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
 import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
 
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+
+import { useSharedValue, runOnJS } from "react-native-reanimated";
+
 export default function App() {
   const { retroStyle, gridVisible, location } = useSettings();
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(0);
+  const zoomSV = useSharedValue(0);
+  const lastZoom = useSharedValue(0);
+
   const cameraRef = useRef(null);
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
@@ -30,6 +37,21 @@ export default function App() {
   const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedLutId, setSelectedLutId] = useState("none");
+
+  const pinchGesture = Gesture.Pinch()
+    .onBegin(() => {
+      lastZoom.value = zoomSV.value;
+    })
+    .onUpdate((e) => {
+      let newZoom = lastZoom.value + (e.scale - 1) * 0.25;
+
+      newZoom = Math.min(Math.max(newZoom, 0), 1);
+
+      zoomSV.value = newZoom;
+
+      // 🔥 sincroniza com o state da câmera
+      runOnJS(setZoom)(newZoom);
+    });
 
   useEffect(() => {
     (async () => {
@@ -109,18 +131,22 @@ export default function App() {
         selectedLutId={selectedLutId}
       />
 
-      <CameraPreview
-        retroStyle={retroStyle}
-        cameraRef={cameraRef}
-        facing={facing}
-        flash={flash}
-        zoom={zoom}
-        pictureSize={pictureSize}
-        onCameraReady={() =>
-          onCameraReady(cameraRef, setPictureSize, setCameraReady)
-        }
-        gridVisible={gridVisible}
-      />
+      <GestureDetector gesture={pinchGesture}>
+        <Animated.View style={styles.container}>
+          <CameraPreview
+            retroStyle={retroStyle}
+            cameraRef={cameraRef}
+            facing={facing}
+            flash={flash}
+            zoom={zoom}
+            pictureSize={pictureSize}
+            onCameraReady={() =>
+              onCameraReady(cameraRef, setPictureSize, setCameraReady)
+            }
+            gridVisible={gridVisible}
+          />
+        </Animated.View>
+      </GestureDetector>
 
       <BottomControls
         controlsAnim={controlsAnim}
