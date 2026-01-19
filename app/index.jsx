@@ -13,7 +13,7 @@ import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
 
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
-import { useSharedValue, runOnJS } from "react-native-reanimated";
+import { runOnJS, useSharedValue } from "react-native-reanimated";
 
 export default function App() {
   const { retroStyle, gridVisible, location } = useSettings();
@@ -132,20 +132,20 @@ export default function App() {
       />
 
       <GestureDetector gesture={pinchGesture}>
-        <Animated.View style={styles.container}>
-          <CameraPreview
-            retroStyle={retroStyle}
-            cameraRef={cameraRef}
-            facing={facing}
-            flash={flash}
-            zoom={zoom}
-            pictureSize={pictureSize}
-            onCameraReady={() =>
-              onCameraReady(cameraRef, setPictureSize, setCameraReady)
-            }
-            gridVisible={gridVisible}
-          />
-        </Animated.View>
+        {/* <Animated.View style={styles.container}> */}
+        <CameraPreview
+          retroStyle={retroStyle}
+          cameraRef={cameraRef}
+          facing={facing}
+          flash={flash}
+          zoom={zoom}
+          pictureSize={pictureSize}
+          onCameraReady={() =>
+            onCameraReady(cameraRef, setPictureSize, setCameraReady)
+          }
+          gridVisible={gridVisible}
+        />
+        {/* </Animated.View> */}
       </GestureDetector>
 
       <BottomControls
