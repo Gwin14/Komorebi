@@ -69,6 +69,7 @@ export const takePicture = async ({
         );
         if (processingInfo.needsProcessing) {
           setProcessingData(processingInfo);
+          setIsProcessing(false); // Libera a UI imediatamente para nova foto
         } else {
           if (hasMediaPermission) await saveToAlbum(photo.uri);
           setIsProcessing(false);

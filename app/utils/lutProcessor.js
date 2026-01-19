@@ -1,7 +1,7 @@
 import { Asset } from "expo-asset";
 import * as FileSystem from "expo-file-system/legacy";
 import * as piexif from "piexifjs";
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { WebView } from "react-native-webview";
 
 const cachedLUTs = {};
@@ -357,15 +357,12 @@ export const applyLUTToImage = async (imageUri, lutId, exifData) => {
   try {
     console.log(`Iniciando processamento com LUT "${lutId}"...`);
 
-    const base64 = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    console.log("Imagem convertida para base64, tamanho:", base64.length);
+    // Otimização: Não lemos o base64 aqui para não bloquear a câmera.
+    // Passamos o URI para ser lido pelo LUTProcessor em background.
 
     return {
       needsProcessing: true,
-      base64,
+      imageUri, // Passamos o URI em vez do base64 direto
       cube: cubeData,
       originalUri: imageUri,
       exifData: exifData || null,
@@ -405,19 +402,19 @@ const applyExifToImage = (base64Data, exifData) => {
     }
     if (exifData.DateTimeOriginal) {
       exifObj["Exif"][piexif.ExifIFD.DateTimeOriginal] = String(
-        exifData.DateTimeOriginal
+        exifData.DateTimeOriginal,
       );
     }
     if (exifData.DateTimeDigitized) {
       exifObj["Exif"][piexif.ExifIFD.DateTimeDigitized] = String(
-        exifData.DateTimeDigitized
+        exifData.DateTimeDigitized,
       );
     }
 
     // O Canvas normaliza a imagem (pixels em pé), então forçamos Orientação 1.
     // Se usarmos a orientação original, a imagem ficará girada (dupla rotação).
     exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
-    
+
     // Resolução padrão (necessário para alguns visualizadores reconhecerem o EXIF corretamente)
     exifObj["0th"][piexif.ImageIFD.XResolution] = [72, 1];
     exifObj["0th"][piexif.ImageIFD.YResolution] = [72, 1];
@@ -426,12 +423,12 @@ const applyExifToImage = (base64Data, exifData) => {
 
     if (exifData.ExposureTime) {
       exifObj["Exif"][piexif.ExifIFD.ExposureTime] = toExifFraction(
-        exifData.ExposureTime
+        exifData.ExposureTime,
       );
     }
     if (exifData.FNumber) {
       exifObj["Exif"][piexif.ExifIFD.FNumber] = toExifFraction(
-        exifData.FNumber
+        exifData.FNumber,
       );
     }
     if (exifData.ISO) {
@@ -439,7 +436,7 @@ const applyExifToImage = (base64Data, exifData) => {
     }
     if (exifData.FocalLength) {
       exifObj["Exif"][piexif.ExifIFD.FocalLength] = toExifFraction(
-        exifData.FocalLength
+        exifData.FocalLength,
       );
     }
     if (exifData.WhiteBalance !== undefined) {
@@ -469,10 +466,14 @@ const applyExifToImage = (base64Data, exifData) => {
 
     // SubSecTime para ordenação precisa
     if (exifData.SubSecTimeOriginal) {
-      exifObj["Exif"][piexif.ExifIFD.SubSecTimeOriginal] = String(exifData.SubSecTimeOriginal);
+      exifObj["Exif"][piexif.ExifIFD.SubSecTimeOriginal] = String(
+        exifData.SubSecTimeOriginal,
+      );
     }
     if (exifData.SubSecTimeDigitized) {
-      exifObj["Exif"][piexif.ExifIFD.SubSecTimeDigitized] = String(exifData.SubSecTimeDigitized);
+      exifObj["Exif"][piexif.ExifIFD.SubSecTimeDigitized] = String(
+        exifData.SubSecTimeDigitized,
+      );
     }
 
     if (exifData.ColorSpace !== undefined) {
@@ -504,7 +505,7 @@ const applyExifToImage = (base64Data, exifData) => {
       exifObj["GPS"][piexif.GPSIFD.GPSAltitudeRef] =
         exifData.GPSAltitude >= 0 ? 0 : 1;
       exifObj["GPS"][piexif.GPSIFD.GPSAltitude] = toExifFraction(
-        Math.abs(exifData.GPSAltitude)
+        Math.abs(exifData.GPSAltitude),
       );
     }
 
@@ -544,12 +545,40 @@ export const saveProcessedImage = async (base64Data, exifData) => {
 
 export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const webViewRef = useRef(null);
+  const [html, setHtml] = useState(null);
 
-  if (!imageData || !imageData.needsProcessing) {
+  useEffect(() => {
+    let isMounted = true;
+    const prepareData = async () => {
+      if (!imageData || !imageData.needsProcessing) return;
+
+      try {
+        let base64 = imageData.base64;
+        // Carregamento tardio (lazy load) do base64 para não travar a UI na captura
+        if (!base64 && imageData.imageUri) {
+          base64 = await FileSystem.readAsStringAsync(imageData.imageUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        }
+
+        if (isMounted && base64) {
+          setHtml(generateProcessingHTML(base64, imageData.cube));
+        }
+      } catch (e) {
+        if (isMounted && onError) onError(e);
+      }
+    };
+
+    setHtml(null);
+    prepareData();
+    return () => {
+      isMounted = false;
+    };
+  }, [imageData]);
+
+  if (!imageData || !imageData.needsProcessing || !html) {
     return null;
   }
-
-  const html = generateProcessingHTML(imageData.base64, imageData.cube);
 
   const handleMessage = async (event) => {
     try {
@@ -558,7 +587,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
       if (message.type === "success") {
         const savedUri = await saveProcessedImage(
           message.data,
-          imageData.exifData
+          imageData.exifData,
         );
         if (savedUri && onProcessed) {
           onProcessed(savedUri);

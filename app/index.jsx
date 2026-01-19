@@ -27,7 +27,7 @@ export default function App() {
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
   const [lutsLoaded, setLutsLoaded] = useState(false);
 
-  const [processingData, setProcessingData] = useState(null);
+  const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedLutId, setSelectedLutId] = useState("none");
 
@@ -63,7 +63,8 @@ export default function App() {
       selectedLutId,
       lutsLoaded,
       hasMediaPermission,
-      setProcessingData,
+      setProcessingData: (data) =>
+        setProcessingQueue((prev) => [...prev, data]),
       location,
     });
   };
@@ -72,8 +73,7 @@ export default function App() {
     try {
       if (hasMediaPermission) await saveToAlbum(processedUri);
     } finally {
-      setProcessingData(null);
-      setIsProcessing(false);
+      setProcessingQueue((prev) => prev.slice(1));
     }
   };
 
@@ -91,11 +91,11 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      {processingData && (
+      {processingQueue.length > 0 && (
         <LUTProcessor
-          imageData={processingData}
+          imageData={processingQueue[0]}
           onProcessed={handleProcessed}
-          onError={() => setIsProcessing(false)}
+          onError={() => setProcessingQueue((prev) => prev.slice(1))}
         />
       )}
 
