@@ -1,5 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
+import Reanimated from "react-native-reanimated";
+import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LUTSelector from "./LUTSelector";
 import Shutter from "./shutter";
@@ -14,6 +16,8 @@ export default function BottomControls({
   selectedLutId,
   setSelectedLutId,
 }) {
+  const deviceOrientationStyle = useDeviceOrientation();
+
   const shutterTranslate = controlsAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 100],
@@ -46,7 +50,9 @@ export default function BottomControls({
         ]}
       >
         <TouchableOpacity style={styles.sideButton}>
-          <Ionicons name="images-outline" size={32} color="white" />
+          <Reanimated.View style={deviceOrientationStyle}>
+            <Ionicons name="images-outline" size={32} color="white" />
+          </Reanimated.View>
         </TouchableOpacity>
 
         <View pointerEvents={activeControl === "none" ? "auto" : "none"}>
@@ -57,7 +63,9 @@ export default function BottomControls({
           style={styles.sideButton}
           onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
         >
-          <Ionicons name="camera-reverse-outline" size={32} color="white" />
+          <Reanimated.View style={deviceOrientationStyle}>
+            <Ionicons name="camera-reverse-outline" size={32} color="white" />
+          </Reanimated.View>
         </TouchableOpacity>
       </Animated.View>
 
