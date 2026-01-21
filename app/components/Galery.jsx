@@ -4,15 +4,22 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Button,
   FlatList,
   Image,
+  Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { ExifItem } from "../components/ExifItem";
+import { MapViewWeb } from "../components/MapViewWeb";
+import { exifHandler } from "../utils/exifFormatter";
+import { EXIF_SCHEMA } from "../utils/exifSchema";
 
 export default function Galery() {
   const router = useRouter();
@@ -20,6 +27,9 @@ export default function Galery() {
   const [permission, requestPermission] = MediaLibrary.usePermissions();
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [exifData, setExifData] = useState(null);
 
   useEffect(() => {
     if (!permission) return;
@@ -107,13 +117,23 @@ export default function Galery() {
       </TouchableOpacity>
 
       <Text style={styles.title}>Galeria</Text>
+
       <FlatList
         data={photos}
         numColumns={3}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 2 }}
         renderItem={({ item }) => (
-          <Image source={{ uri: item.uri }} style={styles.image} />
+          <TouchableOpacity
+            style={{ flex: 1 / 3, padding: 0.9 }}
+            onPress={() => {
+              setModalVisible(true);
+              setSelectedImage(item.uri);
+              exifHandler(item.id, setExifData);
+            }}
+          >
+            <Image source={{ uri: item.uri }} style={styles.image} />
+          </TouchableOpacity>
         )}
         ListEmptyComponent={
           <View style={{ alignItems: "center", marginTop: 40 }}>
@@ -121,6 +141,99 @@ export default function Galery() {
           </View>
         }
       />
+
+      <Modal
+        style={styles.modal}
+        animationType="slide"
+        allowSwipeDismissal={true}
+        transparent={true}
+        visible={modalVisible}
+        presentationStyle="pageSheet"
+        onRequestClose={() => {
+          setModalVisible(false);
+        }}
+      >
+        <ScrollView
+          style={styles.modal}
+          contentContainerStyle={styles.modalContent}
+        >
+          <Image
+            source={{ uri: selectedImage }}
+            style={{ width: "100%", height: 300 }}
+          />
+
+          <Text
+            style={{
+              color: "#fff",
+              fontWeight: "bold",
+              fontSize: 20,
+              margin: 10,
+              textAlign: "left",
+              paddingLeft: 15,
+              width: "100%",
+            }}
+          >
+            Informações
+          </Text>
+
+          <View style={styles.efixContainer}>
+            {exifData && (
+              <>
+                {Object.entries(EXIF_SCHEMA).map(([key, config]) => {
+                  const value = exifData[key];
+                  if (!value) return null;
+                  if (key === "latitude" || key === "longitude") return null;
+
+                  return (
+                    <View key={key} style={styles.exifItemWrapper}>
+                      <ExifItem
+                        icon={config.icon}
+                        label={config.label}
+                        value={String(value)}
+                      />
+                    </View>
+                  );
+                })}
+              </>
+            )}
+          </View>
+
+          {(() => {
+            const lat = exifData?.latitude ?? exifData?.GPSLatitude;
+            const lon = exifData?.longitude ?? exifData?.GPSLongitude;
+
+            if (lat != null && lon != null) {
+              return (
+                <View style={{ width: "95%", marginBottom: 20 }}>
+                  <MapViewWeb latitude={Number(lat)} longitude={Number(lon)} />
+                </View>
+              );
+            }
+            return null;
+          })()}
+
+          {/* <Pressable
+            style={{
+              marginTop: 20,
+              alignSelf: "center",
+              backgroundColor: "#ffaa00ff",
+              padding: 10,
+              borderRadius: 5,
+            }}
+            onPress={() => setModalVisible(false)}
+          >
+            <Text style={styles.textStyle}>Fechar</Text>
+          </Pressable> */}
+
+          <Button
+            title="Fechar"
+            onPress={() => setModalVisible(false)}
+            color="#ffaa00"
+          >
+            Fechar
+          </Button>
+        </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -138,15 +251,33 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
   },
   image: {
-    width: "33.33%",
+    width: "100%",
     aspectRatio: 1,
     borderRadius: 2,
-    margin: 0.9,
+    // margin: 0.9,
   },
   backButton: {
     position: "absolute",
     top: 59,
     left: 16,
     zIndex: 10,
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  modalContent: {
+    alignItems: "center",
+    paddingBottom: 40,
+  },
+  efixContainer: {
+    flexDirection: "row", // organiza os itens horizontalmente
+    flexWrap: "wrap", // permite quebra de linha
+    justifyContent: "space-between", // espaçamento entre as colunas
+    padding: 10,
+  },
+  exifItemWrapper: {
+    width: "45%", // cerca de metade da tela (menos espaço de margem)
+    marginBottom: 10,
   },
 });
