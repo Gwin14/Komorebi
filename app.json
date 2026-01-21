@@ -38,7 +38,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/logo.jpeg",
+          "image": "./assets/images/icone.png",
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }
@@ -46,8 +46,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow App massa to access your camera",
-          "microphonePermission": "Allow App massa to access your microphone",
+          "cameraPermission": "Permitir que o app acesse sua câmera para poder tirar fotos.",
+          "microphonePermission": "Permitir que o app acesse seu microfone para gravar vídeos.",
           "recordAudioAndroid": true
         }
       ],
