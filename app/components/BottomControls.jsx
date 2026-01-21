@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
@@ -16,6 +18,7 @@ export default function BottomControls({
   selectedLutId,
   setSelectedLutId,
 }) {
+  const router = useRouter();
   const deviceOrientationStyle = useDeviceOrientation();
 
   const shutterTranslate = controlsAnim.interpolate({
@@ -51,7 +54,15 @@ export default function BottomControls({
       >
         <TouchableOpacity style={styles.sideButton}>
           <Reanimated.View style={deviceOrientationStyle}>
-            <Ionicons name="images-outline" size={32} color="white" />
+            <Ionicons
+              name="images-outline"
+              size={32}
+              color="white"
+              onPress={() => {
+                router.push("components/Galery");
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              }}
+            />
           </Reanimated.View>
         </TouchableOpacity>
 
