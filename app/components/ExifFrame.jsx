@@ -1,8 +1,8 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
+import BackButton from "./BackButton";
 import LoadingScreen from "./LoadingScreen";
 
 export default function ExifFrame() {
@@ -20,9 +20,7 @@ export default function ExifFrame() {
 
       {loading && <LoadingScreen />}
 
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="chevron-back" size={32} color="white" />
-      </TouchableOpacity>
+      <BackButton />
     </View>
   );
 }
@@ -30,11 +28,5 @@ export default function ExifFrame() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backButton: {
-    position: "absolute",
-    top: 59,
-    left: 16,
-    zIndex: 10,
   },
 });

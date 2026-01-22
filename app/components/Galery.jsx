@@ -1,4 +1,3 @@
-import { Ionicons } from "@expo/vector-icons";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -19,6 +18,7 @@ import { ExifItem } from "../components/ExifItem";
 import { MapViewWeb } from "../components/MapViewWeb";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
+import BackButton from "./BackButton";
 import LoadingScreen from "./LoadingScreen";
 
 export default function Galery() {
@@ -108,9 +108,7 @@ export default function Galery() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="chevron-back" size={32} color="white" />
-      </TouchableOpacity>
+      <BackButton />
 
       <Text style={styles.title}>Galeria</Text>
 
@@ -252,12 +250,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     // margin: 0.9,
   },
-  backButton: {
-    position: "absolute",
-    top: 59,
-    left: 16,
-    zIndex: 10,
-  },
+
   modal: {
     flex: 1,
     backgroundColor: "#000000",
