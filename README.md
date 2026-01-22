@@ -1,4 +1,6 @@
-# 📷 Camera App
+# 📷 Komorebi
+
+<img src="https://github.com/Gwin14/Komorebi/blob/main/assets/images/icone.png" width="300" />
 
 Um aplicativo de câmera moderno e minimalista desenvolvido com React Native e Expo, com controles intuitivos e interface elegante.
 
@@ -39,7 +41,7 @@ O app possui um dial de zoom único que oferece:
 
 1. Clone o repositório:
 ```bash
-git clone <url-do-repositorio>
+git clone <https://github.com/Gwin14/Komorebi>
 cd camera
 ```
 
@@ -135,12 +137,6 @@ npm run web        # Executa na web
 npm run lint       # Executa o linter
 ```
 
-## 🐛 Problemas Conhecidos
-
-- O zoom máximo varia de acordo com o dispositivo
-- Algumas funcionalidades podem ter comportamento diferente entre iOS e Android
-- O controle de zoom não está disponível em todos os dispositivos
-
 ## 🤝 Contribuindo
 
 Contribuições são bem-vindas! Sinta-se à vontade para:
@@ -153,17 +149,5 @@ Contribuições são bem-vindas! Sinta-se à vontade para:
 ## 📄 Licença
 
 Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalhes.
-
-## 👤 Autor
-
-Desenvolvido com ❤️ usando Expo e React Native
-
-## 🙏 Agradecimentos
-
-- Expo team pela excelente plataforma
-- Comunidade React Native
-- Todos os contribuidores de bibliotecas open source utilizadas
-
----
 
 **Nota**: Este aplicativo requer um dispositivo físico para melhor experiência, pois emuladores podem ter limitações com recursos de câmera e feedback háptico.
