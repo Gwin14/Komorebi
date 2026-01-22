@@ -1,5 +1,4 @@
 import * as MediaLibrary from "expo-media-library";
-import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -22,8 +21,6 @@ import BackButton from "./BackButton";
 import LoadingScreen from "./LoadingScreen";
 
 export default function Galery() {
-  const router = useRouter();
-
   const [permission, requestPermission] = MediaLibrary.usePermissions();
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);

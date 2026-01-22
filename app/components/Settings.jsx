@@ -142,6 +142,22 @@ export default function Settings() {
             style={styles.socialIcon}
           />
         </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            require("react-native")
+              .Linking.openURL("https://github.com/Gwin14")
+              .catch((e) => {
+                console.error("Erro ao abrir link", e);
+              });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+        >
+          <Image
+            source={require("../../assets/images/github.png")}
+            style={styles.socialIcon}
+          />
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView } from "react-native-webview";
@@ -6,7 +5,6 @@ import BackButton from "./BackButton";
 import LoadingScreen from "./LoadingScreen";
 
 export default function Feedback() {
-  const router = useRouter();
   const [loading, setLoading] = useState(true);
 
   return (
