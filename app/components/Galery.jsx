@@ -3,7 +3,6 @@ import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Button,
   FlatList,
   Image,
@@ -20,6 +19,7 @@ import { ExifItem } from "../components/ExifItem";
 import { MapViewWeb } from "../components/MapViewWeb";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
+import LoadingScreen from "./LoadingScreen";
 
 export default function Galery() {
   const router = useRouter();
@@ -103,11 +103,7 @@ export default function Galery() {
   }
 
   if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   return (
