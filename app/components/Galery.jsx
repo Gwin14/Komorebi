@@ -150,7 +150,7 @@ export default function Galery() {
         >
           <Image
             source={{ uri: selectedImage }}
-            style={{ width: "100%", height: 300 }}
+            style={{ width: "100%", height: 350 }}
           />
 
           <Text
