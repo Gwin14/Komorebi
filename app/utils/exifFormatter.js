@@ -16,39 +16,47 @@ export const exifHandler = async (assetId, setExifData) => {
     const info = await MediaLibrary.getAssetInfoAsync(assetId);
     const rawExif = info.exif;
 
-    if (!rawExif || !rawExif["{Exif}"]) {
+    if (!rawExif) {
       setExifData(null);
       return;
     }
 
-    const exif = rawExif["{Exif}"];
-    const gps = rawExif["{GPS}"];
+    const exif = rawExif["{Exif}"] || rawExif;
+    const gps = rawExif["{GPS}"] || rawExif;
 
     const formattedExif = {
-      iso: exif?.ISOSpeedRatings?.[0] ?? null,
+      iso: exif?.ISOSpeedRatings?.[0] ?? exif?.ISOSpeedRatings ?? null,
       aperture: formatAperture(exif?.FNumber),
       shutter: formatShutter(exif?.ExposureTime),
       exposureBias:
-        exif?.ExposureBiasValue !== undefined
-          ? `${exif.ExposureBiasValue} EV`
+        exif?.ExposureBiasValue != null
+          ? `${parseFloat(exif.ExposureBiasValue).toFixed(1)} EV`
           : null,
       focalLength35mm: exif?.FocalLenIn35mmFilm
         ? `${exif.FocalLenIn35mmFilm}mm`
         : null,
       lens: exif?.LensModel ?? null,
-      date: exif?.DateTimeOriginal ?? null,
+      date: exif?.DateTimeOriginal ?? exif?.DateTime ?? null,
       latitude:
         gps?.Latitude !== undefined
           ? gps.LatitudeRef === "S"
             ? -gps.Latitude
             : gps.Latitude
-          : null,
+          : gps?.GPSLatitude !== undefined
+            ? gps.GPSLatitudeRef === "S" || gps.GPSLatitude < 0
+              ? -Math.abs(gps.GPSLatitude)
+              : Math.abs(gps.GPSLatitude)
+            : null,
       longitude:
         gps?.Longitude !== undefined
           ? gps.LongitudeRef === "W"
             ? -gps.Longitude
             : gps.Longitude
-          : null,
+          : gps?.GPSLongitude !== undefined
+            ? gps.GPSLongitudeRef === "W" || gps.GPSLongitude < 0
+              ? -Math.abs(gps.GPSLongitude)
+              : Math.abs(gps.GPSLongitude)
+            : null,
     };
 
     console.log("Formatted EXIF:", formattedExif);
