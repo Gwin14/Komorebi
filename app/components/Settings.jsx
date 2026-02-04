@@ -92,6 +92,16 @@ export default function Settings() {
         />
       </TouchableOpacity>
 
+      <TouchableOpacity
+        onPress={() => {
+          router.push("components/CommingSoon");
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+        style={{ width: "100%", alignItems: "center" }}
+      >
+        <ExternalLink label="Em breve..." disabled />
+      </TouchableOpacity>
+
       <View style={styles.divider} />
 
       <View style={styles.socialContainer}>
