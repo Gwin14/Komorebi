@@ -137,7 +137,6 @@ export default function Galery() {
         style={styles.modal}
         animationType="slide"
         allowSwipeDismissal={true}
-        transparent={true}
         visible={modalVisible}
         presentationStyle="pageSheet"
         onRequestClose={() => {

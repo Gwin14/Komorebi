@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   GRID_VISIBLE: "@settings/gridVisible",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
+  FIRSTTIME: "@settings/firstTime",
 };
 
 export const SettingsProvider = ({ children }) => {
@@ -16,6 +17,7 @@ export const SettingsProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(false);
   const [location, setLocation] = useState(true);
+  const [firstTime, setFirstTime] = useState(true);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -23,13 +25,20 @@ export const SettingsProvider = ({ children }) => {
         const savedRetroStyle = await AsyncStorage.getItem(
           STORAGE_KEYS.RETRO_STYLE,
         );
+
         const savedGrid = await AsyncStorage.getItem(STORAGE_KEYS.GRID_VISIBLE);
 
         const savedShutterSound = await AsyncStorage.getItem(
           STORAGE_KEYS.SHUTTER_SOUND,
         );
 
+        const savedFirstTime = await AsyncStorage.getItem(
+          STORAGE_KEYS.FIRSTTIME,
+        );
+
         const savedLocation = await AsyncStorage.getItem(STORAGE_KEYS.LOCATION);
+
+        // ----------
 
         if (savedLocation !== null) setLocation(savedLocation === "true");
 
@@ -39,6 +48,8 @@ export const SettingsProvider = ({ children }) => {
 
         if (savedShutterSound !== null)
           setShutterSound(savedShutterSound === "true");
+
+        if (savedFirstTime !== null) setFirstTime(savedFirstTime === "true");
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
@@ -77,6 +88,13 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [location, loading]);
 
+  // 💾 Salvar "Primeira vez"
+  useEffect(() => {
+    if (!loading) {
+      AsyncStorage.setItem(STORAGE_KEYS.FIRSTTIME, firstTime.toString());
+    }
+  }, [firstTime, loading]);
+
   const value = {
     retroStyle,
     setRetroStyle,
@@ -87,6 +105,8 @@ export const SettingsProvider = ({ children }) => {
     setShutterSound,
     location,
     setLocation,
+    firstTime,
+    setFirstTime,
   };
 
   return (

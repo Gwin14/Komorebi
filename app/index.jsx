@@ -1,4 +1,5 @@
 import { useCameraPermissions } from "expo-camera";
+
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useEffect, useRef, useState } from "react";
@@ -10,20 +11,25 @@ import {
   Text,
   View,
 } from "react-native";
-
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { runOnJS, useSharedValue } from "react-native-reanimated";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import TopBar from "./components/TopBar";
+import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
 import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
 import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
 
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-
-import { runOnJS, useSharedValue } from "react-native-reanimated";
-
 export default function App() {
-  const { retroStyle, gridVisible, location } = useSettings();
+  const {
+    retroStyle,
+    gridVisible,
+    location,
+    firstTime,
+    // setFirstTime,
+    loading,
+  } = useSettings();
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -109,6 +115,8 @@ export default function App() {
     }
   };
 
+  if (loading) return null; // ou splash
+
   if (!cameraPermission) return <View />;
   if (!cameraPermission.granted) {
     return (
@@ -139,6 +147,8 @@ export default function App() {
       )}
 
       {isProcessing && <View style={styles.processingOverlay} />}
+
+      {firstTime && <Welcome />}
 
       <TopBar
         flash={flash}
@@ -175,6 +185,14 @@ export default function App() {
         selectedLutId={selectedLutId}
         setSelectedLutId={setSelectedLutId}
       />
+
+      {/* <Button
+        title="🔁 Reset Welcome"
+        onPress={async () => {
+          await AsyncStorage.setItem("@settings/firstTime", "true");
+          setFirstTime(true);
+        }}
+      /> */}
     </View>
   );
 }
