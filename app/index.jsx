@@ -2,7 +2,14 @@ import { useCameraPermissions } from "expo-camera";
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Button, StyleSheet, Text, View } from "react-native";
+import {
+  Animated,
+  Button,
+  Linking,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
@@ -57,6 +64,9 @@ export default function App() {
     (async () => {
       await loadAllLUTs();
       setLutsLoaded(true);
+
+      await requestCameraPermission();
+
       const { status } = await MediaLibrary.requestPermissionsAsync();
       setHasMediaPermission(status === "granted");
       await Location.requestForegroundPermissionsAsync();
@@ -103,10 +113,17 @@ export default function App() {
   if (!cameraPermission.granted) {
     return (
       <View style={styles.container}>
-        <Text style={styles.message}>
-          Precisamos da sua permissão para a câmera
-        </Text>
-        <Button onPress={requestCameraPermission} title="Dar permissão" />
+        <View style={styles.messageContainer}>
+          <Text style={styles.message}>
+            É preciso permissão da câmera para usar o app 🤠, se não tiver
+            aceito, vá nas configurações
+          </Text>
+          <Button
+            onPress={Linking.openSettings}
+            color="#ffaa00"
+            title="Dar permissão"
+          />
+        </View>
       </View>
     );
   }
@@ -163,13 +180,31 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  message: { color: "white", textAlign: "center", marginBottom: 20 },
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  message: {
+    color: "white",
+    textAlign: "center",
+    marginBottom: 20,
+  },
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.8)",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 2000,
+  },
+  messageContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ffaa00",
+    borderRadius: 10,
+    padding: 20,
+    margin: 20,
   },
 });
