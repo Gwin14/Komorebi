@@ -14,7 +14,9 @@
       "supportsTablet": true,
       "infoPlist": {
         "LSRequiresIPhoneOS": true,
-        "UIRequiredDeviceCapabilities": ["camera"]
+        "UIRequiredDeviceCapabilities": ["camera"],
+        "NSCameraUsageDescription": "Precisamos da câmera para tirar fotos.",
+        "NSMicrophoneUsageDescription": "Precisamos do microfone para gravar vídeos."
       }
     },
     "android": {
@@ -32,7 +34,7 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.anonymous.camera"
+      "package": "br.dev.fabiosantos.komorebi"
     },
     "plugins": [
       "expo-router",
@@ -44,14 +46,7 @@
           "backgroundColor": "#000000"
         }
       ],
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "Permitir que o app acesse sua câmera para poder tirar fotos.",
-          "microphonePermission": "Permitir que o app acesse seu microfone para gravar vídeos.",
-          "recordAudioAndroid": true
-        }
-      ],
+      ["react-native-vision-camera"],
       "expo-asset",
       [
         "expo-location",

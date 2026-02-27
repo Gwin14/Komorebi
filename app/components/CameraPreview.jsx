@@ -1,5 +1,5 @@
-import { CameraView } from "expo-camera";
 import { Image, StyleSheet, View } from "react-native";
+import { Camera, useCameraDevice } from "react-native-vision-camera";
 
 export default function CameraPreview({
   retroStyle,
@@ -10,17 +10,31 @@ export default function CameraPreview({
   pictureSize,
   onCameraReady,
   gridVisible,
+  setMinZoom,
+  setMaxZoom,
 }) {
+  const device = useCameraDevice(facing === "back" ? "back" : "front");
+
+  if (!device) {
+    return null;
+  }
+
+  // Atualiza limites reais de zoom do device
+  if (setMinZoom && setMaxZoom) {
+    setMinZoom(device.minZoom);
+    setMaxZoom(device.maxZoom);
+  }
+
   return (
     <View style={retroStyle ? styles.retroStyle : styles.cameraWrapper}>
-      <CameraView
+      <Camera
         style={styles.camera}
-        facing={facing}
+        device={device}
+        isActive={true}
         ref={cameraRef}
-        flash={flash}
+        photo={true}
         zoom={zoom}
-        pictureSize={pictureSize}
-        onCameraReady={onCameraReady}
+        onInitialized={onCameraReady}
       />
       <Image
         source={require("../../assets/images/grid.png")}

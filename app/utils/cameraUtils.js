@@ -26,6 +26,7 @@ export const takePicture = async ({
   hasMediaPermission,
   setProcessingData,
   location,
+  flash,
 }) => {
   if (cameraRef.current && cameraReady && !isProcessing) {
     try {
@@ -51,19 +52,17 @@ export const takePicture = async ({
         console.log("Erro ao obter localização:", e);
       }
 
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 1,
-        skipProcessing: false,
-        exif: true,
-        additionalExif,
+      const photo = await cameraRef.current.takePhoto({
+        flash: flash === "on" ? "on" : "off",
+        qualityPrioritization: "quality",
       });
 
-      const completeExif = { ...photo.exif, ...additionalExif };
-      console.log(completeExif);
+      const uri = photo?.path || photo?.filePath || photo?.uri;
+      const completeExif = { ...additionalExif };
 
       if (selectedLutId !== "none" && lutsLoaded) {
         const processingInfo = await applyLUTToImage(
-          photo.uri,
+          uri,
           selectedLutId,
           completeExif,
         );
@@ -71,11 +70,11 @@ export const takePicture = async ({
           setProcessingData(processingInfo);
           setIsProcessing(false); // Libera a UI imediatamente para nova foto
         } else {
-          if (hasMediaPermission) await saveToAlbum(photo.uri);
+          if (hasMediaPermission) await saveToAlbum(uri);
           setIsProcessing(false);
         }
       } else {
-        if (hasMediaPermission) await saveToAlbum(photo.uri);
+        if (hasMediaPermission) await saveToAlbum(uri);
         setIsProcessing(false);
       }
     } catch (error) {
@@ -92,10 +91,9 @@ export const onCameraReady = async (
 ) => {
   try {
     if (cameraRef.current) {
-      const sizes = await cameraRef.current.getAvailablePictureSizesAsync();
-      if (sizes && sizes.length > 0) {
-        setPictureSize(sizes[0]);
-      }
+      // Vision Camera doesn't expose getAvailablePictureSizesAsync;
+      // preserve pictureSize as null and mark camera ready.
+      if (setPictureSize) setPictureSize(null);
       setCameraReady(true);
     }
   } catch (e) {
