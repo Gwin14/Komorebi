@@ -55,6 +55,7 @@ export const takePicture = async ({
       const photo = await cameraRef.current.takePhoto({
         flash: flash === "on" ? "on" : "off",
         qualityPrioritization: "quality",
+        enableAutoRedEyeReduction: true,
       });
 
       const uri = photo?.path || photo?.filePath || photo?.uri;
