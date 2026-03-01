@@ -1,4 +1,4 @@
-import { useCameraPermissions } from "expo-camera";
+import { Camera } from "react-native-vision-camera";
 
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
@@ -34,6 +34,8 @@ export default function App() {
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(0);
+  const [minZoom, setMinZoom] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(5);
   const zoomSV = useSharedValue(0);
   const lastZoom = useSharedValue(0);
 
@@ -43,7 +45,7 @@ export default function App() {
   const [activeControl, setActiveControl] = useState("none");
   const controlsAnim = useRef(new Animated.Value(0)).current;
 
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [cameraPermission, setCameraPermission] = useState(null);
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
   const [lutsLoaded, setLutsLoaded] = useState(false);
 
@@ -56,13 +58,23 @@ export default function App() {
       lastZoom.value = zoomSV.value;
     })
     .onUpdate((e) => {
-      let newZoom = lastZoom.value + (e.scale - 1) * 0.25;
+      const scale = e.scale;
 
-      newZoom = Math.min(Math.max(newZoom, 0), 1);
+      const min = minZoom;
+      const max = maxZoom;
+
+      const normalized = (lastZoom.value - min) / (max - min);
+
+      // 🔧 Ajuste a sensibilidade do zoom aqui:
+      // 0.25 = menos sensível | 0.4 = médio | 0.6+ = mais rápido
+      const newNormalized = Math.min(
+        Math.max(normalized + (scale - 1) * 0.25, 0),
+        1
+      );
+
+      const newZoom = min + newNormalized * (max - min);
 
       zoomSV.value = newZoom;
-
-      // 🔥 sincroniza com o state da câmera
       runOnJS(setZoom)(newZoom);
     });
 
@@ -71,7 +83,9 @@ export default function App() {
       await loadAllLUTs();
       setLutsLoaded(true);
 
-      await requestCameraPermission();
+      const permission = await Camera.requestCameraPermission();
+      console.log("Camera permission status:", permission);
+      setCameraPermission(permission);
 
       const { status } = await MediaLibrary.requestPermissionsAsync();
       setHasMediaPermission(status === "granted");
@@ -101,6 +115,7 @@ export default function App() {
       selectedLutId,
       lutsLoaded,
       hasMediaPermission,
+      flash,
       setProcessingData: (data) =>
         setProcessingQueue((prev) => [...prev, data]),
       location,
@@ -117,8 +132,8 @@ export default function App() {
 
   if (loading) return null; // ou splash
 
-  if (!cameraPermission) return <View />;
-  if (!cameraPermission.granted) {
+  if (cameraPermission === null) return <View />;
+  if (cameraPermission !== "authorized" && cameraPermission !== "granted") {
     return (
       <View style={styles.container}>
         <View style={styles.messageContainer}>
@@ -171,6 +186,8 @@ export default function App() {
             onCameraReady(cameraRef, setPictureSize, setCameraReady)
           }
           gridVisible={gridVisible}
+          setMinZoom={setMinZoom}
+          setMaxZoom={setMaxZoom}
         />
         {/* </Animated.View> */}
       </GestureDetector>
