@@ -35,7 +35,6 @@ export default function CameraPreview({
         photo={true}
         video={false}
         audio={false}
-        lowLightBoost={true}
         zoom={zoom}
         onInitialized={onCameraReady}
       />
