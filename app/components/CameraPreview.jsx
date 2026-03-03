@@ -15,30 +15,14 @@ export default function CameraPreview({
   setMinZoom,
   setMaxZoom,
   onSmileDetected,
+  smileDetectionEnabled,
 }) {
   const device = useCameraDevice(facing === "back" ? "back" : "front");
   const isTakingPhoto = useRef(false);
 
-  // const takePhotoIfSmiling = useCallback(async () => {
-  //   if (!cameraRef?.current || isTakingPhoto.current) return;
-
-  //   try {
-  //     isTakingPhoto.current = true;
-  //     await cameraRef.current.takePhoto({
-  //       flash: flash,
-  //     });
-
-  //     setTimeout(() => {
-  //       isTakingPhoto.current = false;
-  //     }, 2000);
-  //   } catch (e) {
-  //     console.log("Erro ao tirar foto automática:", e);
-  //     isTakingPhoto.current = false;
-  //   }
-  // }, [cameraRef, flash]);
-
   const handleFacesDetection = useCallback(
     (faces) => {
+      if (!smileDetectionEnabled) return;
       if (!faces.length || isTakingPhoto.current) return;
 
       const face = faces[0];
@@ -49,15 +33,14 @@ export default function CameraPreview({
       ) {
         isTakingPhoto.current = true;
 
-        onSmileDetected?.(); // 👈 chama o fluxo correto
+        onSmileDetected?.();
 
-        // evita spam de fotos
         setTimeout(() => {
           isTakingPhoto.current = false;
         }, 2500);
       }
     },
-    [onSmileDetected],
+    [onSmileDetected, smileDetectionEnabled],
   );
 
   const faceDetectionOptions = useMemo(

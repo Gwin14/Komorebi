@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { useState , useEffect,  } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import PhotoWeather from "./PhotoWeather";
-import * as Location from "expo-location"
 
 export default function TopBar({
   flash,
@@ -14,6 +14,8 @@ export default function TopBar({
   toggleMode,
   activeControl,
   selectedLutId,
+  smileDetectionEnabled,
+  toggleSmileDetectionEnabled,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -70,13 +72,24 @@ export default function TopBar({
 
   return (
     <View style={styles.buttonsContainer}>
-      <TouchableOpacity onPress={toggleFlash}>
+      {/* <TouchableOpacity onPress={toggleFlash}>
         <Animated.View style={animatedStyle}>
           <Ionicons
             name={flash === "off" ? "flash-off-outline" : "flash-outline"}
             size={32}
             style={styles.button}
             color="white"
+          />
+        </Animated.View>
+      </TouchableOpacity> */}
+
+      <TouchableOpacity onPress={toggleSmileDetectionEnabled}>
+        <Animated.View style={animatedStyle}>
+          <Ionicons
+            name={"happy-outline"}
+            size={32}
+            style={styles.button}
+            color={smileDetectionEnabled ? "#ffaa00" : "white"}
           />
         </Animated.View>
       </TouchableOpacity>
