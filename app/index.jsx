@@ -69,7 +69,7 @@ export default function App() {
       // 0.25 = menos sensível | 0.4 = médio | 0.6+ = mais rápido
       const newNormalized = Math.min(
         Math.max(normalized + (scale - 1) * 0.25, 0),
-        1
+        1,
       );
 
       const newZoom = min + newNormalized * (max - min);
@@ -188,6 +188,7 @@ export default function App() {
           gridVisible={gridVisible}
           setMinZoom={setMinZoom}
           setMaxZoom={setMaxZoom}
+          onSmileDetected={handleTakePicture}
         />
         {/* </Animated.View> */}
       </GestureDetector>

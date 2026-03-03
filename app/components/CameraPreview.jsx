@@ -1,5 +1,7 @@
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Image, StyleSheet, View } from "react-native";
-import { Camera, useCameraDevice } from "react-native-vision-camera";
+import { useCameraDevice } from "react-native-vision-camera";
+import { Camera } from "react-native-vision-camera-face-detector";
 
 export default function CameraPreview({
   retroStyle,
@@ -12,17 +14,70 @@ export default function CameraPreview({
   gridVisible,
   setMinZoom,
   setMaxZoom,
+  onSmileDetected,
 }) {
   const device = useCameraDevice(facing === "back" ? "back" : "front");
+  const isTakingPhoto = useRef(false);
+
+  // const takePhotoIfSmiling = useCallback(async () => {
+  //   if (!cameraRef?.current || isTakingPhoto.current) return;
+
+  //   try {
+  //     isTakingPhoto.current = true;
+  //     await cameraRef.current.takePhoto({
+  //       flash: flash,
+  //     });
+
+  //     setTimeout(() => {
+  //       isTakingPhoto.current = false;
+  //     }, 2000);
+  //   } catch (e) {
+  //     console.log("Erro ao tirar foto automática:", e);
+  //     isTakingPhoto.current = false;
+  //   }
+  // }, [cameraRef, flash]);
+
+  const handleFacesDetection = useCallback(
+    (faces) => {
+      if (!faces.length || isTakingPhoto.current) return;
+
+      const face = faces[0];
+
+      if (
+        face.smilingProbability !== undefined &&
+        face.smilingProbability > 0.7
+      ) {
+        isTakingPhoto.current = true;
+
+        onSmileDetected?.(); // 👈 chama o fluxo correto
+
+        // evita spam de fotos
+        setTimeout(() => {
+          isTakingPhoto.current = false;
+        }, 2500);
+      }
+    },
+    [onSmileDetected],
+  );
+
+  const faceDetectionOptions = useMemo(
+    () => ({
+      performanceMode: "accurate",
+      classificationMode: "all",
+      landmarkMode: "all",
+    }),
+    [],
+  );
+
+  useEffect(() => {
+    if (device && setMinZoom && setMaxZoom) {
+      setMinZoom(device.minZoom);
+      setMaxZoom(device.maxZoom);
+    }
+  }, [device, setMinZoom, setMaxZoom]);
 
   if (!device) {
     return null;
-  }
-
-  // Atualiza limites reais de zoom do device
-  if (setMinZoom && setMaxZoom) {
-    setMinZoom(device.minZoom);
-    setMaxZoom(device.maxZoom);
   }
 
   return (
@@ -37,6 +92,8 @@ export default function CameraPreview({
         audio={false}
         zoom={zoom}
         onInitialized={onCameraReady}
+        faceDetectionCallback={handleFacesDetection}
+        faceDetectionOptions={faceDetectionOptions}
       />
       <Image
         source={require("../../assets/images/grid.png")}

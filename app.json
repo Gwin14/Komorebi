@@ -53,6 +53,14 @@
         {
           "locationWhenInUsePermission": "Permitir que o app acesse sua localização para adicionar GPS às fotos."
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "18.0"
+          }
+        }
       ]
     ],
     "experiments": {
