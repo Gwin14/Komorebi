@@ -59,22 +59,25 @@ export const takePicture = async ({
       });
 
       const uri = photo?.path || photo?.filePath || photo?.uri;
-      const completeExif = { ...additionalExif };
+      const hasGpsData = Object.keys(additionalExif).length > 0;
 
-      if (selectedLutId !== "none" && lutsLoaded) {
+      // Processa a imagem se um filtro for selecionado OU se houver dados de GPS para adicionar
+      if ((selectedLutId !== "none" && lutsLoaded) || hasGpsData) {
         const processingInfo = await applyLUTToImage(
           uri,
           selectedLutId,
-          completeExif,
+          additionalExif,
         );
         if (processingInfo.needsProcessing) {
           setProcessingData(processingInfo);
           setIsProcessing(false); // Libera a UI imediatamente para nova foto
         } else {
+          // Fallback: se o processamento não for necessário, salva a original
           if (hasMediaPermission) await saveToAlbum(uri);
           setIsProcessing(false);
         }
       } else {
+        // Nenhum filtro e nenhum GPS, apenas salva a foto
         if (hasMediaPermission) await saveToAlbum(uri);
         setIsProcessing(false);
       }
