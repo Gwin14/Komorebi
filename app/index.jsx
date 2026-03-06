@@ -194,6 +194,7 @@ export default function App() {
           setMaxZoom={setMaxZoom}
           onSmileDetected={handleTakePicture}
           smileDetectionEnabled={smileDetectionEnabled}
+          location={location}
         />
         {/* </Animated.View> */}
       </GestureDetector>

@@ -16,6 +16,7 @@ export default function CameraPreview({
   setMaxZoom,
   onSmileDetected,
   smileDetectionEnabled,
+  location,
 }) {
   const device = useCameraDevice(facing === "back" ? "back" : "front");
   const isTakingPhoto = useRef(false);
@@ -77,6 +78,7 @@ export default function CameraPreview({
         onInitialized={onCameraReady}
         faceDetectionCallback={handleFacesDetection}
         faceDetectionOptions={faceDetectionOptions}
+        enableLocation={location}
       />
       <Image
         source={require("../../assets/images/grid.png")}

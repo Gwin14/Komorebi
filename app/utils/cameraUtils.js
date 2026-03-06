@@ -47,9 +47,12 @@ export const takePicture = async ({
               GPSAltitude: gpsLocation.coords.altitude,
             };
           }
+        } else {
+          additionalExif.removeGPS = true;
         }
       } catch (e) {
         console.log("Erro ao obter localização:", e);
+        additionalExif.removeGPS = true;
       }
 
       const photo = await cameraRef.current.takePhoto({
