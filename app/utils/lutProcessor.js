@@ -348,20 +348,22 @@ const generateProcessingHTML = (base64Image, cube) => {
 
 export const applyLUTToImage = async (imageUri, lutId, exifData) => {
   const cubeData = getCachedLUT(lutId);
-  const hasExif = exifData && Object.keys(exifData).length > 0;
 
-  if (!cubeData && !hasExif) {
-    console.warn(
-      `LUT "${lutId}" não encontrado e sem EXIF, retornando imagem original.`,
-    );
+  if (!cubeData) {
+    console.warn(`LUT "${lutId}" não encontrado, retornando imagem original`);
     return { needsProcessing: false, originalUri: imageUri };
   }
 
   try {
+    console.log(`Iniciando processamento com LUT "${lutId}"...`);
+
+    // Otimização: Não lemos o base64 aqui para não bloquear a câmera.
+    // Passamos o URI para ser lido pelo LUTProcessor em background.
+
     return {
       needsProcessing: true,
-      imageUri,
-      cube: cubeData, // Pode ser null se for apenas para adicionar EXIF
+      imageUri, // Passamos o URI em vez do base64 direto
+      cube: cubeData,
       originalUri: imageUri,
       exifData: exifData || null,
     };
@@ -572,34 +574,17 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
           });
         }
 
-        if (!isMounted || !base64) return;
-
-        try {
-          originalExifRef.current = piexif.load(
-            "data:image/jpeg;base64," + base64,
-          );
-        } catch (e) {
-          console.log("Erro ao extrair EXIF original:", e);
-          originalExifRef.current = null;
-        }
-
-        if (imageData.cube) {
-          // Se tem LUT, usa a WebView para processar
-          console.log("Processando com LUT via WebView...");
-          setHtml(generateProcessingHTML(base64, imageData.cube));
-        } else {
-          // Se não tem LUT, só adiciona o EXIF e salva
-          console.log("Processando apenas para adicionar EXIF...");
-          const savedUri = await saveProcessedImage(
-            base64,
-            imageData.exifData,
-            originalExifRef.current,
-          );
-          if (savedUri && onProcessed) {
-            onProcessed(savedUri);
-          } else if (onError) {
-            onError(new Error("Falha ao salvar imagem com EXIF."));
+        if (isMounted && base64) {
+          try {
+            originalExifRef.current = piexif.load(
+              "data:image/jpeg;base64," + base64,
+            );
+          } catch (e) {
+            console.log("Erro ao extrair EXIF original:", e);
+            originalExifRef.current = null;
           }
+
+          setHtml(generateProcessingHTML(base64, imageData.cube));
         }
       } catch (e) {
         if (isMounted && onError) onError(e);
@@ -613,8 +598,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
     };
   }, [imageData]);
 
-  // Apenas renderiza a WebView se houver HTML (ou seja, se tiver um LUT para aplicar)
-  if (!html) {
+  if (!imageData || !imageData.needsProcessing || !html) {
     return null;
   }
 
