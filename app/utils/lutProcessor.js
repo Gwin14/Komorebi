@@ -493,7 +493,9 @@ const applyExifToImage = (base64Data, exifData, originalExifObj = null) => {
       exifObj["Exif"][piexif.ExifIFD.FlashpixVersion] = "0100";
 
       // GPS Data
-      if (
+      if (exifData.removeGPS) {
+        exifObj["GPS"] = {};
+      } else if (
         exifData.GPSLatitude !== undefined &&
         exifData.GPSLongitude !== undefined
       ) {

@@ -53,6 +53,8 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedLutId, setSelectedLutId] = useState("none");
 
+  const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
+
   const pinchGesture = Gesture.Pinch()
     .onBegin(() => {
       lastZoom.value = zoomSV.value;
@@ -69,7 +71,7 @@ export default function App() {
       // 0.25 = menos sensível | 0.4 = médio | 0.6+ = mais rápido
       const newNormalized = Math.min(
         Math.max(normalized + (scale - 1) * 0.25, 0),
-        1
+        1,
       );
 
       const newZoom = min + newNormalized * (max - min);
@@ -168,6 +170,8 @@ export default function App() {
       <TopBar
         flash={flash}
         toggleFlash={() => setFlash((f) => (f === "off" ? "on" : "off"))}
+        smileDetectionEnabled={smileDetectionEnabled}
+        toggleSmileDetectionEnabled={() => setSmileDetectionEnabled((s) => !s)}
         toggleMode={toggleMode}
         activeControl={activeControl}
         selectedLutId={selectedLutId}
@@ -188,6 +192,9 @@ export default function App() {
           gridVisible={gridVisible}
           setMinZoom={setMinZoom}
           setMaxZoom={setMaxZoom}
+          onSmileDetected={handleTakePicture}
+          smileDetectionEnabled={smileDetectionEnabled}
+          location={location}
         />
         {/* </Animated.View> */}
       </GestureDetector>
