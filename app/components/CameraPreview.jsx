@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Image, StyleSheet, View } from "react-native";
-import { useCameraDevice } from "react-native-vision-camera";
+import { useCameraDevice, useCameraFormat } from "react-native-vision-camera";
 import { Camera } from "react-native-vision-camera-face-detector";
+// import { Dimensions } from "react-native";
+
+// const { width, height } = Dimensions.get("screen");
 
 export default function CameraPreview({
   retroStyle,
@@ -20,6 +23,11 @@ export default function CameraPreview({
 }) {
   const device = useCameraDevice(facing === "back" ? "back" : "front");
   const isTakingPhoto = useRef(false);
+
+  const format = useCameraFormat(device, [
+    { photoAspectRatio: 4 / 3 },
+    { photoResolution: "max" },
+  ]);
 
   const handleFacesDetection = useCallback(
     (faces) => {
@@ -71,6 +79,7 @@ export default function CameraPreview({
         device={device}
         isActive={true}
         ref={cameraRef}
+        format={format}
         photo={true}
         video={false}
         audio={false}
