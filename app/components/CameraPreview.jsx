@@ -88,6 +88,7 @@ export default function CameraPreview({
         faceDetectionCallback={handleFacesDetection}
         faceDetectionOptions={faceDetectionOptions}
         enableLocation={location}
+        photoQualityBalance={"quality"}
       />
       <Image
         source={require("../../assets/images/grid.png")}
