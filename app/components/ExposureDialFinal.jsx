@@ -16,7 +16,7 @@ const GROUP = 5;
 const MAX_LINES_HALF = Math.floor(TOTAL_LINES / 2);
 const CONTAINER_WIDTH = screenWidth * 0.9;
 
-export default function ExposureDialFinal({ value, onChange }) {
+export default function ExposureDialFinal({ value, onChange, onRelease }) {
   const offset = useRef(new Animated.Value(0)).current;
   const lastIndex = useRef(0);
   const accumulatedOffset = useRef(0);
@@ -44,9 +44,6 @@ export default function ExposureDialFinal({ value, onChange }) {
               : Haptics.ImpactFeedbackStyle.Light
           );
 
-          // --- LÓGICA INVERTIDA AQUI ---
-          // Antes: (index - MIN_INDEX) / (MAX_INDEX - MIN_INDEX)
-          // Agora: Subtraímos de 1 para inverter a direção
           const normalProgress = (index - MIN_INDEX) / (MAX_INDEX - MIN_INDEX);
           const invertedZoom = 1 - normalProgress;
 
@@ -68,7 +65,10 @@ export default function ExposureDialFinal({ value, onChange }) {
           useNativeDriver: true,
           tension: 50,
           friction: 7,
-        }).start();
+        }).start(() => {
+          // 🚀 Chama o callback para fechar o slider quando o movimento parar
+          onRelease?.();
+        });
       },
     })
   ).current;

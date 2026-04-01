@@ -17,6 +17,7 @@ export default function BottomControls({
   setZoom,
   selectedLutId,
   setSelectedLutId,
+  onSliderRelease, // 🚀 Recebe a prop vinda do App (index.jsx)
 }) {
   const router = useRouter();
   const deviceOrientationStyle = useDeviceOrientation();
@@ -52,17 +53,15 @@ export default function BottomControls({
           },
         ]}
       >
-        <TouchableOpacity style={styles.sideButton}>
+        <TouchableOpacity 
+          style={styles.sideButton}
+          onPress={() => {
+            router.push("components/Galery");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+        >
           <Reanimated.View style={deviceOrientationStyle}>
-            <Ionicons
-              name="images-outline"
-              size={32}
-              color="white"
-              onPress={() => {
-                router.push("components/Galery");
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              }}
-            />
+            <Ionicons name="images-outline" size={32} color="white" />
           </Reanimated.View>
         </TouchableOpacity>
 
@@ -91,7 +90,11 @@ export default function BottomControls({
         pointerEvents={activeControl !== "none" ? "auto" : "none"}
       >
         {activeControl === "zoom" && (
-          <ExposureDialFinal value={zoom} onChange={(v) => setZoom(v)} />
+          <ExposureDialFinal 
+            value={zoom} 
+            onChange={(v) => setZoom(v)} 
+            onRelease={onSliderRelease} // 👈 Passa o fechamento para o Slider
+          />
         )}
 
         {activeControl === "lut" && (

@@ -1,5 +1,3 @@
-import { Camera } from "react-native-vision-camera";
-
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useEffect, useRef, useState } from "react";
@@ -13,6 +11,7 @@ import {
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
+import { Camera } from "react-native-vision-camera";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import TopBar from "./components/TopBar";
@@ -22,14 +21,8 @@ import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
 import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
 
 export default function App() {
-  const {
-    retroStyle,
-    gridVisible,
-    location,
-    firstTime,
-    // setFirstTime,
-    loading,
-  } = useSettings();
+  const { retroStyle, gridVisible, location, firstTime, loading } =
+    useSettings();
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -55,40 +48,39 @@ export default function App() {
 
   const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
 
+  // --- GESTOS ---
+
   const pinchGesture = Gesture.Pinch()
     .onBegin(() => {
       lastZoom.value = zoomSV.value;
     })
     .onUpdate((e) => {
       const scale = e.scale;
-
       const min = minZoom;
       const max = maxZoom;
-
       const normalized = (lastZoom.value - min) / (max - min);
-
-      // 🔧 Ajuste a sensibilidade do zoom aqui:
-      // 0.25 = menos sensível | 0.4 = médio | 0.6+ = mais rápido
-      const newNormalized = Math.min(
-        Math.max(normalized + (scale - 1) * 0.25, 0),
-        1,
-      );
-
+      const newNormalized = Math.min(Math.max(normalized + (scale - 1) * 0.25, 0), 1);
       const newZoom = min + newNormalized * (max - min);
-
       zoomSV.value = newZoom;
       runOnJS(setZoom)(newZoom);
     });
+
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onStart(() => {
+      runOnJS(setActiveControl)("zoom");
+    });
+
+  const composedGestures = Gesture.Simultaneous(pinchGesture, doubleTapGesture);
+
+  // --- EFEITOS ---
 
   useEffect(() => {
     (async () => {
       await loadAllLUTs();
       setLutsLoaded(true);
-
       const permission = await Camera.requestCameraPermission();
-      console.log("Camera permission status:", permission);
       setCameraPermission(permission);
-
       const { status } = await MediaLibrary.requestPermissionsAsync();
       setHasMediaPermission(status === "granted");
       await Location.requestForegroundPermissionsAsync();
@@ -110,16 +102,9 @@ export default function App() {
 
   const handleTakePicture = () => {
     takePicture({
-      cameraRef,
-      cameraReady,
-      isProcessing,
-      setIsProcessing,
-      selectedLutId,
-      lutsLoaded,
-      hasMediaPermission,
-      flash,
-      setProcessingData: (data) =>
-        setProcessingQueue((prev) => [...prev, data]),
+      cameraRef, cameraReady, isProcessing, setIsProcessing,
+      selectedLutId, lutsLoaded, hasMediaPermission, flash,
+      setProcessingData: (data) => setProcessingQueue((prev) => [...prev, data]),
       location,
     });
   };
@@ -132,26 +117,7 @@ export default function App() {
     }
   };
 
-  if (loading) return null; // ou splash
-
-  if (cameraPermission === null) return <View />;
-  if (cameraPermission !== "authorized" && cameraPermission !== "granted") {
-    return (
-      <View style={styles.container}>
-        <View style={styles.messageContainer}>
-          <Text style={styles.message}>
-            É preciso permissão da câmera para usar o app 🤠, se não tiver
-            aceito, vá nas configurações
-          </Text>
-          <Button
-            onPress={Linking.openSettings}
-            color="#ffaa00"
-            title="Dar permissão"
-          />
-        </View>
-      </View>
-    );
-  }
+  if (loading || cameraPermission === null) return null;
 
   return (
     <View style={styles.container}>
@@ -164,7 +130,6 @@ export default function App() {
       )}
 
       {isProcessing && <View style={styles.processingOverlay} />}
-
       {firstTime && <Welcome />}
 
       <TopBar
@@ -177,26 +142,24 @@ export default function App() {
         selectedLutId={selectedLutId}
       />
 
-      <GestureDetector gesture={pinchGesture}>
-        {/* <Animated.View style={styles.container}> */}
-        <CameraPreview
-          retroStyle={retroStyle}
-          cameraRef={cameraRef}
-          facing={facing}
-          flash={flash}
-          zoom={zoom}
-          pictureSize={pictureSize}
-          onCameraReady={() =>
-            onCameraReady(cameraRef, setPictureSize, setCameraReady)
-          }
-          gridVisible={gridVisible}
-          setMinZoom={setMinZoom}
-          setMaxZoom={setMaxZoom}
-          onSmileDetected={handleTakePicture}
-          smileDetectionEnabled={smileDetectionEnabled}
-          location={location}
-        />
-        {/* </Animated.View> */}
+      <GestureDetector gesture={composedGestures}>
+        <View style={styles.previewContainer}>
+          <CameraPreview
+            retroStyle={retroStyle}
+            cameraRef={cameraRef}
+            facing={facing}
+            flash={flash}
+            zoom={zoom}
+            pictureSize={pictureSize}
+            onCameraReady={() => onCameraReady(cameraRef, setPictureSize, setCameraReady)}
+            gridVisible={gridVisible}
+            setMinZoom={setMinZoom}
+            setMaxZoom={setMaxZoom}
+            onSmileDetected={handleTakePicture}
+            smileDetectionEnabled={smileDetectionEnabled}
+            location={location}
+          />
+        </View>
       </GestureDetector>
 
       <BottomControls
@@ -208,45 +171,15 @@ export default function App() {
         setZoom={setZoom}
         selectedLutId={selectedLutId}
         setSelectedLutId={setSelectedLutId}
+        // 🚀 Passamos a função toggleMode para que o slider saiba como se fechar
+        onSliderRelease={() => toggleMode("none")} 
       />
-
-      {/* <Button
-        title="🔁 Reset Welcome"
-        onPress={async () => {
-          await AsyncStorage.setItem("@settings/firstTime", "true");
-          setFirstTime(true);
-        }}
-      /> */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  message: {
-    color: "white",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 2000,
-  },
-  messageContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ffaa00",
-    borderRadius: 10,
-    padding: 20,
-    margin: 20,
-  },
+  container: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
+  previewContainer: { flex: 1, width: "100%" },
+  processingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0, 0, 0, 0.8)", zIndex: 2000 },
 });
