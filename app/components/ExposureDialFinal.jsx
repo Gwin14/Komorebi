@@ -7,6 +7,7 @@ import {
   StyleSheet,
   View,
 } from "react-native";
+import { runOnJS } from "react-native-reanimated";
 
 const { width: screenWidth } = Dimensions.get("window");
 
@@ -16,19 +17,38 @@ const GROUP = 5;
 const MAX_LINES_HALF = Math.floor(TOTAL_LINES / 2);
 const CONTAINER_WIDTH = screenWidth * 0.9;
 
-export default function ExposureDialFinal({ value, onChange, onRelease }) {
+export default function ExposureDialFinal({
+  value,
+  onChange,
+  onRelease,
+  zoomSV,
+  minZoom,
+  maxZoom,
+}) {
   const offset = useRef(new Animated.Value(0)).current;
   const lastIndex = useRef(0);
   const accumulatedOffset = useRef(0);
+  const startOffset = useRef(0);
 
   const MAX_INDEX = MAX_LINES_HALF;
   const MIN_INDEX = -MAX_LINES_HALF;
 
+  const initialNormalProgress = (value - minZoom) / (maxZoom - minZoom);
+  const clampedProgress = Math.min(Math.max(initialNormalProgress, 0), 1);
+  const initialIndex = MIN_INDEX + clampedProgress * (MAX_INDEX - MIN_INDEX);
+  offset.setValue(initialIndex * SUB_SPACING);
+  accumulatedOffset.current = initialIndex * SUB_SPACING;
+  lastIndex.current = initialIndex;
+
   const pan = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        startOffset.current = accumulatedOffset.current;
+      },
       onPanResponderMove: (_, gesture) => {
-        let totalOffset = accumulatedOffset.current + gesture.dx;
+        const SENSITIVITY = 0.5;
+        let totalOffset = startOffset.current + gesture.dx * SENSITIVITY;
         let index = Math.round(totalOffset / SUB_SPACING);
 
         if (index > MAX_INDEX) index = MAX_INDEX;
@@ -41,18 +61,20 @@ export default function ExposureDialFinal({ value, onChange, onRelease }) {
           Haptics.impactAsync(
             isMajor
               ? Haptics.ImpactFeedbackStyle.Medium
-              : Haptics.ImpactFeedbackStyle.Light
+              : Haptics.ImpactFeedbackStyle.Light,
           );
 
           const normalProgress = (index - MIN_INDEX) / (MAX_INDEX - MIN_INDEX);
           const invertedZoom = 1 - normalProgress;
-
-          onChange?.(invertedZoom);
+          const zoomValue = minZoom + (1 - invertedZoom) * (maxZoom - minZoom);
+          zoomSV.value = zoomValue;
+          runOnJS(onChange)(zoomValue);
           lastIndex.current = index;
         }
       },
       onPanResponderRelease: (_, gesture) => {
-        let totalOffset = accumulatedOffset.current + gesture.dx;
+        const SENSITIVITY = 0.5;
+        let totalOffset = startOffset.current + gesture.dx * SENSITIVITY;
         let index = Math.round(totalOffset / SUB_SPACING);
 
         if (index > MAX_INDEX) index = MAX_INDEX;
@@ -60,17 +82,17 @@ export default function ExposureDialFinal({ value, onChange, onRelease }) {
 
         accumulatedOffset.current = index * SUB_SPACING;
 
-        Animated.spring(offset, {
-          toValue: index * SUB_SPACING,
-          useNativeDriver: true,
-          tension: 50,
-          friction: 7,
-        }).start(() => {
-          // 🚀 Chama o callback para fechar o slider quando o movimento parar
-          onRelease?.();
-        });
+        const normalProgress = (index - MIN_INDEX) / (MAX_INDEX - MIN_INDEX);
+        const invertedZoom = 1 - normalProgress;
+        const zoomValue = minZoom + (1 - invertedZoom) * (maxZoom - minZoom);
+        zoomSV.value = zoomValue;
+        runOnJS(onChange)(zoomValue);
+        lastIndex.current = index;
+
+        // Remove the spring animation to prevent oscillation
+        onRelease?.();
       },
-    })
+    }),
   ).current;
 
   return (
@@ -85,7 +107,7 @@ export default function ExposureDialFinal({ value, onChange, onRelease }) {
 
           const translateX = Animated.add(
             offset,
-            new Animated.Value(index * SUB_SPACING)
+            new Animated.Value(index * SUB_SPACING),
           );
 
           const opacity = translateX.interpolate({

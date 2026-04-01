@@ -1,14 +1,7 @@
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useEffect, useRef, useState } from "react";
-import {
-  Animated,
-  Button,
-  Linking,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { Camera } from "react-native-vision-camera";
@@ -26,11 +19,11 @@ export default function App() {
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
-  const [zoom, setZoom] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [minZoom, setMinZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(5);
-  const zoomSV = useSharedValue(0);
-  const lastZoom = useSharedValue(0);
+  const zoomSV = useSharedValue(1);
+  const lastZoom = useSharedValue(1);
 
   const cameraRef = useRef(null);
   const [pictureSize, setPictureSize] = useState(null);
@@ -59,7 +52,10 @@ export default function App() {
       const min = minZoom;
       const max = maxZoom;
       const normalized = (lastZoom.value - min) / (max - min);
-      const newNormalized = Math.min(Math.max(normalized + (scale - 1) * 0.25, 0), 1);
+      const newNormalized = Math.min(
+        Math.max(normalized + (scale - 1) * 0.25, 0),
+        1,
+      );
       const newZoom = min + newNormalized * (max - min);
       zoomSV.value = newZoom;
       runOnJS(setZoom)(newZoom);
@@ -102,9 +98,16 @@ export default function App() {
 
   const handleTakePicture = () => {
     takePicture({
-      cameraRef, cameraReady, isProcessing, setIsProcessing,
-      selectedLutId, lutsLoaded, hasMediaPermission, flash,
-      setProcessingData: (data) => setProcessingQueue((prev) => [...prev, data]),
+      cameraRef,
+      cameraReady,
+      isProcessing,
+      setIsProcessing,
+      selectedLutId,
+      lutsLoaded,
+      hasMediaPermission,
+      flash,
+      setProcessingData: (data) =>
+        setProcessingQueue((prev) => [...prev, data]),
       location,
     });
   };
@@ -151,7 +154,9 @@ export default function App() {
             flash={flash}
             zoom={zoom}
             pictureSize={pictureSize}
-            onCameraReady={() => onCameraReady(cameraRef, setPictureSize, setCameraReady)}
+            onCameraReady={() =>
+              onCameraReady(cameraRef, setPictureSize, setCameraReady)
+            }
             gridVisible={gridVisible}
             setMinZoom={setMinZoom}
             setMaxZoom={setMaxZoom}
@@ -171,15 +176,27 @@ export default function App() {
         setZoom={setZoom}
         selectedLutId={selectedLutId}
         setSelectedLutId={setSelectedLutId}
+        zoomSV={zoomSV}
+        minZoom={minZoom}
+        maxZoom={maxZoom}
         // 🚀 Passamos a função toggleMode para que o slider saiba como se fechar
-        onSliderRelease={() => toggleMode("none")} 
+        onSliderRelease={() => toggleMode("none")}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000", alignItems: "center", justifyContent: "center" },
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   previewContainer: { flex: 1, width: "100%" },
-  processingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0, 0, 0, 0.8)", zIndex: 2000 },
+  processingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.8)",
+    zIndex: 2000,
+  },
 });

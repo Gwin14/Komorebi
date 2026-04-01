@@ -17,6 +17,9 @@ export default function BottomControls({
   setZoom,
   selectedLutId,
   setSelectedLutId,
+  zoomSV,
+  minZoom,
+  maxZoom,
   onSliderRelease, // 🚀 Recebe a prop vinda do App (index.jsx)
 }) {
   const router = useRouter();
@@ -53,7 +56,7 @@ export default function BottomControls({
           },
         ]}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.sideButton}
           onPress={() => {
             router.push("components/Galery");
@@ -90,10 +93,13 @@ export default function BottomControls({
         pointerEvents={activeControl !== "none" ? "auto" : "none"}
       >
         {activeControl === "zoom" && (
-          <ExposureDialFinal 
-            value={zoom} 
-            onChange={(v) => setZoom(v)} 
+          <ExposureDialFinal
+            value={zoom}
+            onChange={(v) => setZoom(v)}
             onRelease={onSliderRelease} // 👈 Passa o fechamento para o Slider
+            zoomSV={zoomSV}
+            minZoom={minZoom}
+            maxZoom={maxZoom}
           />
         )}
 
