@@ -1,4 +1,5 @@
 import * as MediaLibrary from "expo-media-library";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -27,6 +28,7 @@ export default function Galery() {
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [exifData, setExifData] = useState(null);
+  const router = useRouter();
 
   useEffect(() => {
     if (!permission) return;
@@ -152,19 +154,38 @@ export default function Galery() {
             style={{ width: "100%", height: 350 }}
           />
 
-          <Text
-            style={{
-              color: "#fff",
-              fontWeight: "bold",
-              fontSize: 20,
-              margin: 10,
-              textAlign: "left",
-              paddingLeft: 15,
-              width: "100%",
-            }}
-          >
-            Informações
-          </Text>
+          <View style={styles.header}>
+            <Text
+              style={{
+                color: "#fff",
+                fontWeight: "bold",
+                fontSize: 20,
+                margin: 10,
+                textAlign: "left",
+                paddingLeft: 15,
+              }}
+            >
+              Informações
+            </Text>
+            <TouchableOpacity
+              style={styles.exifFrameButton}
+              onPress={() => {
+                setModalVisible(false);
+                router.push({
+                  pathname: "components/ExifFrameWithPhoto",
+                  params: { photoUri: selectedImage },
+                });
+              }}
+            >
+              <Image
+                source={require("../../assets/images/exif-frame-icon.png")}
+                style={{
+                  width: 30,
+                  height: 30,
+                }}
+              />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.efixContainer}>
             {exifData && (
@@ -229,12 +250,23 @@ export default function Galery() {
 }
 
 const styles = StyleSheet.create({
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+  },
   title: {
     fontSize: 25,
     fontWeight: "bold",
     marginBottom: 20,
     color: "#fff",
     textAlign: "center",
+  },
+  exifFrameButton: {
+    marginRight: 15,
+    padding: 6,
+    borderRadius: 6,
   },
   container: {
     flex: 1,
@@ -246,7 +278,6 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     // margin: 0.9,
   },
-
   modal: {
     flex: 1,
     backgroundColor: "#000000",
