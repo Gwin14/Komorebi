@@ -125,11 +125,13 @@ export default function App() {
   return (
     <View style={styles.container}>
       {processingQueue.length > 0 && (
-        <LUTProcessor
-          imageData={processingQueue[0]}
-          onProcessed={handleProcessed}
-          onError={() => setProcessingQueue((prev) => prev.slice(1))}
-        />
+        <View style={styles.hiddenProcessor}>
+          <LUTProcessor
+            imageData={processingQueue[0]}
+            onProcessed={handleProcessed}
+            onError={() => setProcessingQueue((prev) => prev.slice(1))}
+          />
+        </View>
       )}
 
       {isProcessing && <View style={styles.processingOverlay} />}
@@ -198,5 +200,11 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.8)",
     zIndex: 2000,
+  },
+  hiddenProcessor: {
+    position: "absolute",
+    width: 0,
+    height: 0,
+    overflow: "hidden",
   },
 });
