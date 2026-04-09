@@ -32,6 +32,33 @@ export const AVAILABLE_LUTS = [
   },
 ];
 
+const LUT_GRAIN_CONFIG = {
+  none: null,
+  filtro1: {
+    lumaStd: 14,
+    rStd: 5,
+    gStd: 3,
+    bStd: 8,
+    shadowBoost: 1.4,
+    highlightReduction: 0.5,
+    clumpFreq: 0.07,
+    clumpAmp: 0.4,
+    octaves: 3,
+  }, // Dark Gold — Tri-X feel
+  filtro2: null, // Wes Anderson — sem grain
+  filtro3: {
+    lumaStd: 20,
+    rStd: 9,
+    gStd: 5,
+    bStd: 13,
+    shadowBoost: 1.7,
+    highlightReduction: 0.4,
+    clumpFreq: 0.065,
+    clumpAmp: 0.55,
+    octaves: 3,
+  }, // Cinema — CineStill feel
+};
+
 const parseCubeFile = (text) => {
   const lines = text.split("\n");
   let size = 0;
@@ -138,7 +165,7 @@ export const getCachedLUT = (lutId) => {
   return cachedLUTs[lutId] || null;
 };
 
-const generateProcessingHTML = (base64Image, cube) => {
+const generateProcessingHTML = (base64Image, cube, grainConfig) => {
   return `
 <!DOCTYPE html>
 <html>
@@ -315,6 +342,69 @@ const generateProcessingHTML = (base64Image, cube) => {
       }
       
       ctx.putImageData(imageData, 0, 0);
+
+      // --- GRAIN ---
+if (${JSON.stringify(grainConfig ? true : false)}) {
+  const gc = ${JSON.stringify(grainConfig)};
+
+  // Box-Muller gaussiana
+  function gaussian(std) {
+    let u, v;
+    do { u = Math.random(); } while (u === 0);
+    do { v = Math.random(); } while (v === 0);
+    return std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  // Perlin noise
+  const _p = Array.from({length:256},(_,i)=>i);
+  for(let i=255;i>0;i--){const j=Math.floor(Math.random()*(i+1));[_p[i],_p[j]]=[_p[j],_p[i]];}
+  const PERM=[..._p,..._p];
+  const fade=t=>t*t*t*(t*(t*6-15)+10);
+  const lerp=(a,b,t)=>a+t*(b-a);
+  const grad2=(h,x,y)=>((h&1)?-x:x)+((h&2)?-y:y);
+  function perlin(x,y){
+    const X=Math.floor(x)&255,Y=Math.floor(y)&255;
+    x-=Math.floor(x);y-=Math.floor(y);
+    const u=fade(x),v=fade(y);
+    const a=PERM[X]+Y,b=PERM[X+1]+Y;
+    return lerp(lerp(grad2(PERM[a],x,y),grad2(PERM[b],x-1,y),u),lerp(grad2(PERM[a+1],x,y-1),grad2(PERM[b+1],x-1,y-1),u),v);
+  }
+  function fbm(x,y,oct){
+    let v=0,a=0.5,f=1,mx=0;
+    for(let i=0;i<oct;i++){v+=perlin(x*f,y*f)*a;mx+=a;a*=0.5;f*=2.1;}
+    return v/mx;
+  }
+
+  const grainData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const gd = grainData.data;
+  const gw = canvas.width, gh = canvas.height;
+
+  // Pré-calcular campo Perlin
+  const clump = new Float32Array(gw * gh);
+  for(let y=0;y<gh;y++)
+    for(let x=0;x<gw;x++)
+      clump[y*gw+x] = fbm(x*gc.clumpFreq, y*gc.clumpFreq, gc.octaves);
+
+  for(let y=0;y<gh;y++){
+    for(let x=0;x<gw;x++){
+      const i=(y*gw+x)*4;
+      const r=gd[i],g=gd[i+1],b=gd[i+2];
+      const luma=0.2126*r+0.7152*g+0.0722*b;
+      const t=luma/255;
+      const lf=1+Math.pow(1-t,1.6)*gc.shadowBoost-Math.pow(t,2.2)*gc.highlightReduction;
+      const cl=1+clump[y*gw+x]*gc.clumpAmp;
+      const lumaG=gaussian(gc.lumaStd*lf*cl);
+      const cr=gaussian(gc.rStd*lf);
+      const cg=gaussian(gc.gStd*lf);
+      const cb=gaussian(gc.bStd*lf);
+      gd[i]  =Math.min(255,Math.max(0,r+lumaG+cr));
+      gd[i+1]=Math.min(255,Math.max(0,g+lumaG+cg));
+      gd[i+2]=Math.min(255,Math.max(0,b+lumaG+cb));
+    }
+  }
+  ctx.putImageData(grainData, 0, 0);
+}
+// --- FIM GRAIN ---
       
       console.log('Processamento concluído!');
       
@@ -366,6 +456,7 @@ export const applyLUTToImage = async (imageUri, lutId, exifData) => {
       cube: cubeData,
       originalUri: imageUri,
       exifData: exifData || null,
+      grainConfig: LUT_GRAIN_CONFIG[lutId] || null,
     };
   } catch (error) {
     console.error("Erro ao preparar processamento:", error);
@@ -586,7 +677,13 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
             originalExifRef.current = null;
           }
 
-          setHtml(generateProcessingHTML(base64, imageData.cube));
+          setHtml(
+            generateProcessingHTML(
+              base64,
+              imageData.cube,
+              imageData.grainConfig || null,
+            ),
+          );
         }
       } catch (e) {
         if (isMounted && onError) onError(e);
