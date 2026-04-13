@@ -11,7 +11,7 @@ import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
 import {
-  cropImageToAspect,
+  cropImageToInverseAspect,
   onCameraReady,
   saveToAlbum,
   takePicture,
@@ -135,11 +135,8 @@ export default function App() {
       if (doubleCaptureMode) {
         await saveToAlbum(processedUri);
 
-        const landscapeUri = await cropImageToAspect(processedUri, 4 / 3);
-        const portraitUri = await cropImageToAspect(processedUri, 3 / 4);
-
-        if (landscapeUri) await saveToAlbum(landscapeUri);
-        if (portraitUri) await saveToAlbum(portraitUri);
+        const inverseUri = await cropImageToInverseAspect(processedUri);
+        if (inverseUri) await saveToAlbum(inverseUri);
       } else {
         await saveToAlbum(processedUri);
       }
