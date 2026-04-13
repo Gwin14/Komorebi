@@ -93,9 +93,6 @@ const LUT_GRAIN_CONFIG = {
   }, // Cinema — Tri-X feel
 };
 
-
-
-
 const parseCubeFile = (text) => {
   const lines = text.split("\n");
   let size = 0;
@@ -749,7 +746,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
           originalExifRef.current,
         );
         if (savedUri && onProcessed) {
-          onProcessed(savedUri);
+          onProcessed(savedUri, imageData.doubleCaptureMode);
         }
       } else if (message.type === "error") {
         console.error("Erro no processamento:", message.message);

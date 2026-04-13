@@ -10,7 +10,12 @@ import CameraPreview from "./components/CameraPreview";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
-import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
+import {
+  cropImageToAspect,
+  onCameraReady,
+  saveToAlbum,
+  takePicture,
+} from "./utils/cameraUtils";
 import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
 
 export default function App() {
@@ -22,6 +27,7 @@ export default function App() {
   const [zoom, setZoom] = useState(1);
   const [minZoom, setMinZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(5);
+  const [doubleCaptureMode, setDoubleCaptureMode] = useState(false);
   const zoomSV = useSharedValue(1);
   const lastZoom = useSharedValue(1);
 
@@ -109,12 +115,36 @@ export default function App() {
       setProcessingData: (data) =>
         setProcessingQueue((prev) => [...prev, data]),
       location,
+      doubleCaptureMode,
     });
   };
 
-  const handleProcessed = async (processedUri) => {
+  useEffect(() => {
+    const item = processingQueue[0];
+    if (!item || item.needsProcessing) return;
+
+    (async () => {
+      await handleProcessed(item.originalUri, item.doubleCaptureMode);
+    })();
+  }, [processingQueue]);
+
+  const handleProcessed = async (processedUri, doubleCaptureMode = false) => {
     try {
-      if (hasMediaPermission) await saveToAlbum(processedUri);
+      if (!hasMediaPermission) return;
+
+      if (doubleCaptureMode) {
+        await saveToAlbum(processedUri);
+
+        const landscapeUri = await cropImageToAspect(processedUri, 4 / 3);
+        const portraitUri = await cropImageToAspect(processedUri, 3 / 4);
+
+        if (landscapeUri) await saveToAlbum(landscapeUri);
+        if (portraitUri) await saveToAlbum(portraitUri);
+      } else {
+        await saveToAlbum(processedUri);
+      }
+    } catch (error) {
+      console.error("Erro ao salvar imagem processada:", error);
     } finally {
       setProcessingQueue((prev) => prev.slice(1));
     }
@@ -145,6 +175,8 @@ export default function App() {
         toggleMode={toggleMode}
         activeControl={activeControl}
         selectedLutId={selectedLutId}
+        doubleCaptureMode={doubleCaptureMode}
+        toggleDoubleCaptureMode={() => setDoubleCaptureMode((value) => !value)}
       />
 
       <GestureDetector gesture={composedGestures}>

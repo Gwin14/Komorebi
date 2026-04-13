@@ -1,5 +1,7 @@
+import * as ImageManipulator from "expo-image-manipulator";
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
+import { Image } from "react-native";
 import { applyLUTToImage } from "./lutProcessor";
 
 const APP_ALBUM = "Komorebi";
@@ -27,6 +29,7 @@ export const takePicture = async ({
   setProcessingData,
   location,
   flash,
+  doubleCaptureMode = false,
 }) => {
   if (cameraRef.current && cameraReady && !isProcessing) {
     try {
@@ -68,6 +71,8 @@ export const takePicture = async ({
           selectedLutId,
           completeExif,
         );
+        processingInfo.doubleCaptureMode = doubleCaptureMode;
+
         if (processingInfo.needsProcessing) {
           setProcessingData(processingInfo);
           setIsProcessing(false); // Libera a UI imediatamente para nova foto
@@ -75,6 +80,13 @@ export const takePicture = async ({
           if (hasMediaPermission) await saveToAlbum(uri);
           setIsProcessing(false);
         }
+      } else if (doubleCaptureMode) {
+        setProcessingData({
+          needsProcessing: false,
+          originalUri: uri,
+          doubleCaptureMode: true,
+        });
+        setIsProcessing(false);
       } else {
         if (hasMediaPermission) await saveToAlbum(uri);
         setIsProcessing(false);
@@ -83,6 +95,47 @@ export const takePicture = async ({
       console.error("Erro ao tirar foto:", error);
       setIsProcessing(false);
     }
+  }
+};
+
+const getImageDimensions = (uri) =>
+  new Promise((resolve, reject) => {
+    Image.getSize(uri, (width, height) => resolve({ width, height }), reject);
+  });
+
+const getCropRect = (width, height, ratio) => {
+  const currentRatio = width / height;
+  let cropWidth = width;
+  let cropHeight = height;
+
+  if (currentRatio > ratio) {
+    cropWidth = Math.round(height * ratio);
+  } else {
+    cropHeight = Math.round(width / ratio);
+  }
+
+  return {
+    originX: Math.round((width - cropWidth) / 2),
+    originY: Math.round((height - cropHeight) / 2),
+    width: cropWidth,
+    height: cropHeight,
+  };
+};
+
+export const cropImageToAspect = async (uri, ratio) => {
+  try {
+    const { width, height } = await getImageDimensions(uri);
+    const crop = getCropRect(width, height, ratio);
+
+    const result = await ImageManipulator.manipulateAsync(uri, [{ crop }], {
+      compress: 1,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+
+    return result.uri;
+  } catch (error) {
+    console.error("Erro ao gerar crop da imagem:", error);
+    return null;
   }
 };
 

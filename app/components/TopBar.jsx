@@ -16,6 +16,8 @@ export default function TopBar({
   selectedLutId,
   smileDetectionEnabled,
   toggleSmileDetectionEnabled,
+  doubleCaptureMode,
+  toggleDoubleCaptureMode,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -93,6 +95,17 @@ export default function TopBar({
           />
         </Animated.View>
       </TouchableOpacity>
+
+      {/* <TouchableOpacity onPress={toggleDoubleCaptureMode}>
+        <Animated.View style={animatedStyle}>
+          <Ionicons
+            name="layers-outline"
+            size={32}
+            style={styles.button}
+            color={doubleCaptureMode ? "#ffaa00" : "white"}
+          />
+        </Animated.View>
+      </TouchableOpacity> */}
 
       {/* <TouchableOpacity onPress={() => toggleMode("zoom")}>
         <Animated.View style={animatedStyle}>
