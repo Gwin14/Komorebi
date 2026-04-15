@@ -19,8 +19,14 @@ import {
 import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
 
 export default function App() {
-  const { retroStyle, gridVisible, location, firstTime, loading } =
-    useSettings();
+  const {
+    retroStyle,
+    gridVisible,
+    location,
+    firstTime,
+    loading,
+    saveOriginalWithLUT,
+  } = useSettings();
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -116,6 +122,7 @@ export default function App() {
         setProcessingQueue((prev) => [...prev, data]),
       location,
       doubleCaptureMode,
+      saveOriginalWithLUT,
     });
   };
 
@@ -124,11 +131,17 @@ export default function App() {
     if (!item || item.needsProcessing) return;
 
     (async () => {
-      await handleProcessed(item.originalUri, item.doubleCaptureMode);
+      await handleProcessed(item.originalUri, item);
     })();
   }, [processingQueue]);
 
-  const handleProcessed = async (processedUri, doubleCaptureMode = false) => {
+  const handleProcessed = async (processedUri, item = {}) => {
+    const {
+      doubleCaptureMode = false,
+      saveOriginalWithLUT: saveOriginalWithoutLUT = false,
+      originalUri,
+    } = item;
+
     try {
       if (!hasMediaPermission) return;
 
@@ -139,6 +152,10 @@ export default function App() {
         if (inverseUri) await saveToAlbum(inverseUri);
       } else {
         await saveToAlbum(processedUri);
+      }
+
+      if (saveOriginalWithoutLUT && originalUri) {
+        await saveToAlbum(originalUri);
       }
     } catch (error) {
       console.error("Erro ao salvar imagem processada:", error);

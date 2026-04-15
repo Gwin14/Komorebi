@@ -30,6 +30,7 @@ export const takePicture = async ({
   location,
   flash,
   doubleCaptureMode = false,
+  saveOriginalWithLUT = false,
 }) => {
   if (cameraRef.current && cameraReady && !isProcessing) {
     try {
@@ -72,6 +73,8 @@ export const takePicture = async ({
           completeExif,
         );
         processingInfo.doubleCaptureMode = doubleCaptureMode;
+        processingInfo.saveOriginalWithLUT = saveOriginalWithLUT;
+        processingInfo.originalUri = uri;
 
         if (processingInfo.needsProcessing) {
           setProcessingData(processingInfo);

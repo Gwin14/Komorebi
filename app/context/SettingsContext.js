@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   GRID_VISIBLE: "@settings/gridVisible",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
+  SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
 };
 
@@ -17,6 +18,7 @@ export const SettingsProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(false);
   const [location, setLocation] = useState(true);
+  const [saveOriginalWithLUT, setSaveOriginalWithLUT] = useState(false);
   const [firstTime, setFirstTime] = useState(true);
 
   useEffect(() => {
@@ -36,6 +38,10 @@ export const SettingsProvider = ({ children }) => {
           STORAGE_KEYS.FIRSTTIME,
         );
 
+        const savedSaveOriginalWithLUT = await AsyncStorage.getItem(
+          STORAGE_KEYS.SAVE_ORIGINAL_WITH_LUT,
+        );
+
         const savedLocation = await AsyncStorage.getItem(STORAGE_KEYS.LOCATION);
 
         // ----------
@@ -48,6 +54,9 @@ export const SettingsProvider = ({ children }) => {
 
         if (savedShutterSound !== null)
           setShutterSound(savedShutterSound === "true");
+
+        if (savedSaveOriginalWithLUT !== null)
+          setSaveOriginalWithLUT(savedSaveOriginalWithLUT === "true");
 
         if (savedFirstTime !== null) setFirstTime(savedFirstTime === "true");
       } catch (e) {
@@ -81,6 +90,16 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [shutterSound, loading]);
 
+  // 💾 Salvar "Salvar original sem LUT"
+  useEffect(() => {
+    if (!loading) {
+      AsyncStorage.setItem(
+        STORAGE_KEYS.SAVE_ORIGINAL_WITH_LUT,
+        saveOriginalWithLUT.toString(),
+      );
+    }
+  }, [saveOriginalWithLUT, loading]);
+
   // 💾 Salvar "Localização"
   useEffect(() => {
     if (!loading) {
@@ -105,6 +124,8 @@ export const SettingsProvider = ({ children }) => {
     setShutterSound,
     location,
     setLocation,
+    saveOriginalWithLUT,
+    setSaveOriginalWithLUT,
     firstTime,
     setFirstTime,
   };

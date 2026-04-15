@@ -20,6 +20,8 @@ export default function Settings() {
     setShutterSound,
     location,
     setLocation,
+    saveOriginalWithLUT,
+    setSaveOriginalWithLUT,
   } = useSettings();
 
   if (loading) {
@@ -51,6 +53,12 @@ export default function Settings() {
           label="Som do Obturador"
           value={shutterSound}
           onValueChange={setShutterSound}
+        />
+
+        <CustomToggle
+          label="Salvar cópia sem LUT"
+          value={saveOriginalWithLUT}
+          onValueChange={setSaveOriginalWithLUT}
         />
 
         <CustomToggle

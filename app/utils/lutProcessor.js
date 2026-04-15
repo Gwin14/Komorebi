@@ -746,7 +746,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
           originalExifRef.current,
         );
         if (savedUri && onProcessed) {
-          onProcessed(savedUri, imageData.doubleCaptureMode);
+          onProcessed(savedUri, imageData);
         }
       } else if (message.type === "error") {
         console.error("Erro no processamento:", message.message);
