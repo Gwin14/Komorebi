@@ -113,6 +113,15 @@ export default function App() {
     }).start();
   }, [activeControl]);
 
+  useEffect(() => {
+    if (
+      selectedLutId !== "none" &&
+      !availableLuts.some((lut) => lut.id === selectedLutId)
+    ) {
+      setSelectedLutId("none");
+    }
+  }, [availableLuts, selectedLutId]);
+
   const toggleMode = (mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
   };

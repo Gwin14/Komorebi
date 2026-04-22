@@ -54,6 +54,12 @@ export const addCustomLUT = (id, name, cubeData) => {
   cachedLUTs[id] = cubeData;
 };
 
+export const removeCustomLUT = (id) => {
+  if (id && cachedLUTs[id]) {
+    delete cachedLUTs[id];
+  }
+};
+
 export const loadCustomLUTs = async (customLuts) => {
   if (!Array.isArray(customLuts)) return;
 

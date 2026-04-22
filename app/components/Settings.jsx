@@ -6,7 +6,11 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
-import { addCustomLUT, parseCubeFile } from "../utils/lutProcessor";
+import {
+  addCustomLUT,
+  parseCubeFile,
+  removeCustomLUT,
+} from "../utils/lutProcessor";
 import CustomToggle from "./CustoToggle";
 import ExternalLink from "./ExternalLink";
 
@@ -62,6 +66,11 @@ export default function Settings() {
     }
   };
 
+  const handleDeleteLUT = (id) => {
+    removeCustomLUT(id);
+    setCustomLuts((prev) => prev.filter((lut) => lut.id !== id));
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -114,6 +123,23 @@ export default function Settings() {
             <Text style={styles.uploadText}>Upload LUT</Text>
           </View>
         </TouchableOpacity>
+
+        {customLuts.length > 0 && (
+          <View style={styles.customLutList}>
+            <Text style={styles.sectionTitle}>LUTs carregados</Text>
+            {customLuts.map((lut) => (
+              <View key={lut.id} style={styles.customLutItem}>
+                <Text style={styles.customLutName}>{lut.name}</Text>
+                <TouchableOpacity
+                  onPress={() => handleDeleteLUT(lut.id)}
+                  style={styles.deleteButton}
+                >
+                  <Ionicons name="trash-outline" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={styles.divider} />
@@ -269,6 +295,39 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     marginLeft: 10,
+  },
+  customLutList: {
+    marginTop: 20,
+    width: "100%",
+    borderTopWidth: 1,
+    borderTopColor: "#444",
+    paddingTop: 12,
+  },
+  sectionTitle: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  customLutItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#111",
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  customLutName: {
+    color: "#fff",
+    fontSize: 14,
+    flex: 1,
+  },
+  deleteButton: {
+    backgroundColor: "#aa2222",
+    borderRadius: 8,
+    padding: 8,
+    marginLeft: 12,
   },
   backButton: {
     position: "absolute",
