@@ -16,7 +16,11 @@ import {
   saveToAlbum,
   takePicture,
 } from "./utils/cameraUtils";
-import { loadAllLUTs, LUTProcessor } from "./utils/lutProcessor";
+import {
+  AVAILABLE_LUTS,
+  loadAllLUTs,
+  LUTProcessor,
+} from "./utils/lutProcessor";
 
 export default function App() {
   const {
@@ -26,6 +30,7 @@ export default function App() {
     firstTime,
     loading,
     saveOriginalWithLUT,
+    customLuts,
   } = useSettings();
 
   const [facing, setFacing] = useState("back");
@@ -52,6 +57,8 @@ export default function App() {
   const [selectedLutId, setSelectedLutId] = useState("none");
 
   const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
+
+  const availableLuts = [...AVAILABLE_LUTS, ...customLuts];
 
   // --- GESTOS ---
 
@@ -229,6 +236,7 @@ export default function App() {
         maxZoom={maxZoom}
         // 🚀 Passamos a função toggleMode para que o slider saiba como se fechar
         onSliderRelease={() => toggleMode("none")}
+        availableLuts={availableLuts}
       />
     </View>
   );

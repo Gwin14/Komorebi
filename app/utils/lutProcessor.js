@@ -6,7 +6,7 @@ import { WebView } from "react-native-webview";
 
 const cachedLUTs = {};
 
-export const AVAILABLE_LUTS = [
+export let AVAILABLE_LUTS = [
   {
     id: "none",
     name: "Sem Filtro",
@@ -49,6 +49,15 @@ export const AVAILABLE_LUTS = [
     file: require("../../assets/luts/cinema.cube"),
   },
 ];
+
+export const addCustomLUT = (id, name, cubeData) => {
+  cachedLUTs[id] = cubeData;
+  AVAILABLE_LUTS.push({
+    id,
+    name,
+    file: null, // Já carregado
+  });
+};
 
 const LUT_GRAIN_CONFIG = {
   none: null,
@@ -93,7 +102,7 @@ const LUT_GRAIN_CONFIG = {
   }, // Cinema — Tri-X feel
 };
 
-const parseCubeFile = (text) => {
+export const parseCubeFile = (text) => {
   const lines = text.split("\n");
   let size = 0;
   let domainMin = [0, 0, 0];

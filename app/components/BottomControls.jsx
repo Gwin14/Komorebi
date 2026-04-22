@@ -21,6 +21,7 @@ export default function BottomControls({
   minZoom,
   maxZoom,
   onSliderRelease, // 🚀 Recebe a prop vinda do App (index.jsx)
+  availableLuts,
 }) {
   const router = useRouter();
   const deviceOrientationStyle = useDeviceOrientation();
@@ -109,6 +110,7 @@ export default function BottomControls({
               selectedLutId={selectedLutId}
               onSelectLut={setSelectedLutId}
               visible={true}
+              availableLuts={availableLuts}
             />
           </View>
         )}

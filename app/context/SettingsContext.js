@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   LOCATION: "@settings/location",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
+  CUSTOM_LUTS: "@settings/customLuts",
 };
 
 export const SettingsProvider = ({ children }) => {
@@ -20,6 +21,7 @@ export const SettingsProvider = ({ children }) => {
   const [location, setLocation] = useState(true);
   const [saveOriginalWithLUT, setSaveOriginalWithLUT] = useState(false);
   const [firstTime, setFirstTime] = useState(true);
+  const [customLuts, setCustomLuts] = useState([]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -44,6 +46,10 @@ export const SettingsProvider = ({ children }) => {
 
         const savedLocation = await AsyncStorage.getItem(STORAGE_KEYS.LOCATION);
 
+        const savedCustomLuts = await AsyncStorage.getItem(
+          STORAGE_KEYS.CUSTOM_LUTS,
+        );
+
         // ----------
 
         if (savedLocation !== null) setLocation(savedLocation === "true");
@@ -59,6 +65,9 @@ export const SettingsProvider = ({ children }) => {
           setSaveOriginalWithLUT(savedSaveOriginalWithLUT === "true");
 
         if (savedFirstTime !== null) setFirstTime(savedFirstTime === "true");
+
+        if (savedCustomLuts !== null)
+          setCustomLuts(JSON.parse(savedCustomLuts));
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
@@ -100,6 +109,16 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [saveOriginalWithLUT, loading]);
 
+  // 💾 Salvar "Custom LUTs"
+  useEffect(() => {
+    if (!loading) {
+      AsyncStorage.setItem(
+        STORAGE_KEYS.CUSTOM_LUTS,
+        JSON.stringify(customLuts),
+      );
+    }
+  }, [customLuts, loading]);
+
   // 💾 Salvar "Localização"
   useEffect(() => {
     if (!loading) {
@@ -128,6 +147,8 @@ export const SettingsProvider = ({ children }) => {
     setSaveOriginalWithLUT,
     firstTime,
     setFirstTime,
+    customLuts,
+    setCustomLuts,
   };
 
   return (

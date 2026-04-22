@@ -1,9 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as DocumentPicker from "@react-native-documents/picker";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
+import { addCustomLUT, parseCubeFile } from "../utils/lutProcessor";
 import CustomToggle from "./CustoToggle";
 import ExternalLink from "./ExternalLink";
 
@@ -22,7 +25,42 @@ export default function Settings() {
     setLocation,
     saveOriginalWithLUT,
     setSaveOriginalWithLUT,
+    customLuts,
+    setCustomLuts,
   } = useSettings();
+
+  const handleUploadLUT = async () => {
+    try {
+      const results = await DocumentPicker.pick({
+        type: [DocumentPicker.types.allFiles],
+      });
+      const res = Array.isArray(results) ? results[0] : results;
+      const fileName = res.name || res.uri?.split("/").pop() || "arquivo.cube";
+
+      if (!fileName.toLowerCase().endsWith(".cube")) {
+        alert("Por favor, selecione um arquivo .cube");
+        return;
+      }
+
+      const content = await RNFS.readFile(res.uri, "utf8");
+      const cubeData = parseCubeFile(content);
+      const id = "custom_" + Date.now();
+      const name = fileName.replace(/\.cube$/i, "");
+      addCustomLUT(id, name, cubeData);
+      setCustomLuts((prev) => [...prev, { id, name, file: null }]);
+      alert("LUT carregado com sucesso!");
+    } catch (err) {
+      const errorCode = err && typeof err === "object" ? err.code : null;
+      if (
+        errorCode === DocumentPicker.errorCodes.OPERATION_CANCELED ||
+        errorCode === "OPERATION_CANCELED"
+      ) {
+        return;
+      }
+      console.error(err);
+      alert("Erro ao carregar LUT");
+    }
+  };
 
   if (loading) {
     return (
@@ -66,6 +104,16 @@ export default function Settings() {
           value={location}
           onValueChange={setLocation}
         />
+
+        <TouchableOpacity
+          onPress={handleUploadLUT}
+          style={{ width: "90%", alignItems: "center", marginTop: 20 }}
+        >
+          <View style={styles.uploadButton}>
+            <Ionicons name="cloud-upload-outline" size={24} color="white" />
+            <Text style={styles.uploadText}>Upload LUT</Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.divider} />
@@ -209,6 +257,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
     width: "90%",
     marginTop: 20,
+  },
+  uploadButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#333",
+    padding: 10,
+    borderRadius: 8,
+  },
+  uploadText: {
+    color: "white",
+    fontSize: 16,
+    marginLeft: 10,
   },
   backButton: {
     position: "absolute",

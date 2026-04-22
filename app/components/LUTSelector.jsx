@@ -7,9 +7,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { AVAILABLE_LUTS } from "../utils/lutProcessor";
 
-export default function LUTSelector({ selectedLutId, onSelectLut, visible }) {
+export default function LUTSelector({
+  selectedLutId,
+  onSelectLut,
+  visible,
+  availableLuts,
+}) {
   const slideAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
@@ -51,7 +55,7 @@ export default function LUTSelector({ selectedLutId, onSelectLut, visible }) {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {AVAILABLE_LUTS.map((lut) => (
+        {availableLuts.map((lut) => (
           <TouchableOpacity
             key={lut.id}
             style={[
