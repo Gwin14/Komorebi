@@ -19,6 +19,7 @@ import {
 import {
   AVAILABLE_LUTS,
   loadAllLUTs,
+  loadCustomLUTs,
   LUTProcessor,
 } from "./utils/lutProcessor";
 
@@ -93,6 +94,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       await loadAllLUTs();
+      await loadCustomLUTs(customLuts);
       setLutsLoaded(true);
       const permission = await Camera.requestCameraPermission();
       setCameraPermission(permission);
@@ -100,7 +102,7 @@ export default function App() {
       setHasMediaPermission(status === "granted");
       await Location.requestForegroundPermissionsAsync();
     })();
-  }, []);
+  }, [customLuts]);
 
   useEffect(() => {
     const showTools = activeControl !== "none";

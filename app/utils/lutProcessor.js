@@ -52,11 +52,25 @@ export let AVAILABLE_LUTS = [
 
 export const addCustomLUT = (id, name, cubeData) => {
   cachedLUTs[id] = cubeData;
-  AVAILABLE_LUTS.push({
-    id,
-    name,
-    file: null, // Já carregado
-  });
+};
+
+export const loadCustomLUTs = async (customLuts) => {
+  if (!Array.isArray(customLuts)) return;
+
+  for (const customLut of customLuts) {
+    if (!customLut || !customLut.id) continue;
+    if (cachedLUTs[customLut.id]) continue;
+
+    if (customLut.content) {
+      const cubeData = parseCubeFile(customLut.content);
+      if (cubeData && cubeData.size > 0) {
+        cachedLUTs[customLut.id] = cubeData;
+        console.log(`Custom LUT "${customLut.name}" carregado com sucesso`);
+      } else {
+        console.warn(`Custom LUT "${customLut.name}" não pôde ser parseado`);
+      }
+    }
+  }
 };
 
 const LUT_GRAIN_CONFIG = {

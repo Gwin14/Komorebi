@@ -47,7 +47,7 @@ export default function Settings() {
       const id = "custom_" + Date.now();
       const name = fileName.replace(/\.cube$/i, "");
       addCustomLUT(id, name, cubeData);
-      setCustomLuts((prev) => [...prev, { id, name, file: null }]);
+      setCustomLuts((prev) => [...prev, { id, name, content }]);
       alert("LUT carregado com sucesso!");
     } catch (err) {
       const errorCode = err && typeof err === "object" ? err.code : null;
