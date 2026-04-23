@@ -2,7 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "@react-native-documents/picker";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
@@ -11,8 +18,10 @@ import {
   parseCubeFile,
   removeCustomLUT,
 } from "../utils/lutProcessor";
+import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import ExternalLink from "./ExternalLink";
+import LUTUploadButton from "./LUTUploadButton";
 
 export default function Settings() {
   const router = useRouter();
@@ -81,176 +90,174 @@ export default function Settings() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Text style={styles.title}>Página de Configurações</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <Text style={styles.title}>Página de Configurações</Text>
 
-      <View style={{ width: "90%", marginTop: 20 }}>
-        <CustomToggle
-          label="Estilo Retrô do Viewfinder"
-          value={retroStyle}
-          onValueChange={setRetroStyle}
-        />
+        <View style={{ width: "90%", marginTop: 20 }}>
+          <CustomToggle
+            label="Estilo Retrô do Viewfinder"
+            value={retroStyle}
+            onValueChange={setRetroStyle}
+          />
 
-        <CustomToggle
-          label="Grade da Câmera"
-          value={gridVisible}
-          onValueChange={setGridVisible}
-        />
+          <CustomToggle
+            label="Grade da Câmera"
+            value={gridVisible}
+            onValueChange={setGridVisible}
+          />
 
-        <CustomToggle
-          label="Som do Obturador"
-          value={shutterSound}
-          onValueChange={setShutterSound}
-        />
+          <CustomToggle
+            label="Som do Obturador"
+            value={shutterSound}
+            onValueChange={setShutterSound}
+          />
 
-        <CustomToggle
-          label="Salvar cópia sem LUT"
-          value={saveOriginalWithLUT}
-          onValueChange={setSaveOriginalWithLUT}
-        />
+          <CustomToggle
+            label="Salvar cópia sem LUT"
+            value={saveOriginalWithLUT}
+            onValueChange={setSaveOriginalWithLUT}
+          />
 
-        <CustomToggle
-          label="Salvar Localização nas Fotos"
-          value={location}
-          onValueChange={setLocation}
-        />
+          <CustomToggle
+            label="Salvar Localização nas Fotos"
+            value={location}
+            onValueChange={setLocation}
+          />
+        </View>
 
-        <TouchableOpacity
-          onPress={handleUploadLUT}
-          style={{ width: "90%", alignItems: "center", marginTop: 20 }}
-        >
-          <View style={styles.uploadButton}>
-            <Ionicons name="cloud-upload-outline" size={24} color="white" />
-            <Text style={styles.uploadText}>Upload LUT</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.divider} />
 
-        {customLuts.length > 0 && (
-          <View style={styles.customLutList}>
+        <View style={{ width: "90%" }}>
+          <View style={styles.listHeader}>
             <Text style={styles.sectionTitle}>LUTs carregados</Text>
-            {customLuts.map((lut) => (
-              <View key={lut.id} style={styles.customLutItem}>
-                <Text style={styles.customLutName}>{lut.name}</Text>
-                <TouchableOpacity
-                  onPress={() => handleDeleteLUT(lut.id)}
-                  style={styles.deleteButton}
-                >
-                  <Ionicons name="trash-outline" size={20} color="#fff" />
-                </TouchableOpacity>
-              </View>
-            ))}
+            <LUTUploadButton onPress={handleUploadLUT} />
           </View>
-        )}
-      </View>
+          {customLuts.length > 0 && (
+            <View style={styles.customLutList}>
+              {customLuts.map((lut) => (
+                <CustomLUTItem
+                  key={lut.id}
+                  name={lut.name}
+                  onDelete={() => handleDeleteLUT(lut.id)}
+                />
+              ))}
+            </View>
+          )}
+        </View>
 
-      <View style={styles.divider} />
+        <View style={styles.divider} />
 
-      <ExternalLink
-        label="Código fonte"
-        // description="Leia nossa política de privacidade online"
-        url="https://github.com/Gwin14/Komorebi"
-      />
-
-      <TouchableOpacity
-        onPress={() => {
-          router.push("components/ExifFrame");
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }}
-        style={{ width: "100%", alignItems: "center" }}
-      >
-        <ExternalLink label="Gerador de Exif Frame" disabled />
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        onPress={() => {
-          router.push("components/Feedback");
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }}
-        style={{ width: "100%", alignItems: "center" }}
-      >
         <ExternalLink
-          label="Dê seu feedback"
-          description="Ajude a melhorar o app!"
-          disabled
+          label="Código fonte"
+          // description="Leia nossa política de privacidade online"
+          url="https://github.com/Gwin14/Komorebi"
         />
-      </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => {
-          router.push("components/CommingSoon");
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        }}
-        style={{ width: "100%", alignItems: "center" }}
-      >
-        <ExternalLink label="Em breve..." disabled />
-      </TouchableOpacity>
-
-      <View style={styles.divider} />
-
-      <View style={styles.socialContainer}>
         <TouchableOpacity
           onPress={() => {
-            require("react-native")
-              .Linking.openURL("https://www.instagram.com/fotoessencia_/")
-              .catch((e) => {
-                console.error("Erro ao abrir link", e);
-              });
+            router.push("components/ExifFrame");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
+          style={{ width: "100%", alignItems: "center" }}
         >
-          <Image
-            source={require("../../assets/images/instagram.png")}
-            style={styles.socialIcon}
+          <ExternalLink label="Gerador de Exif Frame" disabled />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/Feedback");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={{ width: "100%", alignItems: "center" }}
+        >
+          <ExternalLink
+            label="Dê seu feedback"
+            description="Ajude a melhorar o app!"
+            disabled
           />
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => {
-            require("react-native")
-              .Linking.openURL("https://www.threads.com/@fotoessencia_")
-              .catch((e) => {
-                console.error("Erro ao abrir link", e);
-              });
+            router.push("components/CommingSoon");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
+          style={{ width: "100%", alignItems: "center" }}
         >
-          <Image
-            source={require("../../assets/images/threads.png")}
-            style={styles.socialIcon}
-          />
+          <ExternalLink label="Em breve..." disabled />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => {
-            require("react-native")
-              .Linking.openURL("https://www.youtube.com/@FotoEssência")
-              .catch((e) => {
-                console.error("Erro ao abrir link", e);
-              });
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-        >
-          <Image
-            source={require("../../assets/images/youtube.png")}
-            style={styles.socialIcon}
-          />
-        </TouchableOpacity>
+        <View style={styles.divider} />
 
-        <TouchableOpacity
-          onPress={() => {
-            require("react-native")
-              .Linking.openURL("https://github.com/Gwin14")
-              .catch((e) => {
-                console.error("Erro ao abrir link", e);
-              });
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-        >
-          <Image
-            source={require("../../assets/images/github.png")}
-            style={styles.socialIcon}
-          />
-        </TouchableOpacity>
-      </View>
+        <View style={styles.socialContainer}>
+          <TouchableOpacity
+            onPress={() => {
+              require("react-native")
+                .Linking.openURL("https://www.instagram.com/fotoessencia_/")
+                .catch((e) => {
+                  console.error("Erro ao abrir link", e);
+                });
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <Image
+              source={require("../../assets/images/instagram.png")}
+              style={styles.socialIcon}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              require("react-native")
+                .Linking.openURL("https://www.threads.com/@fotoessencia_")
+                .catch((e) => {
+                  console.error("Erro ao abrir link", e);
+                });
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <Image
+              source={require("../../assets/images/threads.png")}
+              style={styles.socialIcon}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              require("react-native")
+                .Linking.openURL("https://www.youtube.com/@FotoEssência")
+                .catch((e) => {
+                  console.error("Erro ao abrir link", e);
+                });
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <Image
+              source={require("../../assets/images/youtube.png")}
+              style={styles.socialIcon}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              require("react-native")
+                .Linking.openURL("https://github.com/Gwin14")
+                .catch((e) => {
+                  console.error("Erro ao abrir link", e);
+                });
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <Image
+              source={require("../../assets/images/github.png")}
+              style={styles.socialIcon}
+            />
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
         <Ionicons name="chevron-back" size={32} color="white" />
@@ -260,16 +267,25 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+    backgroundColor: "#000",
+    flex: 1,
+    alignItems: "center",
+  },
+  scrollView: {
+    flex: 1,
+    width: "100%",
+  },
+  scrollContent: {
+    alignItems: "center",
+    paddingBottom: 20,
+  },
   title: {
     fontSize: 20,
     fontWeight: "bold",
     marginBottom: 20,
     color: "#fff",
-  },
-  container: {
-    backgroundColor: "#000",
-    flex: 1,
-    alignItems: "center",
+    marginTop: 20,
   },
   divider: {
     height: 1,
@@ -277,57 +293,40 @@ const styles = StyleSheet.create({
     backgroundColor: "#55555563",
     marginVertical: 12,
   },
-  socialIcon: { width: 40, height: 40, aspectRatio: 1, resizeMode: "contain" },
+  socialIcon: {
+    width: 40,
+    height: 40,
+    aspectRatio: 1,
+    resizeMode: "contain",
+    marginbottom: 100,
+  },
   socialContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
     width: "90%",
     marginTop: 20,
   },
-  uploadButton: {
+  customLutList: {
+    // marginTop: 20,
+    width: "100%",
+
+    paddingTop: 12,
+  },
+  listHeader: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#333",
-    padding: 10,
-    borderRadius: 8,
-  },
-  uploadText: {
-    color: "white",
-    fontSize: 16,
-    marginLeft: 10,
-  },
-  customLutList: {
-    marginTop: 20,
-    width: "100%",
-    borderTopWidth: 1,
-    borderTopColor: "#444",
-    paddingTop: 12,
+    justifyContent: "space-between",
+    // marginBottom: 10,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
-    marginBottom: 10,
   },
-  customLutItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#111",
-    padding: 10,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  customLutName: {
-    color: "#fff",
-    fontSize: 14,
-    flex: 1,
-  },
-  deleteButton: {
-    backgroundColor: "#aa2222",
-    borderRadius: 8,
-    padding: 8,
-    marginLeft: 12,
+  emptyState: {
+    marginTop: 20,
+    alignItems: "flex-start",
   },
   backButton: {
     position: "absolute",
