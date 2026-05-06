@@ -27,6 +27,7 @@ export default function Galery() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [exifData, setExifData] = useState(null);
   const router = useRouter();
 
@@ -86,6 +87,20 @@ export default function Galery() {
     }
   };
 
+  const handleDeletePhoto = async () => {
+    if (!selectedAssetId) return;
+
+    try {
+      await MediaLibrary.deleteAssetsAsync([selectedAssetId]);
+      setModalVisible(false);
+      setSelectedImage(null);
+      setSelectedAssetId(null);
+      loadKomorebiPhotos();
+    } catch (e) {
+      console.log("Erro ao excluir foto:", e);
+    }
+  };
+
   if (!permission) {
     return null;
   }
@@ -122,6 +137,7 @@ export default function Galery() {
             onPress={() => {
               setModalVisible(true);
               setSelectedImage(item.uri);
+              setSelectedAssetId(item.id);
               exifHandler(item.id, setExifData);
             }}
           >
@@ -223,26 +239,27 @@ export default function Galery() {
             return null;
           })()}
 
-          {/* <Pressable
+          <View
             style={{
-              marginTop: 20,
-              alignSelf: "center",
-              backgroundColor: "#ffaa00ff",
-              padding: 10,
-              borderRadius: 5,
+              width: "100%",
+              alignItems: "center",
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "space-around",
             }}
-            onPress={() => setModalVisible(false)}
           >
-            <Text style={styles.textStyle}>Fechar</Text>
-          </Pressable> */}
+            <Button
+              title="Fechar"
+              onPress={() => setModalVisible(false)}
+              color="#ffaa00"
+            />
 
-          <Button
-            title="Fechar"
-            onPress={() => setModalVisible(false)}
-            color="#ffaa00"
-          >
-            Fechar
-          </Button>
+            <Button
+              title="Excluir foto"
+              onPress={handleDeletePhoto}
+              color="#ff4444"
+            />
+          </View>
         </ScrollView>
       </Modal>
     </SafeAreaView>
