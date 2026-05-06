@@ -101,16 +101,12 @@ export default function CameraPreview({
 
 const styles = StyleSheet.create({
   cameraWrapper: {
-    position: "absolute",
-    top: 120,
     width: "100%",
     aspectRatio: 3 / 4,
     overflow: "hidden",
   },
   retroStyle: {
-    position: "absolute",
     alignSelf: "center",
-    top: 130,
     width: "90%",
     aspectRatio: 3 / 4,
     overflow: "hidden",

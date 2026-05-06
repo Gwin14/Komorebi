@@ -40,6 +40,8 @@ export default function Settings() {
     setSaveOriginalWithLUT,
     customLuts,
     setCustomLuts,
+    topBarBelow,
+    setTopBarBelow,
   } = useSettings();
 
   const handleUploadLUT = async () => {
@@ -125,6 +127,12 @@ export default function Settings() {
             label="Salvar Localização nas Fotos"
             value={location}
             onValueChange={setLocation}
+          />
+
+          <CustomToggle
+            label="Controles invertidos"
+            value={topBarBelow}
+            onValueChange={setTopBarBelow}
           />
         </View>
 

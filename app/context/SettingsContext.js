@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
   CUSTOM_LUTS: "@settings/customLuts",
+  TOP_BAR_BELOW: "@settings/topBarBelow",
 };
 
 export const SettingsProvider = ({ children }) => {
@@ -22,6 +23,7 @@ export const SettingsProvider = ({ children }) => {
   const [saveOriginalWithLUT, setSaveOriginalWithLUT] = useState(false);
   const [firstTime, setFirstTime] = useState(true);
   const [customLuts, setCustomLuts] = useState([]);
+  const [topBarBelow, setTopBarBelow] = useState(false);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -50,9 +52,16 @@ export const SettingsProvider = ({ children }) => {
           STORAGE_KEYS.CUSTOM_LUTS,
         );
 
+        const savedTopBarBelow = await AsyncStorage.getItem(
+          STORAGE_KEYS.TOP_BAR_BELOW,
+        );
+
         // ----------
 
         if (savedLocation !== null) setLocation(savedLocation === "true");
+
+        if (savedTopBarBelow !== null)
+          setTopBarBelow(savedTopBarBelow === "true");
 
         if (savedRetroStyle !== null) setRetroStyle(savedRetroStyle === "true");
 
@@ -133,6 +142,13 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [firstTime, loading]);
 
+  // 💾 Salvar "TopBar Below"
+  useEffect(() => {
+    if (!loading) {
+      AsyncStorage.setItem(STORAGE_KEYS.TOP_BAR_BELOW, topBarBelow.toString());
+    }
+  }, [topBarBelow, loading]);
+
   const value = {
     retroStyle,
     setRetroStyle,
@@ -149,6 +165,8 @@ export const SettingsProvider = ({ children }) => {
     setFirstTime,
     customLuts,
     setCustomLuts,
+    topBarBelow,
+    setTopBarBelow,
   };
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Camera } from "react-native-vision-camera";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
@@ -32,6 +33,7 @@ export default function App() {
     loading,
     saveOriginalWithLUT,
     customLuts,
+    topBarBelow,
   } = useSettings();
 
   const [facing, setFacing] = useState("back");
@@ -185,7 +187,7 @@ export default function App() {
   if (loading || cameraPermission === null) return null;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       {processingQueue.length > 0 && (
         <View style={styles.hiddenProcessor}>
           <LUTProcessor
@@ -199,17 +201,23 @@ export default function App() {
       {isProcessing && <View style={styles.processingOverlay} />}
       {firstTime && <Welcome />}
 
-      <TopBar
-        flash={flash}
-        toggleFlash={() => setFlash((f) => (f === "off" ? "on" : "off"))}
-        smileDetectionEnabled={smileDetectionEnabled}
-        toggleSmileDetectionEnabled={() => setSmileDetectionEnabled((s) => !s)}
-        toggleMode={toggleMode}
-        activeControl={activeControl}
-        selectedLutId={selectedLutId}
-        doubleCaptureMode={doubleCaptureMode}
-        toggleDoubleCaptureMode={() => setDoubleCaptureMode((value) => !value)}
-      />
+      {!topBarBelow && (
+        <TopBar
+          flash={flash}
+          toggleFlash={() => setFlash((f) => (f === "off" ? "on" : "off"))}
+          smileDetectionEnabled={smileDetectionEnabled}
+          toggleSmileDetectionEnabled={() =>
+            setSmileDetectionEnabled((s) => !s)
+          }
+          toggleMode={toggleMode}
+          activeControl={activeControl}
+          selectedLutId={selectedLutId}
+          doubleCaptureMode={doubleCaptureMode}
+          toggleDoubleCaptureMode={() =>
+            setDoubleCaptureMode((value) => !value)
+          }
+        />
+      )}
 
       <GestureDetector gesture={composedGestures}>
         <View style={styles.previewContainer}>
@@ -233,6 +241,26 @@ export default function App() {
         </View>
       </GestureDetector>
 
+      {topBarBelow && (
+        <View style={styles.topBarBelow}>
+          <TopBar
+            flash={flash}
+            toggleFlash={() => setFlash((f) => (f === "off" ? "on" : "off"))}
+            smileDetectionEnabled={smileDetectionEnabled}
+            toggleSmileDetectionEnabled={() =>
+              setSmileDetectionEnabled((s) => !s)
+            }
+            toggleMode={toggleMode}
+            activeControl={activeControl}
+            selectedLutId={selectedLutId}
+            doubleCaptureMode={doubleCaptureMode}
+            toggleDoubleCaptureMode={() =>
+              setDoubleCaptureMode((value) => !value)
+            }
+          />
+        </View>
+      )}
+
       <BottomControls
         controlsAnim={controlsAnim}
         activeControl={activeControl}
@@ -249,7 +277,7 @@ export default function App() {
         onSliderRelease={() => toggleMode("none")}
         availableLuts={availableLuts}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -257,10 +285,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#000",
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: "stretch",
+    justifyContent: "space-between",
   },
-  previewContainer: { flex: 1, width: "100%" },
+
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0, 0, 0, 0.8)",
@@ -271,5 +299,17 @@ const styles = StyleSheet.create({
     width: 0,
     height: 0,
     overflow: "hidden",
+  },
+  topBarBelow: {
+    width: "90%",
+    borderWidth: 4,
+    borderColor: "#191919af",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+
+    margin: "auto",
+    borderRadius: 10,
+    overflow: "hidden",
+    backgroundColor: "#000",
   },
 });

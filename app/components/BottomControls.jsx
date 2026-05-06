@@ -121,29 +121,22 @@ export default function BottomControls({
 
 const styles = StyleSheet.create({
   shutterContainer: {
-    position: "absolute",
-    bottom: 64,
     width: "100%",
     alignItems: "center",
-    height: 100,
+    marginBottom: 54,
   },
   shutterRow: {
     flexDirection: "row",
     width: "100%",
     justifyContent: "space-around",
     alignItems: "center",
-    position: "absolute",
-    bottom: 0,
-    height: "100%",
+    height: 100,
   },
   sideButton: { padding: 10 },
   toolsContainer: {
     width: "100%",
-    position: "absolute",
-    bottom: 0,
-    height: 100,
+
     justifyContent: "center",
-    zIndex: 10,
   },
   lutSelectorWrapper: {
     flex: 1,

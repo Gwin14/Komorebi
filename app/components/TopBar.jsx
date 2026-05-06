@@ -169,12 +169,9 @@ export default function TopBar({
 
 const styles = StyleSheet.create({
   buttonsContainer: {
-    position: "absolute",
-    top: 64,
     flexDirection: "row",
     width: "100%",
     justifyContent: "space-around",
-    zIndex: 10,
   },
   button: {},
 });
