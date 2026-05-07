@@ -25,33 +25,35 @@ export default function BottomControls({
   onSliderRelease, // 🚀 Recebe a prop vinda do App (index.jsx)
   availableLuts,
   isProcessing,
+  processingQueueLength,
 }) {
   const router = useRouter();
   const deviceOrientationStyle = useDeviceOrientation();
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const isBusy = isProcessing || processingQueueLength > 0;
 
   useEffect(() => {
-    if (isProcessing) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(shimmerAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-          Animated.timing(shimmerAnim, {
-            toValue: 0,
-            duration: 1000,
-            useNativeDriver: true,
-          }),
-        ]),
-      ).start();
-    } else {
-      shimmerAnim.stopAnimation();
+    let loop;
+
+    if (isBusy) {
       shimmerAnim.setValue(0);
+
+      loop = Animated.loop(
+        Animated.timing(shimmerAnim, {
+          toValue: 1,
+          duration: 1200,
+          useNativeDriver: true,
+        })
+      );
+
+      loop.start();
     }
-  }, [isProcessing, shimmerAnim]);
+
+    return () => {
+      loop?.stop();
+    };
+  }, [isBusy]);
 
   const shutterTranslate = controlsAnim.interpolate({
     inputRange: [0, 1],
@@ -100,7 +102,7 @@ export default function BottomControls({
             >
               <Ionicons name="images-outline" size={32} color="white" />
 
-              {isProcessing && (
+              {isBusy && (
                 <Animated.View
                   pointerEvents="none"
                   style={[
@@ -120,7 +122,9 @@ export default function BottomControls({
                   <LinearGradient
                     colors={[
                       "transparent",
-                      "rgba(255,255,255,0.6)",
+                      "rgba(255,255,255,0.4)",
+                      "rgba(255,255,255,0.9)",
+                      "rgba(255,255,255,0.4)",
                       "transparent",
                     ]}
                     start={{ x: 0, y: 0 }}
@@ -134,7 +138,7 @@ export default function BottomControls({
         </View>
 
         <View pointerEvents={activeControl === "none" ? "auto" : "none"}>
-          <Shutter takePicture={takePicture} />
+          <Shutter takePicture={takePicture} isProcessing={isProcessing} />
         </View>
 
         <TouchableOpacity

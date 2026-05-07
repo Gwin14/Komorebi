@@ -198,7 +198,7 @@ export default function App() {
         </View>
       )}
 
-      {isProcessing && <View style={styles.processingOverlay} />}
+      {/* {isProcessing && <View style={styles.processingOverlay} />} */}
       {firstTime && <Welcome />}
 
       {!topBarBelow && (
@@ -276,7 +276,8 @@ export default function App() {
         // 🚀 Passamos a função toggleMode para que o slider saiba como se fechar
         onSliderRelease={() => toggleMode("none")}
         availableLuts={availableLuts}
-        isProcessing={isProcessing || processingQueue.length > 0}
+        isProcessing={isProcessing}
+        processingQueueLength={processingQueue.length}
       />
     </SafeAreaView>
   );
