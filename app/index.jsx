@@ -276,6 +276,7 @@ export default function App() {
         // 🚀 Passamos a função toggleMode para que o slider saiba como se fechar
         onSliderRelease={() => toggleMode("none")}
         availableLuts={availableLuts}
+        isProcessing={isProcessing || processingQueue.length > 0}
       />
     </SafeAreaView>
   );
