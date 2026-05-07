@@ -50,6 +50,7 @@ export default function App() {
   const [cameraReady, setCameraReady] = useState(false);
   const [activeControl, setActiveControl] = useState("none");
   const controlsAnim = useRef(new Animated.Value(0)).current;
+  const shutterAnim = useRef(new Animated.Value(0)).current;
 
   const [cameraPermission, setCameraPermission] = useState(null);
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
@@ -129,6 +130,21 @@ export default function App() {
   };
 
   const handleTakePicture = () => {
+    // animação de "shutter"
+    shutterAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(shutterAnim, {
+        toValue: 1,
+        duration: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(shutterAnim, {
+        toValue: 0,
+        duration: 120,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     takePicture({
       cameraRef,
       cameraReady,
@@ -188,6 +204,17 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: "black",
+            opacity: shutterAnim,
+            zIndex: 3000,
+          },
+        ]}
+      />
       {processingQueue.length > 0 && (
         <View style={styles.hiddenProcessor}>
           <LUTProcessor
