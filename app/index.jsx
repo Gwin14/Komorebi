@@ -182,6 +182,7 @@ export default function App() {
       doubleCaptureMode = false,
       saveOriginalWithLUT: saveOriginalWithoutLUT = false,
       originalUri,
+      aspectRatio = 3 / 4,
     } = item;
 
     try {
@@ -190,7 +191,10 @@ export default function App() {
       if (doubleCaptureMode) {
         await saveToAlbum(processedUri);
 
-        const inverseUri = await cropImageToInverseAspect(processedUri);
+        const inverseUri = await cropImageToInverseAspect(
+          processedUri,
+          aspectRatio,
+        );
         if (inverseUri) await saveToAlbum(inverseUri);
       } else {
         await saveToAlbum(processedUri);

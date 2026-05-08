@@ -172,11 +172,14 @@ export const cropImageToAspect = async (uri, ratio) => {
   }
 };
 
-export const cropImageToInverseAspect = async (uri) => {
+export const cropImageToInverseAspect = async (
+  uri,
+  originalAspectRatio = 3 / 4,
+) => {
   try {
-    const { width, height } = await getImageDimensions(uri);
-    const ratio = width >= height ? 3 / 4 : 4 / 3;
-    return await cropImageToAspect(uri, ratio);
+    // Calcular o aspect ratio inverso
+    const inverseRatio = 1 / originalAspectRatio;
+    return await cropImageToAspect(uri, inverseRatio);
   } catch (error) {
     console.error("Erro ao gerar crop inverso da imagem:", error);
     return null;
