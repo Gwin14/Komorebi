@@ -18,6 +18,8 @@ export default function TopBar({
   toggleSmileDetectionEnabled,
   doubleCaptureMode,
   toggleDoubleCaptureMode,
+  verticalMode,
+  toggleVerticalMode,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -96,7 +98,22 @@ export default function TopBar({
         </Animated.View>
       </TouchableOpacity>
 
-      {/* <TouchableOpacity onPress={toggleDoubleCaptureMode}>
+      <TouchableOpacity onPress={toggleVerticalMode}>
+        <Animated.View style={animatedStyle}>
+          <Ionicons
+            name={
+              verticalMode
+                ? "phone-portrait-outline"
+                : "tablet-landscape-outline"
+            }
+            size={30}
+            style={styles.button}
+            color={verticalMode ? "#ffaa00" : "white"}
+          />
+        </Animated.View>
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={toggleDoubleCaptureMode}>
         <Animated.View style={animatedStyle}>
           <Ionicons
             name="layers-outline"
@@ -105,7 +122,7 @@ export default function TopBar({
             color={doubleCaptureMode ? "#ffaa00" : "white"}
           />
         </Animated.View>
-      </TouchableOpacity> */}
+      </TouchableOpacity>
 
       {/* <TouchableOpacity onPress={() => toggleMode("zoom")}>
         <Animated.View style={animatedStyle}>

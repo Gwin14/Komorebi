@@ -20,6 +20,8 @@ export default function CameraPreview({
   onSmileDetected,
   smileDetectionEnabled,
   location,
+  verticalMode,
+  doubleCaptureMode,
 }) {
   const device = useCameraDevice(facing === "back" ? "back" : "front");
   const isTakingPhoto = useRef(false);
@@ -72,8 +74,21 @@ export default function CameraPreview({
     return null;
   }
 
+  const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
+
   return (
-    <View style={retroStyle ? styles.retroStyle : styles.cameraWrapper}>
+    <View
+      style={[
+        retroStyle ? styles.retroStyle : styles.cameraWrapper,
+        {
+          aspectRatio,
+          width: verticalMode ? "56.25%" : "100%",
+          alignSelf: "center",
+          borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
+          borderWidth: doubleCaptureMode ? 3 : 0,
+        },
+      ]}
+    >
       <Camera
         style={styles.camera}
         device={device}
@@ -102,13 +117,11 @@ export default function CameraPreview({
 const styles = StyleSheet.create({
   cameraWrapper: {
     width: "100%",
-    aspectRatio: 3 / 4,
     overflow: "hidden",
   },
   retroStyle: {
     alignSelf: "center",
     width: "90%",
-    aspectRatio: 3 / 4,
     overflow: "hidden",
     borderRadius: 10,
   },

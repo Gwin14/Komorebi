@@ -31,6 +31,7 @@ export const takePicture = async ({
   flash,
   doubleCaptureMode = false,
   saveOriginalWithLUT = false,
+  aspectRatio = 3 / 4,
 }) => {
   if (cameraRef.current && cameraReady && !isProcessing) {
     try {
@@ -64,7 +65,7 @@ export const takePicture = async ({
       });
 
       const uri = photo?.path || photo?.filePath || photo?.uri;
-      const completeExif = { ...additionalExif };
+      const completeExif = { ...additionalExif, aspectRatio };
 
       if (selectedLutId !== "none" && lutsLoaded) {
         const processingInfo = await applyLUTToImage(
@@ -75,23 +76,52 @@ export const takePicture = async ({
         processingInfo.doubleCaptureMode = doubleCaptureMode;
         processingInfo.saveOriginalWithLUT = saveOriginalWithLUT;
         processingInfo.originalUri = uri;
+        processingInfo.aspectRatio = aspectRatio;
 
         if (processingInfo.needsProcessing) {
           setProcessingData(processingInfo);
-          setIsProcessing(false); // Libera a UI imediatamente para nova foto
+          setIsProcessing(false);
         } else {
-          if (hasMediaPermission) await saveToAlbum(uri);
+          // Mesmo sem LUT, processar para aplicar metadados
+          setProcessingData({
+            needsProcessing: true,
+            imageUri: uri,
+            cube: null,
+            originalUri: uri,
+            exifData: completeExif,
+            grainConfig: null,
+            doubleCaptureMode,
+            saveOriginalWithLUT,
+            aspectRatio,
+          });
           setIsProcessing(false);
         }
       } else if (doubleCaptureMode) {
         setProcessingData({
-          needsProcessing: false,
+          needsProcessing: true,
+          imageUri: uri,
+          cube: null,
           originalUri: uri,
+          exifData: completeExif,
+          grainConfig: null,
           doubleCaptureMode: true,
+          saveOriginalWithLUT,
+          aspectRatio,
         });
         setIsProcessing(false);
       } else {
-        if (hasMediaPermission) await saveToAlbum(uri);
+        // Sempre processar para aplicar metadados e crop
+        setProcessingData({
+          needsProcessing: true,
+          imageUri: uri,
+          cube: null,
+          originalUri: uri,
+          exifData: completeExif,
+          grainConfig: null,
+          doubleCaptureMode: false,
+          saveOriginalWithLUT,
+          aspectRatio,
+        });
         setIsProcessing(false);
       }
     } catch (error) {

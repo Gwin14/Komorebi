@@ -42,6 +42,7 @@ export default function App() {
   const [minZoom, setMinZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(5);
   const [doubleCaptureMode, setDoubleCaptureMode] = useState(false);
+  const [verticalMode, setVerticalMode] = useState(false);
   const zoomSV = useSharedValue(1);
   const lastZoom = useSharedValue(1);
 
@@ -129,6 +130,10 @@ export default function App() {
     setActiveControl((current) => (current === mode ? "none" : mode));
   };
 
+  const toggleVerticalMode = () => {
+    setVerticalMode((prev) => !prev);
+  };
+
   const handleTakePicture = () => {
     // animação de "shutter"
     shutterAnim.setValue(0);
@@ -159,6 +164,7 @@ export default function App() {
       location,
       doubleCaptureMode,
       saveOriginalWithLUT,
+      aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
     });
   };
 
@@ -243,6 +249,8 @@ export default function App() {
           toggleDoubleCaptureMode={() =>
             setDoubleCaptureMode((value) => !value)
           }
+          verticalMode={verticalMode}
+          toggleVerticalMode={toggleVerticalMode}
         />
       )}
 
@@ -264,6 +272,8 @@ export default function App() {
             onSmileDetected={handleTakePicture}
             smileDetectionEnabled={smileDetectionEnabled}
             location={location}
+            verticalMode={verticalMode}
+            doubleCaptureMode={doubleCaptureMode}
           />
         </View>
       </GestureDetector>
@@ -284,6 +294,8 @@ export default function App() {
             toggleDoubleCaptureMode={() =>
               setDoubleCaptureMode((value) => !value)
             }
+            verticalMode={verticalMode}
+            toggleVerticalMode={toggleVerticalMode}
           />
         </View>
       )}

@@ -117,6 +117,8 @@ export default function Settings() {
             onValueChange={setShutterSound}
           />
 
+          <View style={styles.divider} />
+
           <CustomToggle
             label="Salvar cópia sem LUT"
             value={saveOriginalWithLUT}
