@@ -82,7 +82,11 @@ export default function CameraPreview({
         retroStyle ? styles.retroStyle : styles.cameraWrapper,
         {
           aspectRatio,
-          width: verticalMode ? "56.25%" : "100%",
+          width: verticalMode
+            ? "75%"
+            : retroStyle
+              ? "90%"
+              : "100%",
           alignSelf: "center",
           borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
           borderWidth: doubleCaptureMode ? 3 : 0,
