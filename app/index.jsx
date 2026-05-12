@@ -11,6 +11,7 @@ import CameraPreview from "./components/CameraPreview";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
+import { usePhysicalCameraDevices } from "./hooks/uselensselector";
 import {
   cropImageToInverseAspect,
   onCameraReady,
@@ -64,6 +65,14 @@ export default function App() {
   const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
 
   const availableLuts = [...AVAILABLE_LUTS, ...customLuts];
+
+  // 🆕 Hook de detecção de lentes físicas reais
+  const { lenses, activeLens, activeLensId, setActiveLensId } =
+    usePhysicalCameraDevices(facing);
+
+  const handleSelectLens = (id) => {
+    setActiveLensId(id);
+  };
 
   // --- GESTOS ---
 
@@ -125,6 +134,13 @@ export default function App() {
       setSelectedLutId("none");
     }
   }, [availableLuts, selectedLutId]);
+
+  // 🆕 Sincronizar zoom quando facing muda (troca câmera frontal/traseira)
+  // A lente padrão da frontal é neutralZoom=1
+  useEffect(() => {
+    setZoom(1);
+    zoomSV.value = 1;
+  }, [facing]);
 
   const toggleMode = (mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
@@ -264,6 +280,7 @@ export default function App() {
             retroStyle={retroStyle}
             cameraRef={cameraRef}
             facing={facing}
+            device={activeLens?.device}
             flash={flash}
             zoom={zoom}
             pictureSize={pictureSize}
@@ -316,11 +333,14 @@ export default function App() {
         zoomSV={zoomSV}
         minZoom={minZoom}
         maxZoom={maxZoom}
-        // 🚀 Passamos a função toggleMode para que o slider saiba como se fechar
         onSliderRelease={() => toggleMode("none")}
         availableLuts={availableLuts}
         isProcessing={isProcessing}
         processingQueueLength={processingQueue.length}
+        // 🆕 Props de lentes
+        lenses={lenses}
+        activeLensId={activeLensId}
+        onSelectLens={handleSelectLens}
       />
     </SafeAreaView>
   );
