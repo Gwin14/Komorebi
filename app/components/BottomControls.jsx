@@ -214,11 +214,16 @@ const styles = StyleSheet.create({
   shutterRow: {
     flexDirection: "row",
     width: "100%",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     alignItems: "center",
     height: 100,
+    paddingHorizontal: 20,
   },
-  sideButton: { padding: 10 },
+  sideButton: {
+    padding: 10,
+    flex: 1,
+    alignItems: "center",
+  },
   galleryButton: {
     padding: 10,
     position: "relative",

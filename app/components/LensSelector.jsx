@@ -10,7 +10,7 @@ export default function LensSelector({
 
   return (
     <View style={styles.container}>
-      <View style={styles.buttonRow}>
+      <View style={styles.buttonRow} pointerEvents="auto">
         {lenses.map((lens) => {
           const active = lens.id === activeLensId;
           return (
@@ -35,14 +35,16 @@ export default function LensSelector({
 
 const styles = StyleSheet.create({
   container: {
+    position: "absolute",
+    bottom: -52,
+    left: 0,
+    right: 0,
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
-    zIndex: 9999,
-    elevation: 9999,
-    position: "absolute",
-    transform: [{ translateY: -100 }],
+    zIndex: 999,
+    elevation: 999,
+    pointerEvents: "box-none",
   },
   scroll: {
     paddingHorizontal: 18,
@@ -58,7 +60,7 @@ const styles = StyleSheet.create({
   },
   button: {
     minWidth: 64,
-    height: 42,
+    // height: 42,
     paddingHorizontal: 14,
     borderRadius: 21,
     borderWidth: 1.5,
@@ -72,7 +74,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   buttonInactive: {
-    backgroundColor: "rgba(30,30,30,0.96)",
+    // backgroundColor: "rgba(30,30,30,0.96)",
     borderColor: "rgba(255,255,255,0.12)",
   },
   buttonActive: {
