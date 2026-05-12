@@ -13,6 +13,7 @@ import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
 import { usePhysicalCameraDevices } from "./hooks/uselensselector";
 import {
+  copyExifFromImage,
   cropImageToInverseAspect,
   onCameraReady,
   saveToAlbum,
@@ -211,7 +212,14 @@ export default function App() {
           processedUri,
           aspectRatio,
         );
-        if (inverseUri) await saveToAlbum(inverseUri);
+        if (inverseUri) {
+          // Copiar o EXIF completo da primeira imagem para a segunda
+          const inverseUriWithExif = await copyExifFromImage(
+            processedUri,
+            inverseUri,
+          );
+          await saveToAlbum(inverseUriWithExif);
+        }
       } else {
         await saveToAlbum(processedUri);
       }
