@@ -7,6 +7,7 @@ import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import ExposureDialFinal from "./ExposureDialFinal";
+import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
 import Shutter from "./shutter";
 
@@ -22,10 +23,14 @@ export default function BottomControls({
   zoomSV,
   minZoom,
   maxZoom,
-  onSliderRelease, // 🚀 Recebe a prop vinda do App (index.jsx)
+  onSliderRelease,
   availableLuts,
   isProcessing,
   processingQueueLength,
+  // 🆕 Props de lentes
+  lenses,
+  activeLensId,
+  onSelectLens,
 }) {
   const router = useRouter();
   const deviceOrientationStyle = useDeviceOrientation();
@@ -44,7 +49,7 @@ export default function BottomControls({
           toValue: 1,
           duration: 1200,
           useNativeDriver: true,
-        })
+        }),
       );
 
       loop.start();
@@ -75,8 +80,21 @@ export default function BottomControls({
     outputRange: [1, 0],
   });
 
+  // LensSelector só aparece quando há mais de 1 lente e nenhum controle ativo
+  const showLensSelector =
+    lenses && lenses.length > 1 && activeControl === "none";
+
   return (
     <View style={styles.shutterContainer}>
+      {/* 🆕 Seletor de lentes — acima da linha do shutter, sempre visível quando inativo */}
+      {showLensSelector && (
+        <LensSelector
+          lenses={lenses}
+          activeLensId={activeLensId}
+          onSelectLens={onSelectLens}
+        />
+      )}
+
       <Animated.View
         style={[
           styles.shutterRow,
@@ -165,7 +183,7 @@ export default function BottomControls({
           <ExposureDialFinal
             value={zoom}
             onChange={(v) => setZoom(v)}
-            onRelease={onSliderRelease} // 👈 Passa o fechamento para o Slider
+            onRelease={onSliderRelease}
             zoomSV={zoomSV}
             minZoom={minZoom}
             maxZoom={maxZoom}
