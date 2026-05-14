@@ -35,6 +35,7 @@ export default function App() {
     loading,
     saveOriginalWithLUT,
     customLuts,
+    topBarControls,
     topBarBelow,
   } = useSettings();
 
@@ -285,6 +286,7 @@ export default function App() {
           }
           verticalMode={verticalMode}
           toggleVerticalMode={toggleVerticalMode}
+          topBarControls={topBarControls}
         />
       )}
 
@@ -331,6 +333,7 @@ export default function App() {
             }
             verticalMode={verticalMode}
             toggleVerticalMode={toggleVerticalMode}
+            topBarControls={topBarControls}
           />
         </View>
       )}

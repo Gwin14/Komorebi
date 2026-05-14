@@ -18,6 +18,10 @@ import {
   parseCubeFile,
   removeCustomLUT,
 } from "../utils/lutProcessor";
+import {
+  TOP_BAR_CONTROLS,
+  TOP_BAR_MAX_CONTROLS,
+} from "../utils/topBarControls";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import ExternalLink from "./ExternalLink";
@@ -40,6 +44,8 @@ export default function Settings() {
     setSaveOriginalWithLUT,
     customLuts,
     setCustomLuts,
+    topBarControls,
+    setTopBarControls,
     topBarBelow,
     setTopBarBelow,
   } = useSettings();
@@ -80,6 +86,40 @@ export default function Settings() {
   const handleDeleteLUT = (id) => {
     removeCustomLUT(id);
     setCustomLuts((prev) => prev.filter((lut) => lut.id !== id));
+  };
+
+  const handleToggleControl = (controlId) => {
+    if (controlId === "settings") return;
+
+    const selected = topBarControls.includes(controlId);
+    if (selected) {
+      setTopBarControls((prev) => prev.filter((id) => id !== controlId));
+      return;
+    }
+
+    if (topBarControls.length >= TOP_BAR_MAX_CONTROLS) {
+      alert(
+        `Você pode selecionar no máximo ${TOP_BAR_MAX_CONTROLS} controles na TopBar.`,
+      );
+      return;
+    }
+
+    setTopBarControls((prev) => [...prev, controlId]);
+  };
+
+  const moveControl = (controlId, direction) => {
+    setTopBarControls((prev) => {
+      const index = prev.indexOf(controlId);
+      if (index === -1) return prev;
+
+      const nextIndex = direction === "up" ? index - 1 : index + 1;
+      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+
+      const next = [...prev];
+      next.splice(index, 1);
+      next.splice(nextIndex, 0, controlId);
+      return next;
+    });
   };
 
   if (loading) {
@@ -142,6 +182,101 @@ export default function Settings() {
 
         <View style={{ width: "90%" }}>
           <View style={styles.listHeader}>
+            <Text style={styles.sectionTitle}>Controles da TopBar</Text>
+          </View>
+          <Text style={styles.sectionSubtitle}>
+            Marque até {TOP_BAR_MAX_CONTROLS} controles para aparecer na TopBar.
+            Configurações é obrigatório e sempre fica visível.
+          </Text>
+          <View style={styles.controlList}>
+            {TOP_BAR_CONTROLS.map((control) => {
+              const selected = topBarControls.includes(control.id);
+              const selectedIndex = topBarControls.indexOf(control.id);
+
+              return (
+                <View key={control.id} style={styles.controlRow}>
+                  <View style={styles.controlRowLeft}>
+                    <Ionicons
+                      name="reorder-three-outline"
+                      size={22}
+                      color="#fff"
+                      style={styles.handleIcon}
+                    />
+                    <Text style={styles.controlName}>{control.label}</Text>
+                  </View>
+
+                  <View style={styles.controlRowRight}>
+                    <View style={styles.orderButtons}>
+                      <TouchableOpacity
+                        onPress={() => moveControl(control.id, "up")}
+                        disabled={!selected || selectedIndex <= 0}
+                        style={[
+                          styles.orderButton,
+                          (!selected || selectedIndex <= 0) &&
+                            styles.orderButtonDisabled,
+                        ]}
+                      >
+                        <Ionicons
+                          name="chevron-up-outline"
+                          size={20}
+                          color={
+                            selected && selectedIndex > 0 ? "#fff" : "#7a7a7a"
+                          }
+                        />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => moveControl(control.id, "down")}
+                        disabled={
+                          !selected ||
+                          selectedIndex === -1 ||
+                          selectedIndex === topBarControls.length - 1
+                        }
+                        style={[
+                          styles.orderButton,
+                          (!selected ||
+                            selectedIndex === -1 ||
+                            selectedIndex === topBarControls.length - 1) &&
+                            styles.orderButtonDisabled,
+                        ]}
+                      >
+                        <Ionicons
+                          name="chevron-down-outline"
+                          size={20}
+                          color={
+                            selected &&
+                            selectedIndex !== -1 &&
+                            selectedIndex !== topBarControls.length - 1
+                              ? "#fff"
+                              : "#7a7a7a"
+                          }
+                        />
+                      </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => handleToggleControl(control.id)}
+                      disabled={control.id === "settings"}
+                      style={[
+                        styles.checkbox,
+                        selected && styles.checkboxSelected,
+                        control.id === "settings" && styles.checkboxDisabled,
+                      ]}
+                    >
+                      {selected && (
+                        <Ionicons name="checkmark" size={16} color="#000" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={{ width: "90%" }}>
+          <View style={styles.listHeader}>
             <Text style={styles.sectionTitle}>LUTs carregados</Text>
             <LUTUploadButton onPress={handleUploadLUT} />
           </View>
@@ -162,7 +297,6 @@ export default function Settings() {
 
         <ExternalLink
           label="Código fonte"
-          // description="Leia nossa política de privacidade online"
           url="https://github.com/Gwin14/Komorebi"
         />
 
@@ -334,9 +468,79 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
-  emptyState: {
-    marginTop: 20,
-    alignItems: "flex-start",
+  sectionSubtitle: {
+    color: "#ccc",
+    fontSize: 12,
+    marginTop: 8,
+    marginBottom: 10,
+    lineHeight: 18,
+  },
+  controlList: {
+    width: "100%",
+  },
+  controlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+  controlRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  handleIcon: {
+    marginRight: 10,
+  },
+  controlName: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  controlRowRight: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  orderButtons: {
+    flexDirection: "row",
+    marginRight: 12,
+  },
+  orderButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 6,
+  },
+  orderButtonDisabled: {
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+  },
+  checkbox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#777",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  checkboxSelected: {
+    backgroundColor: "#ffaa00",
+    borderColor: "#ffaa00",
+  },
+  checkboxDisabled: {
+    opacity: 0.4,
+  },
+  text: {
+    color: "#fff",
+    fontSize: 16,
   },
   backButton: {
     position: "absolute",
