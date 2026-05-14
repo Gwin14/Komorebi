@@ -106,17 +106,23 @@ export default function App() {
   // --- EFEITOS ---
 
   useEffect(() => {
+    // Não pedir permissões enquanto a welcome screen estiver aberta
+    if (firstTime) return;
+
     (async () => {
       await loadAllLUTs();
       await loadCustomLUTs(customLuts);
       setLutsLoaded(true);
+
       const permission = await Camera.requestCameraPermission();
       setCameraPermission(permission);
+
       const { status } = await MediaLibrary.requestPermissionsAsync();
       setHasMediaPermission(status === "granted");
+
       await Location.requestForegroundPermissionsAsync();
     })();
-  }, [customLuts]);
+  }, [customLuts, firstTime]);
 
   useEffect(() => {
     const showTools = activeControl !== "none";
@@ -234,7 +240,7 @@ export default function App() {
     }
   };
 
-  if (loading || cameraPermission === null) return null;
+  if (loading) return null;
 
   return (
     <SafeAreaView style={styles.container}>
