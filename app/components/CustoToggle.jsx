@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "#ffffff0d",
     borderRadius: 12,
     marginVertical: 4,
   },

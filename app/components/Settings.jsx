@@ -50,6 +50,11 @@ export default function Settings() {
     setTopBarBelow,
   } = useSettings();
 
+  const controlsMap = {};
+  TOP_BAR_CONTROLS.forEach((control) => {
+    controlsMap[control.id] = control;
+  });
+
   const handleUploadLUT = async () => {
     try {
       const results = await DocumentPicker.pick({
@@ -88,12 +93,17 @@ export default function Settings() {
     setCustomLuts((prev) => prev.filter((lut) => lut.id !== id));
   };
 
-  const handleToggleControl = (controlId) => {
+  const handleRemoveControl = (controlId) => {
+    if (controlId === "settings") return;
+    setTopBarControls((prev) => prev.filter((id) => id !== controlId));
+  };
+
+  const handleAddControl = (controlId) => {
     if (controlId === "settings") return;
 
     const selected = topBarControls.includes(controlId);
     if (selected) {
-      setTopBarControls((prev) => prev.filter((id) => id !== controlId));
+      handleRemoveControl(controlId);
       return;
     }
 
@@ -107,19 +117,22 @@ export default function Settings() {
     setTopBarControls((prev) => [...prev, controlId]);
   };
 
-  const moveControl = (controlId, direction) => {
-    setTopBarControls((prev) => {
-      const index = prev.indexOf(controlId);
-      if (index === -1) return prev;
+  const moveControlInOrder = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return;
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= topBarControls.length ||
+      toIndex >= topBarControls.length
+    )
+      return;
 
-      const nextIndex = direction === "up" ? index - 1 : index + 1;
-      if (nextIndex < 0 || nextIndex >= prev.length) return prev;
+    const newControls = [...topBarControls];
+    const [moved] = newControls.splice(fromIndex, 1);
+    newControls.splice(toIndex, 0, moved);
 
-      const next = [...prev];
-      next.splice(index, 1);
-      next.splice(nextIndex, 0, controlId);
-      return next;
-    });
+    setTopBarControls(newControls);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   };
 
   if (loading) {
@@ -130,11 +143,16 @@ export default function Settings() {
     );
   }
 
+  const unselectedControls = TOP_BAR_CONTROLS.filter(
+    (control) => !topBarControls.includes(control.id),
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        scrollEventThrottle={16}
       >
         <Text style={styles.title}>Página de Configurações</Text>
 
@@ -180,97 +198,113 @@ export default function Settings() {
 
         <View style={styles.divider} />
 
-        <View style={{ width: "90%" }}>
+        <View style={{ width: "98%" }}>
           <View style={styles.listHeader}>
             <Text style={styles.sectionTitle}>Controles da TopBar</Text>
           </View>
           <Text style={styles.sectionSubtitle}>
-            Marque até {TOP_BAR_MAX_CONTROLS} controles para aparecer na TopBar.
-            Configurações é obrigatório e sempre fica visível.
+            Use as setas para alterar a ordem. Marque até {TOP_BAR_MAX_CONTROLS}{" "}
+            controles. Configurações é obrigatório e sempre fica visível.
           </Text>
-          <View style={styles.controlList}>
-            {TOP_BAR_CONTROLS.map((control) => {
-              const selected = topBarControls.includes(control.id);
-              const selectedIndex = topBarControls.indexOf(control.id);
 
-              return (
-                <View key={control.id} style={styles.controlRow}>
-                  <View style={styles.controlRowLeft}>
-                    <Ionicons
-                      name="reorder-three-outline"
-                      size={22}
-                      color="#fff"
-                      style={styles.handleIcon}
-                    />
-                    <Text style={styles.controlName}>{control.label}</Text>
-                  </View>
+          {topBarControls.length > 0 && (
+            <View>
+              <View style={styles.draggableList}>
+                {topBarControls.map((controlId, index) => (
+                  <View key={controlId} style={styles.draggableRow}>
+                    <View style={styles.controlRowLeft}>
+                      <Text style={styles.controlName}>
+                        {controlsMap[controlId]?.label}
+                      </Text>
+                    </View>
 
-                  <View style={styles.controlRowRight}>
-                    <View style={styles.orderButtons}>
+                    <View style={styles.rowActions}>
                       <TouchableOpacity
-                        onPress={() => moveControl(control.id, "up")}
-                        disabled={!selected || selectedIndex <= 0}
+                        onPress={() => {
+                          if (index > 0) moveControlInOrder(index, index - 1);
+                        }}
+                        disabled={index === 0}
                         style={[
-                          styles.orderButton,
-                          (!selected || selectedIndex <= 0) &&
-                            styles.orderButtonDisabled,
+                          styles.smallButton,
+                          index === 0 && styles.smallButtonDisabled,
                         ]}
                       >
                         <Ionicons
                           name="chevron-up-outline"
-                          size={20}
-                          color={
-                            selected && selectedIndex > 0 ? "#fff" : "#7a7a7a"
-                          }
+                          size={18}
+                          color={index > 0 ? "#ffaa00" : "#5a5a5a"}
                         />
                       </TouchableOpacity>
+
                       <TouchableOpacity
-                        onPress={() => moveControl(control.id, "down")}
-                        disabled={
-                          !selected ||
-                          selectedIndex === -1 ||
-                          selectedIndex === topBarControls.length - 1
-                        }
+                        onPress={() => {
+                          if (index < topBarControls.length - 1)
+                            moveControlInOrder(index, index + 1);
+                        }}
+                        disabled={index === topBarControls.length - 1}
                         style={[
-                          styles.orderButton,
-                          (!selected ||
-                            selectedIndex === -1 ||
-                            selectedIndex === topBarControls.length - 1) &&
-                            styles.orderButtonDisabled,
+                          styles.smallButton,
+                          index === topBarControls.length - 1 &&
+                            styles.smallButtonDisabled,
                         ]}
                       >
                         <Ionicons
                           name="chevron-down-outline"
-                          size={20}
+                          size={18}
                           color={
-                            selected &&
-                            selectedIndex !== -1 &&
-                            selectedIndex !== topBarControls.length - 1
-                              ? "#fff"
-                              : "#7a7a7a"
+                            index < topBarControls.length - 1
+                              ? "#ffaa00"
+                              : "#5a5a5a"
                           }
                         />
                       </TouchableOpacity>
-                    </View>
 
-                    <TouchableOpacity
-                      onPress={() => handleToggleControl(control.id)}
-                      disabled={control.id === "settings"}
-                      style={[
-                        styles.checkbox,
-                        selected && styles.checkboxSelected,
-                        control.id === "settings" && styles.checkboxDisabled,
-                      ]}
-                    >
-                      {selected && (
-                        <Ionicons name="checkmark" size={16} color="#000" />
-                      )}
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => {
+                          Haptics.impactAsync(
+                            Haptics.ImpactFeedbackStyle.Light,
+                          );
+                          handleRemoveControl(controlId);
+                        }}
+                        style={styles.removeButton}
+                      >
+                        <Ionicons
+                          name="close-outline"
+                          size={18}
+                          color="#ff6b6b"
+                        />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                </View>
-              );
-            })}
-          </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {unselectedControls.length > 0 && (
+            <View>
+              <View style={styles.availableList}>
+                {unselectedControls.map((control) => (
+                  <TouchableOpacity
+                    key={control.id}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      handleAddControl(control.id);
+                    }}
+                    style={styles.availableItem}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={20}
+                      color="#ffaa00"
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text style={styles.controlName}>{control.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.divider} />
@@ -451,92 +485,91 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   customLutList: {
-    // marginTop: 20,
     width: "100%",
-
     paddingTop: 12,
   },
   listHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    // marginBottom: 10,
     paddingHorizontal: 16,
+    marginTop: 12,
   },
   sectionTitle: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
   },
-  sectionSubtitle: {
-    color: "#ccc",
-    fontSize: 12,
-    marginTop: 8,
-    marginBottom: 10,
-    lineHeight: 18,
-  },
-  controlList: {
+  draggableList: {
     width: "100%",
+    marginTop: -12,
   },
-  controlRow: {
+  draggableRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    borderRadius: 14,
+    backgroundColor: "#ffffff0d",
+    borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    marginHorizontal: 16,
+  },
+  draggingRow: {
+    backgroundColor: "rgba(255, 170, 0, 0.2)",
+    borderLeftColor: "#fff",
   },
   controlRowLeft: {
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
   },
-  handleIcon: {
-    marginRight: 10,
+  dragHandle: {
+    padding: 8,
+    marginRight: 4,
   },
   controlName: {
     color: "#fff",
     fontSize: 15,
     fontWeight: "500",
   },
-  controlRowRight: {
+  rowActions: {
     flexDirection: "row",
     alignItems: "center",
   },
-  orderButtons: {
-    flexDirection: "row",
-    marginRight: 12,
-  },
-  orderButton: {
+  smallButton: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    marginLeft: 6,
+    marginLeft: 4,
   },
-  orderButtonDisabled: {
+  smallButtonDisabled: {
     backgroundColor: "rgba(255, 255, 255, 0.02)",
   },
-  checkbox: {
+  removeButton: {
     width: 32,
     height: 32,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#777",
+    borderRadius: 8,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.05)",
+    marginLeft: 4,
   },
-  checkboxSelected: {
-    backgroundColor: "#ffaa00",
-    borderColor: "#ffaa00",
+  availableList: {
+    width: "100%",
+    paddingHorizontal: 16,
   },
-  checkboxDisabled: {
-    opacity: 0.4,
+  availableItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#ffffff0d",
   },
   text: {
     color: "#fff",

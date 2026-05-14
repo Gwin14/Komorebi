@@ -1,10 +1,10 @@
 export const TOP_BAR_CONTROLS = [
-  {
-    id: "aspectRatio",
-    label: "Aspect Ratio",
-    icon: "crop-outline",
-    alwaysEnabled: false,
-  },
+//   {
+//     id: "aspectRatio",
+//     label: "Zoom",
+//     icon: "crop-outline",
+//     alwaysEnabled: false,
+//   },
   {
     id: "weather",
     label: "Tempo",
@@ -25,19 +25,19 @@ export const TOP_BAR_CONTROLS = [
   },
   {
     id: "smile",
-    label: "Smile",
+    label: "Detecção de Sorriso",
     icon: "happy-outline",
     alwaysEnabled: false,
   },
   {
     id: "vertical",
-    label: "Vertical",
+    label: "Proporção",
     icon: "phone-portrait-outline",
     alwaysEnabled: false,
   },
   {
     id: "doubleCapture",
-    label: "Duplo",
+    label: "Captura Dupla",
     icon: "layers-outline",
     alwaysEnabled: false,
   },
