@@ -9,6 +9,7 @@ export default function CameraPreview({
   device,
   flash,
   zoom,
+  exposure,
   pictureSize,
   onCameraReady,
   gridVisible,
@@ -72,6 +73,8 @@ export default function CameraPreview({
     console.log("minZoom:", device.minZoom);
     console.log("maxZoom:", device.maxZoom);
     console.log("neutralZoom:", device.neutralZoom);
+    console.log("minExposure:", device.minExposure);
+    console.log("maxExposure:", device.maxExposure);
     console.log("==========================");
 
     // Alert.alert(
@@ -111,6 +114,7 @@ export default function CameraPreview({
         video={false}
         audio={false}
         zoom={zoom}
+        exposure={exposure}
         onInitialized={onCameraReady}
         faceDetectionCallback={handleFacesDetection}
         faceDetectionOptions={faceDetectionOptions}

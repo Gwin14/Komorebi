@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Camera } from "react-native-vision-camera";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
+import ExposureSlider from "./components/ExposureSlider";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
@@ -42,6 +43,7 @@ export default function App() {
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(1);
+  const [exposure, setExposure] = useState(0);
   const [minZoom, setMinZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(5);
   const [doubleCaptureMode, setDoubleCaptureMode] = useState(false);
@@ -59,6 +61,7 @@ export default function App() {
   const [cameraPermission, setCameraPermission] = useState(null);
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
   const [lutsLoaded, setLutsLoaded] = useState(false);
+  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
 
   const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -239,6 +242,8 @@ export default function App() {
       console.error("Erro ao salvar imagem processada:", error);
     } finally {
       setProcessingQueue((prev) => prev.slice(1));
+
+      setGalleryRefreshKey((v) => v + 1);
     }
   };
 
@@ -302,6 +307,7 @@ export default function App() {
               device={activeLens?.device}
               flash={flash}
               zoom={zoom}
+              exposure={exposure}
               pictureSize={pictureSize}
               onCameraReady={() =>
                 onCameraReady(cameraRef, setPictureSize, setCameraReady)
@@ -358,6 +364,8 @@ export default function App() {
         </View>
       )}
 
+      <ExposureSlider exposure={exposure} setExposure={setExposure} />
+
       <BottomControls
         controlsAnim={controlsAnim}
         activeControl={activeControl}
@@ -365,6 +373,8 @@ export default function App() {
         setFacing={setFacing}
         zoom={zoom}
         setZoom={setZoom}
+        exposure={exposure}
+        setExposure={setExposure}
         selectedLutId={selectedLutId}
         setSelectedLutId={setSelectedLutId}
         zoomSV={zoomSV}
@@ -378,6 +388,7 @@ export default function App() {
         lenses={lenses}
         activeLensId={activeLensId}
         onSelectLens={handleSelectLens}
+        galleryRefreshKey={galleryRefreshKey}
       />
     </SafeAreaView>
   );

@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
@@ -18,6 +20,8 @@ export default function BottomControls({
   setFacing,
   zoom,
   setZoom,
+  exposure,
+  setExposure,
   selectedLutId,
   setSelectedLutId,
   zoomSV,
@@ -31,12 +35,43 @@ export default function BottomControls({
   lenses,
   activeLensId,
   onSelectLens,
+  galleryRefreshKey,
 }) {
   const router = useRouter();
   const deviceOrientationStyle = useDeviceOrientation();
+  const [lastPhotoUri, setLastPhotoUri] = useState(null);
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const isBusy = isProcessing || processingQueueLength > 0;
+
+  useEffect(() => {
+    loadLastPhoto();
+  }, [galleryRefreshKey]);
+
+  const loadLastPhoto = async () => {
+    try {
+      const albums = await MediaLibrary.getAlbumsAsync();
+
+      const komorebiAlbum = albums.find(
+        (a) => a.title.toLowerCase() === "komorebi",
+      );
+
+      if (!komorebiAlbum) return;
+
+      const photos = await MediaLibrary.getAssetsAsync({
+        album: komorebiAlbum,
+        mediaType: "photo",
+        first: 1,
+        sortBy: [["creationTime", false]],
+      });
+
+      if (photos.assets.length > 0) {
+        setLastPhotoUri(photos.assets[0].uri);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
     let loop;
@@ -106,19 +141,24 @@ export default function BottomControls({
       >
         <View style={styles.sideButton}>
           <TouchableOpacity
-            style={styles.galleryButton}
+            style={styles.galleryThumb}
             onPress={() => {
               router.push("components/Galery");
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             }}
           >
             <Reanimated.View
-              style={[
-                deviceOrientationStyle,
-                { width: 32, height: 32, borderRadius: 5, overflow: "hidden" },
-              ]}
+              style={[deviceOrientationStyle, styles.galleryThumbInner]}
             >
-              <Ionicons name="images-outline" size={32} color="white" />
+              {lastPhotoUri ? (
+                <Image
+                  source={{ uri: lastPhotoUri }}
+                  style={styles.galleryImage}
+                  contentFit="cover"
+                />
+              ) : (
+                <Ionicons name="images-outline" size={20} color="white" />
+              )}
 
               {isBusy && (
                 <Animated.View
@@ -130,7 +170,7 @@ export default function BottomControls({
                         {
                           translateX: shimmerAnim.interpolate({
                             inputRange: [0, 1],
-                            outputRange: [-32, 32],
+                            outputRange: [-40, 40],
                           }),
                         },
                       ],
@@ -159,14 +199,16 @@ export default function BottomControls({
           <Shutter takePicture={takePicture} isProcessing={isProcessing} />
         </View>
 
-        <TouchableOpacity
-          style={styles.sideButton}
-          onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
-        >
-          <Reanimated.View style={deviceOrientationStyle}>
-            <Ionicons name="camera-reverse-outline" size={32} color="white" />
-          </Reanimated.View>
-        </TouchableOpacity>
+        <View style={styles.rightControls}>
+          <TouchableOpacity
+            style={styles.flipButton}
+            onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
+          >
+            <Reanimated.View style={deviceOrientationStyle}>
+              <Ionicons name="camera-reverse-outline" size={28} color="white" />
+            </Reanimated.View>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       <Animated.View
@@ -224,9 +266,23 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
   },
-  galleryButton: {
+  galleryThumb: {
     padding: 10,
-    position: "relative",
+  },
+
+  galleryThumbInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    overflow: "hidden",
+    backgroundColor: "#111",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+
+  galleryImage: {
+    width: "100%",
+    height: "100%",
   },
   toolsContainer: {
     width: "100%",
@@ -238,5 +294,20 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  rightControls: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+
+  flipButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.06)",
   },
 });
