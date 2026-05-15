@@ -99,7 +99,8 @@ export default function App() {
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onStart(() => {
-      runOnJS(setActiveControl)("zoom");
+      // runOnJS(setActiveControl)("zoom");
+      console.log("Double tap detected");
     });
 
   const composedGestures = Gesture.Simultaneous(pinchGesture, doubleTapGesture);
@@ -319,17 +320,19 @@ export default function App() {
         </GestureDetector>
       )}
 
-      {!firstTime && cameraPermission !== "granted" && (
-        <View style={styles.permissionContainer}>
-          <Text style={styles.permissionTitle}>
-            Permissão de câmera necessária
-          </Text>
+      {!firstTime &&
+        cameraPermission !== null &&
+        cameraPermission !== "granted" && (
+          <View style={styles.permissionContainer}>
+            <Text style={styles.permissionTitle}>
+              Permissão de câmera necessária
+            </Text>
 
-          <Text style={styles.permissionText}>
-            Autorize o acesso à câmera para usar o app.
-          </Text>
-        </View>
-      )}
+            <Text style={styles.permissionText}>
+              Autorize o acesso à câmera para usar o app.
+            </Text>
+          </View>
+        )}
 
       {topBarBelow && (
         <View style={styles.topBarBelow}>
