@@ -68,7 +68,16 @@ export default function Settings() {
         return;
       }
 
-      const content = await RNFS.readFile(res.uri, "utf8");
+      const pickedUri = res.fileCopyUri || res.uri;
+      const normalizedUri = pickedUri
+        ? decodeURI(pickedUri.replace(/^file:\/\//, ""))
+        : null;
+
+      if (!normalizedUri) {
+        throw new Error("URI inválida do arquivo selecionado");
+      }
+
+      const content = await RNFS.readFile(normalizedUri, "utf8");
       const cubeData = parseCubeFile(content);
       const id = "custom_" + Date.now();
       const name = fileName.replace(/\.cube$/i, "");
@@ -464,7 +473,9 @@ export default function Settings() {
           />
 
           <View>
-            <Text style={[styles.text, { fontWeight: "bold" }]}>Site oficial</Text>
+            <Text style={[styles.text, { fontWeight: "bold" }]}>
+              Site oficial
+            </Text>
             <Text style={styles.text}>Conheça minha arte!</Text>
           </View>
         </TouchableOpacity>
