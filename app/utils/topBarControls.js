@@ -50,7 +50,7 @@ export const TOP_BAR_CONTROLS = [
 ];
 
 export const DEFAULT_TOP_BAR_CONTROLS = [
-  "aspectRatio",
+  "vertical",
   "weather",
   "luts",
   "settings",
