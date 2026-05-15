@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera } from "react-native-vision-camera-face-detector";
 
@@ -117,11 +117,15 @@ export default function CameraPreview({
         enableLocation={location}
         photoQualityBalance={"quality"}
       />
-      <Image
-        source={require("../../assets/images/grid.png")}
-        style={gridVisible ? styles.grid : styles.gridHidden}
-        pointerEvents="none"
-      />
+      {gridVisible && (
+        <View pointerEvents="none" style={styles.gridOverlay}>
+          <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
+          <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
+
+          <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
+          <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
+        </View>
+      )}
     </View>
   );
 }
@@ -138,14 +142,25 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   camera: { flex: 1 },
-  grid: {
+  gridOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
-    width: "100%",
-    height: "100%",
-    resizeMode: "stretch",
-    tintColor: "#7b7b7b3c",
+    right: 0,
+    bottom: 0,
   },
-  gridHidden: { display: "none" },
+  gridLineVertical: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  gridLineHorizontal: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
 });
