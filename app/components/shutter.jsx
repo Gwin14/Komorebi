@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
-import { StyleSheet, TouchableOpacity, Animated } from "react-native";
 import { useEffect, useRef } from "react";
+import { Animated, StyleSheet, TouchableOpacity } from "react-native";
 import { useSettings } from "../context/SettingsContext";
 import useShutterSound from "../utils/useShutterSound";
 
@@ -26,7 +26,7 @@ export default function Shutter({ takePicture, isProcessing }) {
               duration: 200,
               useNativeDriver: true,
             }),
-          ])
+          ]),
         ),
         Animated.loop(
           Animated.sequence([
@@ -40,8 +40,8 @@ export default function Shutter({ takePicture, isProcessing }) {
               duration: 500,
               useNativeDriver: true,
             }),
-          ])
-        )
+          ]),
+        ),
       ]).start();
     } else {
       scaleAnim.setValue(1);
@@ -88,5 +88,6 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 15, // Android
     alignSelf: "center",
+    marginHorizontal: 20,
   },
 });

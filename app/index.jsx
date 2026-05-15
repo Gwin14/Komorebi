@@ -364,7 +364,7 @@ export default function App() {
         </View>
       )}
 
-      <ExposureSlider exposure={exposure} setExposure={setExposure} />
+      <ExposureSlider exposure={exposure} setExposure={setExposure} topBarBelow={topBarBelow} />
 
       <BottomControls
         controlsAnim={controlsAnim}

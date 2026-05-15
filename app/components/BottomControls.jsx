@@ -262,14 +262,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   sideButton: {
-    padding: 10,
     flex: 1,
     alignItems: "center",
   },
-  galleryThumb: {
-    padding: 10,
-  },
-
   galleryThumbInner: {
     width: 52,
     height: 52,
@@ -309,5 +304,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255, 255, 255, 0.04)",
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.06)",
+
   },
 });

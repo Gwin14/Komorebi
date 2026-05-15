@@ -1,10 +1,10 @@
-import React, { useRef } from "react";
 import * as Haptics from "expo-haptics";
-import { PanResponder, StyleSheet, Text, View, Dimensions } from "react-native";
+import React, { useRef } from "react";
+import { Dimensions, PanResponder, StyleSheet, Text, View } from "react-native";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 // Largura da área da régua (ajuste conforme o seu layout)
-const DIAL_WIDTH = SCREEN_WIDTH * 0.6; 
+const DIAL_WIDTH = SCREEN_WIDTH * 0.6;
 const TICK_SPACING = 15; // Espaço em pixels entre cada tracinho da régua
 
 export default function ExposureSlider({
@@ -12,6 +12,7 @@ export default function ExposureSlider({
   setExposure,
   minExposure = -2,
   maxExposure = 2,
+  topBarBelow,
 }) {
   const exposureRef = useRef(exposure);
   const exposureStart = useRef(exposure);
@@ -45,9 +46,7 @@ export default function ExposureSlider({
         if (currentStep !== lastHapticStep.current) {
           lastHapticStep.current = currentStep;
 
-          Haptics.impactAsync(
-            Haptics.ImpactFeedbackStyle.Rigid,
-          );
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
         }
 
         exposureRef.current = roundedExposure;
@@ -55,8 +54,7 @@ export default function ExposureSlider({
       },
       onPanResponderRelease: (_, gestureState) => {
         const wasTap =
-          Math.abs(gestureState.dx) < 5 &&
-          Math.abs(gestureState.dy) < 5;
+          Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5;
 
         if (wasTap) {
           exposureRef.current = 0;
@@ -65,16 +63,14 @@ export default function ExposureSlider({
 
           setExposure(0);
 
-          Haptics.impactAsync(
-            Haptics.ImpactFeedbackStyle.Heavy,
-          );
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
           return;
         }
 
         exposureStart.current = exposureRef.current;
       },
-    })
+    }),
   ).current;
 
   // Renderiza os tracinhos da régua dinamicamente
@@ -87,7 +83,7 @@ export default function ExposureSlider({
 
     for (let i = startTick; i <= endTick; i++) {
       const isMajor = i % 5 === 0; // Traco maior a cada 0.5 unidades
-      const isCenter = i === 0;    // Destaque para o zero absoluto
+      const isCenter = i === 0; // Destaque para o zero absoluto
 
       ticks.push(
         <View
@@ -100,7 +96,7 @@ export default function ExposureSlider({
               marginRight: i === endTick ? 0 : TICK_SPACING,
             },
           ]}
-        />
+        />,
       );
     }
     return ticks;
@@ -110,26 +106,28 @@ export default function ExposureSlider({
   // Quanto maior o valor, mais para a esquerda a régua se move (offset negativo)
   const range = maxExposure - minExposure;
   const currentProgress = (exposure - minExposure) / range;
-  
+
   // Cada 0.1 EV equivale a um tracinho
   const tickIndex = (exposure - minExposure) * 10;
 
   // Centraliza exatamente o tracinho atual no indicador
-  const translateX =
-    (DIAL_WIDTH / 2) -
-    (tickIndex * (TICK_SPACING + 1.7));
+  const translateX = DIAL_WIDTH / 2 - tickIndex * (TICK_SPACING + 1.7);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, topBarBelow && { marginVertical: -5 }]}>
       {/* Texto com o valor atual em cima */}
-      <Text style={styles.exposureText}>
-        {exposure > 0 ? "+" : ""}
-        {exposure.toFixed(1)} EV
-      </Text>
+      {!topBarBelow && (
+        <Text style={styles.exposureText}>
+          {exposure > 0 ? "+" : ""}
+          {exposure.toFixed(1)} EV
+        </Text>
+      )}
 
       {/* Área sensível ao toque */}
-      <View style={[styles.dialContainer, { width: DIAL_WIDTH }]} {...exposurePanResponder.panHandlers}>
-        
+      <View
+        style={[styles.dialContainer, { width: DIAL_WIDTH }]}
+        {...exposurePanResponder.panHandlers}
+      >
         {/* A Régua que se move */}
         <View style={[styles.ruleTrack, { transform: [{ translateX }] }]}>
           {renderTicks()}
@@ -138,6 +136,12 @@ export default function ExposureSlider({
         {/* Marcador Central Fixo (A agulha da régua) */}
         <View style={styles.centerIndicator} pointerEvents="none" />
       </View>
+      {topBarBelow && (
+        <Text style={[styles.exposureText, styles.exposureTextBelow]}>
+          {exposure > 0 ? "+" : ""}
+          {exposure.toFixed(1)} EV
+        </Text>
+      )}
     </View>
   );
 }
@@ -155,6 +159,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontVariant: ["tabular-nums"], // Evita o texto de "tremer" mudando de largura
     letterSpacing: 0.5,
+  },
+  exposureTextBelow: {
+    marginTop: 8,
+    marginBottom: 0,
   },
   dialContainer: {
     height: 40,
