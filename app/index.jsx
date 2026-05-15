@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -287,33 +287,49 @@ export default function App() {
           verticalMode={verticalMode}
           toggleVerticalMode={toggleVerticalMode}
           topBarControls={topBarControls}
+          firstTime={firstTime}
         />
       )}
 
-      <GestureDetector gesture={composedGestures}>
-        <View style={styles.previewContainer}>
-          <CameraPreview
-            retroStyle={retroStyle}
-            cameraRef={cameraRef}
-            facing={facing}
-            device={activeLens?.device}
-            flash={flash}
-            zoom={zoom}
-            pictureSize={pictureSize}
-            onCameraReady={() =>
-              onCameraReady(cameraRef, setPictureSize, setCameraReady)
-            }
-            gridVisible={gridVisible}
-            setMinZoom={setMinZoom}
-            setMaxZoom={setMaxZoom}
-            onSmileDetected={handleTakePicture}
-            smileDetectionEnabled={smileDetectionEnabled}
-            location={location}
-            verticalMode={verticalMode}
-            doubleCaptureMode={doubleCaptureMode}
-          />
+      {!firstTime && cameraPermission === "granted" && (
+        <GestureDetector gesture={composedGestures}>
+          <View style={styles.previewContainer}>
+            <CameraPreview
+              retroStyle={retroStyle}
+              cameraRef={cameraRef}
+              facing={facing}
+              device={activeLens?.device}
+              flash={flash}
+              zoom={zoom}
+              pictureSize={pictureSize}
+              onCameraReady={() =>
+                onCameraReady(cameraRef, setPictureSize, setCameraReady)
+              }
+              gridVisible={gridVisible}
+              setMinZoom={setMinZoom}
+              setMaxZoom={setMaxZoom}
+              onSmileDetected={handleTakePicture}
+              smileDetectionEnabled={smileDetectionEnabled}
+              location={location}
+              verticalMode={verticalMode}
+              doubleCaptureMode={doubleCaptureMode}
+              isActive={!firstTime}
+            />
+          </View>
+        </GestureDetector>
+      )}
+
+      {!firstTime && cameraPermission !== "granted" && (
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionTitle}>
+            Permissão de câmera necessária
+          </Text>
+
+          <Text style={styles.permissionText}>
+            Autorize o acesso à câmera para usar o app.
+          </Text>
         </View>
-      </GestureDetector>
+      )}
 
       {topBarBelow && (
         <View style={styles.topBarBelow}>
@@ -334,6 +350,7 @@ export default function App() {
             verticalMode={verticalMode}
             toggleVerticalMode={toggleVerticalMode}
             topBarControls={topBarControls}
+            firstTime={firstTime}
           />
         </View>
       )}
@@ -393,5 +410,27 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: "hidden",
     backgroundColor: "#000",
+  },
+
+  permissionContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+
+  permissionTitle: {
+    color: "white",
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+
+  permissionText: {
+    color: "#b0b0b0",
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
   },
 });

@@ -21,6 +21,7 @@ export default function TopBar({
   verticalMode,
   toggleVerticalMode,
   topBarControls = [],
+  firstTime,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -30,6 +31,8 @@ export default function TopBar({
   const [coords, setCoords] = useState(null);
 
   useEffect(() => {
+    if (firstTime) return;
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -45,7 +48,7 @@ export default function TopBar({
 
       console.log("Coords obtidas:", coords);
     })();
-  }, []);
+  }, [firstTime]);
 
   useEffect(() => {
     if (!coords) return;

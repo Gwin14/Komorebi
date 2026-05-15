@@ -19,6 +19,7 @@ export default function CameraPreview({
   location,
   verticalMode,
   doubleCaptureMode,
+  isActive = true,
 }) {
   const isTakingPhoto = useRef(false);
 
@@ -93,11 +94,7 @@ export default function CameraPreview({
         retroStyle ? styles.retroStyle : styles.cameraWrapper,
         {
           aspectRatio,
-          width: verticalMode
-            ? "75%"
-            : retroStyle
-              ? "90%"
-              : "100%",
+          width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
           alignSelf: "center",
           borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
           borderWidth: doubleCaptureMode ? 3 : 0,
@@ -107,7 +104,7 @@ export default function CameraPreview({
       <Camera
         style={styles.camera}
         device={device}
-        isActive={true}
+        isActive={isActive}
         ref={cameraRef}
         format={format}
         photo={true}
