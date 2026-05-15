@@ -435,6 +435,39 @@ export default function Settings() {
             />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          onPress={() => {
+            require("react-native")
+              .Linking.openURL("https://fotoessencia.fabiosantos.dev.br/")
+              .catch((e) => {
+                console.error("Erro ao abrir link", e);
+              });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={{
+            width: "90%",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-around",
+            marginBottom: 50,
+            marginTop: 20,
+            borderWidth: 4,
+            borderColor: "#191919af",
+            padding: 12,
+            borderRadius: 12,
+          }}
+        >
+          <Image
+            source={require("../../assets/images/fotoessencia.jpeg")}
+            style={styles.siteIcon}
+          />
+
+          <View>
+            <Text style={[styles.text, { fontWeight: "bold" }]}>Site oficial</Text>
+            <Text style={styles.text}>Conheça minha arte!</Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -477,6 +510,14 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     resizeMode: "contain",
     marginbottom: 100,
+  },
+  siteIcon: {
+    width: 60,
+    height: 60,
+    aspectRatio: 1,
+    resizeMode: "contain",
+    marginbottom: 100,
+    borderRadius: "50%",
   },
   socialContainer: {
     flexDirection: "row",
