@@ -1,17 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Image, StyleSheet, View } from "react-native";
-import { useCameraDevice, useCameraFormat } from "react-native-vision-camera";
+import { StyleSheet, View } from "react-native";
+import { useCameraFormat } from "react-native-vision-camera";
 import { Camera } from "react-native-vision-camera-face-detector";
-// import { Dimensions } from "react-native";
-
-// const { width, height } = Dimensions.get("screen");
 
 export default function CameraPreview({
   retroStyle,
   cameraRef,
-  facing,
+  device,
   flash,
   zoom,
+  exposure,
   pictureSize,
   onCameraReady,
   gridVisible,
@@ -20,13 +18,16 @@ export default function CameraPreview({
   onSmileDetected,
   smileDetectionEnabled,
   location,
+  verticalMode,
+  doubleCaptureMode,
+  isActive = true,
 }) {
-  const device = useCameraDevice(facing === "back" ? "back" : "front");
   const isTakingPhoto = useRef(false);
 
   const format = useCameraFormat(device, [
     { photoAspectRatio: 4 / 3 },
     { photoResolution: "max" },
+    { videoResolution: "max" },
   ]);
 
   const handleFacesDetection = useCallback(
@@ -41,9 +42,7 @@ export default function CameraPreview({
         face.smilingProbability > 0.7
       ) {
         isTakingPhoto.current = true;
-
         onSmileDetected?.();
-
         setTimeout(() => {
           isTakingPhoto.current = false;
         }, 2500);
@@ -62,39 +61,75 @@ export default function CameraPreview({
   );
 
   useEffect(() => {
-    if (device && setMinZoom && setMaxZoom) {
-      setMinZoom(device.minZoom);
-      setMaxZoom(device.maxZoom);
-    }
+    if (!device) return;
+
+    if (setMinZoom) setMinZoom(device.minZoom);
+    if (setMaxZoom) setMaxZoom(device.maxZoom);
+
+    console.log("=== CÂMERA INICIALIZADA ===");
+    console.log("Nome:", device.name);
+    console.log("Position:", device.position);
+    console.log("physicalDevices:", device.physicalDevices);
+    console.log("minZoom:", device.minZoom);
+    console.log("maxZoom:", device.maxZoom);
+    console.log("neutralZoom:", device.neutralZoom);
+    console.log("minExposure:", device.minExposure);
+    console.log("maxExposure:", device.maxExposure);
+    console.log("==========================");
+
+    // Alert.alert(
+    //   "Câmera selecionada",
+    //   `Nome: ${device.name}\n\nphysicalDevices: ${JSON.stringify(
+    //     device.physicalDevices,
+    //   )}\n\nminZoom: ${device.minZoom}\nmaxZoom: ${device.maxZoom}`,
+    // );
   }, [device, setMinZoom, setMaxZoom]);
 
   if (!device) {
     return null;
   }
 
+  const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
+
   return (
-    <View style={retroStyle ? styles.retroStyle : styles.cameraWrapper}>
+    <View
+      style={[
+        retroStyle ? styles.retroStyle : styles.cameraWrapper,
+        {
+          aspectRatio,
+          width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
+          alignSelf: "center",
+          borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
+          borderWidth: doubleCaptureMode ? 3 : 0,
+        },
+      ]}
+    >
       <Camera
         style={styles.camera}
         device={device}
-        isActive={true}
+        isActive={isActive}
         ref={cameraRef}
         format={format}
         photo={true}
         video={false}
         audio={false}
         zoom={zoom}
+        exposure={exposure}
         onInitialized={onCameraReady}
         faceDetectionCallback={handleFacesDetection}
         faceDetectionOptions={faceDetectionOptions}
         enableLocation={location}
         photoQualityBalance={"quality"}
       />
-      <Image
-        source={require("../../assets/images/grid.png")}
-        style={gridVisible ? styles.grid : styles.gridHidden}
-        pointerEvents="none"
-      />
+      {gridVisible && (
+        <View pointerEvents="none" style={styles.gridOverlay}>
+          <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
+          <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
+
+          <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
+          <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
+        </View>
+      )}
     </View>
   );
 }
@@ -102,25 +137,34 @@ export default function CameraPreview({
 const styles = StyleSheet.create({
   cameraWrapper: {
     width: "100%",
-    aspectRatio: 3 / 4,
     overflow: "hidden",
   },
   retroStyle: {
     alignSelf: "center",
     width: "90%",
-    aspectRatio: 3 / 4,
     overflow: "hidden",
     borderRadius: 10,
   },
   camera: { flex: 1 },
-  grid: {
+  gridOverlay: {
     position: "absolute",
     top: 0,
     left: 0,
-    width: "100%",
-    height: "100%",
-    resizeMode: "stretch",
-    tintColor: "#7b7b7b3c",
+    right: 0,
+    bottom: 0,
   },
-  gridHidden: { display: "none" },
+  gridLineVertical: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
+  gridLineHorizontal: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.22)",
+  },
 });

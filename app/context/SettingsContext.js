@@ -1,5 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useState } from "react";
+import {
+  DEFAULT_TOP_BAR_CONTROLS,
+  normalizeTopBarControls,
+} from "../utils/topBarControls";
 
 const SettingsContext = createContext(null);
 
@@ -12,6 +16,7 @@ const STORAGE_KEYS = {
   FIRSTTIME: "@settings/firstTime",
   CUSTOM_LUTS: "@settings/customLuts",
   TOP_BAR_BELOW: "@settings/topBarBelow",
+  TOP_BAR_CONTROLS: "@settings/topBarControls",
 };
 
 export const SettingsProvider = ({ children }) => {
@@ -24,6 +29,9 @@ export const SettingsProvider = ({ children }) => {
   const [firstTime, setFirstTime] = useState(true);
   const [customLuts, setCustomLuts] = useState([]);
   const [topBarBelow, setTopBarBelow] = useState(false);
+  const [topBarControls, setTopBarControls] = useState(
+    DEFAULT_TOP_BAR_CONTROLS,
+  );
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -55,6 +63,9 @@ export const SettingsProvider = ({ children }) => {
         const savedTopBarBelow = await AsyncStorage.getItem(
           STORAGE_KEYS.TOP_BAR_BELOW,
         );
+        const savedTopBarControls = await AsyncStorage.getItem(
+          STORAGE_KEYS.TOP_BAR_CONTROLS,
+        );
 
         // ----------
 
@@ -62,6 +73,16 @@ export const SettingsProvider = ({ children }) => {
 
         if (savedTopBarBelow !== null)
           setTopBarBelow(savedTopBarBelow === "true");
+
+        if (savedTopBarControls !== null) {
+          try {
+            setTopBarControls(
+              normalizeTopBarControls(JSON.parse(savedTopBarControls)),
+            );
+          } catch (error) {
+            console.error("Erro ao ler topBarControls", error);
+          }
+        }
 
         if (savedRetroStyle !== null) setRetroStyle(savedRetroStyle === "true");
 
@@ -149,6 +170,16 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [topBarBelow, loading]);
 
+  // 💾 Salvar "TopBar Controls"
+  useEffect(() => {
+    if (!loading) {
+      AsyncStorage.setItem(
+        STORAGE_KEYS.TOP_BAR_CONTROLS,
+        JSON.stringify(topBarControls),
+      );
+    }
+  }, [topBarControls, loading]);
+
   const value = {
     retroStyle,
     setRetroStyle,
@@ -165,6 +196,8 @@ export const SettingsProvider = ({ children }) => {
     setFirstTime,
     customLuts,
     setCustomLuts,
+    topBarControls,
+    setTopBarControls,
     topBarBelow,
     setTopBarBelow,
   };

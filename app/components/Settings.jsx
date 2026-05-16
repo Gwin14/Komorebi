@@ -18,6 +18,10 @@ import {
   parseCubeFile,
   removeCustomLUT,
 } from "../utils/lutProcessor";
+import {
+  TOP_BAR_CONTROLS,
+  TOP_BAR_MAX_CONTROLS,
+} from "../utils/topBarControls";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import ExternalLink from "./ExternalLink";
@@ -40,9 +44,16 @@ export default function Settings() {
     setSaveOriginalWithLUT,
     customLuts,
     setCustomLuts,
+    topBarControls,
+    setTopBarControls,
     topBarBelow,
     setTopBarBelow,
   } = useSettings();
+
+  const controlsMap = {};
+  TOP_BAR_CONTROLS.forEach((control) => {
+    controlsMap[control.id] = control;
+  });
 
   const handleUploadLUT = async () => {
     try {
@@ -57,7 +68,16 @@ export default function Settings() {
         return;
       }
 
-      const content = await RNFS.readFile(res.uri, "utf8");
+      const pickedUri = res.fileCopyUri || res.uri;
+      const normalizedUri = pickedUri
+        ? decodeURI(pickedUri.replace(/^file:\/\//, ""))
+        : null;
+
+      if (!normalizedUri) {
+        throw new Error("URI inválida do arquivo selecionado");
+      }
+
+      const content = await RNFS.readFile(normalizedUri, "utf8");
       const cubeData = parseCubeFile(content);
       const id = "custom_" + Date.now();
       const name = fileName.replace(/\.cube$/i, "");
@@ -82,6 +102,48 @@ export default function Settings() {
     setCustomLuts((prev) => prev.filter((lut) => lut.id !== id));
   };
 
+  const handleRemoveControl = (controlId) => {
+    if (controlId === "settings") return;
+    setTopBarControls((prev) => prev.filter((id) => id !== controlId));
+  };
+
+  const handleAddControl = (controlId) => {
+    if (controlId === "settings") return;
+
+    const selected = topBarControls.includes(controlId);
+    if (selected) {
+      handleRemoveControl(controlId);
+      return;
+    }
+
+    if (topBarControls.length >= TOP_BAR_MAX_CONTROLS) {
+      alert(
+        `Você pode selecionar no máximo ${TOP_BAR_MAX_CONTROLS} controles na TopBar.`,
+      );
+      return;
+    }
+
+    setTopBarControls((prev) => [...prev, controlId]);
+  };
+
+  const moveControlInOrder = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex) return;
+    if (
+      fromIndex < 0 ||
+      toIndex < 0 ||
+      fromIndex >= topBarControls.length ||
+      toIndex >= topBarControls.length
+    )
+      return;
+
+    const newControls = [...topBarControls];
+    const [moved] = newControls.splice(fromIndex, 1);
+    newControls.splice(toIndex, 0, moved);
+
+    setTopBarControls(newControls);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -90,11 +152,16 @@ export default function Settings() {
     );
   }
 
+  const unselectedControls = TOP_BAR_CONTROLS.filter(
+    (control) => !topBarControls.includes(control.id),
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
+        scrollEventThrottle={16}
       >
         <Text style={styles.title}>Página de Configurações</Text>
 
@@ -117,6 +184,8 @@ export default function Settings() {
             onValueChange={setShutterSound}
           />
 
+          <View style={styles.divider} />
+
           <CustomToggle
             label="Salvar cópia sem LUT"
             value={saveOriginalWithLUT}
@@ -134,6 +203,117 @@ export default function Settings() {
             value={topBarBelow}
             onValueChange={setTopBarBelow}
           />
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={{ width: "98%" }}>
+          <View style={styles.listHeader}>
+            <Text style={styles.sectionTitle}>Controles da TopBar</Text>
+          </View>
+          <Text style={styles.sectionSubtitle}>
+            Use as setas para alterar a ordem. Marque até {TOP_BAR_MAX_CONTROLS}{" "}
+            controles. Configurações é obrigatório e sempre fica visível.
+          </Text>
+
+          {topBarControls.length > 0 && (
+            <View>
+              <View style={styles.draggableList}>
+                {topBarControls.map((controlId, index) => (
+                  <View key={controlId} style={styles.draggableRow}>
+                    <View style={styles.controlRowLeft}>
+                      <Text style={styles.controlName}>
+                        {controlsMap[controlId]?.label}
+                      </Text>
+                    </View>
+
+                    <View style={styles.rowActions}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (index > 0) moveControlInOrder(index, index - 1);
+                        }}
+                        disabled={index === 0}
+                        style={[
+                          styles.smallButton,
+                          index === 0 && styles.smallButtonDisabled,
+                        ]}
+                      >
+                        <Ionicons
+                          name="chevron-up-outline"
+                          size={18}
+                          color={index > 0 ? "#ffaa00" : "#5a5a5a"}
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          if (index < topBarControls.length - 1)
+                            moveControlInOrder(index, index + 1);
+                        }}
+                        disabled={index === topBarControls.length - 1}
+                        style={[
+                          styles.smallButton,
+                          index === topBarControls.length - 1 &&
+                            styles.smallButtonDisabled,
+                        ]}
+                      >
+                        <Ionicons
+                          name="chevron-down-outline"
+                          size={18}
+                          color={
+                            index < topBarControls.length - 1
+                              ? "#ffaa00"
+                              : "#5a5a5a"
+                          }
+                        />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          Haptics.impactAsync(
+                            Haptics.ImpactFeedbackStyle.Light,
+                          );
+                          handleRemoveControl(controlId);
+                        }}
+                        style={styles.removeButton}
+                      >
+                        <Ionicons
+                          name="close-outline"
+                          size={18}
+                          color="#ff6b6b"
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {unselectedControls.length > 0 && (
+            <View>
+              <View style={styles.availableList}>
+                {unselectedControls.map((control) => (
+                  <TouchableOpacity
+                    key={control.id}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      handleAddControl(control.id);
+                    }}
+                    style={styles.availableItem}
+                  >
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={20}
+                      color="#ffaa00"
+                      style={{ marginRight: 10 }}
+                    />
+                    <Text style={styles.controlName}>{control.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.divider} />
@@ -160,7 +340,6 @@ export default function Settings() {
 
         <ExternalLink
           label="Código fonte"
-          // description="Leia nossa política de privacidade online"
           url="https://github.com/Gwin14/Komorebi"
         />
 
@@ -265,6 +444,41 @@ export default function Settings() {
             />
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          onPress={() => {
+            require("react-native")
+              .Linking.openURL("https://fotoessencia.fabiosantos.dev.br/")
+              .catch((e) => {
+                console.error("Erro ao abrir link", e);
+              });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={{
+            width: "90%",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-around",
+            marginBottom: 50,
+            marginTop: 20,
+            borderWidth: 4,
+            borderColor: "#191919af",
+            padding: 12,
+            borderRadius: 12,
+          }}
+        >
+          <Image
+            source={require("../../assets/images/fotoessencia.jpeg")}
+            style={styles.siteIcon}
+          />
+
+          <View>
+            <Text style={[styles.text, { fontWeight: "bold" }]}>
+              Site oficial
+            </Text>
+            <Text style={styles.text}>Conheça minha arte!</Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
 
       <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -308,6 +522,14 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
     marginbottom: 100,
   },
+  siteIcon: {
+    width: 60,
+    height: 60,
+    aspectRatio: 1,
+    resizeMode: "contain",
+    marginbottom: 100,
+    borderRadius: "50%",
+  },
   socialContainer: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -315,26 +537,95 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   customLutList: {
-    // marginTop: 20,
     width: "100%",
-
     paddingTop: 12,
   },
   listHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    // marginBottom: 10,
     paddingHorizontal: 16,
+    marginTop: 12,
   },
   sectionTitle: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
   },
-  emptyState: {
-    marginTop: 20,
-    alignItems: "flex-start",
+  draggableList: {
+    width: "100%",
+    marginTop: -12,
+  },
+  draggableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#ffffff0d",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    marginHorizontal: 16,
+  },
+  draggingRow: {
+    backgroundColor: "rgba(255, 170, 0, 0.2)",
+    borderLeftColor: "#fff",
+  },
+  controlRowLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  dragHandle: {
+    padding: 8,
+    marginRight: 4,
+  },
+  controlName: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  rowActions: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  smallButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4,
+  },
+  smallButtonDisabled: {
+    backgroundColor: "rgba(255, 255, 255, 0.02)",
+  },
+  removeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 4,
+  },
+  availableList: {
+    width: "100%",
+    paddingHorizontal: 16,
+  },
+  availableItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#ffffff0d",
+  },
+  text: {
+    color: "#fff",
+    fontSize: 16,
   },
   backButton: {
     position: "absolute",

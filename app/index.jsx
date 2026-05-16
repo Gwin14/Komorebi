@@ -1,17 +1,20 @@
 import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Camera } from "react-native-vision-camera";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
+import ExposureSlider from "./components/ExposureSlider";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
+import { usePhysicalCameraDevices } from "./hooks/uselensselector";
 import {
+  copyExifFromImage,
   cropImageToInverseAspect,
   onCameraReady,
   saveToAlbum,
@@ -33,15 +36,18 @@ export default function App() {
     loading,
     saveOriginalWithLUT,
     customLuts,
+    topBarControls,
     topBarBelow,
   } = useSettings();
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(1);
+  const [exposure, setExposure] = useState(0);
   const [minZoom, setMinZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(5);
   const [doubleCaptureMode, setDoubleCaptureMode] = useState(false);
+  const [verticalMode, setVerticalMode] = useState(false);
   const zoomSV = useSharedValue(1);
   const lastZoom = useSharedValue(1);
 
@@ -55,6 +61,7 @@ export default function App() {
   const [cameraPermission, setCameraPermission] = useState(null);
   const [hasMediaPermission, setHasMediaPermission] = useState(null);
   const [lutsLoaded, setLutsLoaded] = useState(false);
+  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
 
   const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -63,6 +70,14 @@ export default function App() {
   const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
 
   const availableLuts = [...AVAILABLE_LUTS, ...customLuts];
+
+  // 🆕 Hook de detecção de lentes físicas reais
+  const { lenses, activeLens, activeLensId, setActiveLensId } =
+    usePhysicalCameraDevices(facing);
+
+  const handleSelectLens = (id) => {
+    setActiveLensId(id);
+  };
 
   // --- GESTOS ---
 
@@ -87,7 +102,8 @@ export default function App() {
   const doubleTapGesture = Gesture.Tap()
     .numberOfTaps(2)
     .onStart(() => {
-      runOnJS(setActiveControl)("zoom");
+      // runOnJS(setActiveControl)("zoom");
+      console.log("Double tap detected");
     });
 
   const composedGestures = Gesture.Simultaneous(pinchGesture, doubleTapGesture);
@@ -95,17 +111,23 @@ export default function App() {
   // --- EFEITOS ---
 
   useEffect(() => {
+    // Não pedir permissões enquanto a welcome screen estiver aberta
+    if (firstTime) return;
+
     (async () => {
       await loadAllLUTs();
       await loadCustomLUTs(customLuts);
       setLutsLoaded(true);
+
       const permission = await Camera.requestCameraPermission();
       setCameraPermission(permission);
+
       const { status } = await MediaLibrary.requestPermissionsAsync();
       setHasMediaPermission(status === "granted");
+
       await Location.requestForegroundPermissionsAsync();
     })();
-  }, [customLuts]);
+  }, [customLuts, firstTime]);
 
   useEffect(() => {
     const showTools = activeControl !== "none";
@@ -125,8 +147,19 @@ export default function App() {
     }
   }, [availableLuts, selectedLutId]);
 
+  // 🆕 Sincronizar zoom quando facing muda (troca câmera frontal/traseira)
+  // A lente padrão da frontal é neutralZoom=1
+  useEffect(() => {
+    setZoom(1);
+    zoomSV.value = 1;
+  }, [facing]);
+
   const toggleMode = (mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
+  };
+
+  const toggleVerticalMode = () => {
+    setVerticalMode((prev) => !prev);
   };
 
   const handleTakePicture = () => {
@@ -159,6 +192,7 @@ export default function App() {
       location,
       doubleCaptureMode,
       saveOriginalWithLUT,
+      aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
     });
   };
 
@@ -176,6 +210,7 @@ export default function App() {
       doubleCaptureMode = false,
       saveOriginalWithLUT: saveOriginalWithoutLUT = false,
       originalUri,
+      aspectRatio = 3 / 4,
     } = item;
 
     try {
@@ -184,8 +219,18 @@ export default function App() {
       if (doubleCaptureMode) {
         await saveToAlbum(processedUri);
 
-        const inverseUri = await cropImageToInverseAspect(processedUri);
-        if (inverseUri) await saveToAlbum(inverseUri);
+        const inverseUri = await cropImageToInverseAspect(
+          processedUri,
+          aspectRatio,
+        );
+        if (inverseUri) {
+          // Copiar o EXIF completo da primeira imagem para a segunda
+          const inverseUriWithExif = await copyExifFromImage(
+            processedUri,
+            inverseUri,
+          );
+          await saveToAlbum(inverseUriWithExif);
+        }
       } else {
         await saveToAlbum(processedUri);
       }
@@ -197,10 +242,12 @@ export default function App() {
       console.error("Erro ao salvar imagem processada:", error);
     } finally {
       setProcessingQueue((prev) => prev.slice(1));
+
+      setGalleryRefreshKey((v) => v + 1);
     }
   };
 
-  if (loading || cameraPermission === null) return null;
+  if (loading) return null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -243,30 +290,55 @@ export default function App() {
           toggleDoubleCaptureMode={() =>
             setDoubleCaptureMode((value) => !value)
           }
+          verticalMode={verticalMode}
+          toggleVerticalMode={toggleVerticalMode}
+          topBarControls={topBarControls}
+          firstTime={firstTime}
         />
       )}
 
-      <GestureDetector gesture={composedGestures}>
-        <View style={styles.previewContainer}>
-          <CameraPreview
-            retroStyle={retroStyle}
-            cameraRef={cameraRef}
-            facing={facing}
-            flash={flash}
-            zoom={zoom}
-            pictureSize={pictureSize}
-            onCameraReady={() =>
-              onCameraReady(cameraRef, setPictureSize, setCameraReady)
-            }
-            gridVisible={gridVisible}
-            setMinZoom={setMinZoom}
-            setMaxZoom={setMaxZoom}
-            onSmileDetected={handleTakePicture}
-            smileDetectionEnabled={smileDetectionEnabled}
-            location={location}
-          />
-        </View>
-      </GestureDetector>
+      {!firstTime && cameraPermission === "granted" && (
+        <GestureDetector gesture={composedGestures}>
+          <View style={styles.previewContainer}>
+            <CameraPreview
+              retroStyle={retroStyle}
+              cameraRef={cameraRef}
+              facing={facing}
+              device={activeLens?.device}
+              flash={flash}
+              zoom={zoom}
+              exposure={exposure}
+              pictureSize={pictureSize}
+              onCameraReady={() =>
+                onCameraReady(cameraRef, setPictureSize, setCameraReady)
+              }
+              gridVisible={gridVisible}
+              setMinZoom={setMinZoom}
+              setMaxZoom={setMaxZoom}
+              onSmileDetected={handleTakePicture}
+              smileDetectionEnabled={smileDetectionEnabled}
+              location={location}
+              verticalMode={verticalMode}
+              doubleCaptureMode={doubleCaptureMode}
+              isActive={!firstTime}
+            />
+          </View>
+        </GestureDetector>
+      )}
+
+      {!firstTime &&
+        cameraPermission !== null &&
+        cameraPermission !== "granted" && (
+          <View style={styles.permissionContainer}>
+            <Text style={styles.permissionTitle}>
+              Permissão de câmera necessária
+            </Text>
+
+            <Text style={styles.permissionText}>
+              Autorize o acesso à câmera para usar o app.
+            </Text>
+          </View>
+        )}
 
       {topBarBelow && (
         <View style={styles.topBarBelow}>
@@ -284,9 +356,15 @@ export default function App() {
             toggleDoubleCaptureMode={() =>
               setDoubleCaptureMode((value) => !value)
             }
+            verticalMode={verticalMode}
+            toggleVerticalMode={toggleVerticalMode}
+            topBarControls={topBarControls}
+            firstTime={firstTime}
           />
         </View>
       )}
+
+      <ExposureSlider exposure={exposure} setExposure={setExposure} topBarBelow={topBarBelow} />
 
       <BottomControls
         controlsAnim={controlsAnim}
@@ -295,16 +373,22 @@ export default function App() {
         setFacing={setFacing}
         zoom={zoom}
         setZoom={setZoom}
+        exposure={exposure}
+        setExposure={setExposure}
         selectedLutId={selectedLutId}
         setSelectedLutId={setSelectedLutId}
         zoomSV={zoomSV}
         minZoom={minZoom}
         maxZoom={maxZoom}
-        // 🚀 Passamos a função toggleMode para que o slider saiba como se fechar
         onSliderRelease={() => toggleMode("none")}
         availableLuts={availableLuts}
         isProcessing={isProcessing}
         processingQueueLength={processingQueue.length}
+        // 🆕 Props de lentes
+        lenses={lenses}
+        activeLensId={activeLensId}
+        onSelectLens={handleSelectLens}
+        galleryRefreshKey={galleryRefreshKey}
       />
     </SafeAreaView>
   );
@@ -340,5 +424,27 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: "hidden",
     backgroundColor: "#000",
+  },
+
+  permissionContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+
+  permissionTitle: {
+    color: "white",
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+
+  permissionText: {
+    color: "#b0b0b0",
+    fontSize: 16,
+    textAlign: "center",
+    lineHeight: 24,
   },
 });

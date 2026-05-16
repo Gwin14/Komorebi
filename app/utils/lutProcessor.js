@@ -228,7 +228,12 @@ export const getCachedLUT = (lutId) => {
   return cachedLUTs[lutId] || null;
 };
 
-const generateProcessingHTML = (base64Image, cube, grainConfig) => {
+const generateProcessingHTML = (
+  base64Image,
+  cube,
+  grainConfig,
+  aspectRatio = 3 / 4,
+) => {
   return `
 <!DOCTYPE html>
 <html>
@@ -345,14 +350,35 @@ const generateProcessingHTML = (base64Image, cube, grainConfig) => {
     const img = new Image();
     
     img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
+      let drawWidth = img.width;
+      let drawHeight = img.height;
+      
+      // Calcular dimensions com aspect ratio correto
+      const currentRatio = img.width / img.height;
+      const targetRatio = ${aspectRatio};
+      
+      if (currentRatio > targetRatio) {
+        // Imagem muito larga, crop na largura
+        drawWidth = Math.round(img.height * targetRatio);
+      } else {
+        // Imagem muito alta, crop na altura
+        drawHeight = Math.round(img.width / targetRatio);
+      }
+      
+      const offsetX = Math.round((img.width - drawWidth) / 2);
+      const offsetY = Math.round((img.height - drawHeight) / 2);
+      
+      canvas.width = drawWidth;
+      canvas.height = drawHeight;
+      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
-      const size = cube.size;
-      const { domainMin, domainMax, lut } = cube;
+      
+      // Apenas processar LUT se cube for fornecido
+      if (cube) {
+        const size = cube.size;
+        const { domainMin, domainMax, lut } = cube;
       
       console.log('Processando ' + (data.length / 4) + ' pixels...');
       console.log('Domain:', domainMin, domainMax);
@@ -405,6 +431,7 @@ const generateProcessingHTML = (base64Image, cube, grainConfig) => {
       }
       
       ctx.putImageData(imageData, 0, 0);
+      }
 
       // --- GRAIN ---
 if (${JSON.stringify(grainConfig ? true : false)}) {
@@ -745,6 +772,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
               base64,
               imageData.cube,
               imageData.grainConfig || null,
+              imageData.aspectRatio,
             ),
           );
         }

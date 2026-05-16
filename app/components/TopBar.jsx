@@ -18,6 +18,10 @@ export default function TopBar({
   toggleSmileDetectionEnabled,
   doubleCaptureMode,
   toggleDoubleCaptureMode,
+  verticalMode,
+  toggleVerticalMode,
+  topBarControls = [],
+  firstTime,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -27,6 +31,8 @@ export default function TopBar({
   const [coords, setCoords] = useState(null);
 
   useEffect(() => {
+    if (firstTime) return;
+
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -42,7 +48,7 @@ export default function TopBar({
 
       console.log("Coords obtidas:", coords);
     })();
-  }, []);
+  }, [firstTime]);
 
   useEffect(() => {
     if (!coords) return;
@@ -72,97 +78,96 @@ export default function TopBar({
       .catch(console.error);
   }, [coords]);
 
+  const controlOptions = {
+    aspectRatio: {
+      icon: "crop-outline",
+      onPress: () => toggleMode("zoom"),
+      active: activeControl === "zoom",
+    },
+    weather: {
+      icon: "cloud-outline",
+      onPress: () => setOpen(true),
+      active: false,
+    },
+    luts: {
+      icon: "color-filter-outline",
+      onPress: () => toggleMode("lut"),
+      active: activeControl === "lut" || selectedLutId !== "none",
+    },
+    settings: {
+      icon: "settings-outline",
+      onPress: () => router.push("components/Settings"),
+      active: false,
+    },
+    smile: {
+      icon: "happy-outline",
+      onPress: toggleSmileDetectionEnabled,
+      active: smileDetectionEnabled,
+    },
+    vertical: {
+      icon: verticalMode
+        ? "phone-portrait-outline"
+        : "tablet-landscape-outline",
+      onPress: toggleVerticalMode,
+      active: verticalMode,
+    },
+    doubleCapture: {
+      icon: "layers-outline",
+      onPress: toggleDoubleCaptureMode,
+      active: doubleCaptureMode,
+    },
+    flash: {
+      icon: flash === "off" ? "flash-off-outline" : "flash-outline",
+      onPress: toggleFlash,
+      active: flash !== "off",
+    },
+  };
+
   return (
     <View style={styles.buttonsContainer}>
-      {/* <TouchableOpacity onPress={toggleFlash}>
-        <Animated.View style={animatedStyle}>
-          <Ionicons
-            name={flash === "off" ? "flash-off-outline" : "flash-outline"}
-            size={32}
-            style={styles.button}
-            color="white"
-          />
-        </Animated.View>
-      </TouchableOpacity> */}
+      {topBarControls.map((controlId) => {
+        const control = controlOptions[controlId];
+        if (!control) return null;
 
-      <TouchableOpacity onPress={toggleSmileDetectionEnabled}>
-        <Animated.View style={animatedStyle}>
-          <Ionicons
-            name={"happy-outline"}
-            size={32}
-            style={styles.button}
-            color={smileDetectionEnabled ? "#ffaa00" : "white"}
-          />
-        </Animated.View>
-      </TouchableOpacity>
+        if (controlId === "weather") {
+          return (
+            <View key={controlId}>
+              <Animated.View style={animatedStyle}>
+                <Popover
+                  isVisible={open}
+                  onRequestClose={() => setOpen(false)}
+                  backgroundStyle={{ backgroundColor: "transparent" }}
+                  popoverStyle={{ backgroundColor: "transparent" }}
+                  from={
+                    <TouchableOpacity onPress={control.onPress}>
+                      <Ionicons
+                        name={control.icon}
+                        size={32}
+                        color={control.active ? "#ffaa00" : "white"}
+                      />
+                    </TouchableOpacity>
+                  }
+                >
+                  <PhotoWeather data={data} place={place} />
+                </Popover>
+              </Animated.View>
+            </View>
+          );
+        }
 
-      {/* <TouchableOpacity onPress={toggleDoubleCaptureMode}>
-        <Animated.View style={animatedStyle}>
-          <Ionicons
-            name="layers-outline"
-            size={32}
-            style={styles.button}
-            color={doubleCaptureMode ? "#ffaa00" : "white"}
-          />
-        </Animated.View>
-      </TouchableOpacity> */}
-
-      {/* <TouchableOpacity onPress={() => toggleMode("zoom")}>
-        <Animated.View style={animatedStyle}>
-          <Ionicons
-            name="aperture-outline"
-            size={32}
-            style={styles.button}
-            color={activeControl === "zoom" ? "#ffaa00" : "white"}
-          />
-        </Animated.View>
-      </TouchableOpacity> */}
-
-      <TouchableOpacity>
-        <Animated.View style={animatedStyle}>
-          <Popover
-            isVisible={open}
-            onRequestClose={() => setOpen(false)}
-            backgroundStyle={{ backgroundColor: "transparent" }}
-            popoverStyle={{ backgroundColor: "transparent" }}
-            from={
-              <TouchableOpacity onPress={() => setOpen(true)}>
-                <Ionicons name="cloud-outline" size={32} color="white" />
-              </TouchableOpacity>
-            }
-          >
-            <PhotoWeather data={data} place={place} />
-          </Popover>
-        </Animated.View>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => toggleMode("lut")}>
-        <Animated.View style={animatedStyle}>
-          <Ionicons
-            name="color-filter-outline"
-            size={32}
-            style={styles.button}
-            color={
-              activeControl === "lut"
-                ? "#ffaa00"
-                : selectedLutId !== "none"
-                  ? "#ffaa00"
-                  : "white"
-            }
-          />
-        </Animated.View>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.push("components/Settings")}>
-        <Animated.View style={animatedStyle}>
-          <Ionicons
-            name="settings-outline"
-            size={32}
-            color="white"
-            style={styles.button}
-          />
-        </Animated.View>
-      </TouchableOpacity>
+        return (
+          <TouchableOpacity key={controlId} onPress={control.onPress}>
+            <Animated.View style={animatedStyle}>
+              <Ionicons
+                name={control.icon}
+                size={32}
+                style={styles.button}
+                color={control.active ? "#ffaa00" : "white"}
+              />
+            </Animated.View>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
