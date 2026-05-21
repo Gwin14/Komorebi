@@ -5,27 +5,20 @@ import { useRouter } from "expo-router";
 import {
   Image,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
-import {
-  addCustomLUT,
-  parseCubeFile,
-  removeCustomLUT,
-} from "../utils/lutProcessor";
-import {
-  TOP_BAR_CONTROLS,
-  TOP_BAR_MAX_CONTROLS,
-} from "../utils/topBarControls";
+import { addCustomLUT, parseCubeFile, removeCustomLUT } from "../utils/lutProcessor";
+import { TOP_BAR_CONTROLS, TOP_BAR_MAX_CONTROLS } from "../utils/topBarControls";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import ExternalLink from "./ExternalLink";
 import LUTUploadButton from "./LUTUploadButton";
+import styles from "./Settings.styles";
 
 export default function Settings() {
   const router = useRouter();
@@ -165,7 +158,7 @@ export default function Settings() {
       >
         <Text style={styles.title}>Página de Configurações</Text>
 
-        <View style={{ width: "90%", marginTop: 20 }}>
+        <View style={styles.togglesSection}>
           <CustomToggle
             label="Estilo Retrô do Viewfinder"
             value={retroStyle}
@@ -207,7 +200,7 @@ export default function Settings() {
 
         <View style={styles.divider} />
 
-        <View style={{ width: "98%" }}>
+        <View style={styles.topBarSection}>
           <View style={styles.listHeader}>
             <Text style={styles.sectionTitle}>Controles da TopBar</Text>
           </View>
@@ -306,7 +299,7 @@ export default function Settings() {
                       name="add-circle-outline"
                       size={20}
                       color="#ffaa00"
-                      style={{ marginRight: 10 }}
+                      style={styles.availableIcon}
                     />
                     <Text style={styles.controlName}>{control.label}</Text>
                   </TouchableOpacity>
@@ -318,7 +311,7 @@ export default function Settings() {
 
         <View style={styles.divider} />
 
-        <View style={{ width: "90%" }}>
+        <View style={styles.lutSection}>
           <View style={styles.listHeader}>
             <Text style={styles.sectionTitle}>LUTs carregados</Text>
             <LUTUploadButton onPress={handleUploadLUT} />
@@ -348,7 +341,7 @@ export default function Settings() {
             router.push("components/ExifFrame");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
-          style={{ width: "100%", alignItems: "center" }}
+          style={styles.linkButtonWrapper}
         >
           <ExternalLink label="Gerador de Exif Frame" disabled />
         </TouchableOpacity>
@@ -358,7 +351,7 @@ export default function Settings() {
             router.push("components/Feedback");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
-          style={{ width: "100%", alignItems: "center" }}
+          style={styles.linkButtonWrapper}
         >
           <ExternalLink
             label="Dê seu feedback"
@@ -372,7 +365,7 @@ export default function Settings() {
             router.push("components/CommingSoon");
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
-          style={{ width: "100%", alignItems: "center" }}
+          style={styles.linkButtonWrapper}
         >
           <ExternalLink label="Em breve..." disabled />
         </TouchableOpacity>
@@ -454,18 +447,7 @@ export default function Settings() {
               });
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           }}
-          style={{
-            width: "90%",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-around",
-            marginBottom: 50,
-            marginTop: 20,
-            borderWidth: 4,
-            borderColor: "#191919af",
-            padding: 12,
-            borderRadius: 12,
-          }}
+          style={styles.siteButton}
         >
           <Image
             source={require("../../assets/images/fotoessencia.jpeg")}
@@ -473,7 +455,7 @@ export default function Settings() {
           />
 
           <View>
-            <Text style={[styles.text, { fontWeight: "bold" }]}>
+            <Text style={[styles.text, styles.siteTitle]}>
               Site oficial
             </Text>
             <Text style={styles.text}>Conheça minha arte!</Text>
@@ -487,150 +469,3 @@ export default function Settings() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "#000",
-    flex: 1,
-    alignItems: "center",
-  },
-  scrollView: {
-    flex: 1,
-    width: "100%",
-  },
-  scrollContent: {
-    alignItems: "center",
-    paddingBottom: 20,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 20,
-    color: "#fff",
-    marginTop: 20,
-  },
-  divider: {
-    height: 1,
-    width: "90%",
-    backgroundColor: "#55555563",
-    marginVertical: 12,
-  },
-  socialIcon: {
-    width: 40,
-    height: 40,
-    aspectRatio: 1,
-    resizeMode: "contain",
-    marginbottom: 100,
-  },
-  siteIcon: {
-    width: 60,
-    height: 60,
-    aspectRatio: 1,
-    resizeMode: "contain",
-    marginbottom: 100,
-    borderRadius: "50%",
-  },
-  socialContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    width: "90%",
-    marginTop: 20,
-  },
-  customLutList: {
-    width: "100%",
-    paddingTop: 12,
-  },
-  listHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 12,
-  },
-  sectionTitle: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  draggableList: {
-    width: "100%",
-    marginTop: -12,
-  },
-  draggableRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#ffffff0d",
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-    marginHorizontal: 16,
-  },
-  draggingRow: {
-    backgroundColor: "rgba(255, 170, 0, 0.2)",
-    borderLeftColor: "#fff",
-  },
-  controlRowLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  dragHandle: {
-    padding: 8,
-    marginRight: 4,
-  },
-  controlName: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  rowActions: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  smallButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 4,
-  },
-  smallButtonDisabled: {
-    backgroundColor: "rgba(255, 255, 255, 0.02)",
-  },
-  removeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 4,
-  },
-  availableList: {
-    width: "100%",
-    paddingHorizontal: 16,
-  },
-  availableItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.03)",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#ffffff0d",
-  },
-  text: {
-    color: "#fff",
-    fontSize: 16,
-  },
-  backButton: {
-    position: "absolute",
-    top: 59,
-    left: 16,
-    zIndex: 10,
-  },
-});

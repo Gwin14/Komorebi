@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Pressable, StyleSheet } from "react-native";
+import { Pressable } from "react-native";
+import styles from "./LUTUploadButton.styles";
 
 export default function LUTUploadButton({ onPress, disabled = false }) {
   const handlePress = () => {
@@ -23,14 +24,3 @@ export default function LUTUploadButton({ onPress, disabled = false }) {
   );
 }
 
-const styles = StyleSheet.create({
-  button: {
-    padding: 8,
-  },
-  buttonPressed: {
-    opacity: 0.7,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-});

@@ -2,11 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import PhotoWeather from "./PhotoWeather";
+import styles from "./TopBar.styles";
 
 export default function TopBar({
   flash,
@@ -171,12 +172,3 @@ export default function TopBar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  buttonsContainer: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-around",
-  },
-  button: {},
-});

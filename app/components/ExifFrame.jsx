@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { WebView } from "react-native-webview";
 import BackButton from "./BackButton";
 import LoadingScreen from "./LoadingScreen";
+import styles from "./ExifFrame.styles";
 
 export default function ExifFrame() {
   const [loading, setLoading] = useState(true);
@@ -22,9 +23,3 @@ export default function ExifFrame() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});

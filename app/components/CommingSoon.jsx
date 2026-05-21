@@ -1,8 +1,9 @@
 import Feather from "@expo/vector-icons/Feather";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { FlatList, StyleSheet, Text, View } from "react-native";
+import { FlatList, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Backbutton from "../components/BackButton";
+import styles from "./CommingSoon.styles";
 
 export default function ComingSoon() {
   // Itens separados por seção
@@ -37,14 +38,18 @@ export default function ComingSoon() {
   ];
 
   // renderItem agora recebe IconComponent e iconName como parâmetros
-  const renderItem =
-    (IconComponent, iconName) =>
-    ({ item }) => (
+  const renderItem = (IconComponent, iconName) => {
+    function SectionItem({ item }) {
+      return (
       <View style={styles.itemContainer}>
         <IconComponent name={iconName} size={24} color="#ffaa00ff" />
         <Text style={styles.text}>{item.title}</Text>
       </View>
-    );
+      );
+    }
+
+    return SectionItem;
+  };
 
   const renderSection = (title, data, IconComponent, iconName) => (
     <View style={styles.section}>
@@ -92,34 +97,3 @@ export default function ComingSoon() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  header: {
-    color: "#fff",
-    fontSize: 28,
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  section: {
-    marginBottom: 30,
-  },
-  sectionHeader: {
-    color: "#ffffff",
-    fontSize: 22,
-    marginBottom: 15,
-  },
-  itemContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 8,
-  },
-  text: {
-    color: "#fff",
-    fontSize: 18,
-    marginLeft: 10,
-  },
-});

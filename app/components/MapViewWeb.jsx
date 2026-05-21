@@ -1,4 +1,5 @@
 import { WebView } from "react-native-webview";
+import styles from "./MapViewWeb.styles";
 
 export function MapViewWeb({ latitude, longitude }) {
   if (typeof latitude !== "number" || typeof longitude !== "number") {
@@ -89,13 +90,7 @@ export function MapViewWeb({ latitude, longitude }) {
       source={{ html }}
       javaScriptEnabled
       domStorageEnabled
-      style={{
-        width: "100%",
-        height: 250,
-        borderRadius: 0,
-        overflow: "hidden",
-        backgroundColor: "transparent",
-      }}
+      style={styles.webView}
     />
   );
 }

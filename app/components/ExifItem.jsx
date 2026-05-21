@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
+import styles from "./ExifItem.styles";
 
 export function ExifItem({ icon, label, value }) {
   return (
@@ -12,21 +13,3 @@ export function ExifItem({ icon, label, value }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  label: {
-    color: "#aaa",
-    marginLeft: 8,
-    marginRight: 4,
-    fontSize: 14,
-  },
-  value: {
-    color: "#fff",
-    fontSize: 14,
-  },
-});

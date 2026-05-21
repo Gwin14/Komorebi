@@ -8,10 +8,9 @@ import {
   Modal,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ExifItem } from "../components/ExifItem";
@@ -20,6 +19,7 @@ import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
 import BackButton from "./BackButton";
 import LoadingScreen from "./LoadingScreen";
+import styles from "./Galery.styles";
 
 export default function Galery() {
   const [permission, requestPermission] = MediaLibrary.usePermissions();
@@ -107,10 +107,10 @@ export default function Galery() {
 
   if (!permission.granted) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={styles.permissionContainer}>
         <Text>Permissão para acessar fotos é necessária.</Text>
         <Pressable onPress={requestPermission}>
-          <Text style={{ color: "blue", marginTop: 8 }}>Permitir acesso</Text>
+          <Text style={styles.permissionButtonText}>Permitir acesso</Text>
         </Pressable>
       </View>
     );
@@ -130,10 +130,10 @@ export default function Galery() {
         data={photos}
         numColumns={3}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 2 }}
+        contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
           <TouchableOpacity
-            style={{ flex: 1 / 3, padding: 0.9 }}
+            style={styles.photoItem}
             onPress={() => {
               setModalVisible(true);
               setSelectedImage(item.uri);
@@ -145,7 +145,7 @@ export default function Galery() {
           </TouchableOpacity>
         )}
         ListEmptyComponent={
-          <View style={{ alignItems: "center", marginTop: 40 }}>
+          <View style={styles.emptyContainer}>
             <Text>Nenhuma foto encontrada no álbum Komorebi.</Text>
           </View>
         }
@@ -167,20 +167,11 @@ export default function Galery() {
         >
           <Image
             source={{ uri: selectedImage }}
-            style={{ width: "100%", height: 350 }}
+            style={styles.selectedImage}
           />
 
           <View style={styles.header}>
-            <Text
-              style={{
-                color: "#fff",
-                fontWeight: "bold",
-                fontSize: 20,
-                margin: 10,
-                textAlign: "left",
-                paddingLeft: 15,
-              }}
-            >
+            <Text style={styles.infoTitle}>
               Informações
             </Text>
             <TouchableOpacity
@@ -195,10 +186,7 @@ export default function Galery() {
             >
               <Image
                 source={require("../../assets/images/exif-frame-icon.png")}
-                style={{
-                  width: 30,
-                  height: 30,
-                }}
+                style={styles.exifFrameIcon}
               />
             </TouchableOpacity>
           </View>
@@ -231,7 +219,7 @@ export default function Galery() {
 
             if (lat != null && lon != null) {
               return (
-                <View style={{ width: "95%", marginBottom: 20 }}>
+                <View style={styles.mapContainer}>
                   <MapViewWeb latitude={Number(lat)} longitude={Number(lon)} />
                 </View>
               );
@@ -239,15 +227,7 @@ export default function Galery() {
             return null;
           })()}
 
-          <View
-            style={{
-              width: "100%",
-              alignItems: "center",
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "space-around",
-            }}
-          >
+          <View style={styles.modalActions}>
             <Button
               title="Fechar"
               onPress={() => setModalVisible(false)}
@@ -265,52 +245,3 @@ export default function Galery() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  title: {
-    fontSize: 25,
-    fontWeight: "bold",
-    marginBottom: 20,
-    color: "#fff",
-    textAlign: "center",
-  },
-  exifFrameButton: {
-    marginRight: 15,
-    padding: 6,
-    borderRadius: 6,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-  },
-  image: {
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: 2,
-    // margin: 0.9,
-  },
-  modal: {
-    flex: 1,
-    backgroundColor: "#000000",
-  },
-  modalContent: {
-    alignItems: "center",
-    paddingBottom: 40,
-  },
-  efixContainer: {
-    flexDirection: "row", // organiza os itens horizontalmente
-    flexWrap: "wrap", // permite quebra de linha
-    justifyContent: "space-between", // espaçamento entre as colunas
-    padding: 10,
-  },
-  exifItemWrapper: {
-    width: "45%", // cerca de metade da tela (menos espaço de margem)
-    marginBottom: 10,
-  },
-});
