@@ -35,7 +35,7 @@ export default function useDeviceOrientation() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [rotation]);
 
   return animatedStyle;
 }

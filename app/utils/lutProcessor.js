@@ -570,7 +570,7 @@ const applyExifToImage = (base64Data, exifData, originalExifObj = null) => {
     } else {
       try {
         exifObj = piexif.load(dataUrl);
-      } catch (e) {
+      } catch (_e) {
         // Se não houver EXIF existente, criar novo objeto
         exifObj = { "0th": {}, Exif: {}, GPS: {}, "1st": {}, thumbnail: null };
       }
@@ -786,7 +786,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
     return () => {
       isMounted = false;
     };
-  }, [imageData]);
+  }, [imageData, onError]);
 
   if (!imageData || !imageData.needsProcessing || !html) {
     return null;

@@ -79,7 +79,8 @@ export function usePhysicalCameraDevices(facing = "back") {
     setActiveLensId(wide?.id ?? lenses[0].id);
   }, [lenses, activeLensId]);
 
-  const activeLens = lenses.find((lens) => lens.id === activeLensId) ?? lenses[0];
+  const activeLens =
+    lenses.find((lens) => lens.id === activeLensId) ?? lenses[0];
 
   return {
     lenses,
