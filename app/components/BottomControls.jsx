@@ -5,13 +5,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Animated, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
 import Shutter from "./shutter";
+import styles from "./BottomControls.styles";
 
 export default function BottomControls({
   controlsAnim,
@@ -164,7 +165,7 @@ export default function BottomControls({
                 <Animated.View
                   pointerEvents="none"
                   style={[
-                    StyleSheet.absoluteFillObject,
+                    styles.shimmerOverlay,
                     {
                       transform: [
                         {
@@ -187,7 +188,7 @@ export default function BottomControls({
                     ]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 0 }}
-                    style={{ flex: 1 }}
+                    style={styles.shimmerGradient}
                   />
                 </Animated.View>
               )}
@@ -246,64 +247,3 @@ export default function BottomControls({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  shutterContainer: {
-    width: "100%",
-    alignItems: "center",
-    marginBottom: 54,
-  },
-  shutterRow: {
-    flexDirection: "row",
-    width: "100%",
-    justifyContent: "space-between",
-    alignItems: "center",
-    height: 100,
-    paddingHorizontal: 20,
-  },
-  sideButton: {
-    flex: 1,
-    alignItems: "center",
-  },
-  galleryThumbInner: {
-    width: 52,
-    height: 52,
-    borderRadius: 8,
-    overflow: "hidden",
-    backgroundColor: "#111",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-  },
-
-  galleryImage: {
-    width: "100%",
-    height: "100%",
-  },
-  toolsContainer: {
-    width: "100%",
-
-    justifyContent: "center",
-  },
-  lutSelectorWrapper: {
-    flex: 1,
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  rightControls: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-  },
-
-  flipButton: {
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.04)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.06)",
-
-  },
-});

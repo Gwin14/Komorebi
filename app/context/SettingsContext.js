@@ -1,103 +1,59 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useState } from "react";
 import {
-  DEFAULT_TOP_BAR_CONTROLS,
-  normalizeTopBarControls,
-} from "../utils/topBarControls";
+  loadStoredSettings,
+  saveStoredSetting,
+  SETTINGS_STORAGE_KEYS,
+} from "../utils/settingsStorage";
+import { DEFAULT_TOP_BAR_CONTROLS } from "../utils/topBarControls";
 
 const SettingsContext = createContext(null);
 
-const STORAGE_KEYS = {
-  RETRO_STYLE: "@settings/retroStyle",
-  GRID_VISIBLE: "@settings/gridVisible",
-  SHUTTER_SOUND: "@settings/shutterSound",
-  LOCATION: "@settings/location",
-  SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
-  FIRSTTIME: "@settings/firstTime",
-  CUSTOM_LUTS: "@settings/customLuts",
-  TOP_BAR_BELOW: "@settings/topBarBelow",
-  TOP_BAR_CONTROLS: "@settings/topBarControls",
+const DEFAULT_SETTINGS = {
+  retroStyle: false,
+  gridVisible: false,
+  shutterSound: false,
+  location: true,
+  saveOriginalWithLUT: false,
+  firstTime: true,
+  customLuts: [],
+  topBarBelow: false,
+  topBarControls: DEFAULT_TOP_BAR_CONTROLS,
 };
 
 export const SettingsProvider = ({ children }) => {
-  const [retroStyle, setRetroStyle] = useState(false);
-  const [gridVisible, setGridVisible] = useState(false);
+  const [retroStyle, setRetroStyle] = useState(DEFAULT_SETTINGS.retroStyle);
+  const [gridVisible, setGridVisible] = useState(DEFAULT_SETTINGS.gridVisible);
   const [loading, setLoading] = useState(true);
-  const [shutterSound, setShutterSound] = useState(false);
-  const [location, setLocation] = useState(true);
-  const [saveOriginalWithLUT, setSaveOriginalWithLUT] = useState(false);
-  const [firstTime, setFirstTime] = useState(true);
-  const [customLuts, setCustomLuts] = useState([]);
-  const [topBarBelow, setTopBarBelow] = useState(false);
+  const [shutterSound, setShutterSound] = useState(
+    DEFAULT_SETTINGS.shutterSound,
+  );
+  const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
+  const [saveOriginalWithLUT, setSaveOriginalWithLUT] = useState(
+    DEFAULT_SETTINGS.saveOriginalWithLUT,
+  );
+  const [firstTime, setFirstTime] = useState(DEFAULT_SETTINGS.firstTime);
+  const [customLuts, setCustomLuts] = useState(DEFAULT_SETTINGS.customLuts);
+  const [topBarBelow, setTopBarBelow] = useState(
+    DEFAULT_SETTINGS.topBarBelow,
+  );
   const [topBarControls, setTopBarControls] = useState(
-    DEFAULT_TOP_BAR_CONTROLS,
+    DEFAULT_SETTINGS.topBarControls,
   );
 
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const savedRetroStyle = await AsyncStorage.getItem(
-          STORAGE_KEYS.RETRO_STYLE,
-        );
+        const savedSettings = await loadStoredSettings(DEFAULT_SETTINGS);
 
-        const savedGrid = await AsyncStorage.getItem(STORAGE_KEYS.GRID_VISIBLE);
-
-        const savedShutterSound = await AsyncStorage.getItem(
-          STORAGE_KEYS.SHUTTER_SOUND,
-        );
-
-        const savedFirstTime = await AsyncStorage.getItem(
-          STORAGE_KEYS.FIRSTTIME,
-        );
-
-        const savedSaveOriginalWithLUT = await AsyncStorage.getItem(
-          STORAGE_KEYS.SAVE_ORIGINAL_WITH_LUT,
-        );
-
-        const savedLocation = await AsyncStorage.getItem(STORAGE_KEYS.LOCATION);
-
-        const savedCustomLuts = await AsyncStorage.getItem(
-          STORAGE_KEYS.CUSTOM_LUTS,
-        );
-
-        const savedTopBarBelow = await AsyncStorage.getItem(
-          STORAGE_KEYS.TOP_BAR_BELOW,
-        );
-        const savedTopBarControls = await AsyncStorage.getItem(
-          STORAGE_KEYS.TOP_BAR_CONTROLS,
-        );
-
-        // ----------
-
-        if (savedLocation !== null) setLocation(savedLocation === "true");
-
-        if (savedTopBarBelow !== null)
-          setTopBarBelow(savedTopBarBelow === "true");
-
-        if (savedTopBarControls !== null) {
-          try {
-            setTopBarControls(
-              normalizeTopBarControls(JSON.parse(savedTopBarControls)),
-            );
-          } catch (error) {
-            console.error("Erro ao ler topBarControls", error);
-          }
-        }
-
-        if (savedRetroStyle !== null) setRetroStyle(savedRetroStyle === "true");
-
-        if (savedGrid !== null) setGridVisible(savedGrid === "true");
-
-        if (savedShutterSound !== null)
-          setShutterSound(savedShutterSound === "true");
-
-        if (savedSaveOriginalWithLUT !== null)
-          setSaveOriginalWithLUT(savedSaveOriginalWithLUT === "true");
-
-        if (savedFirstTime !== null) setFirstTime(savedFirstTime === "true");
-
-        if (savedCustomLuts !== null)
-          setCustomLuts(JSON.parse(savedCustomLuts));
+        setRetroStyle(savedSettings.retroStyle);
+        setGridVisible(savedSettings.gridVisible);
+        setShutterSound(savedSettings.shutterSound);
+        setLocation(savedSettings.location);
+        setSaveOriginalWithLUT(savedSettings.saveOriginalWithLUT);
+        setFirstTime(savedSettings.firstTime);
+        setCustomLuts(savedSettings.customLuts);
+        setTopBarBelow(savedSettings.topBarBelow);
+        setTopBarControls(savedSettings.topBarControls);
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
@@ -111,29 +67,38 @@ export const SettingsProvider = ({ children }) => {
   // 💾 Salvar "Salvar Original"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(STORAGE_KEYS.RETRO_STYLE, retroStyle.toString());
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.RETRO_STYLE,
+        retroStyle.toString(),
+      );
     }
   }, [retroStyle, loading]);
 
   // 💾 Salvar "Grade da Câmera"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(STORAGE_KEYS.GRID_VISIBLE, gridVisible.toString());
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.GRID_VISIBLE,
+        gridVisible.toString(),
+      );
     }
   }, [gridVisible, loading]);
 
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(STORAGE_KEYS.SHUTTER_SOUND, shutterSound.toString());
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.SHUTTER_SOUND,
+        shutterSound.toString(),
+      );
     }
   }, [shutterSound, loading]);
 
   // 💾 Salvar "Salvar original sem LUT"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(
-        STORAGE_KEYS.SAVE_ORIGINAL_WITH_LUT,
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.SAVE_ORIGINAL_WITH_LUT,
         saveOriginalWithLUT.toString(),
       );
     }
@@ -142,8 +107,8 @@ export const SettingsProvider = ({ children }) => {
   // 💾 Salvar "Custom LUTs"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(
-        STORAGE_KEYS.CUSTOM_LUTS,
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.CUSTOM_LUTS,
         JSON.stringify(customLuts),
       );
     }
@@ -152,29 +117,38 @@ export const SettingsProvider = ({ children }) => {
   // 💾 Salvar "Localização"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(STORAGE_KEYS.LOCATION, location.toString());
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.LOCATION,
+        location.toString(),
+      );
     }
   }, [location, loading]);
 
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(STORAGE_KEYS.FIRSTTIME, firstTime.toString());
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.FIRSTTIME,
+        firstTime.toString(),
+      );
     }
   }, [firstTime, loading]);
 
   // 💾 Salvar "TopBar Below"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(STORAGE_KEYS.TOP_BAR_BELOW, topBarBelow.toString());
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.TOP_BAR_BELOW,
+        topBarBelow.toString(),
+      );
     }
   }, [topBarBelow, loading]);
 
   // 💾 Salvar "TopBar Controls"
   useEffect(() => {
     if (!loading) {
-      AsyncStorage.setItem(
-        STORAGE_KEYS.TOP_BAR_CONTROLS,
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.TOP_BAR_CONTROLS,
         JSON.stringify(topBarControls),
       );
     }

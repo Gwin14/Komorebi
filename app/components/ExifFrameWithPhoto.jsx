@@ -1,10 +1,11 @@
 import * as FileSystem from "expo-file-system/legacy";
 import { useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { WebView } from "react-native-webview";
 import BackButton from "./BackButton";
 import LoadingScreen from "./LoadingScreen";
+import styles from "./ExifFrameWithPhoto.styles";
 
 export default function ExifFrameWithPhoto() {
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,3 @@ export default function ExifFrameWithPhoto() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-});

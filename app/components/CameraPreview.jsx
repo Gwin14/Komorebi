@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { StyleSheet, View } from "react-native";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef
+} from "react";
+import { View } from "react-native";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera } from "react-native-vision-camera-face-detector";
+import styles from "./CameraPreview.styles";
 
 export default function CameraPreview({
   retroStyle,
@@ -133,38 +139,3 @@ export default function CameraPreview({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  cameraWrapper: {
-    width: "100%",
-    overflow: "hidden",
-  },
-  retroStyle: {
-    alignSelf: "center",
-    width: "90%",
-    overflow: "hidden",
-    borderRadius: 10,
-  },
-  camera: { flex: 1 },
-  gridOverlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  gridLineVertical: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: 1,
-    backgroundColor: "rgba(255,255,255,0.22)",
-  },
-  gridLineHorizontal: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.22)",
-  },
-});

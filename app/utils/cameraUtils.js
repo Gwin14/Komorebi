@@ -20,6 +20,53 @@ export async function saveToAlbum(uri) {
   }
 }
 
+const getLocationExif = async (locationEnabled) => {
+  const additionalExif = {};
+
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+
+    if (status !== "granted" || !locationEnabled) {
+      additionalExif.removeGPS = true;
+      return additionalExif;
+    }
+
+    let gpsLocation = await Location.getLastKnownPositionAsync({});
+    if (!gpsLocation) {
+      gpsLocation = await Location.getCurrentPositionAsync({});
+    }
+
+    if (gpsLocation) {
+      additionalExif.GPSLatitude = gpsLocation.coords.latitude;
+      additionalExif.GPSLongitude = gpsLocation.coords.longitude;
+      additionalExif.GPSAltitude = gpsLocation.coords.altitude;
+    }
+  } catch (error) {
+    console.log("Erro ao obter localização:", error);
+    additionalExif.removeGPS = true;
+  }
+
+  return additionalExif;
+};
+
+const createProcessingData = ({
+  aspectRatio,
+  doubleCaptureMode,
+  exifData,
+  imageUri,
+  saveOriginalWithLUT,
+}) => ({
+  needsProcessing: true,
+  imageUri,
+  cube: null,
+  originalUri: imageUri,
+  exifData,
+  grainConfig: null,
+  doubleCaptureMode,
+  saveOriginalWithLUT,
+  aspectRatio,
+});
+
 export const takePicture = async ({
   cameraRef,
   cameraReady,
@@ -35,101 +82,51 @@ export const takePicture = async ({
   saveOriginalWithLUT = false,
   aspectRatio = 3 / 4,
 }) => {
-  if (cameraRef.current && cameraReady && !isProcessing) {
-    try {
-      setIsProcessing(true);
+  if (!cameraRef.current || !cameraReady || isProcessing) return;
 
-      let additionalExif = {};
-      try {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status === "granted" && location) {
-          let gpsLocation = await Location.getLastKnownPositionAsync({});
-          if (!gpsLocation) {
-            gpsLocation = await Location.getCurrentPositionAsync({});
-          }
-          if (gpsLocation) {
-            additionalExif = {
-              GPSLatitude: gpsLocation.coords.latitude,
-              GPSLongitude: gpsLocation.coords.longitude,
-              GPSAltitude: gpsLocation.coords.altitude,
-            };
-          }
-        } else {
-          additionalExif.removeGPS = true;
-        }
-      } catch (e) {
-        console.log("Erro ao obter localização:", e);
-        additionalExif.removeGPS = true;
-      }
+  try {
+    setIsProcessing(true);
 
-      const photo = await cameraRef.current.takePhoto({
-        flash: flash === "on" ? "on" : "off",
-      });
+    const additionalExif = await getLocationExif(location);
+    const photo = await cameraRef.current.takePhoto({
+      flash: flash === "on" ? "on" : "off",
+    });
 
-      const uri = photo?.path || photo?.filePath || photo?.uri;
-      const completeExif = { ...additionalExif, aspectRatio };
+    const uri = photo?.path || photo?.filePath || photo?.uri;
+    const completeExif = { ...additionalExif, aspectRatio };
+    const fallbackProcessingData = createProcessingData({
+      aspectRatio,
+      doubleCaptureMode,
+      exifData: completeExif,
+      imageUri: uri,
+      saveOriginalWithLUT,
+    });
 
-      if (selectedLutId !== "none" && lutsLoaded) {
-        const processingInfo = await applyLUTToImage(
-          uri,
-          selectedLutId,
-          completeExif,
-        );
-        processingInfo.doubleCaptureMode = doubleCaptureMode;
-        processingInfo.saveOriginalWithLUT = saveOriginalWithLUT;
-        processingInfo.originalUri = uri;
-        processingInfo.aspectRatio = aspectRatio;
+    if (selectedLutId !== "none" && lutsLoaded) {
+      const processingInfo = await applyLUTToImage(
+        uri,
+        selectedLutId,
+        completeExif,
+      );
 
-        if (processingInfo.needsProcessing) {
-          setProcessingData(processingInfo);
-          setIsProcessing(false);
-        } else {
-          // Mesmo sem LUT, processar para aplicar metadados
-          setProcessingData({
-            needsProcessing: true,
-            imageUri: uri,
-            cube: null,
-            originalUri: uri,
-            exifData: completeExif,
-            grainConfig: null,
-            doubleCaptureMode,
-            saveOriginalWithLUT,
-            aspectRatio,
-          });
-          setIsProcessing(false);
-        }
-      } else if (doubleCaptureMode) {
+      if (processingInfo.needsProcessing) {
         setProcessingData({
-          needsProcessing: true,
-          imageUri: uri,
-          cube: null,
-          originalUri: uri,
-          exifData: completeExif,
-          grainConfig: null,
-          doubleCaptureMode: true,
+          ...processingInfo,
+          doubleCaptureMode,
           saveOriginalWithLUT,
+          originalUri: uri,
           aspectRatio,
         });
-        setIsProcessing(false);
       } else {
-        // Sempre processar para aplicar metadados e crop
-        setProcessingData({
-          needsProcessing: true,
-          imageUri: uri,
-          cube: null,
-          originalUri: uri,
-          exifData: completeExif,
-          grainConfig: null,
-          doubleCaptureMode: false,
-          saveOriginalWithLUT,
-          aspectRatio,
-        });
-        setIsProcessing(false);
+        setProcessingData(fallbackProcessingData);
       }
-    } catch (error) {
-      console.error("Erro ao tirar foto:", error);
-      setIsProcessing(false);
+    } else {
+      setProcessingData(fallbackProcessingData);
     }
+  } catch (error) {
+    console.error("Erro ao tirar foto:", error);
+  } finally {
+    setIsProcessing(false);
   }
 };
 

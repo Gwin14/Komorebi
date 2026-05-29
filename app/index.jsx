@@ -1,31 +1,24 @@
-import * as Location from "expo-location";
-import * as MediaLibrary from "expo-media-library";
-import { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { runOnJS, useSharedValue } from "react-native-reanimated";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Text, View } from "react-native";
+import { GestureDetector } from "react-native-gesture-handler";
+import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Camera } from "react-native-vision-camera";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import ExposureSlider from "./components/ExposureSlider";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
+import useCameraBootstrap from "./hooks/useCameraBootstrap";
+import useCameraGestures from "./hooks/useCameraGestures";
+import useControlsAnimation from "./hooks/useControlsAnimation";
+import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
+import useShutterAnimation from "./hooks/useShutterAnimation";
+import useVolumeShutter from "./hooks/useVolumeShutter";
 import { usePhysicalCameraDevices } from "./hooks/uselensselector";
-import {
-  copyExifFromImage,
-  cropImageToInverseAspect,
-  onCameraReady,
-  saveToAlbum,
-  takePicture,
-} from "./utils/cameraUtils";
-import {
-  AVAILABLE_LUTS,
-  loadAllLUTs,
-  loadCustomLUTs,
-  LUTProcessor,
-} from "./utils/lutProcessor";
+import styles from "./index.styles";
+import { onCameraReady, takePicture } from "./utils/cameraUtils";
+import { AVAILABLE_LUTS, LUTProcessor } from "./utils/lutProcessor";
 
 export default function App() {
   const {
@@ -55,88 +48,41 @@ export default function App() {
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [activeControl, setActiveControl] = useState("none");
-  const controlsAnim = useRef(new Animated.Value(0)).current;
-  const shutterAnim = useRef(new Animated.Value(0)).current;
 
-  const [cameraPermission, setCameraPermission] = useState(null);
-  const [hasMediaPermission, setHasMediaPermission] = useState(null);
-  const [lutsLoaded, setLutsLoaded] = useState(false);
-  const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
-
-  const [processingQueue, setProcessingQueue] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [selectedLutId, setSelectedLutId] = useState("none");
 
   const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
 
-  const availableLuts = [...AVAILABLE_LUTS, ...customLuts];
+  const availableLuts = useMemo(
+    () => [...AVAILABLE_LUTS, ...customLuts],
+    [customLuts],
+  );
 
-  // 🆕 Hook de detecção de lentes físicas reais
   const { lenses, activeLens, activeLensId, setActiveLensId } =
     usePhysicalCameraDevices(facing);
 
-  const handleSelectLens = (id) => {
-    setActiveLensId(id);
-  };
+  const { cameraPermission, hasMediaPermission, lutsLoaded } =
+    useCameraBootstrap({ customLuts, firstTime });
 
-  // --- GESTOS ---
+  const controlsAnim = useControlsAnimation(activeControl);
+  const { animateShutter, shutterAnim } = useShutterAnimation();
+  const composedGestures = useCameraGestures({
+    lastZoom,
+    maxZoom,
+    minZoom,
+    setZoom,
+    zoomSV,
+  });
 
-  const pinchGesture = Gesture.Pinch()
-    .onBegin(() => {
-      lastZoom.value = zoomSV.value;
-    })
-    .onUpdate((e) => {
-      const scale = e.scale;
-      const min = minZoom;
-      const max = maxZoom;
-      const normalized = (lastZoom.value - min) / (max - min);
-      const newNormalized = Math.min(
-        Math.max(normalized + (scale - 1) * 0.25, 0),
-        1,
-      );
-      const newZoom = min + newNormalized * (max - min);
-      zoomSV.value = newZoom;
-      runOnJS(setZoom)(newZoom);
-    });
-
-  const doubleTapGesture = Gesture.Tap()
-    .numberOfTaps(2)
-    .onStart(() => {
-      // runOnJS(setActiveControl)("zoom");
-      console.log("Double tap detected");
-    });
-
-  const composedGestures = Gesture.Simultaneous(pinchGesture, doubleTapGesture);
-
-  // --- EFEITOS ---
-
-  useEffect(() => {
-    // Não pedir permissões enquanto a welcome screen estiver aberta
-    if (firstTime) return;
-
-    (async () => {
-      await loadAllLUTs();
-      await loadCustomLUTs(customLuts);
-      setLutsLoaded(true);
-
-      const permission = await Camera.requestCameraPermission();
-      setCameraPermission(permission);
-
-      const { status } = await MediaLibrary.requestPermissionsAsync();
-      setHasMediaPermission(status === "granted");
-
-      await Location.requestForegroundPermissionsAsync();
-    })();
-  }, [customLuts, firstTime]);
-
-  useEffect(() => {
-    const showTools = activeControl !== "none";
-    Animated.timing(controlsAnim, {
-      toValue: showTools ? 1 : 0,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, [activeControl]);
+  const {
+    enqueueProcessing,
+    galleryRefreshKey,
+    handleProcessed,
+    isProcessing,
+    processingQueue,
+    removeCurrentProcessing,
+    setIsProcessing,
+  } = usePhotoProcessingQueue(hasMediaPermission);
 
   useEffect(() => {
     if (
@@ -152,31 +98,18 @@ export default function App() {
   useEffect(() => {
     setZoom(1);
     zoomSV.value = 1;
-  }, [facing]);
+  }, [facing, zoomSV]);
 
-  const toggleMode = (mode) => {
+  const toggleMode = useCallback((mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
-  };
+  }, []);
 
-  const toggleVerticalMode = () => {
+  const toggleVerticalMode = useCallback(() => {
     setVerticalMode((prev) => !prev);
-  };
+  }, []);
 
-  const handleTakePicture = () => {
-    // animação de "shutter"
-    shutterAnim.setValue(0);
-    Animated.sequence([
-      Animated.timing(shutterAnim, {
-        toValue: 1,
-        duration: 80,
-        useNativeDriver: true,
-      }),
-      Animated.timing(shutterAnim, {
-        toValue: 0,
-        duration: 120,
-        useNativeDriver: true,
-      }),
-    ]).start();
+  const handleTakePicture = useCallback(() => {
+    animateShutter();
 
     takePicture({
       cameraRef,
@@ -187,64 +120,52 @@ export default function App() {
       lutsLoaded,
       hasMediaPermission,
       flash,
-      setProcessingData: (data) =>
-        setProcessingQueue((prev) => [...prev, data]),
+      setProcessingData: enqueueProcessing,
       location,
       doubleCaptureMode,
       saveOriginalWithLUT,
       aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
     });
-  };
+  }, [
+    animateShutter,
+    cameraReady,
+    doubleCaptureMode,
+    enqueueProcessing,
+    flash,
+    hasMediaPermission,
+    isProcessing,
+    location,
+    lutsLoaded,
+    saveOriginalWithLUT,
+    selectedLutId,
+    setIsProcessing,
+    verticalMode,
+  ]);
 
-  useEffect(() => {
-    const item = processingQueue[0];
-    if (!item || item.needsProcessing) return;
+  const handleCameraReady = useCallback(() => {
+    onCameraReady(cameraRef, setPictureSize, setCameraReady);
+  }, []);
 
-    (async () => {
-      await handleProcessed(item.originalUri, item);
-    })();
-  }, [processingQueue]);
+  useVolumeShutter({
+    enabled: !firstTime && cameraPermission === "granted" && cameraReady,
+    onVolumeChange: handleTakePicture,
+  });
 
-  const handleProcessed = async (processedUri, item = {}) => {
-    const {
-      doubleCaptureMode = false,
-      saveOriginalWithLUT: saveOriginalWithoutLUT = false,
-      originalUri,
-      aspectRatio = 3 / 4,
-    } = item;
-
-    try {
-      if (!hasMediaPermission) return;
-
-      if (doubleCaptureMode) {
-        await saveToAlbum(processedUri);
-
-        const inverseUri = await cropImageToInverseAspect(
-          processedUri,
-          aspectRatio,
-        );
-        if (inverseUri) {
-          // Copiar o EXIF completo da primeira imagem para a segunda
-          const inverseUriWithExif = await copyExifFromImage(
-            processedUri,
-            inverseUri,
-          );
-          await saveToAlbum(inverseUriWithExif);
-        }
-      } else {
-        await saveToAlbum(processedUri);
-      }
-
-      if (saveOriginalWithoutLUT && originalUri) {
-        await saveToAlbum(originalUri);
-      }
-    } catch (error) {
-      console.error("Erro ao salvar imagem processada:", error);
-    } finally {
-      setProcessingQueue((prev) => prev.slice(1));
-
-      setGalleryRefreshKey((v) => v + 1);
-    }
+  const topBarProps = {
+    activeControl,
+    doubleCaptureMode,
+    firstTime,
+    flash,
+    selectedLutId,
+    smileDetectionEnabled,
+    toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
+    toggleFlash: () => setFlash((value) => (value === "off" ? "on" : "off")),
+    toggleMode,
+    toggleSmileDetectionEnabled: () =>
+      setSmileDetectionEnabled((value) => !value),
+    toggleVerticalMode,
+    topBarControls,
+    verticalMode,
   };
 
   if (loading) return null;
@@ -254,11 +175,9 @@ export default function App() {
       <Animated.View
         pointerEvents="none"
         style={[
-          StyleSheet.absoluteFillObject,
+          styles.shutterOverlay,
           {
-            backgroundColor: "black",
             opacity: shutterAnim,
-            zIndex: 3000,
           },
         ]}
       />
@@ -267,7 +186,7 @@ export default function App() {
           <LUTProcessor
             imageData={processingQueue[0]}
             onProcessed={handleProcessed}
-            onError={() => setProcessingQueue((prev) => prev.slice(1))}
+            onError={removeCurrentProcessing}
           />
         </View>
       )}
@@ -275,27 +194,7 @@ export default function App() {
       {/* {isProcessing && <View style={styles.processingOverlay} />} */}
       {firstTime && <Welcome />}
 
-      {!topBarBelow && (
-        <TopBar
-          flash={flash}
-          toggleFlash={() => setFlash((f) => (f === "off" ? "on" : "off"))}
-          smileDetectionEnabled={smileDetectionEnabled}
-          toggleSmileDetectionEnabled={() =>
-            setSmileDetectionEnabled((s) => !s)
-          }
-          toggleMode={toggleMode}
-          activeControl={activeControl}
-          selectedLutId={selectedLutId}
-          doubleCaptureMode={doubleCaptureMode}
-          toggleDoubleCaptureMode={() =>
-            setDoubleCaptureMode((value) => !value)
-          }
-          verticalMode={verticalMode}
-          toggleVerticalMode={toggleVerticalMode}
-          topBarControls={topBarControls}
-          firstTime={firstTime}
-        />
-      )}
+      {!topBarBelow && <TopBar {...topBarProps} />}
 
       {!firstTime && cameraPermission === "granted" && (
         <GestureDetector gesture={composedGestures}>
@@ -309,9 +208,7 @@ export default function App() {
               zoom={zoom}
               exposure={exposure}
               pictureSize={pictureSize}
-              onCameraReady={() =>
-                onCameraReady(cameraRef, setPictureSize, setCameraReady)
-              }
+              onCameraReady={handleCameraReady}
               gridVisible={gridVisible}
               setMinZoom={setMinZoom}
               setMaxZoom={setMaxZoom}
@@ -342,29 +239,15 @@ export default function App() {
 
       {topBarBelow && (
         <View style={styles.topBarBelow}>
-          <TopBar
-            flash={flash}
-            toggleFlash={() => setFlash((f) => (f === "off" ? "on" : "off"))}
-            smileDetectionEnabled={smileDetectionEnabled}
-            toggleSmileDetectionEnabled={() =>
-              setSmileDetectionEnabled((s) => !s)
-            }
-            toggleMode={toggleMode}
-            activeControl={activeControl}
-            selectedLutId={selectedLutId}
-            doubleCaptureMode={doubleCaptureMode}
-            toggleDoubleCaptureMode={() =>
-              setDoubleCaptureMode((value) => !value)
-            }
-            verticalMode={verticalMode}
-            toggleVerticalMode={toggleVerticalMode}
-            topBarControls={topBarControls}
-            firstTime={firstTime}
-          />
+          <TopBar {...topBarProps} />
         </View>
       )}
 
-      <ExposureSlider exposure={exposure} setExposure={setExposure} topBarBelow={topBarBelow} />
+      <ExposureSlider
+        exposure={exposure}
+        setExposure={setExposure}
+        topBarBelow={topBarBelow}
+      />
 
       <BottomControls
         controlsAnim={controlsAnim}
@@ -384,67 +267,11 @@ export default function App() {
         availableLuts={availableLuts}
         isProcessing={isProcessing}
         processingQueueLength={processingQueue.length}
-        // 🆕 Props de lentes
         lenses={lenses}
         activeLensId={activeLensId}
-        onSelectLens={handleSelectLens}
+        onSelectLens={setActiveLensId}
         galleryRefreshKey={galleryRefreshKey}
       />
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#000",
-    alignItems: "stretch",
-    justifyContent: "space-between",
-  },
-
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0, 0, 0, 0.8)",
-    zIndex: 2000,
-  },
-  hiddenProcessor: {
-    position: "absolute",
-    width: 0,
-    height: 0,
-    overflow: "hidden",
-  },
-  topBarBelow: {
-    width: "90%",
-    borderWidth: 4,
-    borderColor: "#191919af",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-
-    margin: "auto",
-    borderRadius: 10,
-    overflow: "hidden",
-    backgroundColor: "#000",
-  },
-
-  permissionContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 32,
-  },
-
-  permissionTitle: {
-    color: "white",
-    fontSize: 22,
-    fontWeight: "700",
-    marginBottom: 12,
-    textAlign: "center",
-  },
-
-  permissionText: {
-    color: "#b0b0b0",
-    fontSize: 16,
-    textAlign: "center",
-    lineHeight: 24,
-  },
-});

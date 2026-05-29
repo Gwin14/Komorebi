@@ -1,16 +1,10 @@
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
+import styles from "./LoadingScreen.styles";
 
 export default function LoadingScreen() {
   return (
     <View
-      style={[
-        StyleSheet.absoluteFillObject,
-        {
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#000",
-        },
-      ]}
+      style={styles.container}
     >
       <ActivityIndicator size="large" />
     </View>
