@@ -14,6 +14,7 @@ import useCameraGestures from "./hooks/useCameraGestures";
 import useControlsAnimation from "./hooks/useControlsAnimation";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
 import useShutterAnimation from "./hooks/useShutterAnimation";
+import useVolumeShutter from "./hooks/useVolumeShutter";
 import { usePhysicalCameraDevices } from "./hooks/uselensselector";
 import styles from "./index.styles";
 import { onCameraReady, takePicture } from "./utils/cameraUtils";
@@ -144,6 +145,11 @@ export default function App() {
   const handleCameraReady = useCallback(() => {
     onCameraReady(cameraRef, setPictureSize, setCameraReady);
   }, []);
+
+  useVolumeShutter({
+    enabled: !firstTime && cameraPermission === "granted" && cameraReady,
+    onVolumeChange: handleTakePicture,
+  });
 
   const topBarProps = {
     activeControl,
