@@ -50,7 +50,7 @@ export default StyleSheet.create({
     aspectRatio: 1,
     resizeMode: "contain",
     marginbottom: 100,
-    borderRadius: "50%",
+    borderRadius: 30,
   },
   socialContainer: {
     flexDirection: "row",

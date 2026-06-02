@@ -8,15 +8,23 @@ import { applyLUTToImage } from "./lutProcessor";
 
 const APP_ALBUM = "Komorebi";
 
-export async function saveToAlbum(uri) {
-  const asset = await MediaLibrary.createAssetAsync(uri);
+// Garante que a URI sempre tem o prefixo file:// (necessário no Android)
+const normalizeUri = (uri) => {
+  if (!uri) return uri;
+  return uri.startsWith("file://") ? uri : `file://${uri}`;
+};
 
-  let album = await MediaLibrary.getAlbumAsync(APP_ALBUM);
+export async function saveToAlbum(uri) {
+  const fileUri = normalizeUri(uri);
+  const asset = await MediaLibrary.createAssetAsync(fileUri);
+
+  const albums = await MediaLibrary.getAlbumsAsync();
+  const album = albums.find((a) => a.title === APP_ALBUM);
 
   if (!album) {
-    await MediaLibrary.createAlbumAsync(APP_ALBUM, asset, false);
+    await MediaLibrary.createAlbumAsync(APP_ALBUM, asset, true); // true = copyAsset
   } else {
-    await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+    await MediaLibrary.addAssetsToAlbumAsync([asset], album, true); // true = copyAsset
   }
 }
 
@@ -49,24 +57,6 @@ const getLocationExif = async (locationEnabled) => {
   return additionalExif;
 };
 
-const createProcessingData = ({
-  aspectRatio,
-  doubleCaptureMode,
-  exifData,
-  imageUri,
-  saveOriginalWithLUT,
-}) => ({
-  needsProcessing: true,
-  imageUri,
-  cube: null,
-  originalUri: imageUri,
-  exifData,
-  grainConfig: null,
-  doubleCaptureMode,
-  saveOriginalWithLUT,
-  aspectRatio,
-});
-
 export const takePicture = async ({
   cameraRef,
   cameraReady,
@@ -90,18 +80,26 @@ export const takePicture = async ({
     const additionalExif = await getLocationExif(location);
     const photo = await cameraRef.current.takePhoto({
       flash: flash === "on" ? "on" : "off",
-      qualityPrioritization: "balanced", // reduz tamanho sem perda percetível
+      photoQualityBalance: "quality",
     });
 
-    const uri = photo?.path || photo?.filePath || photo?.uri;
+    // Normaliza a URI logo na origem — resolve FileSystem, ImageManipulator e MediaLibrary no Android
+    const uri = normalizeUri(photo?.path || photo?.filePath || photo?.uri);
+
     const completeExif = { ...additionalExif, aspectRatio };
-    const fallbackProcessingData = createProcessingData({
-      aspectRatio,
-      doubleCaptureMode,
-      exifData: completeExif,
+
+    // Item sem LUT: needsProcessing: false → a fila salva diretamente sem passar pelo WebView
+    const noLutData = {
+      needsProcessing: false,
+      originalUri: uri,
       imageUri: uri,
+      exifData: completeExif,
+      doubleCaptureMode,
       saveOriginalWithLUT,
-    });
+      aspectRatio,
+      cube: null,
+      grainConfig: null,
+    };
 
     if (selectedLutId !== "none" && lutsLoaded) {
       const processingInfo = await applyLUTToImage(
@@ -111,6 +109,7 @@ export const takePicture = async ({
       );
 
       if (processingInfo.needsProcessing) {
+        // Tem LUT → vai pro WebView normalmente
         setProcessingData({
           ...processingInfo,
           doubleCaptureMode,
@@ -119,10 +118,12 @@ export const takePicture = async ({
           aspectRatio,
         });
       } else {
-        setProcessingData(fallbackProcessingData);
+        // LUT não encontrado no cache → salva direto
+        setProcessingData(noLutData);
       }
     } else {
-      setProcessingData(fallbackProcessingData);
+      // Sem LUT selecionada → salva direto
+      setProcessingData(noLutData);
     }
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
@@ -177,7 +178,6 @@ export const cropImageToInverseAspect = async (
   originalAspectRatio = 3 / 4,
 ) => {
   try {
-    // Calcular o aspect ratio inverso
     const inverseRatio = 1 / originalAspectRatio;
     return await cropImageToAspect(uri, inverseRatio);
   } catch (error) {
@@ -193,14 +193,12 @@ export const onCameraReady = async (
 ) => {
   try {
     if (cameraRef.current) {
-      // Vision Camera doesn't expose getAvailablePictureSizesAsync;
-      // preserve pictureSize as null and mark camera ready.
       if (setPictureSize) setPictureSize(null);
       setCameraReady(true);
     }
   } catch (e) {
     console.warn("Erro ao obter pictureSize:", e);
-    setCameraReady(true); // Still set ready to true
+    setCameraReady(true);
   }
 };
 
@@ -231,18 +229,15 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
   }
 
   try {
-    // Ler imagem em base64
     const base64Data = await FileSystem.readAsStringAsync(imageUri, {
       encoding: "base64",
     });
 
     const dataUrl = `data:image/jpeg;base64,${base64Data}`;
 
-    // Criar novo objeto EXIF
     let exifObj = { "0th": {}, Exif: {}, GPS: {}, "1st": {}, thumbnail: null };
 
     try {
-      // Tentar carregar EXIF existente
       const existingExif = piexif.load(dataUrl);
       if (existingExif) {
         exifObj = JSON.parse(JSON.stringify(existingExif));
@@ -252,7 +247,6 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
       console.log("Criando novo objeto EXIF");
     }
 
-    // Aplicar metadados
     if (exifData.Make) {
       exifObj["0th"][piexif.ImageIFD.Make] = String(exifData.Make);
     }
@@ -273,14 +267,12 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
       );
     }
 
-    // Orientação
     exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
     exifObj["0th"][piexif.ImageIFD.XResolution] = [72, 1];
     exifObj["0th"][piexif.ImageIFD.YResolution] = [72, 1];
     exifObj["0th"][piexif.ImageIFD.ResolutionUnit] = 2;
     exifObj["0th"][piexif.ImageIFD.Software] = "Komorebi";
 
-    // EXIF detalhado
     if (exifData.ExposureTime) {
       exifObj["Exif"][piexif.ExifIFD.ExposureTime] = toExifFraction(
         exifData.ExposureTime,
@@ -340,7 +332,6 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
     exifObj["Exif"][piexif.ExifIFD.ExifVersion] = "0230";
     exifObj["Exif"][piexif.ExifIFD.FlashpixVersion] = "0100";
 
-    // GPS Data
     if (exifData.removeGPS) {
       exifObj["GPS"] = {};
     } else if (
@@ -365,19 +356,17 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
       );
     }
 
-    // Converter EXIF para bytes e inserir na imagem
     const exifBytes = piexif.dump(exifObj);
     const newDataUrl = piexif.insert(exifBytes, dataUrl);
     const newBase64 = newDataUrl.split(",")[1];
 
-    // Salvar imagem com EXIF
     const timestamp = Date.now();
     const newFileName = FileSystem.documentDirectory + `exif_${timestamp}.jpg`;
     await FileSystem.writeAsStringAsync(newFileName, newBase64, {
       encoding: "base64",
     });
 
-    console.log("EXIF aplicado com sucesso à imagem dupla");
+    console.log("EXIF aplicado com sucesso");
     return newFileName;
   } catch (error) {
     console.error("Erro ao aplicar EXIF:", error);
@@ -387,7 +376,6 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
 
 export const copyExifFromImage = async (sourceImageUri, targetImageUri) => {
   try {
-    // Ler o EXIF da imagem de origem
     const sourceBase64 = await FileSystem.readAsStringAsync(sourceImageUri, {
       encoding: "base64",
     });
@@ -400,19 +388,16 @@ export const copyExifFromImage = async (sourceImageUri, targetImageUri) => {
       return targetImageUri;
     }
 
-    // Ler a imagem de destino
     const targetBase64 = await FileSystem.readAsStringAsync(targetImageUri, {
       encoding: "base64",
     });
 
     const targetDataUrl = `data:image/jpeg;base64,${targetBase64}`;
 
-    // Inserir o EXIF extraído na imagem de destino
     const exifBytes = piexif.dump(sourceExifObj);
     const newDataUrl = piexif.insert(exifBytes, targetDataUrl);
     const newBase64 = newDataUrl.split(",")[1];
 
-    // Salvar imagem com EXIF copiado
     const timestamp = Date.now();
     const newFileName = FileSystem.documentDirectory + `exif_${timestamp}.jpg`;
     await FileSystem.writeAsStringAsync(newFileName, newBase64, {
