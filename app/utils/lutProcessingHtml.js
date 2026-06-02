@@ -21,31 +21,23 @@ export const generateProcessingHTML = (
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d', { 
       willReadFrequently: true,
-      colorSpace: 'srgb'  // Forçar sRGB
+      colorSpace: 'srgb'
     });
     
     const cube = ${JSON.stringify(cube)};
     
-    // Conversões sRGB <-> Linear mais precisas
     const sRGBToLinear = (val) => {
-      if (val <= 0.04045) {
-        return val / 12.92;
-      }
+      if (val <= 0.04045) return val / 12.92;
       return Math.pow((val + 0.055) / 1.055, 2.4);
     };
     
     const linearToSRGB = (val) => {
-      if (val <= 0.0031308) {
-        return val * 12.92;
-      }
+      if (val <= 0.0031308) return val * 12.92;
       return 1.055 * Math.pow(val, 1.0 / 2.4) - 0.055;
     };
     
-    const clamp = (val, min = 0, max = 1) => {
-      return Math.max(min, Math.min(max, val));
-    };
+    const clamp = (val, min = 0, max = 1) => Math.max(min, Math.min(max, val));
     
-    // Interpolação tetrahedral (mais precisa que trilinear)
     const tetrahedralInterpolate = (r, g, b, size, lut) => {
       const rScaled = r * (size - 1);
       const gScaled = g * (size - 1);
@@ -68,7 +60,6 @@ export const generateProcessingHTML = (
         return lut[index] || { r: 0, g: 0, b: 0 };
       };
       
-      // Interpolação trilinear completa (mantida por compatibilidade)
       const c000 = getColor(r0, g0, b0);
       const c001 = getColor(r1, g0, b0);
       const c010 = getColor(r0, g1, b0);
@@ -120,27 +111,22 @@ export const generateProcessingHTML = (
     const img = new Image();
     
     img.onload = () => {
+      // Limitar resolução máxima para evitar bitmaps absurdos em memória.
+      // O crop de aspect ratio já foi feito antes de chegar aqui (cropImageToAspect),
+      // então o Canvas só precisa escalar — sem recortar.
+      const MAX_DIMENSION = 3000;
       let drawWidth = img.width;
       let drawHeight = img.height;
-      
-      // Calcular dimensions com aspect ratio correto
-      const currentRatio = img.width / img.height;
-      const targetRatio = ${aspectRatio};
-      
-      if (currentRatio > targetRatio) {
-        // Imagem muito larga, crop na largura
-        drawWidth = Math.round(img.height * targetRatio);
-      } else {
-        // Imagem muito alta, crop na altura
-        drawHeight = Math.round(img.width / targetRatio);
+
+      if (drawWidth > MAX_DIMENSION || drawHeight > MAX_DIMENSION) {
+        const scale = MAX_DIMENSION / Math.max(drawWidth, drawHeight);
+        drawWidth = Math.round(drawWidth * scale);
+        drawHeight = Math.round(drawHeight * scale);
       }
-      
-      const offsetX = Math.round((img.width - drawWidth) / 2);
-      const offsetY = Math.round((img.height - drawHeight) / 2);
-      
+
       canvas.width = drawWidth;
       canvas.height = drawHeight;
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight, 0, 0, drawWidth, drawHeight);
+      ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, drawWidth, drawHeight);
       
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imageData.data;
@@ -150,125 +136,113 @@ export const generateProcessingHTML = (
         const size = cube.size;
         const { domainMin, domainMax, lut } = cube;
       
-      console.log('Processando ' + (data.length / 4) + ' pixels...');
-      console.log('Domain:', domainMin, domainMax);
+        console.log('Processando ' + (data.length / 4) + ' pixels...');
+        console.log('Domain:', domainMin, domainMax);
       
-      for (let i = 0; i < data.length; i += 4) {
-        const alpha = data[i + 3] / 255;
-        if (alpha === 0) continue;
-        
-        // Converter para [0,1] e remover premultiplication
-        let r = data[i] / 255;
-        let g = data[i + 1] / 255;
-        let b = data[i + 2] / 255;
-        
-        if (alpha < 1 && alpha > 0) {
-          r = r / alpha;
-          g = g / alpha;
-          b = b / alpha;
+        for (let i = 0; i < data.length; i += 4) {
+          const alpha = data[i + 3] / 255;
+          if (alpha === 0) continue;
+          
+          let r = data[i] / 255;
+          let g = data[i + 1] / 255;
+          let b = data[i + 2] / 255;
+          
+          if (alpha < 1 && alpha > 0) {
+            r = r / alpha;
+            g = g / alpha;
+            b = b / alpha;
+          }
+          
+          // Domain scaling
+          r = clamp((r - domainMin[0]) / (domainMax[0] - domainMin[0]));
+          g = clamp((g - domainMin[1]) / (domainMax[1] - domainMin[1]));
+          b = clamp((b - domainMin[2]) / (domainMax[2] - domainMin[2]));
+          
+          let finalColor = tetrahedralInterpolate(r, g, b, size, lut);
+          
+          finalColor.r = clamp(finalColor.r);
+          finalColor.g = clamp(finalColor.g);
+          finalColor.b = clamp(finalColor.b);
+          
+          if (alpha < 1) {
+            finalColor.r = finalColor.r * alpha;
+            finalColor.g = finalColor.g * alpha;
+            finalColor.b = finalColor.b * alpha;
+          }
+          
+          data[i]     = Math.round(clamp(finalColor.r) * 255);
+          data[i + 1] = Math.round(clamp(finalColor.g) * 255);
+          data[i + 2] = Math.round(clamp(finalColor.b) * 255);
         }
-        
-        // IMPORTANTE: Não aplicar sRGB to Linear antes do domain
-        // O LUT já espera valores em sRGB
-        
-        // Aplicar domain scaling
-        r = clamp((r - domainMin[0]) / (domainMax[0] - domainMin[0]));
-        g = clamp((g - domainMin[1]) / (domainMax[1] - domainMin[1]));
-        b = clamp((b - domainMin[2]) / (domainMax[2] - domainMin[2]));
-        
-        // Aplicar LUT (já em espaço sRGB)
-        let finalColor = tetrahedralInterpolate(r, g, b, size, lut);
-        
-        // Clamp output do LUT
-        finalColor.r = clamp(finalColor.r);
-        finalColor.g = clamp(finalColor.g);
-        finalColor.b = clamp(finalColor.b);
-        
-        // IMPORTANTE: Não aplicar Linear to sRGB após o LUT
-        // O output do LUT já está em sRGB
-        
-        // Premultiply alpha
-        if (alpha < 1) {
-          finalColor.r = finalColor.r * alpha;
-          finalColor.g = finalColor.g * alpha;
-          finalColor.b = finalColor.b * alpha;
-        }
-        
-        // Converter de volta para [0,255]
-        data[i] = Math.round(clamp(finalColor.r) * 255);
-        data[i + 1] = Math.round(clamp(finalColor.g) * 255);
-        data[i + 2] = Math.round(clamp(finalColor.b) * 255);
-      }
       
-      ctx.putImageData(imageData, 0, 0);
+        ctx.putImageData(imageData, 0, 0);
       }
 
       // --- GRAIN ---
-if (${JSON.stringify(grainConfig ? true : false)}) {
-  const gc = ${JSON.stringify(grainConfig)};
+      if (${JSON.stringify(grainConfig ? true : false)}) {
+        const gc = ${JSON.stringify(grainConfig)};
 
-  // Box-Muller gaussiana
-  function gaussian(std) {
-    let u, v;
-    do { u = Math.random(); } while (u === 0);
-    do { v = Math.random(); } while (v === 0);
-    return std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-  }
+        // Box-Muller gaussiana
+        function gaussian(std) {
+          let u, v;
+          do { u = Math.random(); } while (u === 0);
+          do { v = Math.random(); } while (v === 0);
+          return std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+        }
 
-  // Perlin noise
-  const _p = Array.from({length:256},(_,i)=>i);
-  for(let i=255;i>0;i--){const j=Math.floor(Math.random()*(i+1));[_p[i],_p[j]]=[_p[j],_p[i]];}
-  const PERM=[..._p,..._p];
-  const fade=t=>t*t*t*(t*(t*6-15)+10);
-  const lerp=(a,b,t)=>a+t*(b-a);
-  const grad2=(h,x,y)=>((h&1)?-x:x)+((h&2)?-y:y);
-  function perlin(x,y){
-    const X=Math.floor(x)&255,Y=Math.floor(y)&255;
-    x-=Math.floor(x);y-=Math.floor(y);
-    const u=fade(x),v=fade(y);
-    const a=PERM[X]+Y,b=PERM[X+1]+Y;
-    return lerp(lerp(grad2(PERM[a],x,y),grad2(PERM[b],x-1,y),u),lerp(grad2(PERM[a+1],x,y-1),grad2(PERM[b+1],x-1,y-1),u),v);
-  }
-  function fbm(x,y,oct){
-    let v=0,a=0.5,f=1,mx=0;
-    for(let i=0;i<oct;i++){v+=perlin(x*f,y*f)*a;mx+=a;a*=0.5;f*=2.1;}
-    return v/mx;
-  }
+        // Perlin noise
+        const _p = Array.from({length:256},(_,i)=>i);
+        for(let i=255;i>0;i--){const j=Math.floor(Math.random()*(i+1));[_p[i],_p[j]]=[_p[j],_p[i]];}
+        const PERM=[..._p,..._p];
+        const fade=t=>t*t*t*(t*(t*6-15)+10);
+        const lerp=(a,b,t)=>a+t*(b-a);
+        const grad2=(h,x,y)=>((h&1)?-x:x)+((h&2)?-y:y);
+        function perlin(x,y){
+          const X=Math.floor(x)&255,Y=Math.floor(y)&255;
+          x-=Math.floor(x);y-=Math.floor(y);
+          const u=fade(x),v=fade(y);
+          const a=PERM[X]+Y,b=PERM[X+1]+Y;
+          return lerp(lerp(grad2(PERM[a],x,y),grad2(PERM[b],x-1,y),u),lerp(grad2(PERM[a+1],x,y-1),grad2(PERM[b+1],x-1,y-1),u),v);
+        }
+        function fbm(x,y,oct){
+          let v=0,a=0.5,f=1,mx=0;
+          for(let i=0;i<oct;i++){v+=perlin(x*f,y*f)*a;mx+=a;a*=0.5;f*=2.1;}
+          return v/mx;
+        }
 
-  const grainData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const gd = grainData.data;
-  const gw = canvas.width, gh = canvas.height;
+        const grainData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const gd = grainData.data;
+        const gw = canvas.width, gh = canvas.height;
 
-  // Pré-calcular campo Perlin
-  const clump = new Float32Array(gw * gh);
-  for(let y=0;y<gh;y++)
-    for(let x=0;x<gw;x++)
-      clump[y*gw+x] = fbm(x*gc.clumpFreq, y*gc.clumpFreq, gc.octaves);
+        // Pré-calcular campo Perlin
+        const clump = new Float32Array(gw * gh);
+        for(let y=0;y<gh;y++)
+          for(let x=0;x<gw;x++)
+            clump[y*gw+x] = fbm(x*gc.clumpFreq, y*gc.clumpFreq, gc.octaves);
 
-  for(let y=0;y<gh;y++){
-    for(let x=0;x<gw;x++){
-      const i=(y*gw+x)*4;
-      const r=gd[i],g=gd[i+1],b=gd[i+2];
-      const luma=0.2126*r+0.7152*g+0.0722*b;
-      const t=luma/255;
-      const lf=1+Math.pow(1-t,1.6)*gc.shadowBoost-Math.pow(t,2.2)*gc.highlightReduction;
-      const cl=1+clump[y*gw+x]*gc.clumpAmp;
-      const lumaG=gaussian(gc.lumaStd*lf*cl);
-      const cr=gaussian(gc.rStd*lf);
-      const cg=gaussian(gc.gStd*lf);
-      const cb=gaussian(gc.bStd*lf);
-      gd[i]  =Math.min(255,Math.max(0,r+lumaG+cr));
-      gd[i+1]=Math.min(255,Math.max(0,g+lumaG+cg));
-      gd[i+2]=Math.min(255,Math.max(0,b+lumaG+cb));
-    }
-  }
-  ctx.putImageData(grainData, 0, 0);
-}
-// --- FIM GRAIN ---
+        for(let y=0;y<gh;y++){
+          for(let x=0;x<gw;x++){
+            const i=(y*gw+x)*4;
+            const r=gd[i],g=gd[i+1],b=gd[i+2];
+            const luma=0.2126*r+0.7152*g+0.0722*b;
+            const t=luma/255;
+            const lf=1+Math.pow(1-t,1.6)*gc.shadowBoost-Math.pow(t,2.2)*gc.highlightReduction;
+            const cl=1+clump[y*gw+x]*gc.clumpAmp;
+            const lumaG=gaussian(gc.lumaStd*lf*cl);
+            const cr=gaussian(gc.rStd*lf);
+            const cg=gaussian(gc.gStd*lf);
+            const cb=gaussian(gc.bStd*lf);
+            gd[i]  =Math.min(255,Math.max(0,r+lumaG+cr));
+            gd[i+1]=Math.min(255,Math.max(0,g+lumaG+cg));
+            gd[i+2]=Math.min(255,Math.max(0,b+lumaG+cb));
+          }
+        }
+        ctx.putImageData(grainData, 0, 0);
+      }
+      // --- FIM GRAIN ---
       
       console.log('Processamento concluído!');
       
-      // Salvar com qualidade máxima
       canvas.toBlob((blob) => {
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -279,7 +253,7 @@ if (${JSON.stringify(grainConfig ? true : false)}) {
           }));
         };
         reader.readAsDataURL(blob);
-      }, 'image/jpeg', 1.0);  // Qualidade máxima
+      }, 'image/jpeg', 0.86);
     };
     
     img.onerror = (error) => {

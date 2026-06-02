@@ -90,6 +90,7 @@ export const takePicture = async ({
     const additionalExif = await getLocationExif(location);
     const photo = await cameraRef.current.takePhoto({
       flash: flash === "on" ? "on" : "off",
+      qualityPrioritization: "balanced", // reduz tamanho sem perda percetível
     });
 
     const uri = photo?.path || photo?.filePath || photo?.uri;
@@ -160,7 +161,7 @@ export const cropImageToAspect = async (uri, ratio) => {
     const crop = getCropRect(width, height, ratio);
 
     const result = await ImageManipulator.manipulateAsync(uri, [{ crop }], {
-      compress: 1,
+      compress: 0.86,
       format: ImageManipulator.SaveFormat.JPEG,
     });
 
