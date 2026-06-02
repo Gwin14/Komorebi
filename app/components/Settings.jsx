@@ -2,18 +2,19 @@ import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "@react-native-documents/picker";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import {
-  Image,
-  ScrollView,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
-import { addCustomLUT, parseCubeFile, removeCustomLUT } from "../utils/lutProcessor";
-import { TOP_BAR_CONTROLS, TOP_BAR_MAX_CONTROLS } from "../utils/topBarControls";
+import {
+  addCustomLUT,
+  parseCubeFile,
+  removeCustomLUT,
+} from "../utils/lutProcessor";
+import {
+  TOP_BAR_CONTROLS,
+  TOP_BAR_MAX_CONTROLS,
+} from "../utils/topBarControls";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import ExternalLink from "./ExternalLink";
@@ -370,6 +371,26 @@ export default function Settings() {
           <ExternalLink label="Em breve..." disabled />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/TermosDeUso");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Termos de Uso" disabled />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/PoliticaDePrivacidade");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Política de Privacidade" disabled />
+        </TouchableOpacity>
+
         <View style={styles.divider} />
 
         <View style={styles.socialContainer}>
@@ -455,9 +476,7 @@ export default function Settings() {
           />
 
           <View>
-            <Text style={[styles.text, styles.siteTitle]}>
-              Site oficial
-            </Text>
+            <Text style={[styles.text, styles.siteTitle]}>Site oficial</Text>
             <Text style={styles.text}>Conheça minha arte!</Text>
           </View>
         </TouchableOpacity>
