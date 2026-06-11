@@ -33,4 +33,14 @@ export default StyleSheet.create({
     height: 1,
     backgroundColor: "rgba(255,255,255,0.22)",
   },
+  focusSquare: {
+    position: "absolute",
+    width: 76,
+    height: 76,
+    marginLeft: -38,
+    marginTop: -38,
+    borderWidth: 1.5,
+    borderColor: "#ffcc00",
+    borderRadius: 6,
+  },
 });

@@ -2,9 +2,12 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef
+  useRef,
+  useState
 } from "react";
-import { View } from "react-native";
+import { Animated, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera } from "react-native-vision-camera-face-detector";
 import styles from "./CameraPreview.styles";
@@ -29,6 +32,39 @@ export default function CameraPreview({
   isActive = true,
 }) {
   const isTakingPhoto = useRef(false);
+
+  // Toque para focar
+  const [focusPoint, setFocusPoint] = useState(null);
+  const focusAnim = useRef(new Animated.Value(0)).current;
+
+  const focusOnPoint = useCallback(
+    (x, y) => {
+      if (!device?.supportsFocus) return;
+
+      setFocusPoint({ x, y });
+      focusAnim.stopAnimation();
+      focusAnim.setValue(1);
+      Animated.timing(focusAnim, {
+        toValue: 0,
+        duration: 600,
+        delay: 500,
+        useNativeDriver: true,
+      }).start();
+
+      cameraRef.current?.focus({ x, y }).catch(() => {});
+    },
+    [device, cameraRef, focusAnim],
+  );
+
+  const focusGesture = useMemo(
+    () =>
+      Gesture.Tap()
+        .maxDuration(250)
+        .onEnd((event) => {
+          runOnJS(focusOnPoint)(event.x, event.y);
+        }),
+    [focusOnPoint],
+  );
 
   const format = useCameraFormat(device, [
     { photoAspectRatio: 4 / 3 },
@@ -98,44 +134,68 @@ export default function CameraPreview({
   const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
 
   return (
-    <View
-      style={[
-        retroStyle ? styles.retroStyle : styles.cameraWrapper,
-        {
-          aspectRatio,
-          width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
-          alignSelf: "center",
-          borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
-          borderWidth: doubleCaptureMode ? 3 : 0,
-        },
-      ]}
-    >
-      <Camera
-        style={styles.camera}
-        device={device}
-        isActive={isActive}
-        ref={cameraRef}
-        format={format}
-        photo={true}
-        video={false}
-        audio={false}
-        zoom={zoom}
-        exposure={exposure}
-        onInitialized={onCameraReady}
-        faceDetectionCallback={handleFacesDetection}
-        faceDetectionOptions={faceDetectionOptions}
-        enableLocation={location}
-        photoQualityBalance={"quality"}
-      />
-      {gridVisible && (
-        <View pointerEvents="none" style={styles.gridOverlay}>
-          <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
-          <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
+    <GestureDetector gesture={focusGesture}>
+      <View
+        style={[
+          retroStyle ? styles.retroStyle : styles.cameraWrapper,
+          {
+            aspectRatio,
+            width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
+            alignSelf: "center",
+            borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
+            borderWidth: doubleCaptureMode ? 3 : 0,
+          },
+        ]}
+      >
+        <Camera
+          style={styles.camera}
+          device={device}
+          isActive={isActive}
+          ref={cameraRef}
+          format={format}
+          photo={true}
+          video={false}
+          audio={false}
+          zoom={zoom}
+          exposure={exposure}
+          onInitialized={onCameraReady}
+          faceDetectionCallback={handleFacesDetection}
+          faceDetectionOptions={faceDetectionOptions}
+          enableLocation={location}
+          photoQualityBalance={"quality"}
+        />
+        {gridVisible && (
+          <View pointerEvents="none" style={styles.gridOverlay}>
+            <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
+            <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
 
-          <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
-          <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
-        </View>
-      )}
-    </View>
+            <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
+            <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
+          </View>
+        )}
+
+        {focusPoint && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.focusSquare,
+              {
+                left: focusPoint.x,
+                top: focusPoint.y,
+                opacity: focusAnim,
+                transform: [
+                  {
+                    scale: focusAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1.3, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+        )}
+      </View>
+    </GestureDetector>
   );
 }
