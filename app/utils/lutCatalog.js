@@ -40,6 +40,18 @@ export const AVAILABLE_LUTS = [
     name: "Cinema",
     file: require("../../assets/luts/cinema.cube"),
   },
+
+  {
+    id: "filtro7",
+    name: "Ameixa",
+    file: require("../../assets/luts/ameixa.cube"),
+  },
+
+  {
+    id: "filtro8",
+    name: "Banana",
+    file: require("../../assets/luts/banana.cube"),
+  },
 ];
 
 export const LUT_GRAIN_CONFIG = {

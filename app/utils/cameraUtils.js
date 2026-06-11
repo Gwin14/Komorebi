@@ -388,6 +388,12 @@ export const copyExifFromImage = async (sourceImageUri, targetImageUri) => {
       return targetImageUri;
     }
 
+    // A imagem de destino já teve os pixels reorientados pelo ImageManipulator,
+    // por isso forçamos Orientation=1 para evitar dupla rotação.
+    if (sourceExifObj["0th"]) {
+      sourceExifObj["0th"][piexif.ImageIFD.Orientation] = 1;
+    }
+
     const targetBase64 = await FileSystem.readAsStringAsync(targetImageUri, {
       encoding: "base64",
     });
