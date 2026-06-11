@@ -72,6 +72,11 @@ export default function App() {
     minZoom,
     setZoom,
     zoomSV,
+    showLuts: useCallback(() => setActiveControl("lut"), []),
+    hideLuts: useCallback(
+      () => setActiveControl((current) => (current === "lut" ? "none" : current)),
+      [],
+    ),
   });
 
   const {
