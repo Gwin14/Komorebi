@@ -67,7 +67,7 @@ export default function CameraPreview({
   );
 
   const format = useCameraFormat(device, [
-    { photoAspectRatio: 4 / 3 },
+    { photoAspectRatio: verticalMode ? 16 / 9 : 4 / 3 },
     { photoResolution: "max" },
     { videoResolution: "max" },
   ]);
