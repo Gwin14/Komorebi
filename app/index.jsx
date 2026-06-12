@@ -10,6 +10,7 @@ import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
 import useCameraBootstrap from "./hooks/useCameraBootstrap";
+import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
 import useControlsAnimation from "./hooks/useControlsAnimation";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
@@ -154,6 +155,11 @@ export default function App() {
   useVolumeShutter({
     enabled: !firstTime && cameraPermission === "granted" && cameraReady,
     onVolumeChange: handleTakePicture,
+  });
+
+  useCameraControlButton({
+    enabled: !firstTime && cameraPermission === "granted" && cameraReady,
+    onPress: handleTakePicture,
   });
 
   const topBarProps = {
