@@ -78,7 +78,9 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "./plugins/withIosDeploymentTarget",
+      "./plugins/withUiSceneManifest"
     ],
     "experiments": {
       "typedRoutes": true,
