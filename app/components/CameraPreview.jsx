@@ -5,7 +5,7 @@ import {
   useRef,
   useState
 } from "react";
-import { Animated, View } from "react-native";
+import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useCameraFormat } from "react-native-vision-camera";
@@ -67,7 +67,7 @@ export default function CameraPreview({
   );
 
   const format = useCameraFormat(device, [
-    { photoAspectRatio: 4 / 3 },
+    { photoAspectRatio: verticalMode ? 16 / 9 : 4 / 3 },
     { photoResolution: "max" },
     { videoResolution: "max" },
   ]);
@@ -173,6 +173,20 @@ export default function CameraPreview({
             <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
           </View>
         )}
+
+        {doubleCaptureMode && (() => {
+          const marginPct = `${((1 - aspectRatio * aspectRatio) / 2 * 100).toFixed(4)}%`;
+          return (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <View style={[styles.doubleCropZone, { height: marginPct }]}>
+                <View style={styles.doubleCropBorder} />
+              </View>
+              <View style={[styles.doubleCropZone, styles.doubleCropZoneBottom, { height: marginPct }]}>
+                <View style={[styles.doubleCropBorder, { top: 0, bottom: undefined }]} />
+              </View>
+            </View>
+          );
+        })()}
 
         {focusPoint && (
           <Animated.View
