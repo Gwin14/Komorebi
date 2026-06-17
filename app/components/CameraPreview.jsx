@@ -162,7 +162,7 @@ export default function CameraPreview({
           faceDetectionCallback={handleFacesDetection}
           faceDetectionOptions={faceDetectionOptions}
           enableLocation={location}
-          photoQualityBalance={"quality"}
+          photoQualityBalance={"balanced"}
         />
         {gridVisible && (
           <View pointerEvents="none" style={styles.gridOverlay}>
