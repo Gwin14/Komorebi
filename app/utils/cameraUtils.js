@@ -89,13 +89,14 @@ export const takePicture = async ({
     const completeExif = { ...additionalExif, aspectRatio };
 
     // Item sem LUT: needsProcessing: false → a fila salva diretamente sem passar pelo WebView
+    // saveOriginalWithLUT é sempre false aqui: sem LUT aplicado não há cópia "sem LUT" para salvar
     const noLutData = {
       needsProcessing: false,
       originalUri: uri,
       imageUri: uri,
       exifData: completeExif,
       doubleCaptureMode,
-      saveOriginalWithLUT,
+      saveOriginalWithLUT: false,
       aspectRatio,
       cube: null,
       grainConfig: null,

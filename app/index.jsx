@@ -106,6 +106,15 @@ export default function App() {
     zoomSV.value = 1;
   }, [facing, zoomSV]);
 
+  const handleSelectLens = useCallback(
+    (lensId) => {
+      setZoom(1);
+      zoomSV.value = 1;
+      setActiveLensId(lensId);
+    },
+    [setActiveLensId, zoomSV],
+  );
+
   const toggleMode = useCallback((mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
   }, []);
@@ -278,7 +287,7 @@ export default function App() {
         processingQueueLength={processingQueue.length}
         lenses={lenses}
         activeLensId={activeLensId}
-        onSelectLens={setActiveLensId}
+        onSelectLens={handleSelectLens}
         galleryRefreshKey={galleryRefreshKey}
       />
     </SafeAreaView>
