@@ -192,15 +192,13 @@ export default function App() {
           },
         ]}
       />
-      {processingQueue.length > 0 && (
-        <View style={styles.hiddenProcessor}>
-          <LUTProcessor
-            imageData={processingQueue[0]}
-            onProcessed={handleProcessed}
-            onError={removeCurrentProcessing}
-          />
-        </View>
-      )}
+      <View style={styles.hiddenProcessor}>
+        <LUTProcessor
+          imageData={processingQueue[0] ?? null}
+          onProcessed={handleProcessed}
+          onError={removeCurrentProcessing}
+        />
+      </View>
 
       {/* {isProcessing && <View style={styles.processingOverlay} />} */}
       {firstTime && <Welcome />}

@@ -1,99 +1,89 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as piexif from "piexifjs";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WebView } from "react-native-webview";
 import { saveProcessedImage } from "./exifImageWriter";
-import { generateProcessingHTML } from "./lutProcessingHtml";
+import { generateRuntimeHTML } from "./lutProcessingHtml";
 
 export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const webViewRef = useRef(null);
-  const [html, setHtml] = useState(null);
+  const [ready, setReady] = useState(false);
+  const pendingRef = useRef(null);
   const originalExifRef = useRef(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    const prepareData = async () => {
-      if (!imageData || !imageData.needsProcessing) return;
+  const staticHtml = useMemo(() => generateRuntimeHTML(), []);
 
-      try {
-        let base64 = imageData.base64;
-        // Carregamento tardio (lazy load) do base64 para não travar a UI na captura
-        if (!base64 && imageData.imageUri) {
-          base64 = await FileSystem.readAsStringAsync(imageData.imageUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-        }
-
-        if (isMounted && base64) {
-          try {
-            originalExifRef.current = piexif.load(
-              "data:image/jpeg;base64," + base64,
-            );
-          } catch (e) {
-            console.log("Erro ao extrair EXIF original:", e);
-            originalExifRef.current = null;
-          }
-
-          setHtml(
-            generateProcessingHTML(
-              base64,
-              imageData.cube,
-              imageData.grainConfig || null,
-              imageData.aspectRatio,
-            ),
-          );
-        }
-      } catch (e) {
-        if (isMounted && onError) onError(e);
+  const sendToWebView = useCallback(async (data) => {
+    try {
+      let base64 = data.base64;
+      if (!base64 && data.imageUri) {
+        base64 = await FileSystem.readAsStringAsync(data.imageUri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
       }
-    };
+      try {
+        originalExifRef.current = piexif.load("data:image/jpeg;base64," + base64);
+      } catch {
+        originalExifRef.current = null;
+      }
+      const payload = JSON.stringify({
+        base64,
+        cube: data.cube,
+        grainConfig: data.grainConfig || null,
+        aspectRatio: data.aspectRatio,
+      });
+      webViewRef.current?.injectJavaScript(`processImage(${payload}); true;`);
+    } catch (e) {
+      onError?.(e);
+    }
+  }, [onError]);
 
-    setHtml(null);
-    prepareData();
-    return () => {
-      isMounted = false;
-    };
-  }, [imageData, onError]);
+  // Processar item pendente assim que a WebView estiver pronta
+  useEffect(() => {
+    if (ready && pendingRef.current) {
+      sendToWebView(pendingRef.current);
+      pendingRef.current = null;
+    }
+  }, [ready, sendToWebView]);
 
-  if (!imageData || !imageData.needsProcessing || !html) {
-    return null;
-  }
+  // Reagir a novo imageData
+  useEffect(() => {
+    if (!imageData?.needsProcessing) return;
+    if (!ready) {
+      pendingRef.current = imageData;
+      return;
+    }
+    sendToWebView(imageData);
+  }, [imageData, ready, sendToWebView]);
 
-  const handleMessage = async (event) => {
+  const handleMessage = useCallback(async (event) => {
     try {
       const message = JSON.parse(event.nativeEvent.data);
-
       if (message.type === "success") {
         const savedUri = await saveProcessedImage(
           message.data,
-          imageData.exifData,
+          imageData?.exifData,
           originalExifRef.current,
         );
-        if (savedUri && onProcessed) {
-          onProcessed(savedUri, imageData);
-        }
+        if (savedUri) onProcessed?.(savedUri, imageData);
       } else if (message.type === "error") {
-        console.error("Erro no processamento:", message.message);
-        if (onError) {
-          onError(new Error(message.message));
-        }
+        onError?.(new Error(message.message));
       }
     } catch (error) {
-      console.error("Erro ao processar mensagem do WebView:", error);
-      if (onError) {
-        onError(error);
-      }
+      onError?.(error);
     }
-  };
+  }, [imageData, onProcessed, onError]);
 
+  // WebView sempre montada — sem cold start a cada foto
   return (
     <WebView
       ref={webViewRef}
-      source={{ html }}
+      source={{ html: staticHtml }}
       onMessage={handleMessage}
-      style={{ width: 1, height: 1, opacity: 0 }}
-      javaScriptEnabled={true}
-      domStorageEnabled={true}
+      onLoadEnd={() => setReady(true)}
+      style={{ width: 0, height: 0, position: "absolute", opacity: 0 }}
+      javaScriptEnabled
+      domStorageEnabled
     />
   );
 };

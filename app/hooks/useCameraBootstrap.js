@@ -16,21 +16,22 @@ export default function useCameraBootstrap({ customLuts, firstTime }) {
 
     const prepareCamera = async () => {
       try {
-        await loadAllLUTs();
-        await loadCustomLUTs(customLuts);
-        if (!isMounted) return;
+        // Permissões em paralelo — não dependem dos LUTs
+        const [permission, mediaResult] = await Promise.all([
+          Camera.requestCameraPermission(),
+          MediaLibrary.requestPermissionsAsync(),
+          Location.requestForegroundPermissionsAsync(),
+        ]);
 
-        setLutsLoaded(true);
-
-        const permission = await Camera.requestCameraPermission();
         if (!isMounted) return;
         setCameraPermission(permission);
+        setHasMediaPermission(mediaResult.status === "granted");
 
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (!isMounted) return;
-        setHasMediaPermission(status === "granted");
-
-        await Location.requestForegroundPermissionsAsync();
+        // LUTs em background — câmera já pode montar
+        loadAllLUTs()
+          .then(() => loadCustomLUTs(customLuts))
+          .then(() => { if (isMounted) setLutsLoaded(true); })
+          .catch(console.error);
       } catch (error) {
         console.error("Erro ao preparar câmera:", error);
       }
