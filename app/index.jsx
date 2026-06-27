@@ -13,6 +13,7 @@ import useCameraBootstrap from "./hooks/useCameraBootstrap";
 import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
 import useControlsAnimation from "./hooks/useControlsAnimation";
+import useManualCameraControls from "./hooks/useManualCameraControls";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
 import useShutterAnimation from "./hooks/useShutterAnimation";
 import useVolumeShutter from "./hooks/useVolumeShutter";
@@ -61,6 +62,8 @@ export default function App() {
 
   const { lenses, activeLens, activeLensId, setActiveLensId } =
     usePhysicalCameraDevices(facing);
+
+  const manual = useManualCameraControls(activeLens?.device);
 
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
@@ -176,11 +179,16 @@ export default function App() {
     doubleCaptureMode,
     firstTime,
     flash,
+    manualControlsAvailable: manual.available,
+    manualMode: manual.manualMode,
     selectedLutId,
     smileDetectionEnabled,
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
     toggleFlash: () => setFlash((value) => (value === "off" ? "on" : "off")),
-    toggleMode,
+    toggleMode: (mode) => {
+      toggleMode(mode);
+      if (mode === "manual") manual.toggleManualMode();
+    },
     toggleSmileDetectionEnabled: () =>
       setSmileDetectionEnabled((value) => !value),
     toggleVerticalMode,
@@ -289,6 +297,7 @@ export default function App() {
         activeLensId={activeLensId}
         onSelectLens={handleSelectLens}
         galleryRefreshKey={galleryRefreshKey}
+        manual={manual}
       />
     </SafeAreaView>
   );

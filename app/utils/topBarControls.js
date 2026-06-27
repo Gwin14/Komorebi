@@ -47,12 +47,19 @@ export const TOP_BAR_CONTROLS = [
     icon: "flash-outline",
     alwaysEnabled: false,
   },
+  {
+    id: "manual",
+    label: "Controles manuais",
+    icon: "options-outline",
+    alwaysEnabled: false,
+  },
 ];
 
 export const DEFAULT_TOP_BAR_CONTROLS = [
   "vertical",
   "weather",
   "luts",
+  "manual",
   "settings",
 ];
 
