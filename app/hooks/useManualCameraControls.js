@@ -32,9 +32,24 @@ export default function useManualCameraControls(device) {
   const [manualWBTint, setManualWBTint] = useState(DEFAULT_WB_TINT);
   const [manualFocus, setManualFocusValue] = useState(DEFAULT_FOCUS);
 
+  // ISO e obturador compartilham um único modo "auto" porque o
+  // AVCaptureDevice trata os dois como um par (exposureMode custom/auto).
+  // WB e foco têm cada um seu próprio modo automático nativo. EV não tem
+  // estado de auto: é sempre manual, com padrão fixo 0 (ver ExposureSlider
+  // usado direto em app/index.jsx fora deste hook).
+  const [exposureAuto, setExposureAuto] = useState(true);
+  const [wbAuto, setWbAuto] = useState(true);
+  const [focusAuto, setFocusAuto] = useState(true);
+
   const deviceId = device?.id;
   const manualModeRef = useRef(manualMode);
   manualModeRef.current = manualMode;
+  const exposureAutoRef = useRef(exposureAuto);
+  exposureAutoRef.current = exposureAuto;
+  const wbAutoRef = useRef(wbAuto);
+  wbAutoRef.current = wbAuto;
+  const focusAutoRef = useRef(focusAuto);
+  focusAutoRef.current = focusAuto;
 
   useEffect(() => {
     if (!available || !deviceId) {
@@ -83,9 +98,21 @@ export default function useManualCameraControls(device) {
   useEffect(() => {
     if (!available || !deviceId || manualModeRef.current !== "manual") return;
 
-    applyExposure(manualISO, manualShutterSeconds);
-    applyWhiteBalance(manualWBKelvin, manualWBTint);
-    applyFocus(manualFocus);
+    if (exposureAutoRef.current) {
+      setAutoExposure(deviceId).catch(() => {});
+    } else {
+      applyExposure(manualISO, manualShutterSeconds);
+    }
+    if (wbAutoRef.current) {
+      setAutoWhiteBalance(deviceId).catch(() => {});
+    } else {
+      applyWhiteBalance(manualWBKelvin, manualWBTint);
+    }
+    if (focusAutoRef.current) {
+      setAutoFocus(deviceId).catch(() => {});
+    } else {
+      applyFocus(manualFocus);
+    }
     // Only re-trigger on device change, not on every value change (those are
     // applied individually by the setters below).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,6 +121,7 @@ export default function useManualCameraControls(device) {
   const setISO = useCallback(
     (iso) => {
       setManualISO(iso);
+      setExposureAuto(false);
       if (manualModeRef.current === "manual") {
         applyExposure(iso, manualShutterSeconds);
       }
@@ -104,6 +132,7 @@ export default function useManualCameraControls(device) {
   const setShutterSeconds = useCallback(
     (seconds) => {
       setManualShutterSeconds(seconds);
+      setExposureAuto(false);
       if (manualModeRef.current === "manual") {
         applyExposure(manualISO, seconds);
       }
@@ -111,9 +140,17 @@ export default function useManualCameraControls(device) {
     [applyExposure, manualISO],
   );
 
+  const resetExposureToAuto = useCallback(() => {
+    setExposureAuto(true);
+    if (manualModeRef.current === "manual" && available && deviceId) {
+      setAutoExposure(deviceId).catch(() => {});
+    }
+  }, [available, deviceId]);
+
   const setWBKelvin = useCallback(
     (kelvin) => {
       setManualWBKelvin(kelvin);
+      setWbAuto(false);
       if (manualModeRef.current === "manual") {
         applyWhiteBalance(kelvin, manualWBTint);
       }
@@ -124,6 +161,7 @@ export default function useManualCameraControls(device) {
   const setWBTint = useCallback(
     (tint) => {
       setManualWBTint(tint);
+      setWbAuto(false);
       if (manualModeRef.current === "manual") {
         applyWhiteBalance(manualWBKelvin, tint);
       }
@@ -131,9 +169,17 @@ export default function useManualCameraControls(device) {
     [applyWhiteBalance, manualWBKelvin],
   );
 
+  const resetWBToAuto = useCallback(() => {
+    setWbAuto(true);
+    if (manualModeRef.current === "manual" && available && deviceId) {
+      setAutoWhiteBalance(deviceId).catch(() => {});
+    }
+  }, [available, deviceId]);
+
   const setFocus = useCallback(
     (lensPosition) => {
       setManualFocusValue(lensPosition);
+      setFocusAuto(false);
       if (manualModeRef.current === "manual") {
         applyFocus(lensPosition);
       }
@@ -141,32 +187,34 @@ export default function useManualCameraControls(device) {
     [applyFocus],
   );
 
+  const resetFocusToAuto = useCallback(() => {
+    setFocusAuto(true);
+    if (manualModeRef.current === "manual" && available && deviceId) {
+      setAutoFocus(deviceId).catch(() => {});
+    }
+  }, [available, deviceId]);
+
   const toggleManualMode = useCallback(() => {
     if (!available || !deviceId) return;
 
     if (manualModeRef.current === "auto") {
       setManualMode("manual");
-      applyExposure(manualISO, manualShutterSeconds);
-      applyWhiteBalance(manualWBKelvin, manualWBTint);
-      applyFocus(manualFocus);
+      // Ao entrar no modo manual, os ajustes que ainda não foram tocados
+      // pelo usuário começam em "auto" (mostrando "AUTO" na UI) e a câmera
+      // permanece no modo automático nativo até o usuário mexer no slider.
+      setExposureAuto(true);
+      setWbAuto(true);
+      setFocusAuto(true);
+      setAutoExposure(deviceId).catch(() => {});
+      setAutoWhiteBalance(deviceId).catch(() => {});
+      setAutoFocus(deviceId).catch(() => {});
     } else {
       setManualMode("auto");
       setAutoExposure(deviceId).catch(() => {});
       setAutoWhiteBalance(deviceId).catch(() => {});
       setAutoFocus(deviceId).catch(() => {});
     }
-  }, [
-    available,
-    deviceId,
-    applyExposure,
-    applyWhiteBalance,
-    applyFocus,
-    manualISO,
-    manualShutterSeconds,
-    manualWBKelvin,
-    manualWBTint,
-    manualFocus,
-  ]);
+  }, [available, deviceId]);
 
   return {
     available,
@@ -177,11 +225,17 @@ export default function useManualCameraControls(device) {
     setISO,
     manualShutterSeconds,
     setShutterSeconds,
+    exposureAuto,
+    resetExposureToAuto,
     manualWBKelvin,
     setWBKelvin,
     manualWBTint,
     setWBTint,
+    wbAuto,
+    resetWBToAuto,
     manualFocus,
     setFocus,
+    focusAuto,
+    resetFocusToAuto,
   };
 }

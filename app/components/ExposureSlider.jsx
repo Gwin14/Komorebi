@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Dimensions,
   PanResponder,
@@ -27,10 +27,30 @@ export default function ExposureSlider({
   resetValue = 0,
   formatLabel,
   unit = "EV",
+  // Quando informado, o ajuste tem um modo "auto" (ex.: ISO, obturador, WB,
+  // foco). O toque/tap no slider chama onReset() em vez de fixar um valor
+  // numérico, e o label exibe "AUTO" enquanto isAuto for true. EV não usa
+  // essas props: não tem modo automático, sempre mostra o valor numérico.
+  isAuto = false,
+  onReset,
 }) {
-  const exposureRef = useRef(exposure);
-  const exposureStart = useRef(exposure);
+  const displayValue = isAuto ? resetValue : exposure;
+
+  const exposureRef = useRef(displayValue);
+  const exposureStart = useRef(displayValue);
   const lastHapticStep = useRef(0);
+  const wasAutoRef = useRef(isAuto);
+
+  useEffect(() => {
+    if (wasAutoRef.current !== isAuto) {
+      wasAutoRef.current = isAuto;
+      exposureRef.current = displayValue;
+      exposureStart.current = displayValue;
+    }
+    // displayValue/resetValue propositalmente fora das deps: só queremos
+    // resincronizar a referência na transição de modo, não a cada arraste.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuto]);
 
   const progressFor = (v) => {
     if (maxExposure === minExposure) return 0.5;
@@ -80,7 +100,11 @@ export default function ExposureSlider({
             progressFor(resetValue) * (TICKS_COUNT - 1),
           );
 
-          setExposure(resetValue);
+          if (onReset) {
+            onReset();
+          } else {
+            setExposure(resetValue);
+          }
 
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -119,13 +143,15 @@ export default function ExposureSlider({
   };
 
   // Cálculo para mover a régua baseado no valor atual do exposure
-  const progress = progressFor(exposure);
+  const progress = progressFor(displayValue);
   const tickIndex = progress * (TICKS_COUNT - 1);
   const translateX = DIAL_WIDTH / 2 - tickIndex * (TICK_SPACING + 1.7);
 
-  const label = formatLabel
-    ? formatLabel(exposure)
-    : defaultFormatLabel(exposure, unit);
+  const label = isAuto
+    ? "AUTO"
+    : formatLabel
+      ? formatLabel(exposure)
+      : defaultFormatLabel(exposure, unit);
 
   return (
     <View style={[styles.container, topBarBelow && { marginVertical: -5 }]}>

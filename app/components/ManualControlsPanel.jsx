@@ -86,6 +86,8 @@ export default function ManualControlsPanel({
           resetValue={DEFAULT_ISO}
           topBarBelow={topBarBelow}
           formatLabel={(v) => `ISO ${Math.round(v)}`}
+          isAuto={manual.exposureAuto}
+          onReset={manual.resetExposureToAuto}
         />
       )}
 
@@ -98,6 +100,8 @@ export default function ManualControlsPanel({
           resetValue={DEFAULT_SHUTTER_SECONDS}
           topBarBelow={topBarBelow}
           formatLabel={formatShutter}
+          isAuto={manual.exposureAuto}
+          onReset={manual.resetExposureToAuto}
         />
       )}
 
@@ -110,6 +114,8 @@ export default function ManualControlsPanel({
           resetValue={DEFAULT_WB_KELVIN}
           topBarBelow={topBarBelow}
           formatLabel={(v) => `${Math.round(v)}K`}
+          isAuto={manual.wbAuto}
+          onReset={manual.resetWBToAuto}
         />
       )}
 
@@ -122,6 +128,8 @@ export default function ManualControlsPanel({
           resetValue={DEFAULT_FOCUS}
           topBarBelow={topBarBelow}
           formatLabel={(v) => `Foco ${v.toFixed(2)}`}
+          isAuto={manual.focusAuto}
+          onReset={manual.resetFocusToAuto}
         />
       )}
     </View>
