@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import ExposureSlider from "./components/ExposureSlider";
+import ManualControlsPanel from "./components/ManualControlsPanel";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
@@ -269,11 +270,20 @@ export default function App() {
         </View>
       )}
 
-      <ExposureSlider
-        exposure={exposure}
-        setExposure={setExposure}
-        topBarBelow={topBarBelow}
-      />
+      {manual.manualMode === "manual" ? (
+        <ManualControlsPanel
+          manual={manual}
+          topBarBelow={topBarBelow}
+          exposure={exposure}
+          setExposure={setExposure}
+        />
+      ) : (
+        <ExposureSlider
+          exposure={exposure}
+          setExposure={setExposure}
+          topBarBelow={topBarBelow}
+        />
+      )}
 
       <BottomControls
         controlsAnim={controlsAnim}
@@ -297,7 +307,6 @@ export default function App() {
         activeLensId={activeLensId}
         onSelectLens={handleSelectLens}
         galleryRefreshKey={galleryRefreshKey}
-        manual={manual}
       />
     </SafeAreaView>
   );

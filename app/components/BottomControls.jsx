@@ -11,7 +11,6 @@ import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
-import ManualControlsPanel from "./ManualControlsPanel";
 import Shutter from "./shutter";
 import styles from "./BottomControls.styles";
 
@@ -38,7 +37,6 @@ export default function BottomControls({
   activeLensId,
   onSelectLens,
   galleryRefreshKey,
-  manual,
 }) {
   const router = useRouter();
   const deviceOrientationStyle = useDeviceOrientation();
@@ -119,8 +117,11 @@ export default function BottomControls({
   });
 
   // LensSelector só aparece quando há mais de 1 lente e nenhum controle ativo
+  // (modo manual não conta como "controle ativo" para esse efeito)
   const showLensSelector =
-    lenses && lenses.length > 1 && activeControl === "none";
+    lenses &&
+    lenses.length > 1 &&
+    (activeControl === "none" || activeControl === "manual");
 
   return (
     <View style={styles.shutterContainer}>
@@ -246,9 +247,6 @@ export default function BottomControls({
           </View>
         )}
 
-        {activeControl === "manual" && manual && (
-          <ManualControlsPanel manual={manual} />
-        )}
       </Animated.View>
     </View>
   );

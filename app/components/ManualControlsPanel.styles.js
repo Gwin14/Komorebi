@@ -6,7 +6,7 @@ export default StyleSheet.create({
   },
   tabRow: {
     flexDirection: "row",
-    marginBottom: 4,
+    marginTop: 5,
   },
   tab: {
     paddingHorizontal: 14,

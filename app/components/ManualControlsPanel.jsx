@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import ManualControlDial from "./ManualControlDial";
+import ExposureSlider from "./ExposureSlider";
 import styles from "./ManualControlsPanel.styles";
 
 const TABS = [
+  { id: "ev", label: "EV" },
   { id: "iso", label: "ISO" },
   { id: "shutter", label: "SS" },
   { id: "wb", label: "WB" },
@@ -14,13 +15,24 @@ const DEFAULT_ISO_RANGE = { min: 50, max: 3200 };
 const DEFAULT_SHUTTER_RANGE = { minSeconds: 1 / 4000, maxSeconds: 1 };
 const DEFAULT_WB_RANGE = { minKelvin: 2500, maxKelvin: 8000 };
 
+const DEFAULT_ISO = 100;
+const DEFAULT_SHUTTER_SECONDS = 1 / 125;
+const DEFAULT_WB_KELVIN = 5500;
+const DEFAULT_FOCUS = 0.5;
+
 function formatShutter(seconds) {
   if (seconds >= 1) return `${seconds.toFixed(1)}s`;
   return `1/${Math.round(1 / seconds)}s`;
 }
 
-export default function ManualControlsPanel({ manual }) {
-  const [activeTab, setActiveTab] = useState("iso");
+export default function ManualControlsPanel({
+  manual,
+  topBarBelow,
+  // EV props (passados quando manualMode === "manual")
+  exposure,
+  setExposure,
+}) {
+  const [activeTab, setActiveTab] = useState("ev");
   const caps = manual.capabilities;
 
   const isoRange = caps
@@ -33,8 +45,11 @@ export default function ManualControlsPanel({ manual }) {
       }
     : DEFAULT_SHUTTER_RANGE;
 
+  // Quando sai do modo manual, volta para a aba EV
+  // (o componente é desmontado/montado, então o useState já reseta)
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, topBarBelow && { marginVertical: -5 }]}>
       <View style={styles.tabRow}>
         {TABS.map((tab) => (
           <TouchableOpacity
@@ -54,42 +69,58 @@ export default function ManualControlsPanel({ manual }) {
         ))}
       </View>
 
+      {activeTab === "ev" && (
+        <ExposureSlider
+          exposure={exposure}
+          setExposure={setExposure}
+          topBarBelow={topBarBelow}
+        />
+      )}
+
       {activeTab === "iso" && (
-        <ManualControlDial
-          value={manual.manualISO}
-          min={isoRange.min}
-          max={isoRange.max}
-          onChange={manual.setISO}
+        <ExposureSlider
+          exposure={manual.manualISO}
+          setExposure={manual.setISO}
+          minExposure={isoRange.min}
+          maxExposure={isoRange.max}
+          resetValue={DEFAULT_ISO}
+          topBarBelow={topBarBelow}
           formatLabel={(v) => `ISO ${Math.round(v)}`}
         />
       )}
 
       {activeTab === "shutter" && (
-        <ManualControlDial
-          value={manual.manualShutterSeconds}
-          min={shutterRange.minSeconds}
-          max={shutterRange.maxSeconds}
-          onChange={manual.setShutterSeconds}
+        <ExposureSlider
+          exposure={manual.manualShutterSeconds}
+          setExposure={manual.setShutterSeconds}
+          minExposure={shutterRange.minSeconds}
+          maxExposure={shutterRange.maxSeconds}
+          resetValue={DEFAULT_SHUTTER_SECONDS}
+          topBarBelow={topBarBelow}
           formatLabel={formatShutter}
         />
       )}
 
       {activeTab === "wb" && (
-        <ManualControlDial
-          value={manual.manualWBKelvin}
-          min={DEFAULT_WB_RANGE.minKelvin}
-          max={DEFAULT_WB_RANGE.maxKelvin}
-          onChange={manual.setWBKelvin}
+        <ExposureSlider
+          exposure={manual.manualWBKelvin}
+          setExposure={manual.setWBKelvin}
+          minExposure={DEFAULT_WB_RANGE.minKelvin}
+          maxExposure={DEFAULT_WB_RANGE.maxKelvin}
+          resetValue={DEFAULT_WB_KELVIN}
+          topBarBelow={topBarBelow}
           formatLabel={(v) => `${Math.round(v)}K`}
         />
       )}
 
       {activeTab === "focus" && (
-        <ManualControlDial
-          value={manual.manualFocus}
-          min={0}
-          max={1}
-          onChange={manual.setFocus}
+        <ExposureSlider
+          exposure={manual.manualFocus}
+          setExposure={manual.setFocus}
+          minExposure={0}
+          maxExposure={1}
+          resetValue={DEFAULT_FOCUS}
+          topBarBelow={topBarBelow}
           formatLabel={(v) => `Foco ${v.toFixed(2)}`}
         />
       )}

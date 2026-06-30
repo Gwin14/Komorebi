@@ -12,6 +12,11 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 // Largura da área da régua (ajuste conforme o seu layout)
 const DIAL_WIDTH = SCREEN_WIDTH * 0.6;
 const TICK_SPACING = 15; // Espaço em pixels entre cada tracinho da régua
+const TICKS_COUNT = 41; // ímpar, para ter um tracinho centralizado
+
+function defaultFormatLabel(value, unit) {
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)} ${unit}`;
+}
 
 export default function ExposureSlider({
   exposure,
@@ -19,10 +24,23 @@ export default function ExposureSlider({
   minExposure = -2,
   maxExposure = 2,
   topBarBelow,
+  resetValue = 0,
+  formatLabel,
+  unit = "EV",
 }) {
   const exposureRef = useRef(exposure);
   const exposureStart = useRef(exposure);
-  const lastHapticStep = useRef(Math.round(exposure * 10));
+  const lastHapticStep = useRef(0);
+
+  const progressFor = (v) => {
+    if (maxExposure === minExposure) return 0.5;
+    return Math.min(
+      1,
+      Math.max(0, (v - minExposure) / (maxExposure - minExposure)),
+    );
+  };
+
+  const valueFor = (progress) => minExposure + progress * (maxExposure - minExposure);
 
   const exposurePanResponder = useRef(
     PanResponder.create({
@@ -34,20 +52,13 @@ export default function ExposureSlider({
         exposureStart.current = exposureRef.current;
       },
       onPanResponderMove: (_, gestureState) => {
-        // Arrasto horizontal
-        const delta = -gestureState.dx * 0.015;
-
-        let nextExposure = exposureStart.current + delta;
-
-        nextExposure = Math.max(
-          minExposure,
-          Math.min(maxExposure, nextExposure),
-        );
-
-        const roundedExposure = Number(nextExposure.toFixed(2));
+        const startProgress = progressFor(exposureStart.current);
+        const deltaProgress = -gestureState.dx / DIAL_WIDTH;
+        const nextProgress = Math.min(1, Math.max(0, startProgress + deltaProgress));
+        const nextExposure = valueFor(nextProgress);
 
         // Haptic por “clique” da régua
-        const currentStep = Math.round(roundedExposure * 10);
+        const currentStep = Math.round(nextProgress * (TICKS_COUNT - 1));
 
         if (currentStep !== lastHapticStep.current) {
           lastHapticStep.current = currentStep;
@@ -55,19 +66,21 @@ export default function ExposureSlider({
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
         }
 
-        exposureRef.current = roundedExposure;
-        setExposure(roundedExposure);
+        exposureRef.current = nextExposure;
+        setExposure(nextExposure);
       },
       onPanResponderRelease: (_, gestureState) => {
         const wasTap =
           Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5;
 
         if (wasTap) {
-          exposureRef.current = 0;
-          exposureStart.current = 0;
-          lastHapticStep.current = 0;
+          exposureRef.current = resetValue;
+          exposureStart.current = resetValue;
+          lastHapticStep.current = Math.round(
+            progressFor(resetValue) * (TICKS_COUNT - 1),
+          );
 
-          setExposure(0);
+          setExposure(resetValue);
 
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -79,17 +92,14 @@ export default function ExposureSlider({
     }),
   ).current;
 
-  // Renderiza os tracinhos da régua dinamicamente
+  // Renderiza os tracinhos da régua (quantidade fixa, independente do range)
   const renderTicks = () => {
     const ticks = [];
-    // Criamos uma quantidade de traços baseada no range da exposição
-    // Multiplicando por 10 para ter marcações quebradas (ex: -2.0, -1.9, -1.8...)
-    const startTick = minExposure * 10;
-    const endTick = maxExposure * 10;
+    const centerIndex = Math.floor(TICKS_COUNT / 2);
 
-    for (let i = startTick; i <= endTick; i++) {
-      const isMajor = i % 5 === 0; // Traco maior a cada 0.5 unidades
-      const isCenter = i === 0; // Destaque para o zero absoluto
+    for (let i = 0; i < TICKS_COUNT; i++) {
+      const isMajor = i % 5 === 0;
+      const isCenter = i === centerIndex;
 
       ticks.push(
         <View
@@ -99,7 +109,7 @@ export default function ExposureSlider({
             isMajor ? styles.majorTick : styles.minorTick,
             isCenter && styles.centerTickStyle,
             {
-              marginRight: i === endTick ? 0 : TICK_SPACING,
+              marginRight: i === TICKS_COUNT - 1 ? 0 : TICK_SPACING,
             },
           ]}
         />,
@@ -109,25 +119,18 @@ export default function ExposureSlider({
   };
 
   // Cálculo para mover a régua baseado no valor atual do exposure
-  // Quanto maior o valor, mais para a esquerda a régua se move (offset negativo)
-  const range = maxExposure - minExposure;
-  const currentProgress = (exposure - minExposure) / range;
-
-  // Cada 0.1 EV equivale a um tracinho
-  const tickIndex = (exposure - minExposure) * 10;
-
-  // Centraliza exatamente o tracinho atual no indicador
+  const progress = progressFor(exposure);
+  const tickIndex = progress * (TICKS_COUNT - 1);
   const translateX = DIAL_WIDTH / 2 - tickIndex * (TICK_SPACING + 1.7);
+
+  const label = formatLabel
+    ? formatLabel(exposure)
+    : defaultFormatLabel(exposure, unit);
 
   return (
     <View style={[styles.container, topBarBelow && { marginVertical: -5 }]}>
       {/* Texto com o valor atual em cima */}
-      {!topBarBelow && (
-        <Text style={styles.exposureText}>
-          {exposure > 0 ? "+" : ""}
-          {exposure.toFixed(1)} EV
-        </Text>
-      )}
+      {!topBarBelow && <Text style={styles.exposureText}>{label}</Text>}
 
       {/* Área sensível ao toque */}
       <View
@@ -144,11 +147,9 @@ export default function ExposureSlider({
       </View>
       {topBarBelow && (
         <Text style={[styles.exposureText, styles.exposureTextBelow]}>
-          {exposure > 0 ? "+" : ""}
-          {exposure.toFixed(1)} EV
+          {label}
         </Text>
       )}
     </View>
   );
 }
-
