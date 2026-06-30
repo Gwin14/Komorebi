@@ -130,6 +130,17 @@ export default function App() {
   const handleTakePicture = useCallback(() => {
     animateShutter();
 
+    const manualSettings =
+      manual.manualMode === "manual"
+        ? {
+            iso: manual.exposureAuto ? null : manual.manualISO,
+            shutterSeconds: manual.exposureAuto
+              ? null
+              : manual.manualShutterSeconds,
+            wbKelvin: manual.wbAuto ? null : manual.manualWBKelvin,
+          }
+        : null;
+
     takePicture({
       cameraRef,
       cameraReady,
@@ -144,6 +155,7 @@ export default function App() {
       doubleCaptureMode,
       saveOriginalWithLUT,
       aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
+      manualSettings,
     });
   }, [
     animateShutter,
@@ -155,6 +167,12 @@ export default function App() {
     isProcessing,
     location,
     lutsLoaded,
+    manual.exposureAuto,
+    manual.manualISO,
+    manual.manualMode,
+    manual.manualShutterSeconds,
+    manual.manualWBKelvin,
+    manual.wbAuto,
     saveOriginalWithLUT,
     selectedLutId,
     setIsProcessing,

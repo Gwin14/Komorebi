@@ -199,7 +199,13 @@ export default function BottomControls({
           </TouchableOpacity>
         </View>
 
-        <View pointerEvents={activeControl === "none" ? "auto" : "none"}>
+        <View
+          pointerEvents={
+            activeControl === "none" || activeControl === "manual"
+              ? "auto"
+              : "none"
+          }
+        >
           <Shutter takePicture={takePicture} isProcessing={isProcessing} />
         </View>
 

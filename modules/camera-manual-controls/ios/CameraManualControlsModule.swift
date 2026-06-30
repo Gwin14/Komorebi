@@ -51,7 +51,7 @@ public class CameraManualControlsModule: Module {
       ]
     }
 
-    AsyncFunction("setManualExposure") { (deviceId: String, iso: Double, durationSeconds: Double) in
+    AsyncFunction("setManualExposure") { (deviceId: String, iso: Double, durationSeconds: Double) async throws in
       let device = try Self.findDevice(deviceId)
 
       guard device.isExposureModeSupported(.custom) else {
@@ -66,9 +66,16 @@ public class CameraManualControlsModule: Module {
       let duration = CMTimeMakeWithSeconds(clampedDuration, preferredTimescale: 1_000_000)
 
       try device.lockForConfiguration()
-      defer { device.unlockForConfiguration() }
-
-      device.setExposureModeCustom(duration: duration, iso: clampedIso, completionHandler: nil)
+      // Aguarda o completionHandler para só resolver a Promise quando o
+      // sensor já tiver o ISO/obturador realmente aplicados, evitando que
+      // uma captura disparada logo em seguida pegue o hardware em transição
+      // (causa de fotos cujos metadados não batem com os sliders).
+      await withCheckedContinuation { continuation in
+        device.setExposureModeCustom(duration: duration, iso: clampedIso) { _ in
+          continuation.resume()
+        }
+      }
+      device.unlockForConfiguration()
     }
 
     AsyncFunction("setAutoExposure") { (deviceId: String) in
@@ -84,7 +91,7 @@ public class CameraManualControlsModule: Module {
       device.exposureMode = .continuousAutoExposure
     }
 
-    AsyncFunction("setManualWhiteBalance") { (deviceId: String, temperatureKelvin: Double, tint: Double) in
+    AsyncFunction("setManualWhiteBalance") { (deviceId: String, temperatureKelvin: Double, tint: Double) async throws in
       let device = try Self.findDevice(deviceId)
 
       guard device.isWhiteBalanceModeSupported(.locked) else {
@@ -102,9 +109,12 @@ public class CameraManualControlsModule: Module {
       gains.blueGain = max(1.0, min(maxGain, gains.blueGain))
 
       try device.lockForConfiguration()
-      defer { device.unlockForConfiguration() }
-
-      device.setWhiteBalanceModeLocked(with: gains, completionHandler: nil)
+      await withCheckedContinuation { continuation in
+        device.setWhiteBalanceModeLocked(with: gains) { _ in
+          continuation.resume()
+        }
+      }
+      device.unlockForConfiguration()
     }
 
     AsyncFunction("setAutoWhiteBalance") { (deviceId: String) in
@@ -120,7 +130,7 @@ public class CameraManualControlsModule: Module {
       device.whiteBalanceMode = .continuousAutoWhiteBalance
     }
 
-    AsyncFunction("setManualFocus") { (deviceId: String, lensPosition: Double) in
+    AsyncFunction("setManualFocus") { (deviceId: String, lensPosition: Double) async throws in
       let device = try Self.findDevice(deviceId)
 
       guard device.isFocusModeSupported(.locked) else {
@@ -130,9 +140,12 @@ public class CameraManualControlsModule: Module {
       let clampedPosition = Float(max(0.0, min(1.0, lensPosition)))
 
       try device.lockForConfiguration()
-      defer { device.unlockForConfiguration() }
-
-      device.setFocusModeLocked(lensPosition: clampedPosition, completionHandler: nil)
+      await withCheckedContinuation { continuation in
+        device.setFocusModeLocked(lensPosition: clampedPosition) { _ in
+          continuation.resume()
+        }
+      }
+      device.unlockForConfiguration()
     }
 
     AsyncFunction("setAutoFocus") { (deviceId: String) in

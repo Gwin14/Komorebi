@@ -71,6 +71,7 @@ export const takePicture = async ({
   doubleCaptureMode = false,
   saveOriginalWithLUT = false,
   aspectRatio = 3 / 4,
+  manualSettings = null,
 }) => {
   if (!cameraRef.current || !cameraReady || isProcessing) return;
 
@@ -86,7 +87,25 @@ export const takePicture = async ({
     // Normaliza a URI logo na origem — resolve FileSystem, ImageManipulator e MediaLibrary no Android
     const uri = normalizeUri(photo?.path || photo?.filePath || photo?.uri);
 
-    const completeExif = { ...additionalExif, aspectRatio };
+    // Reflete no EXIF os ajustes manuais (ISO/obturador/WB) realmente
+    // travados no AVCaptureDevice no momento da captura, em vez de deixar a
+    // foto sem essa informação (a câmera embute valores de auto exposure).
+    const manualExif = {};
+    if (manualSettings?.iso != null) {
+      manualExif.ISO = Math.round(manualSettings.iso);
+    }
+    if (manualSettings?.shutterSeconds != null) {
+      manualExif.ExposureTime = manualSettings.shutterSeconds;
+    }
+    if (manualSettings?.iso != null || manualSettings?.shutterSeconds != null) {
+      manualExif.ExposureMode = 1; // 1 = manual, conforme spec EXIF
+      manualExif.ExposureProgram = 1; // 1 = manual
+    }
+    if (manualSettings?.wbKelvin != null) {
+      manualExif.WhiteBalance = 1; // 1 = manual
+    }
+
+    const completeExif = { ...additionalExif, ...manualExif, aspectRatio };
 
     // Item sem LUT: needsProcessing: false → a fila salva diretamente sem passar pelo WebView
     // saveOriginalWithLUT é sempre false aqui: sem LUT aplicado não há cópia "sem LUT" para salvar
