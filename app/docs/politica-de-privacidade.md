@@ -73,13 +73,13 @@ Todas as fotos permanecem **no seu dispositivo**. O aplicativo não realiza uplo
 
 O Komorebi integra-se a serviços externos **apenas para funcionalidades específicas e não relacionadas à coleta de dados pessoais identificáveis**:
 
-| Serviço | Finalidade | Dados enviados |
-|---|---|---|
-| **Open-Meteo API** (`api.open-meteo.com`) | Previsão do tempo no painel meteorológico | Coordenadas geográficas aproximadas (latitude/longitude) |
-| **BigDataCloud API** (`api.bigdatacloud.net`) | Geocodificação reversa (nome da cidade/região) | Coordenadas geográficas |
-| **Leaflet.js / CartoDB** | Exibição de mapa na galeria para fotos com GPS | Apenas carregamento de tiles de mapa; coordenadas processadas localmente |
-| **Site do Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criação de molduras de exibição de metadados | Imagem selecionada pelo usuário (processada no navegador) |
-| **Notion** (`fabiosantoss.notion.site`) | Formulário de feedback | Apenas o que você digitar voluntariamente |
+| Serviço                                                                  | Finalidade                                     | Dados enviados                                                           |
+| ------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------ |
+| **Open-Meteo API** (`api.open-meteo.com`)                                | Previsão do tempo no painel meteorológico      | Coordenadas geográficas aproximadas (latitude/longitude)                 |
+| **BigDataCloud API** (`api.bigdatacloud.net`)                            | Geocodificação reversa (nome da cidade/região) | Coordenadas geográficas                                                  |
+| **Leaflet.js / CartoDB**                                                 | Exibição de mapa na galeria para fotos com GPS | Apenas carregamento de tiles de mapa; coordenadas processadas localmente |
+| **Site do Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criação de molduras de exibição de metadados   | Imagem selecionada pelo usuário (processada no navegador)                |
+| **Notion** (`fabiosantoss.notion.site`)                                  | Formulário de feedback                         | Apenas o que você digitar voluntariamente                                |
 
 Esses serviços possuem suas próprias políticas de privacidade, pelas quais a Equipe Komorebi não se responsabiliza.
 
@@ -142,4 +142,4 @@ Se tiver dúvidas sobre esta Política de Privacidade, entre em contato com a Eq
 
 ---
 
-*Este documento foi elaborado com base nas funcionalidades implementadas no Komorebi v1.0.0 e é regido pelas leis brasileiras, em especial a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).*
+_Este documento foi elaborado com base nas funcionalidades implementadas no Komorebi v1.0.0 e é regido pelas leis brasileiras, em especial a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)._

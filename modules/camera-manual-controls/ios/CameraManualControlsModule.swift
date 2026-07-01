@@ -33,6 +33,26 @@ public class CameraManualControlsModule: Module {
       true
     }
 
+    // Diagnóstico temporário: lê o estado real do AVCaptureDevice no
+    // instante em que é chamado, para confirmar se o exposureMode/ISO/
+    // duration ainda estão no valor manual travado ou se algo (ex: o
+    // próprio vision-camera reconfigurando a sessão) já resetou para auto
+    // antes da captura.
+    AsyncFunction("getDebugState") { (deviceId: String) -> [String: Any] in
+      let device = try Self.findDevice(deviceId)
+      return [
+        "exposureMode": device.exposureMode.rawValue,
+        "iso": device.iso,
+        "exposureDurationSeconds": CMTimeGetSeconds(device.exposureDuration),
+        "focusMode": device.focusMode.rawValue,
+        "lensPosition": device.lensPosition,
+        "whiteBalanceMode": device.whiteBalanceMode.rawValue,
+        "isAdjustingExposure": device.isAdjustingExposure,
+        "isAdjustingFocus": device.isAdjustingFocus,
+        "isAdjustingWhiteBalance": device.isAdjustingWhiteBalance,
+      ]
+    }
+
     AsyncFunction("getCapabilities") { (deviceId: String) -> [String: Any] in
       let device = try Self.findDevice(deviceId)
       let format = device.activeFormat
@@ -146,6 +166,28 @@ public class CameraManualControlsModule: Module {
         }
       }
       device.unlockForConfiguration()
+    }
+
+    AsyncFunction("focusAtPoint") { (deviceId: String, pointX: Double, pointY: Double) in
+      let device = try Self.findDevice(deviceId)
+
+      guard device.isFocusPointOfInterestSupported else {
+        throw ManualControlsError.unsupported("Focus point of interest not supported on this device")
+      }
+      guard device.isFocusModeSupported(.autoFocus) else {
+        throw ManualControlsError.unsupported("Autofocus not supported on this device")
+      }
+
+      let clampedX = max(0.0, min(1.0, pointX))
+      let clampedY = max(0.0, min(1.0, pointY))
+
+      try device.lockForConfiguration()
+      defer { device.unlockForConfiguration() }
+
+      // Intentionally only touches focus. VisionCamera's focus() also moves
+      // exposure to autoExpose, which breaks manual ISO/shutter/WB controls.
+      device.focusPointOfInterest = CGPoint(x: clampedX, y: clampedY)
+      device.focusMode = .autoFocus
     }
 
     AsyncFunction("setAutoFocus") { (deviceId: String) in

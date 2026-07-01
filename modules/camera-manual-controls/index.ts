@@ -55,7 +55,11 @@ export async function setManualWhiteBalance(
   temperatureKelvin: number,
   tint: number,
 ): Promise<void> {
-  await nativeModule?.setManualWhiteBalance?.(deviceId, temperatureKelvin, tint);
+  await nativeModule?.setManualWhiteBalance?.(
+    deviceId,
+    temperatureKelvin,
+    tint,
+  );
 }
 
 export async function setAutoWhiteBalance(deviceId: string): Promise<void> {
@@ -69,6 +73,24 @@ export async function setManualFocus(
   await nativeModule?.setManualFocus?.(deviceId, lensPosition);
 }
 
+export async function focusAtPoint(
+  deviceId: string,
+  pointX: number,
+  pointY: number,
+): Promise<void> {
+  if (!nativeModule?.focusAtPoint) {
+    throw new Error("focusAtPoint is not available");
+  }
+
+  await nativeModule?.focusAtPoint?.(deviceId, pointX, pointY);
+}
+
 export async function setAutoFocus(deviceId: string): Promise<void> {
   await nativeModule?.setAutoFocus?.(deviceId);
+}
+
+// Diagnóstico temporário — ver comentário em CameraManualControlsModule.swift.
+export async function getDebugState(deviceId: string): Promise<any> {
+  if (!nativeModule) return null;
+  return nativeModule.getDebugState(deviceId);
 }

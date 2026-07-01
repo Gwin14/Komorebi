@@ -252,7 +252,6 @@ export default function BottomControls({
             />
           </View>
         )}
-
       </Animated.View>
     </View>
   );

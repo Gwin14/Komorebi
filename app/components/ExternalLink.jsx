@@ -1,12 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import {
-  Alert,
-  Linking,
-  Pressable,
-  Text,
-  View
-} from "react-native";
+import { Alert, Linking, Pressable, Text, View } from "react-native";
 import styles from "./ExternalLink.styles";
 
 export default function ExternalLink({
@@ -56,4 +50,3 @@ export default function ExternalLink({
     </Pressable>
   );
 }
-

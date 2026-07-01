@@ -1,6 +1,6 @@
-const { withDangerousMod } = require('expo/config-plugins');
-const fs = require('fs');
-const path = require('path');
+const { withDangerousMod } = require("expo/config-plugins");
+const fs = require("fs");
+const path = require("path");
 
 /**
  * Força o IPHONEOS_DEPLOYMENT_TARGET de TODOS os pods para um valor mínimo,
@@ -11,7 +11,7 @@ const path = require('path');
  * injeta um loop no post_install do Podfile que cobre cada pod individual.
  * Como o Podfile é regenerado pelo prebuild, isto roda sempre — fix permanente.
  */
-const MIN_TARGET = '15.1';
+const MIN_TARGET = "15.1";
 
 const SNIPPET = `
   # >>> withIosDeploymentTarget (auto) — força deployment target mínimo em todos os pods
@@ -28,19 +28,22 @@ const SNIPPET = `
 
 module.exports = function withIosDeploymentTarget(config) {
   return withDangerousMod(config, [
-    'ios',
+    "ios",
     (cfg) => {
-      const podfilePath = path.join(cfg.modRequest.platformProjectRoot, 'Podfile');
-      let contents = fs.readFileSync(podfilePath, 'utf8');
+      const podfilePath = path.join(
+        cfg.modRequest.platformProjectRoot,
+        "Podfile",
+      );
+      let contents = fs.readFileSync(podfilePath, "utf8");
 
-      if (contents.includes('withIosDeploymentTarget (auto)')) {
+      if (contents.includes("withIosDeploymentTarget (auto)")) {
         return cfg;
       }
 
       // Insere o snippet logo após a chamada react_native_post_install(...).
       contents = contents.replace(
         /(react_native_post_install\([\s\S]*?\)\n)/,
-        `$1${SNIPPET}`
+        `$1${SNIPPET}`,
       );
 
       fs.writeFileSync(podfilePath, contents);

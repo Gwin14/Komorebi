@@ -79,9 +79,15 @@ export const takePicture = async ({
     setIsProcessing(true);
 
     const additionalExif = await getLocationExif(location);
+    // Com manual ativo, força "speed" (frame único, sem fusão Deep Fusion/
+    // Smart HDR): em modo "quality"/"balanced" o AVCapturePhotoOutput funde
+    // múltiplos frames em exposições diferentes, ignorando o ISO/obturador
+    // travado manualmente e estourando a foto final em relação ao viewfinder.
+    const hasManualExposure =
+      manualSettings?.iso != null || manualSettings?.shutterSeconds != null;
     const photo = await cameraRef.current.takePhoto({
       flash: flash === "on" ? "on" : "off",
-      photoQualityBalance: "quality",
+      photoQualityBalance: hasManualExposure ? "speed" : "quality",
     });
 
     // Normaliza a URI logo na origem — resolve FileSystem, ImageManipulator e MediaLibrary no Android

@@ -22,7 +22,9 @@ Um aplicativo de câmera moderno e minimalista desenvolvido com React Native e E
 ## 🎮 Funcionalidades Principais
 
 ### Sistema de Filtros LUT
+
 O app possui um sistema profissional de filtros baseado em LUTs:
+
 - **Dark Gold**: Tom cinematográfico quente e vintage
 - **Wes Anderson**: Paleta de cores inspirada no diretor
 - **Cinema**: Look profissional de cinema
@@ -31,6 +33,7 @@ O app possui um sistema profissional de filtros baseado em LUTs:
 - Conversão de espaço de cores sRGB/Linear para precisão
 
 ### Controle de Zoom Avançado
+
 - **Dial interativo**: Controle preciso através de gestos de arrastar
 - **Gestos pinch**: Zoom intuitivo com dois dedos
 - **Feedback háptico**: Vibração diferenciada em marcações principais
@@ -38,7 +41,9 @@ O app possui um sistema profissional de filtros baseado em LUTs:
 - Animações suaves e responsivas
 
 ### Sistema de Metadados EXIF Completo
+
 Salvamento automático de:
+
 - Data e hora da captura
 - Configurações da câmera (ISO, abertura, velocidade)
 - Informações de exposição e compensação
@@ -48,6 +53,7 @@ Salvamento automático de:
 - Espaço de cores e resolução
 
 ### Galeria Integrada
+
 - Visualização de fotos do álbum Komorebi
 - Grade de miniaturas 3x3
 - Modal de visualização com informações detalhadas
@@ -67,22 +73,26 @@ Salvamento automático de:
 ### Instalação
 
 1. Clone o repositório:
+
 ```bash
 git clone https://github.com/Gwin14/Komorebi
 cd Komorebi
 ```
 
 2. Instale as dependências:
+
 ```bash
 npm install
 ```
 
 3. Inicie o projeto:
+
 ```bash
 npm start
 ```
 
 4. Execute no dispositivo:
+
 ```bash
 # Para Android
 npm run android
@@ -94,6 +104,7 @@ npm run ios
 ## 📱 Permissões Necessárias
 
 O aplicativo requer as seguintes permissões:
+
 - **Câmera**: Para capturar fotos
 - **Microfone**: Para gravação de áudio
 - **Galeria/Media Library**: Para salvar fotos capturadas
@@ -104,35 +115,42 @@ As permissões são solicitadas automaticamente na primeira execução.
 ## 🛠️ Tecnologias Utilizadas
 
 ### Core
+
 - **React Native** (0.81.4) - Framework principal
 - **Expo** (~54.0.10) - Plataforma de desenvolvimento
 - **TypeScript** (~5.9.2) - Tipagem estática
 
 ### Câmera e Mídia
+
 - **expo-camera** (~17.0.10) - API de câmera
 - **expo-media-library** (^18.2.0) - Gerenciamento de mídia
 - **expo-image-manipulator** (~14.0.7) - Manipulação de imagens
 - **expo-file-system** (~19.0.19) - Sistema de arquivos
 
 ### UI/UX
+
 - **expo-haptics** (~15.0.7) - Feedback tátil
 - **react-native-reanimated** (~4.1.1) - Animações performáticas
 - **react-native-gesture-handler** (~2.28.0) - Gestos avançados
 - **@expo/vector-icons** - Ícones da interface
 
 ### Sensores e Localização
+
 - **expo-sensors** (^15.0.8) - Acelerômetro e giroscópio
 - **expo-location** (^19.0.8) - GPS e geolocalização
 
 ### Processamento de Imagem
+
 - **piexifjs** (^1.0.6) - Manipulação de metadados EXIF
 - **react-native-webview** (^13.16.0) - Processamento LUT via Canvas API
 
 ### Mapas e Visualização
+
 - **react-native-maps** (^1.26.20) - Mapas nativos
 - **Leaflet.js** (via WebView) - Mapas web interativos
 
 ### Áudio
+
 - **expo-av** (^16.0.8) - Sistema de áudio
 
 ## 📂 Estrutura do Projeto
@@ -181,7 +199,9 @@ Komorebi/
 ## 🎯 Componentes Principais
 
 ### LUTProcessor
+
 Sistema completo de processamento de filtros cinematográficos:
+
 - Carregamento e cache de arquivos .CUBE
 - Interpolação tetrahedral para precisão de cores
 - Processamento via WebView com Canvas API
@@ -190,7 +210,9 @@ Sistema completo de processamento de filtros cinematográficos:
 - Processamento em background para não bloquear a UI
 
 ### Dial de zoom
+
 Dial interativo para controle de zoom com:
+
 - 51 linhas de marcação (incrementos de 15px)
 - Escala dinâmica baseada na distância do centro
 - Feedback háptico diferenciado para marcações principais (a cada 5) e secundárias
@@ -198,14 +220,18 @@ Dial interativo para controle de zoom com:
 - Animação spring para ajuste final
 
 ### CameraPreview
+
 Componente de preview com:
+
 - Suporte a estilo retrô com bordas arredondadas
 - Grade de composição fotográfica opcional
 - Controle de zoom, flash e orientação
 - Captura com metadados EXIF completos
 
 ### Galery
+
 Galeria completa com:
+
 - Grid 3x3 de fotos do álbum Komorebi
 - Modal de visualização em tela cheia
 - Exibição de 9+ campos EXIF
@@ -213,7 +239,9 @@ Galeria completa com:
 - Conversão de coordenadas GPS para formato legível
 
 ### Settings
+
 Página de configurações com:
+
 - Toggle de estilo retrô do viewfinder
 - Toggle de grade da câmera
 - Toggle de som do obturador
@@ -225,7 +253,9 @@ Página de configurações com:
 ## 🎨 Personalização
 
 ### Cores do Tema
+
 As principais cores podem ser ajustadas nos arquivos de estilo:
+
 - Accent color: `#ffaa00` (laranja/âmbar)
 - Background: `#000` (preto absoluto)
 - Text primary: `#fff` (branco)
@@ -233,15 +263,19 @@ As principais cores podem ser ajustadas nos arquivos de estilo:
 - Borders: `#444` e `#555` (cinza escuro)
 
 ### Configurações Salvas (AsyncStorage)
+
 O app salva automaticamente as preferências:
+
 - Estilo retrô do viewfinder
 - Visibilidade da grade
 - Som do obturador
 - Salvamento de localização
 
 ### Adicionando Novos Filtros LUT
+
 1. Adicione o arquivo `.CUBE` em `assets/luts/`
 2. Registre em `AVAILABLE_LUTS` no arquivo `lutProcessor.js`:
+
 ```javascript
 {
   id: "meu-filtro",
@@ -251,7 +285,9 @@ O app salva automaticamente as preferências:
 ```
 
 ### Configurações da Câmera
+
 No arquivo `app.json`, você pode personalizar:
+
 - Mensagens de permissão
 - Ícones e splash screen
 - Configurações de build para iOS/Android
@@ -270,16 +306,19 @@ npm run lint       # Executa o linter ESLint
 ## 🔧 Recursos Avançados
 
 ### Sistema de Orientação
+
 - Detecção automática de orientação via `DeviceMotion`
 - Rotação animada de ícones da interface
 - Mantém usabilidade em qualquer orientação
 
 ### Processamento Assíncrono
+
 - Fila de processamento de imagens
 - Não bloqueia a captura de novas fotos
 - Processamento em background via WebView
 
 ### Gestão de Álbum
+
 - Criação automática do álbum "Komorebi"
 - Organização centralizada de fotos
 - Compatibilidade com galeria nativa
@@ -287,6 +326,7 @@ npm run lint       # Executa o linter ESLint
 ## 🤝 Contribuindo
 
 Contribuições são bem-vindas! Sinta-se à vontade para:
+
 1. Fazer fork do projeto
 2. Criar uma branch para sua feature (`git checkout -b feature/NovaFuncionalidade`)
 3. Commit suas mudanças (`git commit -m 'Adiciona nova funcionalidade'`)

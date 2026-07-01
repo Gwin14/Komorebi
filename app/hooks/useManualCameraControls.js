@@ -5,6 +5,7 @@ import {
   isManualControlsAvailable,
   setAutoExposure,
   setAutoFocus,
+  focusAtPoint as focusAtPointNative,
   setAutoWhiteBalance,
   setManualExposure,
   setManualFocus,
@@ -88,6 +89,20 @@ export default function useManualCameraControls(device) {
     (lensPosition) => {
       if (!available || !deviceId) return;
       setManualFocus(deviceId, lensPosition).catch(() => {});
+    },
+    [available, deviceId],
+  );
+
+  const focusAtPoint = useCallback(
+    async (pointX, pointY) => {
+      if (!available || !deviceId) return false;
+
+      try {
+        await focusAtPointNative(deviceId, pointX, pointY);
+        return true;
+      } catch {
+        return false;
+      }
     },
     [available, deviceId],
   );
@@ -235,6 +250,7 @@ export default function useManualCameraControls(device) {
     resetWBToAuto,
     manualFocus,
     setFocus,
+    focusAtPoint,
     focusAuto,
     resetFocusToAuto,
   };

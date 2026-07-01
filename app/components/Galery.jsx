@@ -10,7 +10,7 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ExifItem } from "../components/ExifItem";
@@ -165,15 +165,10 @@ export default function Galery() {
           style={styles.modal}
           contentContainerStyle={styles.modalContent}
         >
-          <Image
-            source={{ uri: selectedImage }}
-            style={styles.selectedImage}
-          />
+          <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
 
           <View style={styles.header}>
-            <Text style={styles.infoTitle}>
-              Informações
-            </Text>
+            <Text style={styles.infoTitle}>Informações</Text>
             <TouchableOpacity
               style={styles.exifFrameButton}
               onPress={() => {

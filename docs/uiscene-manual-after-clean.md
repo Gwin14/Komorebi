@@ -133,10 +133,13 @@ Fazer as 4 inserções abaixo (buscar a linha âncora e inserir a linha nova log
 ### 4a. Seção PBXBuildFile
 
 Buscar:
+
 ```
 F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 ```
+
 Inserir depois:
+
 ```
 		F11748462D0307B40044C1D9 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748452D0307B40044C1D9 /* SceneDelegate.swift */; };
 ```
@@ -144,10 +147,13 @@ Inserir depois:
 ### 4b. Seção PBXFileReference
 
 Buscar:
+
 ```
 F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = Komorebi/AppDelegate.swift; sourceTree = "<group>"; };
 ```
+
 Inserir depois:
+
 ```
 		F11748452D0307B40044C1D9 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = SceneDelegate.swift; path = Komorebi/SceneDelegate.swift; sourceTree = "<group>"; };
 ```
@@ -155,10 +161,13 @@ Inserir depois:
 ### 4c. Seção PBXGroup (grupo Komorebi)
 
 Buscar:
+
 ```
 F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 ```
+
 Inserir depois:
+
 ```
 				F11748452D0307B40044C1D9 /* SceneDelegate.swift */,
 ```
@@ -166,10 +175,13 @@ Inserir depois:
 ### 4d. Seção PBXSourcesBuildPhase
 
 Buscar:
+
 ```
 F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 ```
+
 Inserir depois:
+
 ```
 				F11748462D0307B40044C1D9 /* SceneDelegate.swift in Sources */,
 ```

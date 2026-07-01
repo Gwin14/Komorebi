@@ -7,7 +7,7 @@ import {
   Image,
   Modal,
   Text,
-  View
+  View,
 } from "react-native";
 import { useSettings } from "../context/SettingsContext";
 import styles from "./Welcome.styles";
@@ -36,7 +36,7 @@ export default function Welcome() {
       animationType="slide"
       // visible={modalVisible}
       presentationStyle="pageSheet"
-      onRequestClose={() =>  setFirstTime(false)}
+      onRequestClose={() => setFirstTime(false)}
     >
       <View style={styles.container}>
         {/* Fundo animado */}
@@ -80,4 +80,3 @@ export default function Welcome() {
     </Modal>
   );
 }
-

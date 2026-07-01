@@ -1,11 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useEffect, useRef } from "react";
-import {
-  Animated,
-  Pressable,
-  Text,
-  View
-} from "react-native";
+import { Animated, Pressable, Text, View } from "react-native";
 import styles from "./CustoToggle.styles";
 
 export default function CustomToggle({ label, value, onValueChange }) {
@@ -49,4 +44,3 @@ export default function CustomToggle({ label, value, onValueChange }) {
     </View>
   );
 }
-

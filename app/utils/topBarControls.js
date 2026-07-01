@@ -1,10 +1,10 @@
 export const TOP_BAR_CONTROLS = [
-//   {
-//     id: "aspectRatio",
-//     label: "Zoom",
-//     icon: "crop-outline",
-//     alwaysEnabled: false,
-//   },
+  //   {
+  //     id: "aspectRatio",
+  //     label: "Zoom",
+  //     icon: "crop-outline",
+  //     alwaysEnabled: false,
+  //   },
   {
     id: "weather",
     label: "Tempo",

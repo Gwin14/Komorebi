@@ -1,11 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useRef } from "react";
-import {
-  Animated,
-  Dimensions,
-  PanResponder,
-  View
-} from "react-native";
+import { Animated, Dimensions, PanResponder, View } from "react-native";
 import { runOnJS } from "react-native-reanimated";
 import styles from "./ExposureDialFinal.styles";
 
@@ -136,4 +131,3 @@ export default function ExposureDialFinal({
     </View>
   );
 }
-

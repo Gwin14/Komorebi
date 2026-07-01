@@ -41,10 +41,10 @@ export default function ComingSoon() {
   const renderItem = (IconComponent, iconName) => {
     function SectionItem({ item }) {
       return (
-      <View style={styles.itemContainer}>
-        <IconComponent name={iconName} size={24} color="#ffaa00ff" />
-        <Text style={styles.text}>{item.title}</Text>
-      </View>
+        <View style={styles.itemContainer}>
+          <IconComponent name={iconName} size={24} color="#ffaa00ff" />
+          <Text style={styles.text}>{item.title}</Text>
+        </View>
       );
     }
 

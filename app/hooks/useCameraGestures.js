@@ -54,13 +54,5 @@ export default function useCameraGestures({
       });
 
     return Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
-  }, [
-    lastZoom,
-    maxZoom,
-    minZoom,
-    setZoom,
-    zoomSV,
-    showLuts,
-    hideLuts,
-  ]);
+  }, [lastZoom, maxZoom, minZoom, setZoom, zoomSV, showLuts, hideLuts]);
 }

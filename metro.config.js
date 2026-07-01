@@ -8,4 +8,3 @@ config.resolver.assetExts.push("cube");
 config.resolver.assetExts.push("md");
 
 module.exports = config;
-    

@@ -4,7 +4,7 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import styles from "./LUTSelector.styles";
 
@@ -88,4 +88,3 @@ export default function LUTSelector({
     </Animated.View>
   );
 }
-

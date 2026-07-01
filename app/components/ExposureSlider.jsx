@@ -1,11 +1,6 @@
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef } from "react";
-import {
-  Dimensions,
-  PanResponder,
-  Text,
-  View
-} from "react-native";
+import { Dimensions, PanResponder, Text, View } from "react-native";
 import styles from "./ExposureSlider.styles";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -60,7 +55,8 @@ export default function ExposureSlider({
     );
   };
 
-  const valueFor = (progress) => minExposure + progress * (maxExposure - minExposure);
+  const valueFor = (progress) =>
+    minExposure + progress * (maxExposure - minExposure);
 
   const exposurePanResponder = useRef(
     PanResponder.create({
@@ -74,7 +70,10 @@ export default function ExposureSlider({
       onPanResponderMove: (_, gestureState) => {
         const startProgress = progressFor(exposureStart.current);
         const deltaProgress = -gestureState.dx / DIAL_WIDTH;
-        const nextProgress = Math.min(1, Math.max(0, startProgress + deltaProgress));
+        const nextProgress = Math.min(
+          1,
+          Math.max(0, startProgress + deltaProgress),
+        );
         const nextExposure = valueFor(nextProgress);
 
         // Haptic por “clique” da régua
