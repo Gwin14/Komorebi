@@ -135,8 +135,8 @@ export default function App() {
     const manualSettings =
       manual.manualMode === "manual"
         ? {
-            iso: manual.exposureAuto ? null : manual.manualISO,
-            shutterSeconds: manual.exposureAuto
+            iso: manual.isoAuto ? null : manual.manualISO,
+            shutterSeconds: manual.shutterAuto
               ? null
               : manual.manualShutterSeconds,
             wbKelvin: manual.wbAuto ? null : manual.manualWBKelvin,
@@ -180,11 +180,12 @@ export default function App() {
     isProcessing,
     location,
     lutsLoaded,
-    manual.exposureAuto,
+    manual.isoAuto,
     manual.manualISO,
     manual.manualMode,
     manual.manualShutterSeconds,
     manual.manualWBKelvin,
+    manual.shutterAuto,
     manual.wbAuto,
     saveOriginalWithLUT,
     selectedLutId,

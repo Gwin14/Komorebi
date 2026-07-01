@@ -86,8 +86,8 @@ export default function ManualControlsPanel({
           resetValue={DEFAULT_ISO}
           topBarBelow={topBarBelow}
           formatLabel={(v) => `ISO ${Math.round(v)}`}
-          isAuto={manual.exposureAuto}
-          onReset={manual.resetExposureToAuto}
+          isAuto={manual.isoAuto}
+          onReset={manual.resetISOToAuto}
         />
       )}
 
@@ -100,8 +100,8 @@ export default function ManualControlsPanel({
           resetValue={DEFAULT_SHUTTER_SECONDS}
           topBarBelow={topBarBelow}
           formatLabel={formatShutter}
-          isAuto={manual.exposureAuto}
-          onReset={manual.resetExposureToAuto}
+          isAuto={manual.shutterAuto}
+          onReset={manual.resetShutterToAuto}
         />
       )}
 

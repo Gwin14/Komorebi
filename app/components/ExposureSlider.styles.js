@@ -35,6 +35,11 @@ export default StyleSheet.create({
     paddingLeft: 0,
     paddingRight: 0,
   },
+  tickSlot: {
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   tick: {
     width: 1.5,
     backgroundColor: "rgba(255, 255, 255, 0.4)",

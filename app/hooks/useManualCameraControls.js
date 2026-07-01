@@ -33,20 +33,25 @@ export default function useManualCameraControls(device) {
   const [manualWBTint, setManualWBTint] = useState(DEFAULT_WB_TINT);
   const [manualFocus, setManualFocusValue] = useState(DEFAULT_FOCUS);
 
-  // ISO e obturador compartilham um único modo "auto" porque o
-  // AVCaptureDevice trata os dois como um par (exposureMode custom/auto).
+  // O AVCaptureDevice aplica ISO e obturador como um par, mas a UI mantém
+  // o estado AUTO de cada slider separado para que resetar um não resete o
+  // outro visualmente. Só voltamos o device para auto nativo quando ambos
+  // estiverem em AUTO.
   // WB e foco têm cada um seu próprio modo automático nativo. EV não tem
   // estado de auto: é sempre manual, com padrão fixo 0 (ver ExposureSlider
   // usado direto em app/index.jsx fora deste hook).
-  const [exposureAuto, setExposureAuto] = useState(true);
+  const [isoAuto, setIsoAuto] = useState(true);
+  const [shutterAuto, setShutterAuto] = useState(true);
   const [wbAuto, setWbAuto] = useState(true);
   const [focusAuto, setFocusAuto] = useState(true);
 
   const deviceId = device?.id;
   const manualModeRef = useRef(manualMode);
   manualModeRef.current = manualMode;
-  const exposureAutoRef = useRef(exposureAuto);
-  exposureAutoRef.current = exposureAuto;
+  const isoAutoRef = useRef(isoAuto);
+  isoAutoRef.current = isoAuto;
+  const shutterAutoRef = useRef(shutterAuto);
+  shutterAutoRef.current = shutterAuto;
   const wbAutoRef = useRef(wbAuto);
   wbAutoRef.current = wbAuto;
   const focusAutoRef = useRef(focusAuto);
@@ -113,7 +118,7 @@ export default function useManualCameraControls(device) {
   useEffect(() => {
     if (!available || !deviceId || manualModeRef.current !== "manual") return;
 
-    if (exposureAutoRef.current) {
+    if (isoAutoRef.current && shutterAutoRef.current) {
       setAutoExposure(deviceId).catch(() => {});
     } else {
       applyExposure(manualISO, manualShutterSeconds);
@@ -136,7 +141,7 @@ export default function useManualCameraControls(device) {
   const setISO = useCallback(
     (iso) => {
       setManualISO(iso);
-      setExposureAuto(false);
+      setIsoAuto(false);
       if (manualModeRef.current === "manual") {
         applyExposure(iso, manualShutterSeconds);
       }
@@ -147,7 +152,7 @@ export default function useManualCameraControls(device) {
   const setShutterSeconds = useCallback(
     (seconds) => {
       setManualShutterSeconds(seconds);
-      setExposureAuto(false);
+      setShutterAuto(false);
       if (manualModeRef.current === "manual") {
         applyExposure(manualISO, seconds);
       }
@@ -155,12 +160,29 @@ export default function useManualCameraControls(device) {
     [applyExposure, manualISO],
   );
 
-  const resetExposureToAuto = useCallback(() => {
-    setExposureAuto(true);
+  const resetISOToAuto = useCallback(() => {
+    setManualISO(DEFAULT_ISO);
+    setIsoAuto(true);
     if (manualModeRef.current === "manual" && available && deviceId) {
-      setAutoExposure(deviceId).catch(() => {});
+      if (shutterAutoRef.current) {
+        setAutoExposure(deviceId).catch(() => {});
+      } else {
+        applyExposure(DEFAULT_ISO, manualShutterSeconds);
+      }
     }
-  }, [available, deviceId]);
+  }, [applyExposure, available, deviceId, manualShutterSeconds]);
+
+  const resetShutterToAuto = useCallback(() => {
+    setManualShutterSeconds(DEFAULT_SHUTTER_SECONDS);
+    setShutterAuto(true);
+    if (manualModeRef.current === "manual" && available && deviceId) {
+      if (isoAutoRef.current) {
+        setAutoExposure(deviceId).catch(() => {});
+      } else {
+        applyExposure(manualISO, DEFAULT_SHUTTER_SECONDS);
+      }
+    }
+  }, [applyExposure, available, deviceId, manualISO]);
 
   const setWBKelvin = useCallback(
     (kelvin) => {
@@ -217,7 +239,8 @@ export default function useManualCameraControls(device) {
       // Ao entrar no modo manual, os ajustes que ainda não foram tocados
       // pelo usuário começam em "auto" (mostrando "AUTO" na UI) e a câmera
       // permanece no modo automático nativo até o usuário mexer no slider.
-      setExposureAuto(true);
+      setIsoAuto(true);
+      setShutterAuto(true);
       setWbAuto(true);
       setFocusAuto(true);
       setAutoExposure(deviceId).catch(() => {});
@@ -238,10 +261,13 @@ export default function useManualCameraControls(device) {
     toggleManualMode,
     manualISO,
     setISO,
+    isoAuto,
+    resetISOToAuto,
     manualShutterSeconds,
     setShutterSeconds,
-    exposureAuto,
-    resetExposureToAuto,
+    shutterAuto,
+    resetShutterToAuto,
+    exposureAuto: isoAuto && shutterAuto,
     manualWBKelvin,
     setWBKelvin,
     manualWBTint,
