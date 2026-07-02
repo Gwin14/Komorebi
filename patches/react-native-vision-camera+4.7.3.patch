@@ -30,10 +30,10 @@ index ecd2a94..7a8f877 100644
  
    // pragma MARK: Side-Props
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-index 12f5c07..1163a5d 100644
+index 12f5c07..4ffe02c 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-@@ -39,7 +39,24 @@ extension CameraSession {
+@@ -39,7 +39,25 @@ extension CameraSession {
        VisionLogger.log(level: .info, message: "Capturing photo...")
  
        // Create photo settings
@@ -44,7 +44,8 @@ index 12f5c07..1163a5d 100644
 +        guard let rawPixelFormat = self.getRawPixelFormat(for: options.rawMode, availableFormats: availableFormats) else {
 +          let activeFormat = videoDeviceInput.device.activeFormat
 +          let dimensions = CMVideoFormatDescriptionGetDimensions(activeFormat.formatDescription)
-+          promise.reject(error: .capture(.unknown(message: "\(options.rawMode) capture is not supported by this camera configuration. rawFormats=\(availableFormats), activeFormat=\(dimensions.width)x\(dimensions.height), device=\(videoDeviceInput.device.localizedName)")))
++          let supportDescription = self.getRawSupportDescription(for: options.rawMode, availableFormats: availableFormats)
++          promise.reject(error: .capture(.unknown(message: "\(supportDescription) rawFormats=\(availableFormats), activeFormat=\(dimensions.width)x\(dimensions.height), device=\(videoDeviceInput.device.localizedName)")))
 +          return
 +        }
 +
@@ -59,7 +60,7 @@ index 12f5c07..1163a5d 100644
  
        // set photo resolution
        if #available(iOS 16.0, *) {
-@@ -91,4 +108,20 @@ extension CameraSession {
+@@ -91,4 +109,40 @@ extension CameraSession {
        photoOutput.setPreparedPhotoSettingsArray([photoSettings], completionHandler: nil)
      }
    }
@@ -78,6 +79,26 @@ index 12f5c07..1163a5d 100644
 +    }
 +
 +    return rawMode == "raw" ? availableFormats.first : nil
++  }
++
++  private func getRawSupportDescription(for rawMode: String, availableFormats: [OSType]) -> String {
++    if availableFormats.isEmpty {
++      return "\(rawMode) capture is not supported by this camera configuration."
++    }
++
++    if #available(iOS 14.3, *) {
++      let hasProRaw = availableFormats.contains(where: { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) })
++      let hasBayerRaw = availableFormats.contains(where: { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) })
++
++      if rawMode == "raw" && hasProRaw && !hasBayerRaw {
++        return "Bayer RAW is not supported by this camera configuration, but Apple ProRAW is available."
++      }
++      if rawMode == "proRaw" && hasBayerRaw && !hasProRaw {
++        return "Apple ProRAW is not supported by this camera configuration, but Bayer RAW is available."
++      }
++    }
++
++    return "\(rawMode) capture is not supported by this camera configuration."
 +  }
  }
 diff --git a/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift b/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift

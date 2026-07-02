@@ -27,6 +27,7 @@ public class CameraRawCaptureModule: Module {
       let device = try Self.findDevice(deviceId)
       let supportsRaw = device.position == .back
       let supportsProRaw: Bool
+      let supportsBayerRaw = false
 
       if #available(iOS 14.3, *) {
         supportsProRaw = supportsRaw
@@ -38,13 +39,13 @@ public class CameraRawCaptureModule: Module {
       if supportsProRaw {
         supportedModes.append("proRaw")
       }
-      if supportsRaw {
+      if supportsBayerRaw {
         supportedModes.append("raw")
       }
 
       return [
-        "supportsRawCapture": supportsRaw,
-        "supportsBayerRawCapture": supportsRaw,
+        "supportsRawCapture": supportsProRaw || supportsBayerRaw,
+        "supportsBayerRawCapture": supportsBayerRaw,
         "supportsProRawCapture": supportsProRaw,
         "supportedModes": supportedModes,
       ]
