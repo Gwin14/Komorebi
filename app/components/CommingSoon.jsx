@@ -18,6 +18,7 @@ export default function ComingSoon() {
     { id: "8", title: "Migração para câmera nativa" },
     { id: "9", title: "Salvar original junto da foto com LUT" },
     { id: "10", title: "Galeria melhorada" },
+    { id: "22", title: "Controles manuais (ISO, obturador, WB, foco)" },
   ];
 
   const comingSoon = [
@@ -32,7 +33,6 @@ export default function ComingSoon() {
 
   const whoKnows = [
     { id: "18", title: "Widget com sugestões baseadas no clima" },
-    { id: "19", title: "Controles manuais" },
     { id: "20", title: "RAW" },
     { id: "21", title: "Sistema de conquistas" },
   ];
@@ -41,10 +41,10 @@ export default function ComingSoon() {
   const renderItem = (IconComponent, iconName) => {
     function SectionItem({ item }) {
       return (
-      <View style={styles.itemContainer}>
-        <IconComponent name={iconName} size={24} color="#ffaa00ff" />
-        <Text style={styles.text}>{item.title}</Text>
-      </View>
+        <View style={styles.itemContainer}>
+          <IconComponent name={iconName} size={24} color="#ffaa00ff" />
+          <Text style={styles.text}>{item.title}</Text>
+        </View>
       );
     }
 

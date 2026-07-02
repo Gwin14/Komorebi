@@ -117,8 +117,11 @@ export default function BottomControls({
   });
 
   // LensSelector só aparece quando há mais de 1 lente e nenhum controle ativo
+  // (modo manual não conta como "controle ativo" para esse efeito)
   const showLensSelector =
-    lenses && lenses.length > 1 && activeControl === "none";
+    lenses &&
+    lenses.length > 1 &&
+    (activeControl === "none" || activeControl === "manual");
 
   return (
     <View style={styles.shutterContainer}>
@@ -196,7 +199,13 @@ export default function BottomControls({
           </TouchableOpacity>
         </View>
 
-        <View pointerEvents={activeControl === "none" ? "auto" : "none"}>
+        <View
+          pointerEvents={
+            activeControl === "none" || activeControl === "manual"
+              ? "auto"
+              : "none"
+          }
+        >
           <Shutter takePicture={takePicture} isProcessing={isProcessing} />
         </View>
 

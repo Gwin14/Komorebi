@@ -1,6 +1,12 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as piexif from "piexifjs";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { WebView } from "react-native-webview";
 import { saveProcessedImage } from "./exifImageWriter";
 import { generateRuntimeHTML } from "./lutProcessingHtml";
@@ -13,30 +19,35 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
 
   const staticHtml = useMemo(() => generateRuntimeHTML(), []);
 
-  const sendToWebView = useCallback(async (data) => {
-    try {
-      let base64 = data.base64;
-      if (!base64 && data.imageUri) {
-        base64 = await FileSystem.readAsStringAsync(data.imageUri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-      }
+  const sendToWebView = useCallback(
+    async (data) => {
       try {
-        originalExifRef.current = piexif.load("data:image/jpeg;base64," + base64);
-      } catch {
-        originalExifRef.current = null;
+        let base64 = data.base64;
+        if (!base64 && data.imageUri) {
+          base64 = await FileSystem.readAsStringAsync(data.imageUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        }
+        try {
+          originalExifRef.current = piexif.load(
+            "data:image/jpeg;base64," + base64,
+          );
+        } catch {
+          originalExifRef.current = null;
+        }
+        const payload = JSON.stringify({
+          base64,
+          cube: data.cube,
+          grainConfig: data.grainConfig || null,
+          aspectRatio: data.aspectRatio,
+        });
+        webViewRef.current?.injectJavaScript(`processImage(${payload}); true;`);
+      } catch (e) {
+        onError?.(e);
       }
-      const payload = JSON.stringify({
-        base64,
-        cube: data.cube,
-        grainConfig: data.grainConfig || null,
-        aspectRatio: data.aspectRatio,
-      });
-      webViewRef.current?.injectJavaScript(`processImage(${payload}); true;`);
-    } catch (e) {
-      onError?.(e);
-    }
-  }, [onError]);
+    },
+    [onError],
+  );
 
   // Processar item pendente assim que a WebView estiver pronta
   useEffect(() => {
@@ -56,23 +67,26 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
     sendToWebView(imageData);
   }, [imageData, ready, sendToWebView]);
 
-  const handleMessage = useCallback(async (event) => {
-    try {
-      const message = JSON.parse(event.nativeEvent.data);
-      if (message.type === "success") {
-        const savedUri = await saveProcessedImage(
-          message.data,
-          imageData?.exifData,
-          originalExifRef.current,
-        );
-        if (savedUri) onProcessed?.(savedUri, imageData);
-      } else if (message.type === "error") {
-        onError?.(new Error(message.message));
+  const handleMessage = useCallback(
+    async (event) => {
+      try {
+        const message = JSON.parse(event.nativeEvent.data);
+        if (message.type === "success") {
+          const savedUri = await saveProcessedImage(
+            message.data,
+            imageData?.exifData,
+            originalExifRef.current,
+          );
+          if (savedUri) onProcessed?.(savedUri, imageData);
+        } else if (message.type === "error") {
+          onError?.(new Error(message.message));
+        }
+      } catch (error) {
+        onError?.(error);
       }
-    } catch (error) {
-      onError?.(error);
-    }
-  }, [imageData, onProcessed, onError]);
+    },
+    [imageData, onProcessed, onError],
+  );
 
   // WebView sempre montada — sem cold start a cada foto
   return (

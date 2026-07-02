@@ -3,9 +3,11 @@ import { Animated, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getDebugState } from "../modules/camera-manual-controls";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import ExposureSlider from "./components/ExposureSlider";
+import ManualControlsPanel from "./components/ManualControlsPanel";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
@@ -13,6 +15,7 @@ import useCameraBootstrap from "./hooks/useCameraBootstrap";
 import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
 import useControlsAnimation from "./hooks/useControlsAnimation";
+import useManualCameraControls from "./hooks/useManualCameraControls";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
 import useShutterAnimation from "./hooks/useShutterAnimation";
 import useVolumeShutter from "./hooks/useVolumeShutter";
@@ -62,6 +65,8 @@ export default function App() {
   const { lenses, activeLens, activeLensId, setActiveLensId } =
     usePhysicalCameraDevices(facing);
 
+  const manual = useManualCameraControls(activeLens?.device);
+
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
 
@@ -75,7 +80,8 @@ export default function App() {
     zoomSV,
     showLuts: useCallback(() => setActiveControl("lut"), []),
     hideLuts: useCallback(
-      () => setActiveControl((current) => (current === "lut" ? "none" : current)),
+      () =>
+        setActiveControl((current) => (current === "lut" ? "none" : current)),
       [],
     ),
   });
@@ -126,6 +132,27 @@ export default function App() {
   const handleTakePicture = useCallback(() => {
     animateShutter();
 
+    const manualSettings =
+      manual.manualMode === "manual"
+        ? {
+            iso: manual.isoAuto ? null : manual.manualISO,
+            shutterSeconds: manual.shutterAuto
+              ? null
+              : manual.manualShutterSeconds,
+            wbKelvin: manual.wbAuto ? null : manual.manualWBKelvin,
+          }
+        : null;
+
+    // DEBUG temporário: confere o estado real do AVCaptureDevice no
+    // instante do disparo, pra ver se o exposureMode ainda é custom ou se
+    // algo já resetou pra auto antes da captura.
+    if (manualSettings && activeLens?.device?.id) {
+      getDebugState(activeLens.device.id).then((state) => {
+        console.log("[ManualDebug] estado no disparo:", state);
+        console.log("[ManualDebug] slider mostrava:", manualSettings);
+      });
+    }
+
     takePicture({
       cameraRef,
       cameraReady,
@@ -140,8 +167,10 @@ export default function App() {
       doubleCaptureMode,
       saveOriginalWithLUT,
       aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
+      manualSettings,
     });
   }, [
+    activeLens,
     animateShutter,
     cameraReady,
     doubleCaptureMode,
@@ -151,6 +180,13 @@ export default function App() {
     isProcessing,
     location,
     lutsLoaded,
+    manual.isoAuto,
+    manual.manualISO,
+    manual.manualMode,
+    manual.manualShutterSeconds,
+    manual.manualWBKelvin,
+    manual.shutterAuto,
+    manual.wbAuto,
     saveOriginalWithLUT,
     selectedLutId,
     setIsProcessing,
@@ -176,11 +212,16 @@ export default function App() {
     doubleCaptureMode,
     firstTime,
     flash,
+    manualControlsAvailable: manual.available,
+    manualMode: manual.manualMode,
     selectedLutId,
     smileDetectionEnabled,
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
     toggleFlash: () => setFlash((value) => (value === "off" ? "on" : "off")),
-    toggleMode,
+    toggleMode: (mode) => {
+      toggleMode(mode);
+      if (mode === "manual") manual.toggleManualMode();
+    },
     toggleSmileDetectionEnabled: () =>
       setSmileDetectionEnabled((value) => !value),
     toggleVerticalMode,
@@ -236,6 +277,8 @@ export default function App() {
               verticalMode={verticalMode}
               doubleCaptureMode={doubleCaptureMode}
               isActive={!firstTime}
+              manualPhotoMode={manual.manualMode === "manual"}
+              onFocusAtPoint={manual.focusAtPoint}
             />
           </View>
         </GestureDetector>
@@ -261,11 +304,20 @@ export default function App() {
         </View>
       )}
 
-      <ExposureSlider
-        exposure={exposure}
-        setExposure={setExposure}
-        topBarBelow={topBarBelow}
-      />
+      {manual.manualMode === "manual" ? (
+        <ManualControlsPanel
+          manual={manual}
+          topBarBelow={topBarBelow}
+          exposure={exposure}
+          setExposure={setExposure}
+        />
+      ) : (
+        <ExposureSlider
+          exposure={exposure}
+          setExposure={setExposure}
+          topBarBelow={topBarBelow}
+        />
+      )}
 
       <BottomControls
         controlsAnim={controlsAnim}

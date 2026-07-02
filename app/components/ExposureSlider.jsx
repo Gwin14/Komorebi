@@ -1,17 +1,17 @@
 import * as Haptics from "expo-haptics";
-import React, { useRef } from "react";
-import {
-  Dimensions,
-  PanResponder,
-  Text,
-  View
-} from "react-native";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
+import { Dimensions, PanResponder, Text, View } from "react-native";
 import styles from "./ExposureSlider.styles";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 // Largura da área da régua (ajuste conforme o seu layout)
 const DIAL_WIDTH = SCREEN_WIDTH * 0.6;
-const TICK_SPACING = 15; // Espaço em pixels entre cada tracinho da régua
+const TICK_SPACING = 15; // Distância visual entre os centros dos tracinhos
+const TICKS_COUNT = 41; // ímpar, para ter um tracinho centralizado
+
+function defaultFormatLabel(value, unit) {
+  return `${value > 0 ? "+" : ""}${value.toFixed(1)} ${unit}`;
+}
 
 export default function ExposureSlider({
   exposure,
@@ -19,115 +19,145 @@ export default function ExposureSlider({
   minExposure = -2,
   maxExposure = 2,
   topBarBelow,
+  resetValue = 0,
+  formatLabel,
+  unit = "EV",
+  // Quando informado, o ajuste tem um modo "auto" (ex.: ISO, obturador, WB,
+  // foco). O toque/tap no slider chama onReset() em vez de fixar um valor
+  // numérico, e o label exibe "AUTO" enquanto isAuto for true. EV não usa
+  // essas props: não tem modo automático, sempre mostra o valor numérico.
+  isAuto = false,
+  onReset,
 }) {
-  const exposureRef = useRef(exposure);
-  const exposureStart = useRef(exposure);
-  const lastHapticStep = useRef(Math.round(exposure * 10));
+  const displayValue = isAuto ? resetValue : exposure;
 
-  const exposurePanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
-      },
-      onPanResponderGrant: () => {
-        exposureStart.current = exposureRef.current;
-      },
-      onPanResponderMove: (_, gestureState) => {
-        // Arrasto horizontal
-        const delta = -gestureState.dx * 0.015;
+  const exposureRef = useRef(displayValue);
+  const exposureStart = useRef(displayValue);
+  const lastHapticStep = useRef(0);
+  const wasAutoRef = useRef(isAuto);
 
-        let nextExposure = exposureStart.current + delta;
+  useEffect(() => {
+    if (wasAutoRef.current !== isAuto) {
+      wasAutoRef.current = isAuto;
+      exposureRef.current = displayValue;
+      exposureStart.current = displayValue;
+    }
+    // displayValue/resetValue propositalmente fora das deps: só queremos
+    // resincronizar a referência na transição de modo, não a cada arraste.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuto]);
 
-        nextExposure = Math.max(
-          minExposure,
-          Math.min(maxExposure, nextExposure),
-        );
+  const progressFor = useCallback((v) => {
+    if (maxExposure === minExposure) return 0.5;
+    return Math.min(
+      1,
+      Math.max(0, (v - minExposure) / (maxExposure - minExposure)),
+    );
+  }, [maxExposure, minExposure]);
 
-        const roundedExposure = Number(nextExposure.toFixed(2));
+  const valueFor = useCallback(
+    (progress) => minExposure + progress * (maxExposure - minExposure),
+    [maxExposure, minExposure],
+  );
 
-        // Haptic por “clique” da régua
-        const currentStep = Math.round(roundedExposure * 10);
+  const exposurePanResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        },
+        onPanResponderGrant: () => {
+          exposureStart.current = exposureRef.current;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          const startProgress = progressFor(exposureStart.current);
+          const deltaProgress = -gestureState.dx / DIAL_WIDTH;
+          const nextProgress = Math.min(
+            1,
+            Math.max(0, startProgress + deltaProgress),
+          );
+          const nextExposure = valueFor(nextProgress);
 
-        if (currentStep !== lastHapticStep.current) {
-          lastHapticStep.current = currentStep;
+          // Haptic por “clique” da régua
+          const currentStep = Math.round(nextProgress * (TICKS_COUNT - 1));
 
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
-        }
+          if (currentStep !== lastHapticStep.current) {
+            lastHapticStep.current = currentStep;
 
-        exposureRef.current = roundedExposure;
-        setExposure(roundedExposure);
-      },
-      onPanResponderRelease: (_, gestureState) => {
-        const wasTap =
-          Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5;
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
+          }
 
-        if (wasTap) {
-          exposureRef.current = 0;
-          exposureStart.current = 0;
-          lastHapticStep.current = 0;
+          exposureRef.current = nextExposure;
+          setExposure(nextExposure);
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          const wasTap =
+            Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5;
 
-          setExposure(0);
+          if (wasTap) {
+            exposureRef.current = resetValue;
+            exposureStart.current = resetValue;
+            lastHapticStep.current = Math.round(
+              progressFor(resetValue) * (TICKS_COUNT - 1),
+            );
 
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            if (onReset) {
+              onReset();
+            } else {
+              setExposure(resetValue);
+            }
 
-          return;
-        }
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-        exposureStart.current = exposureRef.current;
-      },
-    }),
-  ).current;
+            return;
+          }
 
-  // Renderiza os tracinhos da régua dinamicamente
+          exposureStart.current = exposureRef.current;
+        },
+      }),
+    [onReset, progressFor, resetValue, setExposure, valueFor],
+  );
+
+  // Renderiza os tracinhos da régua (quantidade fixa, independente do range)
   const renderTicks = () => {
     const ticks = [];
-    // Criamos uma quantidade de traços baseada no range da exposição
-    // Multiplicando por 10 para ter marcações quebradas (ex: -2.0, -1.9, -1.8...)
-    const startTick = minExposure * 10;
-    const endTick = maxExposure * 10;
+    const resetIndex = Math.round(progressFor(resetValue) * (TICKS_COUNT - 1));
 
-    for (let i = startTick; i <= endTick; i++) {
-      const isMajor = i % 5 === 0; // Traco maior a cada 0.5 unidades
-      const isCenter = i === 0; // Destaque para o zero absoluto
+    for (let i = 0; i < TICKS_COUNT; i++) {
+      const isMajor = i % 5 === 0;
+      const isInitialValue = i === resetIndex;
 
       ticks.push(
-        <View
-          key={i}
-          style={[
-            styles.tick,
-            isMajor ? styles.majorTick : styles.minorTick,
-            isCenter && styles.centerTickStyle,
-            {
-              marginRight: i === endTick ? 0 : TICK_SPACING,
-            },
-          ]}
-        />,
+        <View key={i} style={[styles.tickSlot, { width: TICK_SPACING }]}>
+          <View
+            style={[
+              styles.tick,
+              isMajor ? styles.majorTick : styles.minorTick,
+              isInitialValue && styles.centerTickStyle,
+            ]}
+          />
+        </View>,
       );
     }
     return ticks;
   };
 
   // Cálculo para mover a régua baseado no valor atual do exposure
-  // Quanto maior o valor, mais para a esquerda a régua se move (offset negativo)
-  const range = maxExposure - minExposure;
-  const currentProgress = (exposure - minExposure) / range;
+  const progress = progressFor(displayValue);
+  const tickIndex = progress * (TICKS_COUNT - 1);
+  const translateX = DIAL_WIDTH / 2 - (tickIndex + 0.5) * TICK_SPACING;
 
-  // Cada 0.1 EV equivale a um tracinho
-  const tickIndex = (exposure - minExposure) * 10;
-
-  // Centraliza exatamente o tracinho atual no indicador
-  const translateX = DIAL_WIDTH / 2 - tickIndex * (TICK_SPACING + 1.7);
+  const label = isAuto
+    ? "AUTO"
+    : formatLabel
+      ? formatLabel(exposure)
+      : defaultFormatLabel(exposure, unit);
 
   return (
     <View style={[styles.container, topBarBelow && { marginVertical: -5 }]}>
       {/* Texto com o valor atual em cima */}
-      {!topBarBelow && (
-        <Text style={styles.exposureText}>
-          {exposure > 0 ? "+" : ""}
-          {exposure.toFixed(1)} EV
-        </Text>
-      )}
+      {!topBarBelow && <Text style={styles.exposureText}>{label}</Text>}
 
       {/* Área sensível ao toque */}
       <View
@@ -144,11 +174,9 @@ export default function ExposureSlider({
       </View>
       {topBarBelow && (
         <Text style={[styles.exposureText, styles.exposureTextBelow]}>
-          {exposure > 0 ? "+" : ""}
-          {exposure.toFixed(1)} EV
+          {label}
         </Text>
       )}
     </View>
   );
 }
-

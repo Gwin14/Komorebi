@@ -33,7 +33,7 @@ export default StyleSheet.create({
   thumb: {
     width: 20,
     height: 20,
-    borderRadius:7,
+    borderRadius: 7,
     backgroundColor: "#777",
   },
   thumbActive: {

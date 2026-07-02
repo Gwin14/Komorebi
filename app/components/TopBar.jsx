@@ -23,6 +23,8 @@ export default function TopBar({
   toggleVerticalMode,
   topBarControls = [],
   firstTime,
+  manualControlsAvailable,
+  manualMode,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -122,11 +124,18 @@ export default function TopBar({
       onPress: toggleFlash,
       active: flash !== "off",
     },
+    manual: {
+      icon: "options-outline",
+      onPress: () => toggleMode("manual"),
+      active: activeControl === "manual" || manualMode === "manual",
+    },
   };
 
   return (
     <View style={styles.buttonsContainer}>
       {topBarControls.map((controlId) => {
+        if (controlId === "manual" && !manualControlsAvailable) return null;
+
         const control = controlOptions[controlId];
         if (!control) return null;
 

@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
@@ -30,8 +24,11 @@ export default function CameraPreview({
   verticalMode,
   doubleCaptureMode,
   isActive = true,
+  manualPhotoMode = false,
+  onFocusAtPoint,
 }) {
   const isTakingPhoto = useRef(false);
+  const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);
@@ -51,9 +48,22 @@ export default function CameraPreview({
         useNativeDriver: true,
       }).start();
 
+      const { width, height } = previewLayout;
+      if (onFocusAtPoint && width > 0 && height > 0) {
+        // AVCaptureDevice point-of-interest coordinates are rotated relative
+        // to the portrait preview layer coordinates used by the tap gesture.
+        const pointX = Math.max(0, Math.min(1, y / height));
+        const pointY = Math.max(0, Math.min(1, 1 - x / width));
+
+        onFocusAtPoint(pointX, pointY).then((handled) => {
+          if (!handled) cameraRef.current?.focus({ x, y }).catch(() => {});
+        });
+        return;
+      }
+
       cameraRef.current?.focus({ x, y }).catch(() => {});
     },
-    [device, cameraRef, focusAnim],
+    [device, cameraRef, focusAnim, onFocusAtPoint, previewLayout],
   );
 
   const focusGesture = useMemo(
@@ -66,9 +76,14 @@ export default function CameraPreview({
     [focusOnPoint],
   );
 
+  // Em modo manual, evita resolução máxima de foto: nos sensores Quad-Bayer
+  // (ex: iPhone 17 Pro 48MP) a captura em full-res usa um pipeline de
+  // leitura/binning próprio com sua própria exposição, que ignora o ISO/
+  // obturador travado no AVCaptureDevice — só a captura "binned" (resolução
+  // normal) respeita o lock manual de forma confiável.
   const format = useCameraFormat(device, [
     { photoAspectRatio: verticalMode ? 16 / 9 : 4 / 3 },
-    { photoResolution: "max" },
+    ...(manualPhotoMode ? [] : [{ photoResolution: "max" }]),
     { videoResolution: "max" },
   ]);
 
@@ -136,6 +151,7 @@ export default function CameraPreview({
   return (
     <GestureDetector gesture={focusGesture}>
       <View
+        onLayout={(event) => setPreviewLayout(event.nativeEvent.layout)}
         style={[
           retroStyle ? styles.retroStyle : styles.cameraWrapper,
           {
@@ -174,19 +190,31 @@ export default function CameraPreview({
           </View>
         )}
 
-        {doubleCaptureMode && (() => {
-          const marginPct = `${((1 - aspectRatio * aspectRatio) / 2 * 100).toFixed(4)}%`;
-          return (
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <View style={[styles.doubleCropZone, { height: marginPct }]}>
-                <View style={styles.doubleCropBorder} />
+        {doubleCaptureMode &&
+          (() => {
+            const marginPct = `${(((1 - aspectRatio * aspectRatio) / 2) * 100).toFixed(4)}%`;
+            return (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <View style={[styles.doubleCropZone, { height: marginPct }]}>
+                  <View style={styles.doubleCropBorder} />
+                </View>
+                <View
+                  style={[
+                    styles.doubleCropZone,
+                    styles.doubleCropZoneBottom,
+                    { height: marginPct },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.doubleCropBorder,
+                      { top: 0, bottom: undefined },
+                    ]}
+                  />
+                </View>
               </View>
-              <View style={[styles.doubleCropZone, styles.doubleCropZoneBottom, { height: marginPct }]}>
-                <View style={[styles.doubleCropBorder, { top: 0, bottom: undefined }]} />
-              </View>
-            </View>
-          );
-        })()}
+            );
+          })()}
 
         {focusPoint && (
           <Animated.View

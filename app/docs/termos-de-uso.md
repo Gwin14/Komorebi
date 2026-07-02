@@ -42,12 +42,12 @@ O Aplicativo é fornecido **gratuitamente** e está disponível mediante downloa
 
 O Aplicativo requer as seguintes permissões do sistema para funcionar corretamente:
 
-| Permissão | Finalidade | Obrigatória? |
-|---|---|---|
-| Câmera | Captura de fotos | Sim |
-| Biblioteca de mídia / Galeria | Salvar fotos no álbum "Komorebi" | Sim |
-| Localização (durante o uso) | Adicionar GPS às fotos e exibir clima | Não |
-| Microfone | Reservado para funcionalidades futuras | Não |
+| Permissão                     | Finalidade                             | Obrigatória? |
+| ----------------------------- | -------------------------------------- | ------------ |
+| Câmera                        | Captura de fotos                       | Sim          |
+| Biblioteca de mídia / Galeria | Salvar fotos no álbum "Komorebi"       | Sim          |
+| Localização (durante o uso)   | Adicionar GPS às fotos e exibir clima  | Não          |
+| Microfone                     | Reservado para funcionalidades futuras | Não          |
 
 O Usuário pode gerenciar essas permissões a qualquer momento nas configurações do sistema operacional. A revogação de permissões obrigatórias impedirá o funcionamento de funcionalidades correspondentes.
 
@@ -193,4 +193,4 @@ Para dúvidas, sugestões ou reclamações relacionadas a estes Termos, entre em
 
 ---
 
-*Estes Termos de Uso foram elaborados com base nas funcionalidades do Komorebi v1.0.0 e entram em vigor na data indicada no topo deste documento.*
+_Estes Termos de Uso foram elaborados com base nas funcionalidades do Komorebi v1.0.0 e entram em vigor na data indicada no topo deste documento._

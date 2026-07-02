@@ -30,7 +30,9 @@ export default function useCameraBootstrap({ customLuts, firstTime }) {
         // LUTs em background — câmera já pode montar
         loadAllLUTs()
           .then(() => loadCustomLUTs(customLuts))
-          .then(() => { if (isMounted) setLutsLoaded(true); })
+          .then(() => {
+            if (isMounted) setLutsLoaded(true);
+          })
           .catch(console.error);
       } catch (error) {
         console.error("Erro ao preparar câmera:", error);

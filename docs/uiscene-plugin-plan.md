@@ -45,6 +45,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 Usar `withDangerousMod` para ler o `AppDelegate.swift` gerado pelo prebuild e:
 
 a) Remover o bloco `#if os(iOS) || os(tvOS)` que cria a window em `didFinishLaunchingWithOptions`:
+
 ```swift
 // REMOVER este bloco:
 #if os(iOS) || os(tvOS)

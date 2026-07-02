@@ -18,7 +18,7 @@ export default function useShutterSound() {
         {
           shouldPlay: false,
           volume: 1.0,
-        }
+        },
       );
 
       // 🔥 AQUECE o áudio (remove o delay no primeiro play)

@@ -1,4 +1,4 @@
-const { withInfoPlist } = require('expo/config-plugins');
+const { withInfoPlist } = require("expo/config-plugins");
 
 /**
  * Adds UIApplicationSceneManifest to Info.plist to satisfy the iOS 18 SDK
@@ -7,7 +7,7 @@ const { withInfoPlist } = require('expo/config-plugins');
  */
 module.exports = function withUiSceneManifest(config) {
   return withInfoPlist(config, (cfg) => {
-    cfg.modResults['UIApplicationSceneManifest'] = {
+    cfg.modResults["UIApplicationSceneManifest"] = {
       UIApplicationSupportsMultipleScenes: false,
       UISceneConfigurations: {},
     };

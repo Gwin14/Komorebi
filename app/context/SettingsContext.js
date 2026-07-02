@@ -33,9 +33,7 @@ export const SettingsProvider = ({ children }) => {
   );
   const [firstTime, setFirstTime] = useState(DEFAULT_SETTINGS.firstTime);
   const [customLuts, setCustomLuts] = useState(DEFAULT_SETTINGS.customLuts);
-  const [topBarBelow, setTopBarBelow] = useState(
-    DEFAULT_SETTINGS.topBarBelow,
-  );
+  const [topBarBelow, setTopBarBelow] = useState(DEFAULT_SETTINGS.topBarBelow);
   const [topBarControls, setTopBarControls] = useState(
     DEFAULT_SETTINGS.topBarControls,
   );
@@ -117,20 +115,14 @@ export const SettingsProvider = ({ children }) => {
   // 💾 Salvar "Localização"
   useEffect(() => {
     if (!loading) {
-      saveStoredSetting(
-        SETTINGS_STORAGE_KEYS.LOCATION,
-        location.toString(),
-      );
+      saveStoredSetting(SETTINGS_STORAGE_KEYS.LOCATION, location.toString());
     }
   }, [location, loading]);
 
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
     if (!loading) {
-      saveStoredSetting(
-        SETTINGS_STORAGE_KEYS.FIRSTTIME,
-        firstTime.toString(),
-      );
+      saveStoredSetting(SETTINGS_STORAGE_KEYS.FIRSTTIME, firstTime.toString());
     }
   }, [firstTime, loading]);
 

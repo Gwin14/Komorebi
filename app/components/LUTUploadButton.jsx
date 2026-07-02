@@ -23,4 +23,3 @@ export default function LUTUploadButton({ onPress, disabled = false }) {
     </Pressable>
   );
 }
-

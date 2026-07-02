@@ -74,4 +74,3 @@ export default function Shutter({ takePicture, isProcessing }) {
     </Animated.View>
   );
 }
-
