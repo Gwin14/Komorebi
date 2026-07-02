@@ -7,4 +7,19 @@ export default StyleSheet.create({
     justifyContent: "space-around",
   },
   button: {},
+  rawControl: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 34,
+  },
+  rawLabel: {
+    color: "white",
+    fontSize: 8,
+    fontWeight: "700",
+    marginTop: -2,
+    letterSpacing: 0,
+  },
+  rawLabelActive: {
+    color: "#ffaa00",
+  },
 });

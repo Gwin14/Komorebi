@@ -53,6 +53,12 @@ export const TOP_BAR_CONTROLS = [
     icon: "options-outline",
     alwaysEnabled: false,
   },
+  {
+    id: "rawCapture",
+    label: "RAW / ProRAW",
+    icon: "aperture-outline",
+    alwaysEnabled: false,
+  },
 ];
 
 export const DEFAULT_TOP_BAR_CONTROLS = [
@@ -60,6 +66,7 @@ export const DEFAULT_TOP_BAR_CONTROLS = [
   "weather",
   "luts",
   "manual",
+  "rawCapture",
   "settings",
 ];
 

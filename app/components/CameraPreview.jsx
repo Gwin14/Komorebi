@@ -2,8 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
-import { useCameraFormat } from "react-native-vision-camera";
-import { Camera } from "react-native-vision-camera-face-detector";
+import {
+  Camera as VisionCamera,
+  useCameraFormat,
+} from "react-native-vision-camera";
+import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
 import styles from "./CameraPreview.styles";
 
 export default function CameraPreview({
@@ -25,6 +28,7 @@ export default function CameraPreview({
   doubleCaptureMode,
   isActive = true,
   manualPhotoMode = false,
+  rawPhotoMode = false,
   onFocusAtPoint,
 }) {
   const isTakingPhoto = useRef(false);
@@ -81,11 +85,15 @@ export default function CameraPreview({
   // leitura/binning próprio com sua própria exposição, que ignora o ISO/
   // obturador travado no AVCaptureDevice — só a captura "binned" (resolução
   // normal) respeita o lock manual de forma confiável.
-  const format = useCameraFormat(device, [
-    { photoAspectRatio: verticalMode ? 16 / 9 : 4 / 3 },
-    ...(manualPhotoMode ? [] : [{ photoResolution: "max" }]),
-    { videoResolution: "max" },
-  ]);
+  const formatFilters = useMemo(
+    () => [
+      { photoAspectRatio: verticalMode ? 16 / 9 : 4 / 3 },
+      ...(manualPhotoMode ? [] : [{ photoResolution: "max" }]),
+      { videoResolution: "max" },
+    ],
+    [manualPhotoMode, verticalMode],
+  );
+  const format = useCameraFormat(device, formatFilters);
 
   const handleFacesDetection = useCallback(
     (faces) => {
@@ -147,6 +155,13 @@ export default function CameraPreview({
   }
 
   const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
+  const CameraComponent = rawPhotoMode ? VisionCamera : FaceDetectionCamera;
+  const faceDetectionProps = rawPhotoMode
+    ? {}
+    : {
+        faceDetectionCallback: handleFacesDetection,
+        faceDetectionOptions,
+      };
 
   return (
     <GestureDetector gesture={focusGesture}>
@@ -163,7 +178,7 @@ export default function CameraPreview({
           },
         ]}
       >
-        <Camera
+        <CameraComponent
           style={styles.camera}
           device={device}
           isActive={isActive}
@@ -175,10 +190,9 @@ export default function CameraPreview({
           zoom={zoom}
           exposure={exposure}
           onInitialized={onCameraReady}
-          faceDetectionCallback={handleFacesDetection}
-          faceDetectionOptions={faceDetectionOptions}
+          {...faceDetectionProps}
           enableLocation={location}
-          photoQualityBalance={"balanced"}
+          photoQualityBalance={rawPhotoMode ? "quality" : "balanced"}
         />
         {gridVisible && (
           <View pointerEvents="none" style={styles.gridOverlay}>

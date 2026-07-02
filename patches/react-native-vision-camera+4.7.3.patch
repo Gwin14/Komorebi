@@ -1,0 +1,141 @@
+diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
+index ecd2a94..7a8f877 100644
+--- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
+@@ -89,6 +89,9 @@ extension CameraSession {
+       if photoOutput.isPortraitEffectsMatteDeliverySupported {
+         photoOutput.isPortraitEffectsMatteDeliveryEnabled = photo.enablePortraitEffectsMatte
+       }
++      if #available(iOS 14.3, *), photoOutput.isAppleProRAWSupported {
++        photoOutput.isAppleProRAWEnabled = true
++      }
+       photoOutput.isMirrored = configuration.isMirrored
+       // TODO: Enable isResponsiveCaptureEnabled? (iOS 17+)
+       // TODO: Enable isFastCapturePrioritizationEnabled? (iOS 17+)
+@@ -240,6 +243,16 @@ extension CameraSession {
+     } else {
+       photoOutput.isHighResolutionCaptureEnabled = true
+     }
++
++    if #available(iOS 14.3, *) {
++      if photoOutput.isAppleProRAWSupported && !photoOutput.isAppleProRAWEnabled {
++        photoOutput.isAppleProRAWEnabled = true
++      }
++
++      VisionLogger.log(level: .info, message: "Photo RAW support: appleProRAWSupported=\(photoOutput.isAppleProRAWSupported), appleProRAWEnabled=\(photoOutput.isAppleProRAWEnabled), rawFormats=\(photoOutput.availableRawPhotoPixelFormatTypes), rawFileTypes=\(photoOutput.availableRawPhotoFileTypes)")
++    } else {
++      VisionLogger.log(level: .info, message: "Photo RAW support: rawFormats=\(photoOutput.availableRawPhotoPixelFormatTypes), rawFileTypes=\(photoOutput.availableRawPhotoFileTypes)")
++    }
+   }
+ 
+   // pragma MARK: Side-Props
+diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
+index 12f5c07..1163a5d 100644
+--- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
+@@ -39,7 +39,24 @@ extension CameraSession {
+       VisionLogger.log(level: .info, message: "Capturing photo...")
+ 
+       // Create photo settings
+-      let photoSettings = AVCapturePhotoSettings()
++      let photoSettings: AVCapturePhotoSettings
++      if options.rawMode != "off" {
++        let availableFormats = photoOutput.availableRawPhotoPixelFormatTypes
++        guard let rawPixelFormat = self.getRawPixelFormat(for: options.rawMode, availableFormats: availableFormats) else {
++          let activeFormat = videoDeviceInput.device.activeFormat
++          let dimensions = CMVideoFormatDescriptionGetDimensions(activeFormat.formatDescription)
++          promise.reject(error: .capture(.unknown(message: "\(options.rawMode) capture is not supported by this camera configuration. rawFormats=\(availableFormats), activeFormat=\(dimensions.width)x\(dimensions.height), device=\(videoDeviceInput.device.localizedName)")))
++          return
++        }
++
++        let processedFormat = [AVVideoCodecKey: AVVideoCodecType.jpeg]
++        photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawPixelFormat,
++                                               rawFileType: .dng,
++                                               processedFormat: processedFormat,
++                                               processedFileType: AVFileType("public.jpeg"))
++      } else {
++        photoSettings = AVCapturePhotoSettings()
++      }
+ 
+       // set photo resolution
+       if #available(iOS 16.0, *) {
+@@ -91,4 +108,20 @@ extension CameraSession {
+       photoOutput.setPreparedPhotoSettingsArray([photoSettings], completionHandler: nil)
+     }
+   }
++
++  private func getRawPixelFormat(for rawMode: String, availableFormats: [OSType]) -> OSType? {
++    guard !availableFormats.isEmpty else {
++      return nil
++    }
++
++    if #available(iOS 14.3, *) {
++      if rawMode == "proRaw" {
++        return availableFormats.first(where: { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) })
++      }
++
++      return availableFormats.first(where: { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) })
++    }
++
++    return rawMode == "raw" ? availableFormats.first : nil
++  }
+ }
+diff --git a/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift b/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift
+index 4d8bc38..09b528b 100644
+--- a/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift
+@@ -26,7 +26,7 @@ extension AVCaptureDevice {
+       "minExposure": minExposureTargetBias,
+       "maxExposure": maxExposureTargetBias,
+       "isMultiCam": isMultiCam,
+-      "supportsRawCapture": false, // TODO: supportsRawCapture
++      "supportsRawCapture": position == .back,
+       "supportsLowLightBoost": isLowLightBoostSupported,
+       "supportsFocus": isFocusPointOfInterestSupported,
+       "hardwareLevel": HardwareLevel.full.jsValue,
+diff --git a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
+index e845b38..03ab85e 100644
+--- a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
+@@ -42,6 +42,10 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+   }
+ 
+   func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
++    if path.pathExtension.lowercased() == "dng" && !photo.isRawPhoto {
++      return
++    }
++
+     defer {
+       removeGlobal()
+     }
+diff --git a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
+index c569e88..4e10f92 100644
+--- a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
+@@ -14,6 +14,7 @@ struct TakePhotoOptions {
+   var enableAutoRedEyeReduction = false
+   var enableAutoDistortionCorrection = false
+   var enableShutterSound = true
++  var rawMode = "off"
+ 
+   init(fromJSValue dictionary: NSDictionary) throws {
+     // Flash
+@@ -32,11 +33,16 @@ struct TakePhotoOptions {
+     if let enable = dictionary["enableShutterSound"] as? Bool {
+       enableShutterSound = enable
+     }
++    // RAW capture mode: "off", "raw" (Bayer RAW) or "proRaw" (Apple ProRAW)
++    if let mode = dictionary["rawMode"] as? String {
++      rawMode = mode
++    }
+     // Custom Path
++    let fileExtension = rawMode == "off" ? "jpg" : "dng"
+     if let customPath = dictionary["path"] as? String {
+-      path = try FileUtils.getFilePath(customDirectory: customPath, fileExtension: "jpg")
++      path = try FileUtils.getFilePath(customDirectory: customPath, fileExtension: fileExtension)
+     } else {
+-      path = try FileUtils.getFilePath(fileExtension: "jpg")
++      path = try FileUtils.getFilePath(fileExtension: fileExtension)
+     }
+   }
+ }

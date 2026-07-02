@@ -22,6 +22,30 @@ const PHYSICAL_DEVICE_META = {
   },
 };
 
+const getMaxResolution = (device, widthKey, heightKey) =>
+  Math.max(
+    0,
+    ...(device.formats ?? []).map(
+      (format) => (format[widthKey] ?? 0) * (format[heightKey] ?? 0),
+    ),
+  );
+
+const getDevicePreferenceScore = (device) => {
+  const name = String(device.name ?? "").toLowerCase();
+  let score = 0;
+
+  if (name.includes("lidar") || name.includes("depth")) score -= 1_000_000;
+  if (name.includes("wide")) score += 10_000;
+  if (device.hasFlash) score += 500;
+  if (device.supportsFocus) score += 250;
+  if (device.supportsRawCapture) score += 100;
+
+  score += getMaxResolution(device, "photoWidth", "photoHeight") / 1_000_000;
+  score += getMaxResolution(device, "videoWidth", "videoHeight") / 2_000_000;
+
+  return score;
+};
+
 export function usePhysicalCameraDevices(facing = "back") {
   const devices = useCameraDevices();
   const [activeLensId, setActiveLensId] = useState(null);
@@ -29,32 +53,36 @@ export function usePhysicalCameraDevices(facing = "back") {
   const lenses = useMemo(() => {
     const position = facing === "back" ? "back" : "front";
 
-    const physicalLenses = Array.from(
-      new Map(
-        devices
-          .filter(
-            (device) =>
-              device.position === position &&
-              device.physicalDevices?.length === 1 &&
-              PHYSICAL_DEVICE_META[device.physicalDevices[0]],
-          )
-          .map((device) => {
-            const physicalDeviceType = device.physicalDevices[0];
-            const meta = PHYSICAL_DEVICE_META[physicalDeviceType];
+    const lensMap = new Map();
 
-            return [
-              meta.type,
-              {
-                id: meta.id,
-                label: meta.label,
-                type: meta.type,
-                device,
-                order: meta.order,
-              },
-            ];
-          }),
-      ).values(),
-    ).sort((a, b) => a.order - b.order);
+    devices
+      .filter(
+        (device) =>
+          device.position === position &&
+          device.physicalDevices?.length === 1 &&
+          PHYSICAL_DEVICE_META[device.physicalDevices[0]],
+      )
+      .forEach((device) => {
+        const physicalDeviceType = device.physicalDevices[0];
+        const meta = PHYSICAL_DEVICE_META[physicalDeviceType];
+        const candidate = {
+          id: meta.id,
+          label: meta.label,
+          type: meta.type,
+          device,
+          order: meta.order,
+          score: getDevicePreferenceScore(device),
+        };
+        const current = lensMap.get(meta.type);
+
+        if (!current || candidate.score > current.score) {
+          lensMap.set(meta.type, candidate);
+        }
+      });
+
+    const physicalLenses = Array.from(lensMap.values())
+      .map(({ score, ...lens }) => lens)
+      .sort((a, b) => a.order - b.order);
 
     if (physicalLenses.length > 0) {
       return physicalLenses;
