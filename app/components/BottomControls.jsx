@@ -18,7 +18,7 @@ export default function BottomControls({
   controlsAnim,
   activeControl,
   takePicture,
-  setFacing,
+  onToggleFacing,
   zoom,
   setZoom,
   exposure,
@@ -94,7 +94,7 @@ export default function BottomControls({
     return () => {
       loop?.stop();
     };
-  }, [isBusy]);
+  }, [isBusy, shimmerAnim]);
 
   const shutterTranslate = controlsAnim.interpolate({
     inputRange: [0, 1],
@@ -212,7 +212,7 @@ export default function BottomControls({
         <View style={styles.rightControls}>
           <TouchableOpacity
             style={styles.flipButton}
-            onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
+            onPress={onToggleFacing}
           >
             <Reanimated.View style={deviceOrientationStyle}>
               <Ionicons name="camera-reverse-outline" size={28} color="white" />

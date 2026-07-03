@@ -8,10 +8,10 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
+    "postinstall": "patch-package",
     "lint": "expo lint"
   },
   "dependencies": {
-    "camera-manual-controls": "file:./modules/camera-manual-controls",
     "@expo/metro-runtime": "~6.1.2",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -21,6 +21,8 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@shopify/react-native-skia": "2.2.12",
+    "camera-manual-controls": "file:./modules/camera-manual-controls",
+    "camera-raw-capture": "file:./modules/camera-raw-capture",
     "expo": "~54.0.33",
     "expo-asset": "~12.0.10",
     "expo-av": "^16.0.8",
@@ -72,6 +74,7 @@
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
+    "patch-package": "^8.0.1",
     "typescript": "~5.9.2"
   },
   "private": true

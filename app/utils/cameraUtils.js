@@ -4,6 +4,7 @@ import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import * as piexif from "piexifjs";
 import { Image } from "react-native";
+import { toVisionCameraRawMode } from "../../modules/camera-raw-capture";
 import { applyLUTToImage } from "./lutProcessor";
 
 const APP_ALBUM = "Komorebi";
@@ -72,6 +73,7 @@ export const takePicture = async ({
   saveOriginalWithLUT = false,
   aspectRatio = 3 / 4,
   manualSettings = null,
+  rawMode = "off",
 }) => {
   if (!cameraRef.current || !cameraReady || isProcessing) return;
 
@@ -79,6 +81,8 @@ export const takePicture = async ({
     setIsProcessing(true);
 
     const additionalExif = await getLocationExif(location);
+    const normalizedRawMode = toVisionCameraRawMode(rawMode);
+    const rawModeEnabled = normalizedRawMode !== "off";
     // Com manual ativo, força "speed" (frame único, sem fusão Deep Fusion/
     // Smart HDR): em modo "quality"/"balanced" o AVCapturePhotoOutput funde
     // múltiplos frames em exposições diferentes, ignorando o ISO/obturador
@@ -87,11 +91,27 @@ export const takePicture = async ({
       manualSettings?.iso != null || manualSettings?.shutterSeconds != null;
     const photo = await cameraRef.current.takePhoto({
       flash: flash === "on" ? "on" : "off",
+      rawMode: normalizedRawMode,
       photoQualityBalance: hasManualExposure ? "speed" : "quality",
     });
 
     // Normaliza a URI logo na origem — resolve FileSystem, ImageManipulator e MediaLibrary no Android
     const uri = normalizeUri(photo?.path || photo?.filePath || photo?.uri);
+
+    if (rawModeEnabled) {
+      setProcessingData({
+        needsProcessing: false,
+        originalUri: uri,
+        imageUri: uri,
+        exifData: additionalExif,
+        doubleCaptureMode: false,
+        saveOriginalWithLUT: false,
+        aspectRatio,
+        cube: null,
+        grainConfig: null,
+      });
+      return;
+    }
 
     // Reflete no EXIF os ajustes manuais (ISO/obturador/WB) realmente
     // travados no AVCaptureDevice no momento da captura, em vez de deixar a

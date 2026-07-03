@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { TouchableOpacity, View } from "react-native";
+import { Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
@@ -25,6 +25,9 @@ export default function TopBar({
   firstTime,
   manualControlsAvailable,
   manualMode,
+  rawCaptureAvailable,
+  rawMode,
+  toggleRawMode,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -129,12 +132,20 @@ export default function TopBar({
       onPress: () => toggleMode("manual"),
       active: activeControl === "manual" || manualMode === "manual",
     },
+    rawCapture: {
+      icon: rawMode === "off" ? "aperture-outline" : "aperture",
+      label:
+        rawMode === "proRaw" ? "PRO" : rawMode === "raw" ? "RAW" : "OFF",
+      onPress: toggleRawMode,
+      active: rawMode !== "off",
+    },
   };
 
   return (
     <View style={styles.buttonsContainer}>
       {topBarControls.map((controlId) => {
         if (controlId === "manual" && !manualControlsAvailable) return null;
+        if (controlId === "rawCapture" && !rawCaptureAvailable) return null;
 
         const control = controlOptions[controlId];
         if (!control) return null;
@@ -168,12 +179,30 @@ export default function TopBar({
         return (
           <TouchableOpacity key={controlId} onPress={control.onPress}>
             <Animated.View style={animatedStyle}>
-              <Ionicons
-                name={control.icon}
-                size={32}
-                style={styles.button}
-                color={control.active ? "#ffaa00" : "white"}
-              />
+              {controlId === "rawCapture" ? (
+                <View style={styles.rawControl}>
+                  <Ionicons
+                    name={control.icon}
+                    size={28}
+                    color={control.active ? "#ffaa00" : "white"}
+                  />
+                  <Text
+                    style={[
+                      styles.rawLabel,
+                      control.active && styles.rawLabelActive,
+                    ]}
+                  >
+                    {control.label}
+                  </Text>
+                </View>
+              ) : (
+                <Ionicons
+                  name={control.icon}
+                  size={32}
+                  style={styles.button}
+                  color={control.active ? "#ffaa00" : "white"}
+                />
+              )}
             </Animated.View>
           </TouchableOpacity>
         );

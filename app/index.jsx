@@ -17,6 +17,7 @@ import useCameraGestures from "./hooks/useCameraGestures";
 import useControlsAnimation from "./hooks/useControlsAnimation";
 import useManualCameraControls from "./hooks/useManualCameraControls";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
+import useRawCapture from "./hooks/useRawCapture";
 import useShutterAnimation from "./hooks/useShutterAnimation";
 import useVolumeShutter from "./hooks/useVolumeShutter";
 import { usePhysicalCameraDevices } from "./hooks/uselensselector";
@@ -66,6 +67,7 @@ export default function App() {
     usePhysicalCameraDevices(facing);
 
   const manual = useManualCameraControls(activeLens?.device);
+  const rawCapture = useRawCapture(activeLens?.device);
 
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
@@ -114,12 +116,21 @@ export default function App() {
 
   const handleSelectLens = useCallback(
     (lensId) => {
+      if (lensId === activeLensId) return;
       setZoom(1);
       zoomSV.value = 1;
+      setCameraReady(false);
       setActiveLensId(lensId);
     },
-    [setActiveLensId, zoomSV],
+    [activeLensId, setActiveLensId, zoomSV],
   );
+
+  const handleToggleFacing = useCallback(() => {
+    setZoom(1);
+    zoomSV.value = 1;
+    setCameraReady(false);
+    setFacing((current) => (current === "back" ? "front" : "back"));
+  }, [zoomSV]);
 
   const toggleMode = useCallback((mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
@@ -168,6 +179,7 @@ export default function App() {
       saveOriginalWithLUT,
       aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
       manualSettings,
+      rawMode: rawCapture.rawMode,
     });
   }, [
     activeLens,
@@ -187,6 +199,7 @@ export default function App() {
     manual.manualWBKelvin,
     manual.shutterAuto,
     manual.wbAuto,
+    rawCapture.rawMode,
     saveOriginalWithLUT,
     selectedLutId,
     setIsProcessing,
@@ -196,6 +209,10 @@ export default function App() {
   const handleCameraReady = useCallback(() => {
     onCameraReady(cameraRef, setPictureSize, setCameraReady);
   }, []);
+
+  useEffect(() => {
+    setCameraReady(false);
+  }, [activeLens?.device?.id, rawCapture.rawModeEnabled]);
 
   useVolumeShutter({
     enabled: !firstTime && cameraPermission === "granted" && cameraReady,
@@ -214,6 +231,8 @@ export default function App() {
     flash,
     manualControlsAvailable: manual.available,
     manualMode: manual.manualMode,
+    rawCaptureAvailable: rawCapture.available,
+    rawMode: rawCapture.rawMode,
     selectedLutId,
     smileDetectionEnabled,
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
@@ -222,6 +241,7 @@ export default function App() {
       toggleMode(mode);
       if (mode === "manual") manual.toggleManualMode();
     },
+    toggleRawMode: rawCapture.toggleRawMode,
     toggleSmileDetectionEnabled: () =>
       setSmileDetectionEnabled((value) => !value),
     toggleVerticalMode,
@@ -278,6 +298,7 @@ export default function App() {
               doubleCaptureMode={doubleCaptureMode}
               isActive={!firstTime}
               manualPhotoMode={manual.manualMode === "manual"}
+              rawPhotoMode={rawCapture.rawModeEnabled}
               onFocusAtPoint={manual.focusAtPoint}
             />
           </View>
@@ -323,7 +344,7 @@ export default function App() {
         controlsAnim={controlsAnim}
         activeControl={activeControl}
         takePicture={handleTakePicture}
-        setFacing={setFacing}
+        onToggleFacing={handleToggleFacing}
         zoom={zoom}
         setZoom={setZoom}
         exposure={exposure}
