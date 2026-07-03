@@ -13,11 +13,19 @@ export default function useRawCapture(device) {
   const [capabilities, setCapabilities] = useState(null);
 
   const deviceId = device?.id;
+  const isBackCamera = device?.position === "back";
   const visionCameraAllowsRaw = Boolean(device?.supportsRawCapture);
-  const available = nativeAvailable && visionCameraAllowsRaw;
+  const nativeModesAllowRaw = Boolean(
+    capabilities?.supportedModes?.some((mode) => mode !== "off"),
+  );
+  const canCheckCapabilities = nativeAvailable && Boolean(deviceId);
+  const available =
+    canCheckCapabilities &&
+    isBackCamera &&
+    (capabilities === null || visionCameraAllowsRaw || nativeModesAllowRaw);
 
   useEffect(() => {
-    if (!available || !deviceId) {
+    if (!canCheckCapabilities || !isBackCamera) {
       setCapabilities(null);
       setRawMode("off");
       return;
@@ -36,7 +44,7 @@ export default function useRawCapture(device) {
     return () => {
       cancelled = true;
     };
-  }, [available, deviceId]);
+  }, [canCheckCapabilities, deviceId, isBackCamera]);
 
   useEffect(() => {
     if (!isRawCaptureModeSupported(rawMode, capabilities)) {

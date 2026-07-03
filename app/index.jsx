@@ -116,12 +116,21 @@ export default function App() {
 
   const handleSelectLens = useCallback(
     (lensId) => {
+      if (lensId === activeLensId) return;
       setZoom(1);
       zoomSV.value = 1;
+      setCameraReady(false);
       setActiveLensId(lensId);
     },
-    [setActiveLensId, zoomSV],
+    [activeLensId, setActiveLensId, zoomSV],
   );
+
+  const handleToggleFacing = useCallback(() => {
+    setZoom(1);
+    zoomSV.value = 1;
+    setCameraReady(false);
+    setFacing((current) => (current === "back" ? "front" : "back"));
+  }, [zoomSV]);
 
   const toggleMode = useCallback((mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
@@ -203,7 +212,7 @@ export default function App() {
 
   useEffect(() => {
     setCameraReady(false);
-  }, [rawCapture.rawModeEnabled]);
+  }, [activeLens?.device?.id, rawCapture.rawModeEnabled]);
 
   useVolumeShutter({
     enabled: !firstTime && cameraPermission === "granted" && cameraReady,
@@ -335,7 +344,7 @@ export default function App() {
         controlsAnim={controlsAnim}
         activeControl={activeControl}
         takePicture={handleTakePicture}
-        setFacing={setFacing}
+        onToggleFacing={handleToggleFacing}
         zoom={zoom}
         setZoom={setZoom}
         exposure={exposure}

@@ -1,3 +1,4 @@
+import { BlurView } from "expo-blur";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -33,6 +34,15 @@ export default function CameraPreview({
 }) {
   const isTakingPhoto = useRef(false);
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
+  const [transitionVisible, setTransitionVisible] = useState(false);
+  const transitionOpacity = useRef(new Animated.Value(0)).current;
+  const cameraScale = useRef(new Animated.Value(1)).current;
+  const hasCameraDevice = Boolean(device);
+  const cameraConfigKey = `${device?.id ?? "none"}:${rawPhotoMode ? "raw" : "standard"}:${verticalMode ? "vertical" : "horizontal"}`;
+  const previousCameraConfigKey = useRef(cameraConfigKey);
+  const transitionFallbackTimeout = useRef(null);
+  const transitionFinishTimeout = useRef(null);
+  const transitionStartedAt = useRef(0);
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);
@@ -125,6 +135,80 @@ export default function CameraPreview({
     [],
   );
 
+  const finishCameraTransition = useCallback(() => {
+    if (transitionFallbackTimeout.current) {
+      clearTimeout(transitionFallbackTimeout.current);
+      transitionFallbackTimeout.current = null;
+    }
+
+    if (transitionFinishTimeout.current) {
+      clearTimeout(transitionFinishTimeout.current);
+    }
+
+    const elapsed = Date.now() - transitionStartedAt.current;
+    const delay = Math.max(0, 280 - elapsed);
+
+    transitionFinishTimeout.current = setTimeout(() => {
+      transitionFinishTimeout.current = null;
+
+      Animated.parallel([
+        Animated.timing(transitionOpacity, {
+          toValue: 0,
+          duration: 260,
+          useNativeDriver: true,
+        }),
+        Animated.spring(cameraScale, {
+          toValue: 1,
+          damping: 18,
+          stiffness: 180,
+          mass: 0.65,
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) setTransitionVisible(false);
+      });
+    }, delay);
+  }, [cameraScale, transitionOpacity]);
+
+  const handleCameraInitialized = useCallback(() => {
+    onCameraReady?.();
+    finishCameraTransition();
+  }, [finishCameraTransition, onCameraReady]);
+
+  useEffect(() => {
+    if (!hasCameraDevice) return undefined;
+    if (previousCameraConfigKey.current === cameraConfigKey) {
+      return undefined;
+    }
+
+    previousCameraConfigKey.current = cameraConfigKey;
+    transitionStartedAt.current = Date.now();
+    setTransitionVisible(true);
+    transitionOpacity.stopAnimation();
+    cameraScale.stopAnimation();
+    transitionOpacity.setValue(1);
+    cameraScale.setValue(1.012);
+
+    transitionFallbackTimeout.current = setTimeout(finishCameraTransition, 1100);
+
+    return () => {
+      if (transitionFallbackTimeout.current) {
+        clearTimeout(transitionFallbackTimeout.current);
+        transitionFallbackTimeout.current = null;
+      }
+      if (transitionFinishTimeout.current) {
+        clearTimeout(transitionFinishTimeout.current);
+        transitionFinishTimeout.current = null;
+      }
+    };
+  }, [
+    cameraConfigKey,
+    cameraScale,
+    finishCameraTransition,
+    hasCameraDevice,
+    transitionOpacity,
+  ]);
+
   useEffect(() => {
     if (!device) return;
 
@@ -178,22 +262,47 @@ export default function CameraPreview({
           },
         ]}
       >
-        <CameraComponent
-          style={styles.camera}
-          device={device}
-          isActive={isActive}
-          ref={cameraRef}
-          format={format}
-          photo={true}
-          video={false}
-          audio={false}
-          zoom={zoom}
-          exposure={exposure}
-          onInitialized={onCameraReady}
-          {...faceDetectionProps}
-          enableLocation={location}
-          photoQualityBalance={rawPhotoMode ? "quality" : "balanced"}
-        />
+        <Animated.View
+          style={[
+            styles.camera,
+            {
+              transform: [{ scale: cameraScale }],
+            },
+          ]}
+        >
+          <CameraComponent
+            style={styles.camera}
+            device={device}
+            isActive={isActive}
+            ref={cameraRef}
+            format={format}
+            photo={true}
+            video={false}
+            audio={false}
+            zoom={zoom}
+            exposure={exposure}
+            onInitialized={handleCameraInitialized}
+            {...faceDetectionProps}
+            enableLocation={location}
+            photoQualityBalance={rawPhotoMode ? "quality" : "balanced"}
+          />
+        </Animated.View>
+        {transitionVisible && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.cameraTransitionOverlay,
+              { opacity: transitionOpacity },
+            ]}
+          >
+            <BlurView
+              intensity={42}
+              tint="dark"
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.cameraTransitionScrim} />
+          </Animated.View>
+        )}
         {gridVisible && (
           <View pointerEvents="none" style={styles.gridOverlay}>
             <View style={[styles.gridLineVertical, { left: "33.333%" }]} />

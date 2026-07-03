@@ -12,6 +12,14 @@ export default StyleSheet.create({
     borderRadius: 10,
   },
   camera: { flex: 1 },
+  cameraTransitionOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: "hidden",
+  },
+  cameraTransitionScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0, 0, 0, 0.24)",
+  },
   gridOverlay: {
     position: "absolute",
     top: 0,
