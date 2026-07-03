@@ -65,6 +65,12 @@ export const TOP_BAR_CONTROLS = [
     icon: "radio-button-on-outline",
     alwaysEnabled: false,
   },
+  {
+    id: "portrait",
+    label: "Retrato",
+    icon: "person-outline",
+    alwaysEnabled: false,
+  },
 ];
 
 export const DEFAULT_TOP_BAR_CONTROLS = [
@@ -74,10 +80,11 @@ export const DEFAULT_TOP_BAR_CONTROLS = [
   "manual",
   "rawCapture",
   "livePhoto",
+  "portrait",
   "settings",
 ];
 
-export const TOP_BAR_MAX_CONTROLS = 7;
+export const TOP_BAR_MAX_CONTROLS = 8;
 
 export function normalizeTopBarControls(savedControls) {
   if (!Array.isArray(savedControls)) {

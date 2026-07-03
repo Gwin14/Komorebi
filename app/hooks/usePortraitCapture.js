@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import {
-  getLivePhotoCapabilities,
-  isLivePhotoCaptureAvailable,
-} from "../../modules/camera-live-photo";
+  getPortraitCaptureCapabilities,
+  isPortraitCaptureAvailable,
+} from "../../modules/camera-portrait-capture";
 
-export default function useLivePhotoCapture(device) {
-  const nativeAvailable = Platform.OS === "ios" && isLivePhotoCaptureAvailable();
+export default function usePortraitCapture(device) {
+  const nativeAvailable = Platform.OS === "ios" && isPortraitCaptureAvailable();
   const [enabled, setEnabled] = useState(false);
   const [capabilities, setCapabilities] = useState(null);
 
@@ -16,7 +16,7 @@ export default function useLivePhotoCapture(device) {
   const available =
     canCheckCapabilities &&
     isBackCamera &&
-    (capabilities === null || capabilities.supportsLivePhotoCapture);
+    (capabilities === null || capabilities.supportsPortraitCapture);
 
   useEffect(() => {
     if (!canCheckCapabilities || !isBackCamera) {
@@ -27,7 +27,7 @@ export default function useLivePhotoCapture(device) {
 
     let cancelled = false;
 
-    getLivePhotoCapabilities(deviceId)
+    getPortraitCaptureCapabilities(deviceId)
       .then((caps) => {
         if (!cancelled) setCapabilities(caps);
       })

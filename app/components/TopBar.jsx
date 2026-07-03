@@ -31,6 +31,9 @@ export default function TopBar({
   livePhotoAvailable,
   livePhotoEnabled,
   toggleLivePhotoEnabled,
+  portraitCaptureAvailable,
+  portraitModeEnabled,
+  togglePortraitModeEnabled,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -147,6 +150,11 @@ export default function TopBar({
       onPress: toggleLivePhotoEnabled,
       active: livePhotoEnabled,
     },
+    portrait: {
+      icon: portraitModeEnabled ? "person" : "person-outline",
+      onPress: togglePortraitModeEnabled,
+      active: portraitModeEnabled,
+    },
   };
 
   return (
@@ -155,6 +163,7 @@ export default function TopBar({
         if (controlId === "manual" && !manualControlsAvailable) return null;
         if (controlId === "rawCapture" && !rawCaptureAvailable) return null;
         if (controlId === "livePhoto" && !livePhotoAvailable) return null;
+        if (controlId === "portrait" && !portraitCaptureAvailable) return null;
 
         const control = controlOptions[controlId];
         if (!control) return null;

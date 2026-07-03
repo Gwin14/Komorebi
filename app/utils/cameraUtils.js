@@ -5,6 +5,7 @@ import * as MediaLibrary from "expo-media-library";
 import * as piexif from "piexifjs";
 import { Image } from "react-native";
 import { captureLivePhoto } from "../../modules/camera-live-photo";
+import { capturePortraitPhoto } from "../../modules/camera-portrait-capture";
 import { toVisionCameraRawMode } from "../../modules/camera-raw-capture";
 import { applyLUTToImage } from "./lutProcessor";
 
@@ -77,6 +78,8 @@ export const takePicture = async ({
   rawMode = "off",
   livePhotoEnabled = false,
   livePhotoDeviceId = null,
+  portraitModeEnabled = false,
+  portraitDeviceId = null,
   setNativeCaptureActive = null,
 }) => {
   if (!cameraRef.current || !cameraReady || isProcessing) return;
@@ -106,6 +109,36 @@ export const takePicture = async ({
         imageUri: livePhoto.photoUri,
         livePhotoMovieUri: livePhoto.movieUri,
         localIdentifier: livePhoto.localIdentifier,
+        exifData: additionalExif,
+        doubleCaptureMode: false,
+        saveOriginalWithLUT: false,
+        aspectRatio,
+        cube: null,
+        grainConfig: null,
+      });
+      return;
+    }
+
+    if (portraitModeEnabled && portraitDeviceId && !rawModeEnabled) {
+      if (setNativeCaptureActive) {
+        setNativeCaptureActive(true);
+        await new Promise((resolve) => setTimeout(resolve, 220));
+      }
+
+      const portraitPhoto = await capturePortraitPhoto({
+        deviceId: portraitDeviceId,
+        flashMode: flash === "on" ? "on" : "off",
+      });
+
+      setProcessingData({
+        needsProcessing: false,
+        alreadySaved: true,
+        originalUri: portraitPhoto.photoUri,
+        imageUri: portraitPhoto.photoUri,
+        localIdentifier: portraitPhoto.localIdentifier,
+        depthDataEmbedded: portraitPhoto.depthDataEmbedded,
+        portraitEffectsMatteEmbedded:
+          portraitPhoto.portraitEffectsMatteEmbedded,
         exifData: additionalExif,
         doubleCaptureMode: false,
         saveOriginalWithLUT: false,

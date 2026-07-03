@@ -18,6 +18,7 @@ import useControlsAnimation from "./hooks/useControlsAnimation";
 import useManualCameraControls from "./hooks/useManualCameraControls";
 import useLivePhotoCapture from "./hooks/useLivePhotoCapture";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
+import usePortraitCapture from "./hooks/usePortraitCapture";
 import useRawCapture from "./hooks/useRawCapture";
 import useShutterAnimation from "./hooks/useShutterAnimation";
 import useVolumeShutter from "./hooks/useVolumeShutter";
@@ -71,6 +72,7 @@ export default function App() {
   const manual = useManualCameraControls(activeLens?.device);
   const rawCapture = useRawCapture(activeLens?.device);
   const livePhoto = useLivePhotoCapture(activeLens?.device);
+  const portraitCapture = usePortraitCapture(activeLens?.device);
 
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
@@ -185,6 +187,8 @@ export default function App() {
       rawMode: rawCapture.rawMode,
       livePhotoEnabled: livePhoto.enabled,
       livePhotoDeviceId: activeLens?.device?.id,
+      portraitModeEnabled: portraitCapture.enabled,
+      portraitDeviceId: activeLens?.device?.id,
       setNativeCaptureActive,
     });
   }, [
@@ -206,6 +210,7 @@ export default function App() {
     manual.shutterAuto,
     manual.wbAuto,
     livePhoto.enabled,
+    portraitCapture.enabled,
     rawCapture.rawMode,
     saveOriginalWithLUT,
     selectedLutId,
@@ -220,6 +225,12 @@ export default function App() {
   useEffect(() => {
     setCameraReady(false);
   }, [activeLens?.device?.id, rawCapture.rawModeEnabled]);
+
+  useEffect(() => {
+    if (!rawCapture.rawModeEnabled) return;
+    livePhoto.setEnabled(false);
+    portraitCapture.setEnabled(false);
+  }, [livePhoto, portraitCapture, rawCapture.rawModeEnabled]);
 
   useVolumeShutter({
     enabled: !firstTime && cameraPermission === "granted" && cameraReady,
@@ -240,8 +251,16 @@ export default function App() {
     manualMode: manual.manualMode,
     rawCaptureAvailable: rawCapture.available,
     rawMode: rawCapture.rawMode,
-    livePhotoAvailable: livePhoto.available && !rawCapture.rawModeEnabled,
+    livePhotoAvailable:
+      livePhoto.available &&
+      !rawCapture.rawModeEnabled &&
+      !portraitCapture.enabled,
     livePhotoEnabled: livePhoto.enabled,
+    portraitCaptureAvailable:
+      portraitCapture.available &&
+      !rawCapture.rawModeEnabled &&
+      !livePhoto.enabled,
+    portraitModeEnabled: portraitCapture.enabled,
     selectedLutId,
     smileDetectionEnabled,
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
@@ -251,7 +270,14 @@ export default function App() {
       if (mode === "manual") manual.toggleManualMode();
     },
     toggleRawMode: rawCapture.toggleRawMode,
-    toggleLivePhotoEnabled: livePhoto.toggleEnabled,
+    toggleLivePhotoEnabled: () => {
+      if (!livePhoto.enabled) portraitCapture.setEnabled(false);
+      livePhoto.toggleEnabled();
+    },
+    togglePortraitModeEnabled: () => {
+      if (!portraitCapture.enabled) livePhoto.setEnabled(false);
+      portraitCapture.toggleEnabled();
+    },
     toggleSmileDetectionEnabled: () =>
       setSmileDetectionEnabled((value) => !value),
     toggleVerticalMode,
