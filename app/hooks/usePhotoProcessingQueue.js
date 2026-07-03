@@ -21,6 +21,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
   const handleProcessed = useCallback(
     async (processedUri, item = {}) => {
       const {
+        alreadySaved = false,
         doubleCaptureMode = false,
         saveOriginalWithLUT: saveOriginalWithoutLUT = false,
         originalUri,
@@ -29,6 +30,10 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
 
       try {
         if (!hasMediaPermission) return;
+
+        if (alreadySaved) {
+          return;
+        }
 
         if (doubleCaptureMode) {
           await saveToAlbum(processedUri);
@@ -65,7 +70,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
     const item = processingQueue[0];
     if (!item || item.needsProcessing) return;
 
-    handleProcessed(item.originalUri, item);
+    handleProcessed(item.originalUri || item.imageUri, item);
   }, [handleProcessed, processingQueue]);
 
   return {

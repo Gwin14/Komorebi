@@ -22,6 +22,7 @@
     "@react-navigation/native": "^7.1.8",
     "@shopify/react-native-skia": "2.2.12",
     "camera-manual-controls": "file:./modules/camera-manual-controls",
+    "camera-live-photo": "file:./modules/camera-live-photo",
     "camera-raw-capture": "file:./modules/camera-raw-capture",
     "expo": "~54.0.33",
     "expo-asset": "~12.0.10",

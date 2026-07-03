@@ -4,6 +4,7 @@ import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import * as piexif from "piexifjs";
 import { Image } from "react-native";
+import { captureLivePhoto } from "../../modules/camera-live-photo";
 import { toVisionCameraRawMode } from "../../modules/camera-raw-capture";
 import { applyLUTToImage } from "./lutProcessor";
 
@@ -74,6 +75,9 @@ export const takePicture = async ({
   aspectRatio = 3 / 4,
   manualSettings = null,
   rawMode = "off",
+  livePhotoEnabled = false,
+  livePhotoDeviceId = null,
+  setNativeCaptureActive = null,
 }) => {
   if (!cameraRef.current || !cameraReady || isProcessing) return;
 
@@ -83,6 +87,34 @@ export const takePicture = async ({
     const additionalExif = await getLocationExif(location);
     const normalizedRawMode = toVisionCameraRawMode(rawMode);
     const rawModeEnabled = normalizedRawMode !== "off";
+
+    if (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) {
+      if (setNativeCaptureActive) {
+        setNativeCaptureActive(true);
+        await new Promise((resolve) => setTimeout(resolve, 220));
+      }
+
+      const livePhoto = await captureLivePhoto({
+        deviceId: livePhotoDeviceId,
+        flashMode: flash === "on" ? "on" : "off",
+      });
+
+      setProcessingData({
+        needsProcessing: false,
+        alreadySaved: true,
+        originalUri: livePhoto.photoUri,
+        imageUri: livePhoto.photoUri,
+        livePhotoMovieUri: livePhoto.movieUri,
+        localIdentifier: livePhoto.localIdentifier,
+        exifData: additionalExif,
+        doubleCaptureMode: false,
+        saveOriginalWithLUT: false,
+        aspectRatio,
+        cube: null,
+        grainConfig: null,
+      });
+      return;
+    }
     // Com manual ativo, força "speed" (frame único, sem fusão Deep Fusion/
     // Smart HDR): em modo "quality"/"balanced" o AVCapturePhotoOutput funde
     // múltiplos frames em exposições diferentes, ignorando o ISO/obturador
@@ -174,6 +206,9 @@ export const takePicture = async ({
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
   } finally {
+    if (setNativeCaptureActive) {
+      setNativeCaptureActive(false);
+    }
     setIsProcessing(false);
   }
 };

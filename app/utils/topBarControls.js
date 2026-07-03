@@ -59,6 +59,12 @@ export const TOP_BAR_CONTROLS = [
     icon: "aperture-outline",
     alwaysEnabled: false,
   },
+  {
+    id: "livePhoto",
+    label: "Live Photo",
+    icon: "radio-button-on-outline",
+    alwaysEnabled: false,
+  },
 ];
 
 export const DEFAULT_TOP_BAR_CONTROLS = [
@@ -67,10 +73,11 @@ export const DEFAULT_TOP_BAR_CONTROLS = [
   "luts",
   "manual",
   "rawCapture",
+  "livePhoto",
   "settings",
 ];
 
-export const TOP_BAR_MAX_CONTROLS = 6;
+export const TOP_BAR_MAX_CONTROLS = 7;
 
 export function normalizeTopBarControls(savedControls) {
   if (!Array.isArray(savedControls)) {

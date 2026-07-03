@@ -28,6 +28,9 @@ export default function TopBar({
   rawCaptureAvailable,
   rawMode,
   toggleRawMode,
+  livePhotoAvailable,
+  livePhotoEnabled,
+  toggleLivePhotoEnabled,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -139,6 +142,11 @@ export default function TopBar({
       onPress: toggleRawMode,
       active: rawMode !== "off",
     },
+    livePhoto: {
+      icon: livePhotoEnabled ? "radio-button-on" : "radio-button-on-outline",
+      onPress: toggleLivePhotoEnabled,
+      active: livePhotoEnabled,
+    },
   };
 
   return (
@@ -146,6 +154,7 @@ export default function TopBar({
       {topBarControls.map((controlId) => {
         if (controlId === "manual" && !manualControlsAvailable) return null;
         if (controlId === "rawCapture" && !rawCaptureAvailable) return null;
+        if (controlId === "livePhoto" && !livePhotoAvailable) return null;
 
         const control = controlOptions[controlId];
         if (!control) return null;
