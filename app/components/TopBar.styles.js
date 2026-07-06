@@ -7,6 +7,9 @@ export default StyleSheet.create({
     justifyContent: "space-around",
   },
   button: {},
+  disabledControl: {
+    opacity: 0.35,
+  },
   rawControl: {
     alignItems: "center",
     justifyContent: "center",

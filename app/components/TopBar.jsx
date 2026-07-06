@@ -162,11 +162,14 @@ export default function TopBar({
       {topBarControls.map((controlId) => {
         if (controlId === "manual" && !manualControlsAvailable) return null;
         if (controlId === "rawCapture" && !rawCaptureAvailable) return null;
-        if (controlId === "livePhoto" && !livePhotoAvailable) return null;
-        if (controlId === "portrait" && !portraitCaptureAvailable) return null;
 
         const control = controlOptions[controlId];
         if (!control) return null;
+
+        const disabled =
+          (controlId === "livePhoto" && !livePhotoAvailable) ||
+          (controlId === "portrait" && !portraitCaptureAvailable);
+        const iconColor = control.active ? "#ffaa00" : "white";
 
         if (controlId === "weather") {
           return (
@@ -195,14 +198,20 @@ export default function TopBar({
         }
 
         return (
-          <TouchableOpacity key={controlId} onPress={control.onPress}>
-            <Animated.View style={animatedStyle}>
+          <TouchableOpacity
+            key={controlId}
+            onPress={control.onPress}
+            disabled={disabled}
+          >
+            <Animated.View
+              style={[animatedStyle, disabled && styles.disabledControl]}
+            >
               {controlId === "rawCapture" ? (
                 <View style={styles.rawControl}>
                   <Ionicons
                     name={control.icon}
                     size={28}
-                    color={control.active ? "#ffaa00" : "white"}
+                    color={iconColor}
                   />
                   <Text
                     style={[
@@ -218,7 +227,7 @@ export default function TopBar({
                   name={control.icon}
                   size={32}
                   style={styles.button}
-                  color={control.active ? "#ffaa00" : "white"}
+                  color={iconColor}
                 />
               )}
             </Animated.View>

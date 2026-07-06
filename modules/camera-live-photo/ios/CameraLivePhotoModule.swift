@@ -3,6 +3,8 @@ import AVFoundation
 import Photos
 
 public class CameraLivePhotoModule: Module {
+  private static let livePhotoWarmupNanoseconds: UInt64 = 1_200_000_000
+
   enum LivePhotoError: Error, LocalizedError {
     case deviceNotFound(String)
     case cannotCreateInput
@@ -85,6 +87,7 @@ public class CameraLivePhotoModule: Module {
     let session = AVCaptureSession()
     session.beginConfiguration()
     defer { session.commitConfiguration() }
+    session.sessionPreset = .photo
 
     let input = try AVCaptureDeviceInput(device: device)
     guard session.canAddInput(input) else {
@@ -152,6 +155,8 @@ public class CameraLivePhotoModule: Module {
         session.stopRunning()
       }
     }
+
+    try await Task.sleep(nanoseconds: livePhotoWarmupNanoseconds)
 
     let photoURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("komorebi-live-\(UUID().uuidString).jpg")

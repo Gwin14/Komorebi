@@ -53,13 +53,20 @@ public class CameraPortraitCaptureModule: Module {
 
     AsyncFunction("getCapabilities") { (deviceId: String) async throws -> [String: Any] in
       let device = try Self.findDevice(deviceId)
-      let support = try Self.checkPortraitSupport(device: device)
+      let selection = Self.findPortraitCaptureDevice(preferred: device)
+      let support = selection?.support ?? PortraitSupport(
+        supportsDepthData: false,
+        supportsPortraitEffectsMatte: false
+      )
       let libraryStatus = PHPhotoLibrary.authorizationStatus(for: .addOnly)
 
       return [
         "supportsPortraitCapture": support.supportsPortraitCapture,
         "supportsDepthData": support.supportsDepthData,
         "supportsPortraitEffectsMatte": support.supportsPortraitEffectsMatte,
+        "requestedDeviceId": device.uniqueID,
+        "captureDeviceId": selection?.device.uniqueID ?? "",
+        "captureDeviceName": selection?.device.localizedName ?? "",
         "canSaveToPhotoLibrary": libraryStatus == .authorized || libraryStatus == .limited
       ]
     }
@@ -71,7 +78,15 @@ public class CameraPortraitCaptureModule: Module {
 
       let flashMode = options["flashMode"] as? String ?? "off"
       let device = try Self.findDevice(deviceId)
-      return try await Self.capturePortraitPhoto(device: device, flashMode: flashMode)
+      guard let selection = Self.findPortraitCaptureDevice(preferred: device) else {
+        throw PortraitCaptureError.portraitCaptureNotSupported
+      }
+      return try await Self.capturePortraitPhoto(
+        device: selection.device,
+        support: selection.support,
+        requestedDeviceId: device.uniqueID,
+        flashMode: flashMode
+      )
     }
   }
 
@@ -93,6 +108,7 @@ public class CameraPortraitCaptureModule: Module {
     let session = AVCaptureSession()
     session.beginConfiguration()
     defer { session.commitConfiguration() }
+    session.sessionPreset = .photo
 
     let input = try AVCaptureDeviceInput(device: device)
     guard session.canAddInput(input) else {
@@ -112,8 +128,61 @@ public class CameraPortraitCaptureModule: Module {
     )
   }
 
+  private static func findPortraitCaptureDevice(
+    preferred device: AVCaptureDevice
+  ) -> (device: AVCaptureDevice, support: PortraitSupport)? {
+    for candidate in portraitDeviceCandidates(preferred: device) {
+      guard let support = try? checkPortraitSupport(device: candidate) else {
+        continue
+      }
+
+      if support.supportsPortraitCapture {
+        return (candidate, support)
+      }
+    }
+
+    return nil
+  }
+
+  private static func portraitDeviceCandidates(preferred device: AVCaptureDevice) -> [AVCaptureDevice] {
+    var candidates: [AVCaptureDevice] = []
+    var seenDeviceIds = Set<String>()
+
+    func append(_ candidate: AVCaptureDevice) {
+      guard candidate.position == .back, !seenDeviceIds.contains(candidate.uniqueID) else {
+        return
+      }
+
+      seenDeviceIds.insert(candidate.uniqueID)
+      candidates.append(candidate)
+    }
+
+    append(device)
+
+    var deviceTypes: [AVCaptureDevice.DeviceType] = [
+      .builtInDualCamera,
+      .builtInWideAngleCamera
+    ]
+
+    if #available(iOS 13.0, *) {
+      deviceTypes.insert(.builtInDualWideCamera, at: 0)
+      deviceTypes.insert(.builtInTripleCamera, at: 0)
+    }
+
+    let discoverySession = AVCaptureDevice.DiscoverySession(
+      deviceTypes: deviceTypes,
+      mediaType: .video,
+      position: .back
+    )
+
+    discoverySession.devices.forEach(append)
+    return candidates
+  }
+
   private static func capturePortraitPhoto(
     device: AVCaptureDevice,
+    support: PortraitSupport,
+    requestedDeviceId: String,
     flashMode: String
   ) async throws -> [String: Any] {
     guard device.position == .back else {
@@ -126,7 +195,7 @@ public class CameraPortraitCaptureModule: Module {
     let output = AVCapturePhotoOutput()
     let sessionQueue = DispatchQueue(label: "dev.komorebi.portrait-capture.session")
 
-    let support = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PortraitSupport, Error>) in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       sessionQueue.async {
         do {
           session.beginConfiguration()
@@ -143,21 +212,21 @@ public class CameraPortraitCaptureModule: Module {
           }
           session.addOutput(output)
 
-          let support = PortraitSupport(
-            supportsDepthData: output.isDepthDataDeliverySupported,
-            supportsPortraitEffectsMatte: output.isPortraitEffectsMatteDeliverySupported
+          let configuredSupport = PortraitSupport(
+            supportsDepthData: output.isDepthDataDeliverySupported && support.supportsDepthData,
+            supportsPortraitEffectsMatte: output.isPortraitEffectsMatteDeliverySupported && support.supportsPortraitEffectsMatte
           )
 
-          guard support.supportsPortraitCapture else {
+          guard configuredSupport.supportsPortraitCapture else {
             throw PortraitCaptureError.portraitCaptureNotSupported
           }
 
-          output.isDepthDataDeliveryEnabled = support.supportsDepthData
-          output.isPortraitEffectsMatteDeliveryEnabled = support.supportsPortraitEffectsMatte
+          output.isDepthDataDeliveryEnabled = configuredSupport.supportsDepthData
+          output.isPortraitEffectsMatteDeliveryEnabled = configuredSupport.supportsPortraitEffectsMatte
 
           session.commitConfiguration()
           session.startRunning()
-          continuation.resume(returning: support)
+          continuation.resume()
         } catch {
           session.commitConfiguration()
           continuation.resume(throwing: error)
@@ -195,7 +264,10 @@ public class CameraPortraitCaptureModule: Module {
       "localIdentifier": localIdentifier as Any,
       "savedToLibrary": true,
       "depthDataEmbedded": support.supportsDepthData,
-      "portraitEffectsMatteEmbedded": support.supportsPortraitEffectsMatte
+      "portraitEffectsMatteEmbedded": support.supportsPortraitEffectsMatte,
+      "requestedDeviceId": requestedDeviceId,
+      "captureDeviceId": device.uniqueID,
+      "captureDeviceName": device.localizedName
     ]
   }
 
