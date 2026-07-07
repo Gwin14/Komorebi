@@ -31,6 +31,14 @@ export async function stopListening(): Promise<void> {
   await nativeModule?.stopListening?.();
 }
 
+/** Copy and clear photos captured by the iOS Locked Camera Capture extension. */
+export async function consumePendingLockedCameraCaptures(): Promise<string[]> {
+  if (!nativeModule?.consumePendingLockedCameraCaptures) {
+    return [];
+  }
+  return nativeModule.consumePendingLockedCameraCaptures();
+}
+
 /** Subscribe to hardware capture button presses. Returns null when unavailable. */
 export function addCameraButtonListener(
   listener: CameraButtonListener,

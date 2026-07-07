@@ -80,7 +80,8 @@
       ],
       "expo-web-browser",
       "./plugins/withIosDeploymentTarget",
-      "./plugins/withUiSceneManifest"
+      "./plugins/withUiSceneManifest",
+      "./plugins/withLockedCameraCapture"
     ],
     "experiments": {
       "typedRoutes": true,
