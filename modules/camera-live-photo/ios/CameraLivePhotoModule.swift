@@ -3,14 +3,12 @@ import AVFoundation
 import Photos
 
 public class CameraLivePhotoModule: Module {
-  private static let livePhotoWarmupNanoseconds: UInt64 = 1_200_000_000
-
   enum LivePhotoError: Error, LocalizedError {
     case deviceNotFound(String)
-    case cannotCreateInput
     case cannotAddInput
     case cannotAddOutput
     case livePhotoNotSupported
+    case captureSessionNotReady
     case captureFailed
     case missingPhotoData
     case missingMovieURL
@@ -20,14 +18,14 @@ public class CameraLivePhotoModule: Module {
       switch self {
       case .deviceNotFound(let id):
         return "No AVCaptureDevice found for id \(id)"
-      case .cannotCreateInput:
-        return "Could not create camera input"
       case .cannotAddInput:
         return "Could not add camera input to capture session"
       case .cannotAddOutput:
         return "Could not add photo output to capture session"
       case .livePhotoNotSupported:
         return "Live Photo capture is not supported by this device"
+      case .captureSessionNotReady:
+        return "Live Photo camera session is not ready"
       case .captureFailed:
         return "Live Photo capture failed"
       case .missingPhotoData:
@@ -50,6 +48,22 @@ public class CameraLivePhotoModule: Module {
       return false
     }
 
+    View(LivePhotoCameraView.self) {
+      Events("onInitialized", "onError")
+
+      Prop("deviceId") { (view, deviceId: String?) in
+        view.deviceId = deviceId
+      }
+
+      Prop("flashMode") { (view, flashMode: String?) in
+        view.flashMode = flashMode ?? "off"
+      }
+
+      Prop("isActive") { (view, isActive: Bool?) in
+        view.isActive = isActive ?? true
+      }
+    }
+
     AsyncFunction("getCapabilities") { (deviceId: String) async throws -> [String: Any] in
       let device = try Self.findDevice(deviceId)
       let supportsLivePhoto = try Self.checkLivePhotoSupport(device: device)
@@ -67,12 +81,14 @@ public class CameraLivePhotoModule: Module {
       }
 
       let flashMode = options["flashMode"] as? String ?? "off"
-      let device = try Self.findDevice(deviceId)
-      return try await Self.captureLivePhoto(device: device, flashMode: flashMode)
+      guard let view = await LivePhotoCameraView.activeView(for: deviceId) else {
+        throw LivePhotoError.captureSessionNotReady
+      }
+      return try await view.captureLivePhoto(flashMode: flashMode)
     }
   }
 
-  private static func findDevice(_ deviceId: String) throws -> AVCaptureDevice {
+  static func findDevice(_ deviceId: String) throws -> AVCaptureDevice {
     guard let device = AVCaptureDevice(uniqueID: deviceId) else {
       throw LivePhotoError.deviceNotFound(deviceId)
     }
@@ -104,88 +120,7 @@ public class CameraLivePhotoModule: Module {
     return output.isLivePhotoCaptureSupported
   }
 
-  private static func captureLivePhoto(
-    device: AVCaptureDevice,
-    flashMode: String
-  ) async throws -> [String: Any] {
-    guard device.position == .back else {
-      throw LivePhotoError.livePhotoNotSupported
-    }
-
-    try await requestPhotoLibraryPermission()
-
-    let session = AVCaptureSession()
-    let output = AVCapturePhotoOutput()
-    let sessionQueue = DispatchQueue(label: "dev.komorebi.live-photo.session")
-
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      sessionQueue.async {
-        do {
-          session.beginConfiguration()
-          session.sessionPreset = .photo
-
-          let input = try AVCaptureDeviceInput(device: device)
-          guard session.canAddInput(input) else {
-            throw LivePhotoError.cannotAddInput
-          }
-          session.addInput(input)
-
-          guard session.canAddOutput(output) else {
-            throw LivePhotoError.cannotAddOutput
-          }
-          session.addOutput(output)
-
-          guard output.isLivePhotoCaptureSupported else {
-            throw LivePhotoError.livePhotoNotSupported
-          }
-          output.isLivePhotoCaptureEnabled = true
-
-          session.commitConfiguration()
-          session.startRunning()
-          continuation.resume()
-        } catch {
-          session.commitConfiguration()
-          continuation.resume(throwing: error)
-        }
-      }
-    }
-
-    defer {
-      sessionQueue.async {
-        session.stopRunning()
-      }
-    }
-
-    try await Task.sleep(nanoseconds: livePhotoWarmupNanoseconds)
-
-    let photoURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("komorebi-live-\(UUID().uuidString).jpg")
-    let movieURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("komorebi-live-\(UUID().uuidString).mov")
-
-    let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
-    settings.isHighResolutionPhotoEnabled = output.isHighResolutionCaptureEnabled
-    if output.supportedFlashModes.contains(toAVFlashMode(flashMode)) {
-      settings.flashMode = toAVFlashMode(flashMode)
-    }
-    settings.livePhotoMovieFileURL = movieURL
-
-    let delegate = LivePhotoCaptureDelegate(photoURL: photoURL, movieURL: movieURL)
-    let captureResult = try await delegate.capture(with: output, settings: settings)
-    let localIdentifier = try await saveLivePhotoToLibrary(
-      photoURL: captureResult.photoURL,
-      movieURL: captureResult.movieURL
-    )
-
-    return [
-      "photoUri": captureResult.photoURL.absoluteString,
-      "movieUri": captureResult.movieURL.absoluteString,
-      "localIdentifier": localIdentifier as Any,
-      "savedToLibrary": true
-    ]
-  }
-
-  private static func requestPhotoLibraryPermission() async throws {
+  static func requestPhotoLibraryPermission() async throws {
     let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
     if status == .authorized || status == .limited {
       return
@@ -197,7 +132,7 @@ public class CameraLivePhotoModule: Module {
     }
   }
 
-  private static func saveLivePhotoToLibrary(
+  static func saveLivePhotoToLibrary(
     photoURL: URL,
     movieURL: URL
   ) async throws -> String? {
@@ -221,7 +156,7 @@ public class CameraLivePhotoModule: Module {
     }
   }
 
-  private static func toAVFlashMode(_ mode: String) -> AVCaptureDevice.FlashMode {
+  static func toAVFlashMode(_ mode: String) -> AVCaptureDevice.FlashMode {
     switch mode {
     case "on":
       return .on
@@ -233,16 +168,242 @@ public class CameraLivePhotoModule: Module {
   }
 }
 
-private final class LivePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+public final class LivePhotoCameraView: ExpoView {
+  let onInitialized = EventDispatcher()
+  let onError = EventDispatcher()
+
+  private static weak var currentActiveView: LivePhotoCameraView?
+  private let controller = LivePhotoCameraController()
+
+  var deviceId: String? {
+    didSet {
+      updateSession()
+    }
+  }
+
+  var flashMode: String = "off"
+
+  var isActive: Bool = true {
+    didSet {
+      updateSession()
+    }
+  }
+
+  public required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+
+    backgroundColor = .black
+    videoPreviewLayer.videoGravity = .resizeAspectFill
+    videoPreviewLayer.session = controller.session
+  }
+
+  public override class var layerClass: AnyClass {
+    AVCaptureVideoPreviewLayer.self
+  }
+
+  private var videoPreviewLayer: AVCaptureVideoPreviewLayer {
+    layer as! AVCaptureVideoPreviewLayer
+  }
+
+  @MainActor
+  static func activeView(for deviceId: String) -> LivePhotoCameraView? {
+    guard let view = currentActiveView, view.deviceId == deviceId, view.isActive else {
+      return nil
+    }
+    return view
+  }
+
+  func captureLivePhoto(flashMode: String) async throws -> [String: Any] {
+    print("[LivePhotoNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
+    try await CameraLivePhotoModule.requestPhotoLibraryPermission()
+    let captureResult = try await controller.capture(flashMode: flashMode)
+    print("[LivePhotoNative] capture finished photoURL=\(captureResult.photoURL.absoluteString) movieURL=\(captureResult.movieURL.absoluteString)")
+    let localIdentifier = try await CameraLivePhotoModule.saveLivePhotoToLibrary(
+      photoURL: captureResult.photoURL,
+      movieURL: captureResult.movieURL
+    )
+    print("[LivePhotoNative] saved to library localIdentifier=\(localIdentifier ?? "nil")")
+
+    return [
+      "photoUri": captureResult.photoURL.absoluteString,
+      "movieUri": captureResult.movieURL.absoluteString,
+      "localIdentifier": localIdentifier as Any,
+      "savedToLibrary": true
+    ]
+  }
+
+  private func updateSession() {
+    guard let deviceId, isActive else {
+      print("[LivePhotoNative] stopping session deviceId=\(deviceId ?? "nil") isActive=\(isActive)")
+      if Self.currentActiveView === self {
+        Self.currentActiveView = nil
+      }
+      controller.stop()
+      return
+    }
+
+    Self.currentActiveView = self
+    print("[LivePhotoNative] configure requested deviceId=\(deviceId) isActive=\(isActive)")
+    controller.configure(
+      deviceId: deviceId,
+      onReady: { [weak self] in
+        print("[LivePhotoNative] session ready deviceId=\(self?.deviceId ?? "nil")")
+        self?.onInitialized()
+      },
+      onError: { [weak self] error in
+        print("[LivePhotoNative] session error deviceId=\(self?.deviceId ?? "nil") error=\(error.localizedDescription)")
+        self?.onError(["message": error.localizedDescription])
+      }
+    )
+  }
+
+  deinit {
+    if Self.currentActiveView === self {
+      Self.currentActiveView = nil
+    }
+    controller.stop()
+  }
+}
+
+private final class LivePhotoCameraController {
   struct CaptureResult {
     let photoURL: URL
     let movieURL: URL
   }
 
+  let session = AVCaptureSession()
+
+  private let output = AVCapturePhotoOutput()
+  private let sessionQueue = DispatchQueue(label: "dev.komorebi.live-photo.session")
+  private var configuredDeviceId: String?
+  private var isSessionReady = false
+  private var inFlightDelegates: [LivePhotoCaptureDelegate] = []
+
+  func configure(
+    deviceId: String,
+    onReady: @escaping () -> Void,
+    onError: @escaping (Error) -> Void
+  ) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+
+      var configurationOpen = false
+      do {
+        print("[LivePhotoNative] configure start deviceId=\(deviceId) ready=\(self.isSessionReady) configuredDeviceId=\(self.configuredDeviceId ?? "nil") running=\(self.session.isRunning)")
+        if self.isSessionReady && self.configuredDeviceId == deviceId {
+          if !self.session.isRunning {
+            print("[LivePhotoNative] restarting existing session deviceId=\(deviceId)")
+            self.session.startRunning()
+          }
+          DispatchQueue.main.async(execute: onReady)
+          return
+        }
+
+        self.session.beginConfiguration()
+        configurationOpen = true
+
+        self.session.inputs.forEach { self.session.removeInput($0) }
+        self.session.outputs.forEach { self.session.removeOutput($0) }
+        self.session.sessionPreset = .photo
+
+        let device = try CameraLivePhotoModule.findDevice(deviceId)
+        print("[LivePhotoNative] device found uniqueID=\(device.uniqueID) name=\(device.localizedName) position=\(device.position.rawValue)")
+        guard device.position == .back else {
+          throw CameraLivePhotoModule.LivePhotoError.livePhotoNotSupported
+        }
+
+        let input = try AVCaptureDeviceInput(device: device)
+        guard self.session.canAddInput(input) else {
+          throw CameraLivePhotoModule.LivePhotoError.cannotAddInput
+        }
+        self.session.addInput(input)
+
+        guard self.session.canAddOutput(self.output) else {
+          throw CameraLivePhotoModule.LivePhotoError.cannotAddOutput
+        }
+        self.session.addOutput(self.output)
+
+        guard self.output.isLivePhotoCaptureSupported else {
+          throw CameraLivePhotoModule.LivePhotoError.livePhotoNotSupported
+        }
+
+        self.output.isLivePhotoCaptureEnabled = true
+        self.configuredDeviceId = deviceId
+        self.isSessionReady = true
+        self.session.commitConfiguration()
+        configurationOpen = false
+        self.session.startRunning()
+        print("[LivePhotoNative] configure success deviceId=\(deviceId) liveSupported=\(self.output.isLivePhotoCaptureSupported) highResolutionEnabled=\(self.output.isHighResolutionCaptureEnabled) running=\(self.session.isRunning)")
+        DispatchQueue.main.async(execute: onReady)
+      } catch {
+        if configurationOpen {
+          self.session.commitConfiguration()
+        }
+        self.isSessionReady = false
+        self.configuredDeviceId = nil
+        print("[LivePhotoNative] configure failed deviceId=\(deviceId) error=\(error.localizedDescription)")
+        DispatchQueue.main.async {
+          onError(error)
+        }
+      }
+    }
+  }
+
+  func stop() {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      if self.session.isRunning {
+        print("[LivePhotoNative] stop running session configuredDeviceId=\(self.configuredDeviceId ?? "nil")")
+        self.session.stopRunning()
+      }
+    }
+  }
+
+  func capture(flashMode: String) async throws -> CaptureResult {
+    try await withCheckedThrowingContinuation { continuation in
+      sessionQueue.async { [weak self] in
+        guard let self, self.isSessionReady, self.session.isRunning else {
+          print("[LivePhotoNative] capture blocked ready=\(self?.isSessionReady ?? false) running=\(self?.session.isRunning ?? false) configuredDeviceId=\(self?.configuredDeviceId ?? "nil")")
+          continuation.resume(throwing: CameraLivePhotoModule.LivePhotoError.captureSessionNotReady)
+          return
+        }
+
+        let photoURL = FileManager.default.temporaryDirectory
+          .appendingPathComponent("komorebi-live-\(UUID().uuidString).jpg")
+        let movieURL = FileManager.default.temporaryDirectory
+          .appendingPathComponent("komorebi-live-\(UUID().uuidString).mov")
+
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+        settings.isHighResolutionPhotoEnabled = self.output.isHighResolutionCaptureEnabled
+        let avFlashMode = CameraLivePhotoModule.toAVFlashMode(flashMode)
+        if self.output.supportedFlashModes.contains(avFlashMode) {
+          settings.flashMode = avFlashMode
+        } else {
+          print("[LivePhotoNative] requested flash unsupported flashMode=\(flashMode)")
+        }
+        settings.livePhotoMovieFileURL = movieURL
+
+        print("[LivePhotoNative] capturePhoto now configuredDeviceId=\(self.configuredDeviceId ?? "nil") flashMode=\(settings.flashMode.rawValue) photoURL=\(photoURL.lastPathComponent) movieURL=\(movieURL.lastPathComponent)")
+        let delegate = LivePhotoCaptureDelegate(photoURL: photoURL, movieURL: movieURL)
+        delegate.onFinish = { [weak self, weak delegate] in
+          guard let self, let delegate else { return }
+          self.sessionQueue.async {
+            self.inFlightDelegates.removeAll { $0 === delegate }
+          }
+        }
+        self.inFlightDelegates.append(delegate)
+        delegate.capture(with: self.output, settings: settings, continuation: continuation)
+      }
+    }
+  }
+}
+
+private final class LivePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
   private let photoURL: URL
   private let movieURL: URL
   private var photoData: Data?
-  private var continuation: CheckedContinuation<CaptureResult, Error>?
+  private var continuation: CheckedContinuation<LivePhotoCameraController.CaptureResult, Error>?
+  var onFinish: (() -> Void)?
 
   init(photoURL: URL, movieURL: URL) {
     self.photoURL = photoURL
@@ -252,12 +413,11 @@ private final class LivePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDel
 
   func capture(
     with output: AVCapturePhotoOutput,
-    settings: AVCapturePhotoSettings
-  ) async throws -> CaptureResult {
-    try await withCheckedThrowingContinuation { continuation in
-      self.continuation = continuation
-      output.capturePhoto(with: settings, delegate: self)
-    }
+    settings: AVCapturePhotoSettings,
+    continuation: CheckedContinuation<LivePhotoCameraController.CaptureResult, Error>
+  ) {
+    self.continuation = continuation
+    output.capturePhoto(with: settings, delegate: self)
   }
 
   func photoOutput(
@@ -266,11 +426,13 @@ private final class LivePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDel
     error: Error?
   ) {
     if let error {
+      print("[LivePhotoNative] didFinishProcessingPhoto error=\(error.localizedDescription)")
       finish(with: .failure(error))
       return
     }
 
     photoData = photo.fileDataRepresentation()
+    print("[LivePhotoNative] didFinishProcessingPhoto hasData=\(photoData != nil) bytes=\(photoData?.count ?? 0)")
   }
 
   func photoOutput(
@@ -288,8 +450,11 @@ private final class LivePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDel
     error: Error?
   ) {
     if let error {
+      print("[LivePhotoNative] didFinishProcessingLivePhotoMovie error=\(error.localizedDescription)")
       finish(with: .failure(error))
+      return
     }
+    print("[LivePhotoNative] didFinishProcessingLivePhotoMovie output=\(outputFileURL.lastPathComponent) duration=\(duration.seconds) displayTime=\(photoDisplayTime.seconds)")
   }
 
   func photoOutput(
@@ -298,11 +463,13 @@ private final class LivePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDel
     error: Error?
   ) {
     if let error {
+      print("[LivePhotoNative] didFinishCapture error=\(error.localizedDescription)")
       finish(with: .failure(error))
       return
     }
 
     guard let photoData else {
+      print("[LivePhotoNative] didFinishCapture missing photo data")
       finish(with: .failure(CameraLivePhotoModule.LivePhotoError.missingPhotoData))
       return
     }
@@ -310,21 +477,26 @@ private final class LivePhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDel
     do {
       try photoData.write(to: photoURL, options: .atomic)
       guard FileManager.default.fileExists(atPath: movieURL.path) else {
+        print("[LivePhotoNative] didFinishCapture missing movie file path=\(movieURL.path)")
         finish(with: .failure(CameraLivePhotoModule.LivePhotoError.missingMovieURL))
         return
       }
-      finish(with: .success(CaptureResult(photoURL: photoURL, movieURL: movieURL)))
+      print("[LivePhotoNative] didFinishCapture wrote photo=\(photoURL.lastPathComponent) movieExists=true")
+      finish(with: .success(LivePhotoCameraController.CaptureResult(photoURL: photoURL, movieURL: movieURL)))
     } catch {
+      print("[LivePhotoNative] didFinishCapture write error=\(error.localizedDescription)")
       finish(with: .failure(error))
     }
   }
 
-  private func finish(with result: Result<CaptureResult, Error>) {
+  private func finish(with result: Result<LivePhotoCameraController.CaptureResult, Error>) {
     guard let continuation else {
       return
     }
 
     self.continuation = nil
+    onFinish?()
+    onFinish = nil
     switch result {
     case .success(let captureResult):
       continuation.resume(returning: captureResult)

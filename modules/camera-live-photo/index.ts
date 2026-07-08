@@ -1,4 +1,5 @@
-import { Platform } from "react-native";
+import type { ComponentType } from "react";
+import { Platform, View, type ViewProps } from "react-native";
 
 export type LivePhotoCapabilities = {
   supportsLivePhotoCapture: boolean;
@@ -8,6 +9,14 @@ export type LivePhotoCapabilities = {
 export type LivePhotoCaptureOptions = {
   deviceId: string;
   flashMode?: "off" | "on" | "auto";
+};
+
+export type LivePhotoCameraViewProps = ViewProps & {
+  deviceId?: string | null;
+  flashMode?: "off" | "on" | "auto";
+  isActive?: boolean;
+  onInitialized?: () => void;
+  onError?: (event: { nativeEvent?: { message?: string } }) => void;
 };
 
 export type LivePhotoCaptureResult = {
@@ -31,6 +40,11 @@ if (Platform.OS === "ios") {
     nativeModule = null;
   }
 }
+
+export const LivePhotoCameraView: ComponentType<LivePhotoCameraViewProps> =
+  Platform.OS === "ios" && nativeModule
+    ? require("expo-modules-core").requireNativeViewManager("CameraLivePhoto")
+    : View;
 
 export function isLivePhotoCaptureAvailable(): boolean {
   return Boolean(nativeModule?.isSupported?.());

@@ -8,6 +8,7 @@ public class CameraPortraitCaptureModule: Module {
     case cannotAddInput
     case cannotAddOutput
     case portraitCaptureNotSupported
+    case captureSessionNotReady
     case captureFailed
     case missingPhotoData
     case photoLibraryDenied
@@ -22,6 +23,8 @@ public class CameraPortraitCaptureModule: Module {
         return "Could not add photo output to capture session"
       case .portraitCaptureNotSupported:
         return "Portrait capture is not supported by this device"
+      case .captureSessionNotReady:
+        return "Portrait camera session is not ready"
       case .captureFailed:
         return "Portrait photo capture failed"
       case .missingPhotoData:
@@ -51,6 +54,22 @@ public class CameraPortraitCaptureModule: Module {
       return false
     }
 
+    View(PortraitCameraView.self) {
+      Events("onInitialized", "onError")
+
+      Prop("deviceId") { (view, deviceId: String?) in
+        view.deviceId = deviceId
+      }
+
+      Prop("flashMode") { (view, flashMode: String?) in
+        view.flashMode = flashMode ?? "off"
+      }
+
+      Prop("isActive") { (view, isActive: Bool?) in
+        view.isActive = isActive ?? true
+      }
+    }
+
     AsyncFunction("getCapabilities") { (deviceId: String) async throws -> [String: Any] in
       let device = try Self.findDevice(deviceId)
       let selection = Self.findPortraitCaptureDevice(preferred: device)
@@ -77,27 +96,21 @@ public class CameraPortraitCaptureModule: Module {
       }
 
       let flashMode = options["flashMode"] as? String ?? "off"
-      let device = try Self.findDevice(deviceId)
-      guard let selection = Self.findPortraitCaptureDevice(preferred: device) else {
-        throw PortraitCaptureError.portraitCaptureNotSupported
+      guard let view = await PortraitCameraView.activeView(for: deviceId) else {
+        throw PortraitCaptureError.captureSessionNotReady
       }
-      return try await Self.capturePortraitPhoto(
-        device: selection.device,
-        support: selection.support,
-        requestedDeviceId: device.uniqueID,
-        flashMode: flashMode
-      )
+      return try await view.capturePortraitPhoto(flashMode: flashMode)
     }
   }
 
-  private static func findDevice(_ deviceId: String) throws -> AVCaptureDevice {
+  static func findDevice(_ deviceId: String) throws -> AVCaptureDevice {
     guard let device = AVCaptureDevice(uniqueID: deviceId) else {
       throw PortraitCaptureError.deviceNotFound(deviceId)
     }
     return device
   }
 
-  private static func checkPortraitSupport(device: AVCaptureDevice) throws -> PortraitSupport {
+  static func checkPortraitSupport(device: AVCaptureDevice) throws -> PortraitSupport {
     if device.position != .back {
       return PortraitSupport(
         supportsDepthData: false,
@@ -128,7 +141,7 @@ public class CameraPortraitCaptureModule: Module {
     )
   }
 
-  private static func findPortraitCaptureDevice(
+  static func findPortraitCaptureDevice(
     preferred device: AVCaptureDevice
   ) -> (device: AVCaptureDevice, support: PortraitSupport)? {
     for candidate in portraitDeviceCandidates(preferred: device) {
@@ -179,99 +192,7 @@ public class CameraPortraitCaptureModule: Module {
     return candidates
   }
 
-  private static func capturePortraitPhoto(
-    device: AVCaptureDevice,
-    support: PortraitSupport,
-    requestedDeviceId: String,
-    flashMode: String
-  ) async throws -> [String: Any] {
-    guard device.position == .back else {
-      throw PortraitCaptureError.portraitCaptureNotSupported
-    }
-
-    try await requestPhotoLibraryPermission()
-
-    let session = AVCaptureSession()
-    let output = AVCapturePhotoOutput()
-    let sessionQueue = DispatchQueue(label: "dev.komorebi.portrait-capture.session")
-
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      sessionQueue.async {
-        do {
-          session.beginConfiguration()
-          session.sessionPreset = .photo
-
-          let input = try AVCaptureDeviceInput(device: device)
-          guard session.canAddInput(input) else {
-            throw PortraitCaptureError.cannotAddInput
-          }
-          session.addInput(input)
-
-          guard session.canAddOutput(output) else {
-            throw PortraitCaptureError.cannotAddOutput
-          }
-          session.addOutput(output)
-
-          let configuredSupport = PortraitSupport(
-            supportsDepthData: output.isDepthDataDeliverySupported && support.supportsDepthData,
-            supportsPortraitEffectsMatte: output.isPortraitEffectsMatteDeliverySupported && support.supportsPortraitEffectsMatte
-          )
-
-          guard configuredSupport.supportsPortraitCapture else {
-            throw PortraitCaptureError.portraitCaptureNotSupported
-          }
-
-          output.isDepthDataDeliveryEnabled = configuredSupport.supportsDepthData
-          output.isPortraitEffectsMatteDeliveryEnabled = configuredSupport.supportsPortraitEffectsMatte
-
-          session.commitConfiguration()
-          session.startRunning()
-          continuation.resume()
-        } catch {
-          session.commitConfiguration()
-          continuation.resume(throwing: error)
-        }
-      }
-    }
-
-    defer {
-      sessionQueue.async {
-        session.stopRunning()
-      }
-    }
-
-    let usesHevc = output.availablePhotoCodecTypes.contains(.hevc)
-    let photoURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("komorebi-portrait-\(UUID().uuidString).\(usesHevc ? "heic" : "jpg")")
-    let codec = usesHevc ? AVVideoCodecType.hevc : AVVideoCodecType.jpeg
-    let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
-
-    settings.isHighResolutionPhotoEnabled = output.isHighResolutionCaptureEnabled
-    if output.supportedFlashModes.contains(toAVFlashMode(flashMode)) {
-      settings.flashMode = toAVFlashMode(flashMode)
-    }
-    settings.isDepthDataDeliveryEnabled = support.supportsDepthData
-    settings.isPortraitEffectsMatteDeliveryEnabled = support.supportsPortraitEffectsMatte
-    settings.embedsDepthDataInPhoto = support.supportsDepthData
-    settings.embedsPortraitEffectsMatteInPhoto = support.supportsPortraitEffectsMatte
-
-    let delegate = PortraitPhotoCaptureDelegate(photoURL: photoURL)
-    let captureResult = try await delegate.capture(with: output, settings: settings)
-    let localIdentifier = try await savePhotoToLibrary(photoURL: captureResult.photoURL)
-
-    return [
-      "photoUri": captureResult.photoURL.absoluteString,
-      "localIdentifier": localIdentifier as Any,
-      "savedToLibrary": true,
-      "depthDataEmbedded": support.supportsDepthData,
-      "portraitEffectsMatteEmbedded": support.supportsPortraitEffectsMatte,
-      "requestedDeviceId": requestedDeviceId,
-      "captureDeviceId": device.uniqueID,
-      "captureDeviceName": device.localizedName
-    ]
-  }
-
-  private static func requestPhotoLibraryPermission() async throws {
+  static func requestPhotoLibraryPermission() async throws {
     let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
     if status == .authorized || status == .limited {
       return
@@ -283,7 +204,7 @@ public class CameraPortraitCaptureModule: Module {
     }
   }
 
-  private static func savePhotoToLibrary(photoURL: URL) async throws -> String? {
+  static func savePhotoToLibrary(photoURL: URL) async throws -> String? {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
       var placeholderIdentifier: String?
 
@@ -303,7 +224,7 @@ public class CameraPortraitCaptureModule: Module {
     }
   }
 
-  private static func toAVFlashMode(_ mode: String) -> AVCaptureDevice.FlashMode {
+  static func toAVFlashMode(_ mode: String) -> AVCaptureDevice.FlashMode {
     switch mode {
     case "on":
       return .on
@@ -315,28 +236,304 @@ public class CameraPortraitCaptureModule: Module {
   }
 }
 
-private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
-  struct CaptureResult {
-    let photoURL: URL
+public final class PortraitCameraView: ExpoView {
+  let onInitialized = EventDispatcher()
+  let onError = EventDispatcher()
+
+  private static weak var currentActiveView: PortraitCameraView?
+  private let controller = PortraitCameraController()
+
+  var deviceId: String? {
+    didSet {
+      updateSession()
+    }
   }
 
-  private let photoURL: URL
-  private var photoData: Data?
-  private var continuation: CheckedContinuation<CaptureResult, Error>?
+  var flashMode: String = "off"
 
-  init(photoURL: URL) {
+  var isActive: Bool = true {
+    didSet {
+      updateSession()
+    }
+  }
+
+  public required init(appContext: AppContext? = nil) {
+    super.init(appContext: appContext)
+
+    backgroundColor = .black
+    videoPreviewLayer.videoGravity = .resizeAspectFill
+    videoPreviewLayer.session = controller.session
+  }
+
+  public override class var layerClass: AnyClass {
+    AVCaptureVideoPreviewLayer.self
+  }
+
+  private var videoPreviewLayer: AVCaptureVideoPreviewLayer {
+    layer as! AVCaptureVideoPreviewLayer
+  }
+
+  @MainActor
+  static func activeView(for deviceId: String) -> PortraitCameraView? {
+    guard let view = currentActiveView, view.deviceId == deviceId, view.isActive else {
+      return nil
+    }
+    return view
+  }
+
+  func capturePortraitPhoto(flashMode: String) async throws -> [String: Any] {
+    print("[PortraitNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
+    try await CameraPortraitCaptureModule.requestPhotoLibraryPermission()
+    let captureResult = try await controller.capture(flashMode: flashMode)
+    print("[PortraitNative] capture finished photoURL=\(captureResult.photoURL.absoluteString) depth=\(captureResult.support.supportsDepthData) matte=\(captureResult.support.supportsPortraitEffectsMatte)")
+    let localIdentifier = try await CameraPortraitCaptureModule.savePhotoToLibrary(
+      photoURL: captureResult.photoURL
+    )
+    print("[PortraitNative] saved to library localIdentifier=\(localIdentifier ?? "nil")")
+
+    return [
+      "photoUri": captureResult.photoURL.absoluteString,
+      "localIdentifier": localIdentifier as Any,
+      "savedToLibrary": true,
+      "depthDataEmbedded": captureResult.support.supportsDepthData,
+      "portraitEffectsMatteEmbedded": captureResult.support.supportsPortraitEffectsMatte,
+      "requestedDeviceId": captureResult.requestedDeviceId,
+      "captureDeviceId": captureResult.captureDeviceId,
+      "captureDeviceName": captureResult.captureDeviceName
+    ]
+  }
+
+  private func updateSession() {
+    guard let deviceId, isActive else {
+      print("[PortraitNative] stopping session deviceId=\(deviceId ?? "nil") isActive=\(isActive)")
+      if Self.currentActiveView === self {
+        Self.currentActiveView = nil
+      }
+      controller.stop()
+      return
+    }
+
+    Self.currentActiveView = self
+    print("[PortraitNative] configure requested deviceId=\(deviceId) isActive=\(isActive)")
+    controller.configure(
+      requestedDeviceId: deviceId,
+      onReady: { [weak self] in
+        print("[PortraitNative] session ready deviceId=\(self?.deviceId ?? "nil")")
+        self?.onInitialized()
+      },
+      onError: { [weak self] error in
+        print("[PortraitNative] session error deviceId=\(self?.deviceId ?? "nil") error=\(error.localizedDescription)")
+        self?.onError(["message": error.localizedDescription])
+      }
+    )
+  }
+
+  deinit {
+    if Self.currentActiveView === self {
+      Self.currentActiveView = nil
+    }
+    controller.stop()
+  }
+}
+
+private final class PortraitCameraController {
+  struct CaptureResult {
+    let photoURL: URL
+    let support: CameraPortraitCaptureModule.PortraitSupport
+    let requestedDeviceId: String
+    let captureDeviceId: String
+    let captureDeviceName: String
+  }
+
+  let session = AVCaptureSession()
+
+  private let output = AVCapturePhotoOutput()
+  private let sessionQueue = DispatchQueue(label: "dev.komorebi.portrait-capture.session")
+  private var configuredRequestedDeviceId: String?
+  private var activeCaptureDevice: AVCaptureDevice?
+  private var activeSupport: CameraPortraitCaptureModule.PortraitSupport?
+  private var isSessionReady = false
+  private var inFlightDelegates: [PortraitPhotoCaptureDelegate] = []
+
+  func configure(
+    requestedDeviceId: String,
+    onReady: @escaping () -> Void,
+    onError: @escaping (Error) -> Void
+  ) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+
+      var configurationOpen = false
+      do {
+        print("[PortraitNative] configure start requestedDeviceId=\(requestedDeviceId) ready=\(self.isSessionReady) configuredRequestedDeviceId=\(self.configuredRequestedDeviceId ?? "nil") running=\(self.session.isRunning)")
+        if self.isSessionReady && self.configuredRequestedDeviceId == requestedDeviceId {
+          if !self.session.isRunning {
+            print("[PortraitNative] restarting existing session requestedDeviceId=\(requestedDeviceId)")
+            self.session.startRunning()
+          }
+          DispatchQueue.main.async(execute: onReady)
+          return
+        }
+
+        let requestedDevice = try CameraPortraitCaptureModule.findDevice(requestedDeviceId)
+        print("[PortraitNative] requested device found uniqueID=\(requestedDevice.uniqueID) name=\(requestedDevice.localizedName) position=\(requestedDevice.position.rawValue)")
+        guard let selection = CameraPortraitCaptureModule.findPortraitCaptureDevice(preferred: requestedDevice) else {
+          throw CameraPortraitCaptureModule.PortraitCaptureError.portraitCaptureNotSupported
+        }
+        print("[PortraitNative] selected capture device uniqueID=\(selection.device.uniqueID) name=\(selection.device.localizedName) depth=\(selection.support.supportsDepthData) matte=\(selection.support.supportsPortraitEffectsMatte)")
+
+        self.session.beginConfiguration()
+        configurationOpen = true
+
+        self.session.inputs.forEach { self.session.removeInput($0) }
+        self.session.outputs.forEach { self.session.removeOutput($0) }
+        self.session.sessionPreset = .photo
+
+        let input = try AVCaptureDeviceInput(device: selection.device)
+        guard self.session.canAddInput(input) else {
+          throw CameraPortraitCaptureModule.PortraitCaptureError.cannotAddInput
+        }
+        self.session.addInput(input)
+
+        guard self.session.canAddOutput(self.output) else {
+          throw CameraPortraitCaptureModule.PortraitCaptureError.cannotAddOutput
+        }
+        self.session.addOutput(self.output)
+
+        let configuredSupport = CameraPortraitCaptureModule.PortraitSupport(
+          supportsDepthData: self.output.isDepthDataDeliverySupported && selection.support.supportsDepthData,
+          supportsPortraitEffectsMatte: self.output.isPortraitEffectsMatteDeliverySupported && selection.support.supportsPortraitEffectsMatte
+        )
+
+        guard configuredSupport.supportsPortraitCapture else {
+          throw CameraPortraitCaptureModule.PortraitCaptureError.portraitCaptureNotSupported
+        }
+
+        self.output.isDepthDataDeliveryEnabled = configuredSupport.supportsDepthData
+        self.output.isPortraitEffectsMatteDeliveryEnabled = configuredSupport.supportsPortraitEffectsMatte
+
+        self.configuredRequestedDeviceId = requestedDeviceId
+        self.activeCaptureDevice = selection.device
+        self.activeSupport = configuredSupport
+        self.isSessionReady = true
+        self.session.commitConfiguration()
+        configurationOpen = false
+        self.session.startRunning()
+        print("[PortraitNative] configure success requestedDeviceId=\(requestedDeviceId) captureDeviceId=\(selection.device.uniqueID) depth=\(configuredSupport.supportsDepthData) matte=\(configuredSupport.supportsPortraitEffectsMatte) running=\(self.session.isRunning)")
+        DispatchQueue.main.async(execute: onReady)
+      } catch {
+        if configurationOpen {
+          self.session.commitConfiguration()
+        }
+        self.isSessionReady = false
+        self.configuredRequestedDeviceId = nil
+        self.activeCaptureDevice = nil
+        self.activeSupport = nil
+        print("[PortraitNative] configure failed requestedDeviceId=\(requestedDeviceId) error=\(error.localizedDescription)")
+        DispatchQueue.main.async {
+          onError(error)
+        }
+      }
+    }
+  }
+
+  func stop() {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      if self.session.isRunning {
+        print("[PortraitNative] stop running session configuredRequestedDeviceId=\(self.configuredRequestedDeviceId ?? "nil")")
+        self.session.stopRunning()
+      }
+    }
+  }
+
+  func capture(flashMode: String) async throws -> CaptureResult {
+    try await withCheckedThrowingContinuation { continuation in
+      sessionQueue.async { [weak self] in
+        guard
+          let self,
+          self.isSessionReady,
+          self.session.isRunning,
+          let support = self.activeSupport,
+          let captureDevice = self.activeCaptureDevice,
+          let requestedDeviceId = self.configuredRequestedDeviceId
+        else {
+          print("[PortraitNative] capture blocked ready=\(self?.isSessionReady ?? false) running=\(self?.session.isRunning ?? false) configuredRequestedDeviceId=\(self?.configuredRequestedDeviceId ?? "nil")")
+          continuation.resume(throwing: CameraPortraitCaptureModule.PortraitCaptureError.captureSessionNotReady)
+          return
+        }
+
+        let usesHevc = self.output.availablePhotoCodecTypes.contains(.hevc)
+        let photoURL = FileManager.default.temporaryDirectory
+          .appendingPathComponent("komorebi-portrait-\(UUID().uuidString).\(usesHevc ? "heic" : "jpg")")
+        let codec = usesHevc ? AVVideoCodecType.hevc : AVVideoCodecType.jpeg
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
+
+        settings.isHighResolutionPhotoEnabled = self.output.isHighResolutionCaptureEnabled
+        let avFlashMode = CameraPortraitCaptureModule.toAVFlashMode(flashMode)
+        if self.output.supportedFlashModes.contains(avFlashMode) {
+          settings.flashMode = avFlashMode
+        } else {
+          print("[PortraitNative] requested flash unsupported flashMode=\(flashMode)")
+        }
+        settings.isDepthDataDeliveryEnabled = support.supportsDepthData
+        settings.isPortraitEffectsMatteDeliveryEnabled = support.supportsPortraitEffectsMatte
+        settings.embedsDepthDataInPhoto = support.supportsDepthData
+        settings.embedsPortraitEffectsMatteInPhoto = support.supportsPortraitEffectsMatte
+
+        let delegate = PortraitPhotoCaptureDelegate(
+          photoURL: photoURL,
+          support: support,
+          requestedDeviceId: requestedDeviceId,
+          captureDeviceId: captureDevice.uniqueID,
+          captureDeviceName: captureDevice.localizedName
+        )
+        print("[PortraitNative] capturePhoto now requestedDeviceId=\(requestedDeviceId) captureDeviceId=\(captureDevice.uniqueID) flashMode=\(settings.flashMode.rawValue) photoURL=\(photoURL.lastPathComponent) codec=\(codec.rawValue) depth=\(support.supportsDepthData) matte=\(support.supportsPortraitEffectsMatte)")
+        delegate.onFinish = { [weak self, weak delegate] in
+          guard let self, let delegate else { return }
+          self.sessionQueue.async {
+            self.inFlightDelegates.removeAll { $0 === delegate }
+          }
+        }
+        self.inFlightDelegates.append(delegate)
+        delegate.capture(with: self.output, settings: settings, continuation: continuation)
+      }
+    }
+  }
+}
+
+private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+  private let photoURL: URL
+  private let support: CameraPortraitCaptureModule.PortraitSupport
+  private let requestedDeviceId: String
+  private let captureDeviceId: String
+  private let captureDeviceName: String
+  private var photoData: Data?
+  private var continuation: CheckedContinuation<PortraitCameraController.CaptureResult, Error>?
+  var onFinish: (() -> Void)?
+
+  init(
+    photoURL: URL,
+    support: CameraPortraitCaptureModule.PortraitSupport,
+    requestedDeviceId: String,
+    captureDeviceId: String,
+    captureDeviceName: String
+  ) {
     self.photoURL = photoURL
+    self.support = support
+    self.requestedDeviceId = requestedDeviceId
+    self.captureDeviceId = captureDeviceId
+    self.captureDeviceName = captureDeviceName
     super.init()
   }
 
   func capture(
     with output: AVCapturePhotoOutput,
-    settings: AVCapturePhotoSettings
-  ) async throws -> CaptureResult {
-    try await withCheckedThrowingContinuation { continuation in
-      self.continuation = continuation
-      output.capturePhoto(with: settings, delegate: self)
-    }
+    settings: AVCapturePhotoSettings,
+    continuation: CheckedContinuation<PortraitCameraController.CaptureResult, Error>
+  ) {
+    self.continuation = continuation
+    output.capturePhoto(with: settings, delegate: self)
   }
 
   func photoOutput(
@@ -345,11 +542,13 @@ private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptur
     error: Error?
   ) {
     if let error {
+      print("[PortraitNative] didFinishProcessingPhoto error=\(error.localizedDescription)")
       finish(with: .failure(error))
       return
     }
 
     photoData = photo.fileDataRepresentation()
+    print("[PortraitNative] didFinishProcessingPhoto hasData=\(photoData != nil) bytes=\(photoData?.count ?? 0)")
   }
 
   func photoOutput(
@@ -358,29 +557,41 @@ private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptur
     error: Error?
   ) {
     if let error {
+      print("[PortraitNative] didFinishCapture error=\(error.localizedDescription)")
       finish(with: .failure(error))
       return
     }
 
     guard let photoData else {
+      print("[PortraitNative] didFinishCapture missing photo data")
       finish(with: .failure(CameraPortraitCaptureModule.PortraitCaptureError.missingPhotoData))
       return
     }
 
     do {
       try photoData.write(to: photoURL, options: .atomic)
-      finish(with: .success(CaptureResult(photoURL: photoURL)))
+      print("[PortraitNative] didFinishCapture wrote photo=\(photoURL.lastPathComponent)")
+      finish(with: .success(PortraitCameraController.CaptureResult(
+        photoURL: photoURL,
+        support: support,
+        requestedDeviceId: requestedDeviceId,
+        captureDeviceId: captureDeviceId,
+        captureDeviceName: captureDeviceName
+      )))
     } catch {
+      print("[PortraitNative] didFinishCapture write error=\(error.localizedDescription)")
       finish(with: .failure(error))
     }
   }
 
-  private func finish(with result: Result<CaptureResult, Error>) {
+  private func finish(with result: Result<PortraitCameraController.CaptureResult, Error>) {
     guard let continuation else {
       return
     }
 
     self.continuation = nil
+    onFinish?()
+    onFinish = nil
     switch result {
     case .success(let captureResult):
       continuation.resume(returning: captureResult)

@@ -1,4 +1,5 @@
-import { Platform } from "react-native";
+import type { ComponentType } from "react";
+import { Platform, View, type ViewProps } from "react-native";
 
 export type PortraitCaptureCapabilities = {
   supportsPortraitCapture: boolean;
@@ -10,6 +11,14 @@ export type PortraitCaptureCapabilities = {
 export type PortraitCaptureOptions = {
   deviceId: string;
   flashMode?: "off" | "on" | "auto";
+};
+
+export type PortraitCameraViewProps = ViewProps & {
+  deviceId?: string | null;
+  flashMode?: "off" | "on" | "auto";
+  isActive?: boolean;
+  onInitialized?: () => void;
+  onError?: (event: { nativeEvent?: { message?: string } }) => void;
 };
 
 export type PortraitCaptureResult = {
@@ -36,6 +45,13 @@ if (Platform.OS === "ios") {
     nativeModule = null;
   }
 }
+
+export const PortraitCameraView: ComponentType<PortraitCameraViewProps> =
+  Platform.OS === "ios" && nativeModule
+    ? require("expo-modules-core").requireNativeViewManager(
+        "CameraPortraitCapture",
+      )
+    : View;
 
 export function isPortraitCaptureAvailable(): boolean {
   return Boolean(nativeModule?.isSupported?.());

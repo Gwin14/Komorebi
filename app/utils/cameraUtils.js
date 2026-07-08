@@ -80,27 +80,45 @@ export const takePicture = async ({
   livePhotoDeviceId = null,
   portraitModeEnabled = false,
   portraitDeviceId = null,
-  setNativeCaptureActive = null,
 }) => {
-  if (!cameraRef.current || !cameraReady || isProcessing) return;
+  const normalizedRawMode = toVisionCameraRawMode(rawMode);
+  const rawModeEnabled = normalizedRawMode !== "off";
+  const nativeCaptureEnabled =
+    (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) ||
+    (portraitModeEnabled && portraitDeviceId && !rawModeEnabled);
+
+  if ((!nativeCaptureEnabled && !cameraRef.current) || !cameraReady || isProcessing) {
+    console.warn("[CameraUtils] takePicture blocked", {
+      nativeCaptureEnabled,
+      hasCameraRef: Boolean(cameraRef.current),
+      cameraReady,
+      isProcessing,
+      livePhotoEnabled,
+      portraitModeEnabled,
+      rawMode: normalizedRawMode,
+    });
+    return;
+  }
 
   try {
     setIsProcessing(true);
 
-    const additionalExif = await getLocationExif(location);
-    const normalizedRawMode = toVisionCameraRawMode(rawMode);
-    const rawModeEnabled = normalizedRawMode !== "off";
-
     if (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) {
-      if (setNativeCaptureActive) {
-        setNativeCaptureActive(true);
-        await new Promise((resolve) => setTimeout(resolve, 220));
-      }
-
+      console.log("[CameraUtils] live photo capture start", {
+        deviceId: livePhotoDeviceId,
+        flash,
+      });
       const livePhoto = await captureLivePhoto({
         deviceId: livePhotoDeviceId,
         flashMode: flash === "on" ? "on" : "off",
       });
+      console.log("[CameraUtils] live photo capture result", {
+        photoUri: livePhoto.photoUri,
+        movieUri: livePhoto.movieUri,
+        localIdentifier: livePhoto.localIdentifier,
+        savedToLibrary: livePhoto.savedToLibrary,
+      });
+      const additionalExif = await getLocationExif(location);
 
       setProcessingData({
         needsProcessing: false,
@@ -120,15 +138,23 @@ export const takePicture = async ({
     }
 
     if (portraitModeEnabled && portraitDeviceId && !rawModeEnabled) {
-      if (setNativeCaptureActive) {
-        setNativeCaptureActive(true);
-        await new Promise((resolve) => setTimeout(resolve, 220));
-      }
-
+      console.log("[CameraUtils] portrait capture start", {
+        deviceId: portraitDeviceId,
+        flash,
+      });
       const portraitPhoto = await capturePortraitPhoto({
         deviceId: portraitDeviceId,
         flashMode: flash === "on" ? "on" : "off",
       });
+      console.log("[CameraUtils] portrait capture result", {
+        photoUri: portraitPhoto.photoUri,
+        localIdentifier: portraitPhoto.localIdentifier,
+        savedToLibrary: portraitPhoto.savedToLibrary,
+        depthDataEmbedded: portraitPhoto.depthDataEmbedded,
+        portraitEffectsMatteEmbedded:
+          portraitPhoto.portraitEffectsMatteEmbedded,
+      });
+      const additionalExif = await getLocationExif(location);
 
       setProcessingData({
         needsProcessing: false,
@@ -148,6 +174,8 @@ export const takePicture = async ({
       });
       return;
     }
+
+    const additionalExif = await getLocationExif(location);
     // Com manual ativo, força "speed" (frame único, sem fusão Deep Fusion/
     // Smart HDR): em modo "quality"/"balanced" o AVCapturePhotoOutput funde
     // múltiplos frames em exposições diferentes, ignorando o ISO/obturador
@@ -239,9 +267,6 @@ export const takePicture = async ({
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
   } finally {
-    if (setNativeCaptureActive) {
-      setNativeCaptureActive(false);
-    }
     setIsProcessing(false);
   }
 };
