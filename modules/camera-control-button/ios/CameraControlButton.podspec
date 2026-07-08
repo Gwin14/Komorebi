@@ -14,6 +14,8 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  s.frameworks = 'AVKit'
+  s.weak_frameworks = 'LockedCameraCapture'
 
   # Swift/Objective-C compatibility
   s.pod_target_xcconfig = {

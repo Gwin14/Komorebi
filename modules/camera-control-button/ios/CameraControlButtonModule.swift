@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import AVKit
+import LockedCameraCapture
 import UIKit
 
 // Bridges the iPhone hardware capture button (volume buttons and the
@@ -32,6 +33,41 @@ public class CameraControlButtonModule: Module {
       self?.detachInteraction()
     }
     .runOnQueue(.main)
+
+    AsyncFunction("consumePendingLockedCameraCaptures") { () async throws -> [String] in
+      guard #available(iOS 18.0, *) else { return [] }
+
+      let urls = LockedCameraCaptureManager.shared.sessionContentURLs
+      if urls.isEmpty { return [] }
+
+      let destinationDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("KomorebiLockedCameraCapture", isDirectory: true)
+      try FileManager.default.createDirectory(
+        at: destinationDirectory,
+        withIntermediateDirectories: true
+      )
+
+      var importedUrls: [String] = []
+
+      for url in urls {
+        let destinationUrl = destinationDirectory
+          .appendingPathComponent("locked-\(UUID().uuidString)")
+          .appendingPathExtension(url.pathExtension.isEmpty ? "jpg" : url.pathExtension)
+
+        do {
+          try FileManager.default.copyItem(at: url, to: destinationUrl)
+          try await LockedCameraCaptureManager.shared.invalidateSessionContent(at: url)
+          importedUrls.append(destinationUrl.absoluteString)
+        } catch {
+          if FileManager.default.fileExists(atPath: destinationUrl.path) {
+            try? FileManager.default.removeItem(at: destinationUrl)
+          }
+          throw error
+        }
+      }
+
+      return importedUrls
+    }
 
     OnDestroy { [weak self] in
       DispatchQueue.main.async {

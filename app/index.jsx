@@ -3,6 +3,7 @@ import { Animated, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { consumePendingLockedCameraCaptures } from "../modules/camera-control-button";
 import { getDebugState } from "../modules/camera-manual-controls";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
@@ -22,7 +23,7 @@ import useShutterAnimation from "./hooks/useShutterAnimation";
 import useVolumeShutter from "./hooks/useVolumeShutter";
 import { usePhysicalCameraDevices } from "./hooks/uselensselector";
 import styles from "./index.styles";
-import { onCameraReady, takePicture } from "./utils/cameraUtils";
+import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
 import { AVAILABLE_LUTS, LUTProcessor } from "./utils/lutProcessor";
 
 export default function App() {
@@ -97,6 +98,31 @@ export default function App() {
     removeCurrentProcessing,
     setIsProcessing,
   } = usePhotoProcessingQueue(hasMediaPermission);
+
+  useEffect(() => {
+    if (!hasMediaPermission) return;
+
+    let cancelled = false;
+
+    const importLockedCameraCaptures = async () => {
+      try {
+        const pendingUris = await consumePendingLockedCameraCaptures();
+        if (cancelled || !pendingUris.length) return;
+
+        for (const uri of pendingUris) {
+          await saveToAlbum(uri);
+        }
+      } catch (error) {
+        console.warn("Erro ao importar capturas da tela bloqueada:", error);
+      }
+    };
+
+    importLockedCameraCaptures();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasMediaPermission]);
 
   useEffect(() => {
     if (
