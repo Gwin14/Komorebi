@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
@@ -147,11 +148,13 @@ export default function TopBar({
     },
     livePhoto: {
       icon: livePhotoEnabled ? "radio-button-on" : "radio-button-on-outline",
+      symbol: livePhotoEnabled ? "livephoto" : "livephoto.slash",
       onPress: toggleLivePhotoEnabled,
       active: livePhotoEnabled,
     },
     portrait: {
       icon: portraitModeEnabled ? "person" : "person-outline",
+      symbol: portraitModeEnabled ? "f.cursive.circle.fill" : "f.cursive.circle",
       onPress: togglePortraitModeEnabled,
       active: portraitModeEnabled,
     },
@@ -223,12 +226,31 @@ export default function TopBar({
                   </Text>
                 </View>
               ) : (
-                <Ionicons
-                  name={control.icon}
-                  size={32}
-                  style={styles.button}
-                  color={iconColor}
-                />
+                control.symbol ? (
+                  <SymbolView
+                    name={control.symbol}
+                    size={32}
+                    type="monochrome"
+                    tintColor={iconColor}
+                    resizeMode="scaleAspectFit"
+                    style={styles.symbolButton}
+                    fallback={
+                      <Ionicons
+                        name={control.icon}
+                        size={32}
+                        style={styles.button}
+                        color={iconColor}
+                      />
+                    }
+                  />
+                ) : (
+                  <Ionicons
+                    name={control.icon}
+                    size={32}
+                    style={styles.button}
+                    color={iconColor}
+                  />
+                )
               )}
             </Animated.View>
           </TouchableOpacity>

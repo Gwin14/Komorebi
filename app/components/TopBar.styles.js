@@ -7,6 +7,10 @@ export default StyleSheet.create({
     justifyContent: "space-around",
   },
   button: {},
+  symbolButton: {
+    width: 32,
+    height: 32,
+  },
   disabledControl: {
     opacity: 0.35,
   },
