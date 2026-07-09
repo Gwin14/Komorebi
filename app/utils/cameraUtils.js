@@ -60,6 +60,49 @@ const getLocationExif = async (locationEnabled) => {
   return additionalExif;
 };
 
+const buildPhotoProcessingData = async ({
+  uri,
+  selectedLutId,
+  lutsLoaded,
+  exifData,
+  doubleCaptureMode,
+  saveOriginalWithLUT,
+  aspectRatio,
+  extraData = {},
+}) => {
+  const noLutData = {
+    ...extraData,
+    needsProcessing: false,
+    originalUri: uri,
+    imageUri: uri,
+    exifData,
+    doubleCaptureMode,
+    saveOriginalWithLUT: false,
+    aspectRatio,
+    cube: null,
+    grainConfig: null,
+  };
+
+  if (selectedLutId === "none" || !lutsLoaded) {
+    return noLutData;
+  }
+
+  const processingInfo = await applyLUTToImage(uri, selectedLutId, exifData);
+
+  if (!processingInfo.needsProcessing) {
+    return noLutData;
+  }
+
+  return {
+    ...extraData,
+    ...processingInfo,
+    doubleCaptureMode,
+    saveOriginalWithLUT,
+    originalUri: uri,
+    aspectRatio,
+  };
+};
+
 export const takePicture = async ({
   cameraRef,
   cameraReady,
@@ -119,21 +162,24 @@ export const takePicture = async ({
         savedToLibrary: livePhoto.savedToLibrary,
       });
       const additionalExif = await getLocationExif(location);
+      const uri = normalizeUri(livePhoto.photoUri);
 
-      setProcessingData({
-        needsProcessing: false,
-        alreadySaved: true,
-        originalUri: livePhoto.photoUri,
-        imageUri: livePhoto.photoUri,
-        livePhotoMovieUri: livePhoto.movieUri,
-        localIdentifier: livePhoto.localIdentifier,
-        exifData: additionalExif,
-        doubleCaptureMode: false,
-        saveOriginalWithLUT: false,
-        aspectRatio,
-        cube: null,
-        grainConfig: null,
-      });
+      setProcessingData(
+        await buildPhotoProcessingData({
+          uri,
+          selectedLutId,
+          lutsLoaded,
+          exifData: { ...additionalExif, aspectRatio },
+          doubleCaptureMode,
+          saveOriginalWithLUT,
+          aspectRatio,
+          extraData: {
+            livePhotoMovieUri: livePhoto.movieUri,
+            localIdentifier: livePhoto.localIdentifier,
+            nativeSavedToLibrary: livePhoto.savedToLibrary,
+          },
+        }),
+      );
       return;
     }
 
@@ -155,23 +201,26 @@ export const takePicture = async ({
           portraitPhoto.portraitEffectsMatteEmbedded,
       });
       const additionalExif = await getLocationExif(location);
+      const uri = normalizeUri(portraitPhoto.photoUri);
 
-      setProcessingData({
-        needsProcessing: false,
-        alreadySaved: true,
-        originalUri: portraitPhoto.photoUri,
-        imageUri: portraitPhoto.photoUri,
-        localIdentifier: portraitPhoto.localIdentifier,
-        depthDataEmbedded: portraitPhoto.depthDataEmbedded,
-        portraitEffectsMatteEmbedded:
-          portraitPhoto.portraitEffectsMatteEmbedded,
-        exifData: additionalExif,
-        doubleCaptureMode: false,
-        saveOriginalWithLUT: false,
-        aspectRatio,
-        cube: null,
-        grainConfig: null,
-      });
+      setProcessingData(
+        await buildPhotoProcessingData({
+          uri,
+          selectedLutId,
+          lutsLoaded,
+          exifData: { ...additionalExif, aspectRatio },
+          doubleCaptureMode,
+          saveOriginalWithLUT,
+          aspectRatio,
+          extraData: {
+            localIdentifier: portraitPhoto.localIdentifier,
+            nativeSavedToLibrary: portraitPhoto.savedToLibrary,
+            depthDataEmbedded: portraitPhoto.depthDataEmbedded,
+            portraitEffectsMatteEmbedded:
+              portraitPhoto.portraitEffectsMatteEmbedded,
+          },
+        }),
+      );
       return;
     }
 
@@ -226,44 +275,17 @@ export const takePicture = async ({
 
     const completeExif = { ...additionalExif, ...manualExif, aspectRatio };
 
-    // Item sem LUT: needsProcessing: false → a fila salva diretamente sem passar pelo WebView
-    // saveOriginalWithLUT é sempre false aqui: sem LUT aplicado não há cópia "sem LUT" para salvar
-    const noLutData = {
-      needsProcessing: false,
-      originalUri: uri,
-      imageUri: uri,
-      exifData: completeExif,
-      doubleCaptureMode,
-      saveOriginalWithLUT: false,
-      aspectRatio,
-      cube: null,
-      grainConfig: null,
-    };
-
-    if (selectedLutId !== "none" && lutsLoaded) {
-      const processingInfo = await applyLUTToImage(
+    setProcessingData(
+      await buildPhotoProcessingData({
         uri,
         selectedLutId,
-        completeExif,
-      );
-
-      if (processingInfo.needsProcessing) {
-        // Tem LUT → vai pro WebView normalmente
-        setProcessingData({
-          ...processingInfo,
-          doubleCaptureMode,
-          saveOriginalWithLUT,
-          originalUri: uri,
-          aspectRatio,
-        });
-      } else {
-        // LUT não encontrado no cache → salva direto
-        setProcessingData(noLutData);
-      }
-    } else {
-      // Sem LUT selecionada → salva direto
-      setProcessingData(noLutData);
-    }
+        lutsLoaded,
+        exifData: completeExif,
+        doubleCaptureMode,
+        saveOriginalWithLUT,
+        aspectRatio,
+      }),
+    );
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
   } finally {

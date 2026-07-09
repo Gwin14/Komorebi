@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
+import { saveProcessedPortraitPhoto } from "../../modules/camera-portrait-capture";
 import {
   copyExifFromImage,
   cropImageToInverseAspect,
@@ -26,6 +28,9 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
         saveOriginalWithLUT: saveOriginalWithoutLUT = false,
         originalUri,
         aspectRatio = 3 / 4,
+        livePhotoMovieUri,
+        depthDataEmbedded = false,
+        portraitEffectsMatteEmbedded = false,
       } = item;
 
       try {
@@ -35,7 +40,23 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
           return;
         }
 
-        if (doubleCaptureMode) {
+        if (livePhotoMovieUri) {
+          await saveLivePhotoToLibrary({
+            photoUri: processedUri,
+            movieUri: livePhotoMovieUri,
+            originalPhotoUri: originalUri,
+            albumTitle: "Komorebi",
+          });
+        } else if (
+          originalUri &&
+          (depthDataEmbedded || portraitEffectsMatteEmbedded)
+        ) {
+          await saveProcessedPortraitPhoto({
+            processedPhotoUri: processedUri,
+            originalPhotoUri: originalUri,
+            albumTitle: "Komorebi",
+          });
+        } else if (doubleCaptureMode) {
           await saveToAlbum(processedUri);
 
           const inverseUri = await cropImageToInverseAspect(

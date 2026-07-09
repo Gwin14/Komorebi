@@ -29,6 +29,18 @@ export type PortraitCaptureResult = {
   portraitEffectsMatteEmbedded: boolean;
 };
 
+export type SaveProcessedPortraitPhotoOptions = {
+  processedPhotoUri: string;
+  originalPhotoUri?: string | null;
+  albumTitle?: string;
+};
+
+export type SaveProcessedPortraitPhotoResult = {
+  localIdentifier: string | null;
+  savedToLibrary: boolean;
+  auxiliaryDataPreserved: boolean;
+};
+
 const DEFAULT_CAPABILITIES: PortraitCaptureCapabilities = {
   supportsPortraitCapture: false,
   supportsDepthData: false,
@@ -93,5 +105,25 @@ export async function capturePortraitPhoto(
     portraitEffectsMatteEmbedded: Boolean(
       result.portraitEffectsMatteEmbedded,
     ),
+  };
+}
+
+export async function saveProcessedPortraitPhoto(
+  options: SaveProcessedPortraitPhotoOptions,
+): Promise<SaveProcessedPortraitPhotoResult> {
+  if (!nativeModule) {
+    throw new Error("CameraPortraitCapture native module is not available");
+  }
+
+  const result = await nativeModule.saveProcessedPortraitPhoto({
+    processedPhotoUri: options.processedPhotoUri,
+    originalPhotoUri: options.originalPhotoUri ?? null,
+    albumTitle: options.albumTitle ?? "Komorebi",
+  });
+
+  return {
+    localIdentifier: result.localIdentifier ?? null,
+    savedToLibrary: Boolean(result.savedToLibrary),
+    auxiliaryDataPreserved: Boolean(result.auxiliaryDataPreserved),
   };
 }

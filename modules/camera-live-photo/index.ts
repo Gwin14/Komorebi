@@ -26,6 +26,18 @@ export type LivePhotoCaptureResult = {
   savedToLibrary: boolean;
 };
 
+export type SaveLivePhotoOptions = {
+  photoUri: string;
+  movieUri: string;
+  originalPhotoUri?: string | null;
+  albumTitle?: string;
+};
+
+export type SaveLivePhotoResult = {
+  localIdentifier: string | null;
+  savedToLibrary: boolean;
+};
+
 const DEFAULT_CAPABILITIES: LivePhotoCapabilities = {
   supportsLivePhotoCapture: false,
   canSaveToPhotoLibrary: false,
@@ -77,6 +89,26 @@ export async function captureLivePhoto(
   return {
     photoUri: result.photoUri,
     movieUri: result.movieUri,
+    localIdentifier: result.localIdentifier ?? null,
+    savedToLibrary: Boolean(result.savedToLibrary),
+  };
+}
+
+export async function saveLivePhotoToLibrary(
+  options: SaveLivePhotoOptions,
+): Promise<SaveLivePhotoResult> {
+  if (!nativeModule) {
+    throw new Error("CameraLivePhoto native module is not available");
+  }
+
+  const result = await nativeModule.saveLivePhotoToLibrary({
+    photoUri: options.photoUri,
+    movieUri: options.movieUri,
+    originalPhotoUri: options.originalPhotoUri ?? null,
+    albumTitle: options.albumTitle ?? "Komorebi",
+  });
+
+  return {
     localIdentifier: result.localIdentifier ?? null,
     savedToLibrary: Boolean(result.savedToLibrary),
   };

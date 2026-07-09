@@ -1,6 +1,8 @@
 import ExpoModulesCore
 import AVFoundation
+import ImageIO
 import Photos
+import UniformTypeIdentifiers
 
 public class CameraLivePhotoModule: Module {
   enum LivePhotoError: Error, LocalizedError {
@@ -86,6 +88,36 @@ public class CameraLivePhotoModule: Module {
       }
       return try await view.captureLivePhoto(flashMode: flashMode)
     }
+
+    AsyncFunction("saveLivePhotoToLibrary") { (options: [String: Any]) async throws -> [String: Any] in
+      guard
+        let photoUri = options["photoUri"] as? String,
+        let movieUri = options["movieUri"] as? String
+      else {
+        throw LivePhotoError.captureFailed
+      }
+
+      try await Self.requestPhotoLibraryPermission()
+
+      let photoURL = try Self.fileURL(from: photoUri)
+      let movieURL = try Self.fileURL(from: movieUri)
+      let originalPhotoURL = try (options["originalPhotoUri"] as? String).flatMap { try Self.fileURL(from: $0) }
+      let preparedPhotoURL = Self.copyImageMetadata(
+        from: originalPhotoURL,
+        toProcessedPhotoAt: photoURL
+      ) ?? photoURL
+      let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
+      let localIdentifier = try await Self.saveLivePhotoToLibrary(
+        photoURL: preparedPhotoURL,
+        movieURL: movieURL,
+        albumTitle: albumTitle
+      )
+
+      return [
+        "localIdentifier": localIdentifier as Any,
+        "savedToLibrary": true
+      ]
+    }
   }
 
   static func findDevice(_ deviceId: String) throws -> AVCaptureDevice {
@@ -132,9 +164,78 @@ public class CameraLivePhotoModule: Module {
     }
   }
 
+  static func fileURL(from uri: String) throws -> URL {
+    if uri.hasPrefix("file://"), let url = URL(string: uri) {
+      return url
+    }
+
+    return URL(fileURLWithPath: uri)
+  }
+
+  static func copyImageMetadata(from sourceURL: URL?, toProcessedPhotoAt processedURL: URL) -> URL? {
+    guard
+      let sourceURL,
+      sourceURL != processedURL,
+      let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
+      let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
+      let metadataSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil)
+    else {
+      return nil
+    }
+
+    let destinationURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("komorebi-live-processed-\(UUID().uuidString).jpg")
+    let properties = Self.mergedImageProperties(
+      metadataSource: metadataSource,
+      processedSource: processedSource
+    )
+    guard let destination = CGImageDestinationCreateWithURL(
+      destinationURL as CFURL,
+      UTType.jpeg.identifier as CFString,
+      1,
+      nil
+    ) else {
+      return nil
+    }
+
+    CGImageDestinationAddImage(destination, processedImage, properties)
+    return CGImageDestinationFinalize(destination) ? destinationURL : nil
+  }
+
+  static func mergedImageProperties(
+    metadataSource: CGImageSource,
+    processedSource: CGImageSource
+  ) -> CFDictionary {
+    var merged = (CGImageSourceCopyPropertiesAtIndex(metadataSource, 0, nil) as? [String: Any]) ?? [:]
+    let processed = (CGImageSourceCopyPropertiesAtIndex(processedSource, 0, nil) as? [String: Any]) ?? [:]
+
+    for key in [
+      kCGImagePropertyGPSDictionary as String,
+      kCGImagePropertyExifDictionary as String,
+      kCGImagePropertyTIFFDictionary as String
+    ] {
+      guard let processedValue = processed[key] else {
+        continue
+      }
+
+      if
+        let existingDictionary = merged[key] as? [String: Any],
+        let processedDictionary = processedValue as? [String: Any]
+      {
+        merged[key] = existingDictionary.merging(processedDictionary) { _, processed in processed }
+      } else {
+        merged[key] = processedValue
+      }
+    }
+
+    merged[kCGImagePropertyOrientation as String] = 1
+    return merged as CFDictionary
+  }
+
   static func saveLivePhotoToLibrary(
     photoURL: URL,
-    movieURL: URL
+    movieURL: URL,
+    albumTitle: String? = nil
   ) async throws -> String? {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
       var placeholderIdentifier: String?
@@ -144,6 +245,13 @@ public class CameraLivePhotoModule: Module {
         request.addResource(with: .photo, fileURL: photoURL, options: nil)
         request.addResource(with: .pairedVideo, fileURL: movieURL, options: nil)
         placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
+
+        if
+          let albumTitle,
+          let placeholder = request.placeholderForCreatedAsset
+        {
+          Self.addAsset(placeholder, toAlbumNamed: albumTitle)
+        }
       }, completionHandler: { success, error in
         if let error {
           continuation.resume(throwing: error)
@@ -154,6 +262,27 @@ public class CameraLivePhotoModule: Module {
         }
       })
     }
+  }
+
+  static func addAsset(_ assetPlaceholder: PHObjectPlaceholder, toAlbumNamed albumTitle: String) {
+    let fetchOptions = PHFetchOptions()
+    fetchOptions.predicate = NSPredicate(format: "title = %@", albumTitle)
+    let collections = PHAssetCollection.fetchAssetCollections(
+      with: .album,
+      subtype: .albumRegular,
+      options: fetchOptions
+    )
+
+    if let album = collections.firstObject {
+      let changeRequest = PHAssetCollectionChangeRequest(for: album)
+      changeRequest?.addAssets([assetPlaceholder] as NSArray)
+      return
+    }
+
+    let createRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(
+      withTitle: albumTitle
+    )
+    createRequest.addAssets([assetPlaceholder] as NSArray)
   }
 
   static func toAVFlashMode(_ mode: String) -> AVCaptureDevice.FlashMode {
@@ -215,20 +344,14 @@ public final class LivePhotoCameraView: ExpoView {
 
   func captureLivePhoto(flashMode: String) async throws -> [String: Any] {
     print("[LivePhotoNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
-    try await CameraLivePhotoModule.requestPhotoLibraryPermission()
     let captureResult = try await controller.capture(flashMode: flashMode)
     print("[LivePhotoNative] capture finished photoURL=\(captureResult.photoURL.absoluteString) movieURL=\(captureResult.movieURL.absoluteString)")
-    let localIdentifier = try await CameraLivePhotoModule.saveLivePhotoToLibrary(
-      photoURL: captureResult.photoURL,
-      movieURL: captureResult.movieURL
-    )
-    print("[LivePhotoNative] saved to library localIdentifier=\(localIdentifier ?? "nil")")
 
     return [
       "photoUri": captureResult.photoURL.absoluteString,
       "movieUri": captureResult.movieURL.absoluteString,
-      "localIdentifier": localIdentifier as Any,
-      "savedToLibrary": true
+      "localIdentifier": NSNull(),
+      "savedToLibrary": false
     ]
   }
 

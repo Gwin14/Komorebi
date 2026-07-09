@@ -1,6 +1,8 @@
 import ExpoModulesCore
 import AVFoundation
+import ImageIO
 import Photos
+import UniformTypeIdentifiers
 
 public class CameraPortraitCaptureModule: Module {
   enum PortraitCaptureError: Error, LocalizedError {
@@ -100,6 +102,32 @@ public class CameraPortraitCaptureModule: Module {
         throw PortraitCaptureError.captureSessionNotReady
       }
       return try await view.capturePortraitPhoto(flashMode: flashMode)
+    }
+
+    AsyncFunction("saveProcessedPortraitPhoto") { (options: [String: Any]) async throws -> [String: Any] in
+      guard let processedPhotoUri = options["processedPhotoUri"] as? String else {
+        throw PortraitCaptureError.captureFailed
+      }
+
+      try await Self.requestPhotoLibraryPermission()
+
+      let processedPhotoURL = try Self.fileURL(from: processedPhotoUri)
+      let originalPhotoURL = try (options["originalPhotoUri"] as? String).flatMap { try Self.fileURL(from: $0) }
+      let prepared = Self.copyPortraitAuxiliaryData(
+        from: originalPhotoURL,
+        toProcessedPhotoAt: processedPhotoURL
+      )
+      let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
+      let localIdentifier = try await Self.savePhotoToLibrary(
+        photoURL: prepared.url,
+        albumTitle: albumTitle
+      )
+
+      return [
+        "localIdentifier": localIdentifier as Any,
+        "savedToLibrary": true,
+        "auxiliaryDataPreserved": prepared.auxiliaryDataPreserved
+      ]
     }
   }
 
@@ -204,7 +232,109 @@ public class CameraPortraitCaptureModule: Module {
     }
   }
 
-  static func savePhotoToLibrary(photoURL: URL) async throws -> String? {
+  static func fileURL(from uri: String) throws -> URL {
+    if uri.hasPrefix("file://"), let url = URL(string: uri) {
+      return url
+    }
+
+    return URL(fileURLWithPath: uri)
+  }
+
+  static func copyPortraitAuxiliaryData(
+    from sourceURL: URL?,
+    toProcessedPhotoAt processedURL: URL
+  ) -> (url: URL, auxiliaryDataPreserved: Bool) {
+    guard
+      let sourceURL,
+      sourceURL != processedURL,
+      let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
+      let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
+      let originalSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil)
+    else {
+      return (processedURL, false)
+    }
+
+    let destinationURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("komorebi-portrait-processed-\(UUID().uuidString).heic")
+    let properties = Self.mergedImageProperties(
+      metadataSource: originalSource,
+      processedSource: processedSource
+    )
+
+    guard let destination = CGImageDestinationCreateWithURL(
+      destinationURL as CFURL,
+      UTType.heic.identifier as CFString,
+      1,
+      nil
+    ) else {
+      return (processedURL, false)
+    }
+
+    CGImageDestinationAddImage(destination, processedImage, properties)
+
+    var auxiliaryDataPreserved = false
+    let auxiliaryTypes: [CFString] = [
+      kCGImageAuxiliaryDataTypeDisparity,
+      kCGImageAuxiliaryDataTypeDepth,
+      kCGImageAuxiliaryDataTypePortraitEffectsMatte
+    ]
+
+    for auxiliaryType in auxiliaryTypes {
+      if let auxiliaryData = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+        originalSource,
+        0,
+        auxiliaryType
+      ) {
+        CGImageDestinationAddAuxiliaryDataInfo(
+          destination,
+          auxiliaryType,
+          auxiliaryData
+        )
+        auxiliaryDataPreserved = true
+      }
+    }
+
+    guard CGImageDestinationFinalize(destination) else {
+      return (processedURL, false)
+    }
+
+    return (destinationURL, auxiliaryDataPreserved)
+  }
+
+  static func mergedImageProperties(
+    metadataSource: CGImageSource,
+    processedSource: CGImageSource
+  ) -> CFDictionary {
+    var merged = (CGImageSourceCopyPropertiesAtIndex(metadataSource, 0, nil) as? [String: Any]) ?? [:]
+    let processed = (CGImageSourceCopyPropertiesAtIndex(processedSource, 0, nil) as? [String: Any]) ?? [:]
+
+    for key in [
+      kCGImagePropertyGPSDictionary as String,
+      kCGImagePropertyExifDictionary as String,
+      kCGImagePropertyTIFFDictionary as String
+    ] {
+      guard let processedValue = processed[key] else {
+        continue
+      }
+
+      if
+        let existingDictionary = merged[key] as? [String: Any],
+        let processedDictionary = processedValue as? [String: Any]
+      {
+        merged[key] = existingDictionary.merging(processedDictionary) { _, processed in processed }
+      } else {
+        merged[key] = processedValue
+      }
+    }
+
+    merged[kCGImagePropertyOrientation as String] = 1
+    return merged as CFDictionary
+  }
+
+  static func savePhotoToLibrary(
+    photoURL: URL,
+    albumTitle: String? = nil
+  ) async throws -> String? {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
       var placeholderIdentifier: String?
 
@@ -212,6 +342,13 @@ public class CameraPortraitCaptureModule: Module {
         let request = PHAssetCreationRequest.forAsset()
         request.addResource(with: .photo, fileURL: photoURL, options: nil)
         placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
+
+        if
+          let albumTitle,
+          let placeholder = request.placeholderForCreatedAsset
+        {
+          Self.addAsset(placeholder, toAlbumNamed: albumTitle)
+        }
       }, completionHandler: { success, error in
         if let error {
           continuation.resume(throwing: error)
@@ -222,6 +359,27 @@ public class CameraPortraitCaptureModule: Module {
         }
       })
     }
+  }
+
+  static func addAsset(_ assetPlaceholder: PHObjectPlaceholder, toAlbumNamed albumTitle: String) {
+    let fetchOptions = PHFetchOptions()
+    fetchOptions.predicate = NSPredicate(format: "title = %@", albumTitle)
+    let collections = PHAssetCollection.fetchAssetCollections(
+      with: .album,
+      subtype: .albumRegular,
+      options: fetchOptions
+    )
+
+    if let album = collections.firstObject {
+      let changeRequest = PHAssetCollectionChangeRequest(for: album)
+      changeRequest?.addAssets([assetPlaceholder] as NSArray)
+      return
+    }
+
+    let createRequest = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(
+      withTitle: albumTitle
+    )
+    createRequest.addAssets([assetPlaceholder] as NSArray)
   }
 
   static func toAVFlashMode(_ mode: String) -> AVCaptureDevice.FlashMode {
@@ -283,18 +441,13 @@ public final class PortraitCameraView: ExpoView {
 
   func capturePortraitPhoto(flashMode: String) async throws -> [String: Any] {
     print("[PortraitNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
-    try await CameraPortraitCaptureModule.requestPhotoLibraryPermission()
     let captureResult = try await controller.capture(flashMode: flashMode)
     print("[PortraitNative] capture finished photoURL=\(captureResult.photoURL.absoluteString) depth=\(captureResult.support.supportsDepthData) matte=\(captureResult.support.supportsPortraitEffectsMatte)")
-    let localIdentifier = try await CameraPortraitCaptureModule.savePhotoToLibrary(
-      photoURL: captureResult.photoURL
-    )
-    print("[PortraitNative] saved to library localIdentifier=\(localIdentifier ?? "nil")")
 
     return [
       "photoUri": captureResult.photoURL.absoluteString,
-      "localIdentifier": localIdentifier as Any,
-      "savedToLibrary": true,
+      "localIdentifier": NSNull(),
+      "savedToLibrary": false,
       "depthDataEmbedded": captureResult.support.supportsDepthData,
       "portraitEffectsMatteEmbedded": captureResult.support.supportsPortraitEffectsMatte,
       "requestedDeviceId": captureResult.requestedDeviceId,
