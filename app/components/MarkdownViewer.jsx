@@ -121,8 +121,8 @@ function buildHtml(content) {
            padding: 16px 18px 40px; font-size: 15px; line-height: 1.65; }
     h1 { color: #ffaa00; font-size: 20px; margin: 24px 0 8px; }
     h2 { color: #ffaa00; font-size: 17px; margin: 20px 0 6px; }
-    h3 { color: #ffcc66; font-size: 15px; margin: 14px 0 4px; }
-    h4 { color: #ffcc66; font-size: 14px; margin: 10px 0 4px; }
+    h3 { color: #d5d2ce; font-size: 15px; margin: 14px 0 4px; }
+    h4 { color: #d5d2ce; font-size: 14px; margin: 10px 0 4px; }
     hr { border: none; border-top: 1px solid #2a2a2a; margin: 14px 0; }
     table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
     th { background: #111; color: #ffaa00; padding: 8px 10px; border: 1px solid #2a2a2a; text-align: left; }
@@ -130,8 +130,8 @@ function buildHtml(content) {
     tr:nth-child(even) td { background: #0a0a0a; }
     ul, ol { padding-left: 22px; margin: 4px 0; }
     li { margin: 3px 0; }
-    strong { color: #ffe066; }
-    em { color: #bbb; font-style: italic; }
+    strong { color: #d5d2ce; }
+    em { color: #d5d2ce; font-style: italic; }
     code { background: #1a1a1a; color: #ffaa00; padding: 1px 5px; border-radius: 3px; font-size: 12px; }
     a { color: #ffaa00; text-decoration: underline; }
     p { margin: 6px 0; }
