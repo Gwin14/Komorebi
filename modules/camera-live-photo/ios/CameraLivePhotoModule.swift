@@ -3,6 +3,7 @@ import AVFoundation
 import ImageIO
 import Photos
 import UniformTypeIdentifiers
+import CoreImage
 
 public class CameraLivePhotoModule: Module {
   enum LivePhotoError: Error, LocalizedError {
@@ -51,7 +52,7 @@ public class CameraLivePhotoModule: Module {
     }
 
     View(LivePhotoCameraView.self) {
-      Events("onInitialized", "onError")
+      Events("onInitialized", "onError", "onSmileDetected")
 
       Prop("deviceId") { (view, deviceId: String?) in
         view.deviceId = deviceId
@@ -63,6 +64,10 @@ public class CameraLivePhotoModule: Module {
 
       Prop("isActive") { (view, isActive: Bool?) in
         view.isActive = isActive ?? true
+      }
+
+      Prop("smileDetectionEnabled") { (view, enabled: Bool?) in
+        view.smileDetectionEnabled = enabled ?? false
       }
     }
 
@@ -128,10 +133,6 @@ public class CameraLivePhotoModule: Module {
   }
 
   private static func checkLivePhotoSupport(device: AVCaptureDevice) throws -> Bool {
-    if device.position != .back {
-      return false
-    }
-
     let session = AVCaptureSession()
     session.beginConfiguration()
     defer { session.commitConfiguration() }
@@ -300,6 +301,7 @@ public class CameraLivePhotoModule: Module {
 public final class LivePhotoCameraView: ExpoView {
   let onInitialized = EventDispatcher()
   let onError = EventDispatcher()
+  let onSmileDetected = EventDispatcher()
 
   private static weak var currentActiveView: LivePhotoCameraView?
   private let controller = LivePhotoCameraController()
@@ -311,6 +313,12 @@ public final class LivePhotoCameraView: ExpoView {
   }
 
   var flashMode: String = "off"
+
+  var smileDetectionEnabled: Bool = false {
+    didSet {
+      controller.smileDetectionEnabled = smileDetectionEnabled
+    }
+  }
 
   var isActive: Bool = true {
     didSet {
@@ -324,6 +332,9 @@ public final class LivePhotoCameraView: ExpoView {
     backgroundColor = .black
     videoPreviewLayer.videoGravity = .resizeAspectFill
     videoPreviewLayer.session = controller.session
+    controller.onSmileDetected = { [weak self] in
+      self?.onSmileDetected()
+    }
   }
 
   public override class var layerClass: AnyClass {
@@ -388,7 +399,7 @@ public final class LivePhotoCameraView: ExpoView {
   }
 }
 
-private final class LivePhotoCameraController {
+private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
   struct CaptureResult {
     let photoURL: URL
     let movieURL: URL
@@ -397,6 +408,16 @@ private final class LivePhotoCameraController {
   let session = AVCaptureSession()
 
   private let output = AVCapturePhotoOutput()
+  private let videoOutput = AVCaptureVideoDataOutput()
+  private let smileQueue = DispatchQueue(label: "dev.komorebi.live-photo.smile")
+  private lazy var faceDetector = CIDetector(
+    ofType: CIDetectorTypeFace,
+    context: nil,
+    options: [CIDetectorAccuracy: CIDetectorAccuracyLow]
+  )
+  var smileDetectionEnabled = false
+  var onSmileDetected: (() -> Void)?
+  private var lastSmileAt = Date.distantPast
   private let sessionQueue = DispatchQueue(label: "dev.komorebi.live-photo.session")
   private var configuredDeviceId: String?
   private var isSessionReady = false
@@ -431,10 +452,6 @@ private final class LivePhotoCameraController {
 
         let device = try CameraLivePhotoModule.findDevice(deviceId)
         print("[LivePhotoNative] device found uniqueID=\(device.uniqueID) name=\(device.localizedName) position=\(device.position.rawValue)")
-        guard device.position == .back else {
-          throw CameraLivePhotoModule.LivePhotoError.livePhotoNotSupported
-        }
-
         let input = try AVCaptureDeviceInput(device: device)
         guard self.session.canAddInput(input) else {
           throw CameraLivePhotoModule.LivePhotoError.cannotAddInput
@@ -445,6 +462,15 @@ private final class LivePhotoCameraController {
           throw CameraLivePhotoModule.LivePhotoError.cannotAddOutput
         }
         self.session.addOutput(self.output)
+
+        if self.session.canAddOutput(self.videoOutput) {
+          self.videoOutput.alwaysDiscardsLateVideoFrames = true
+          self.videoOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+          ]
+          self.videoOutput.setSampleBufferDelegate(self, queue: self.smileQueue)
+          self.session.addOutput(self.videoOutput)
+        }
 
         guard self.output.isLivePhotoCaptureSupported else {
           throw CameraLivePhotoModule.LivePhotoError.livePhotoNotSupported
@@ -480,6 +506,30 @@ private final class LivePhotoCameraController {
         self.session.stopRunning()
       }
     }
+  }
+
+  func captureOutput(
+    _ output: AVCaptureOutput,
+    didOutput sampleBuffer: CMSampleBuffer,
+    from connection: AVCaptureConnection
+  ) {
+    guard smileDetectionEnabled,
+          Date().timeIntervalSince(lastSmileAt) >= 2.5,
+          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+          let detector = faceDetector
+    else { return }
+
+    let image = CIImage(cvPixelBuffer: pixelBuffer)
+    let features = detector.features(
+      in: image,
+      options: [CIDetectorSmile: true]
+    )
+    guard features.contains(where: { ($0 as? CIFaceFeature)?.hasSmile == true }) else {
+      return
+    }
+
+    lastSmileAt = Date()
+    DispatchQueue.main.async { [weak self] in self?.onSmileDetected?() }
   }
 
   func capture(flashMode: String) async throws -> CaptureResult {

@@ -3,10 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
-import {
-  Camera as VisionCamera,
-  useCameraFormat,
-} from "react-native-vision-camera";
+import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
 import styles from "./CameraPreview.styles";
 
@@ -97,11 +94,13 @@ export default function CameraPreview({
   // normal) respeita o lock manual de forma confiável.
   const formatFilters = useMemo(
     () => [
-      { photoAspectRatio: verticalMode ? 16 / 9 : 4 / 3 },
+      // RAW precisa permanecer em um formato de sensor 4:3. O 9:16 é um
+      // enquadramento/crop derivado; selecionar 3840x2160 elimina rawFormats.
+      { photoAspectRatio: rawPhotoMode ? 4 / 3 : verticalMode ? 16 / 9 : 4 / 3 },
       ...(manualPhotoMode ? [] : [{ photoResolution: "max" }]),
       { videoResolution: "max" },
     ],
-    [manualPhotoMode, verticalMode],
+    [manualPhotoMode, rawPhotoMode, verticalMode],
   );
   const format = useCameraFormat(device, formatFilters);
 
@@ -239,13 +238,13 @@ export default function CameraPreview({
   }
 
   const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
-  const CameraComponent = rawPhotoMode ? VisionCamera : FaceDetectionCamera;
-  const faceDetectionProps = rawPhotoMode
-    ? {}
-    : {
-        faceDetectionCallback: handleFacesDetection,
-        faceDetectionOptions,
-      };
+  // O frame processor do detector pode coexistir com o photo output RAW.
+  // Manter o mesmo componente evita perder o disparo por sorriso em RAW.
+  const CameraComponent = FaceDetectionCamera;
+  const faceDetectionProps = {
+    faceDetectionCallback: handleFacesDetection,
+    faceDetectionOptions,
+  };
 
   return (
     <GestureDetector gesture={focusGesture}>
@@ -279,6 +278,7 @@ export default function CameraPreview({
             photo={true}
             video={false}
             audio={false}
+            outputOrientation="preview"
             zoom={zoom}
             exposure={exposure}
             onInitialized={handleCameraInitialized}

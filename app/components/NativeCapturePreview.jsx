@@ -13,6 +13,8 @@ export default function NativeCapturePreview({
   gridVisible,
   verticalMode,
   doubleCaptureMode,
+  smileDetectionEnabled,
+  onSmileDetected,
 }) {
   const NativeCameraView =
     mode === "live" ? LivePhotoCameraView : PortraitCameraView;
@@ -72,6 +74,8 @@ export default function NativeCapturePreview({
         isActive={true}
         onInitialized={handleInitialized}
         onError={handleError}
+        smileDetectionEnabled={smileDetectionEnabled}
+        onSmileDetected={onSmileDetected}
       />
 
       {gridVisible && (

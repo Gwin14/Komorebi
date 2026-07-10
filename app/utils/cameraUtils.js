@@ -79,6 +79,7 @@ const buildPhotoProcessingData = async ({
   manualSettings = null,
   extraData = {},
 }) => {
+  const croppedUri = (await cropImageToAspect(uri, aspectRatio)) || uri;
   const komorebiMetadata = buildKomorebiExifMetadata({
     selectedLut,
     selectedLutId,
@@ -92,7 +93,7 @@ const buildPhotoProcessingData = async ({
     ...extraData,
     needsProcessing: false,
     originalUri: uri,
-    imageUri: uri,
+    imageUri: croppedUri,
     exifData: baseExifData,
     doubleCaptureMode,
     saveOriginalWithLUT: false,
@@ -106,7 +107,11 @@ const buildPhotoProcessingData = async ({
     return noLutData;
   }
 
-  const processingInfo = await applyLUTToImage(uri, selectedLutId, exifData);
+  const processingInfo = await applyLUTToImage(
+    croppedUri,
+    selectedLutId,
+    exifData,
+  );
 
   if (!processingInfo.needsProcessing) {
     return noLutData;
@@ -280,10 +285,23 @@ export const takePicture = async ({
     const uri = normalizeUri(photo?.path || photo?.filePath || photo?.uri);
 
     if (rawModeEnabled) {
+      const isVerticalCrop = Math.abs(aspectRatio - 9 / 16) < 0.01;
+      const rawDerivativeAspectRatio =
+        flash === "on"
+          ? null
+          : doubleCaptureMode
+            ? 1 / aspectRatio
+            : isVerticalCrop
+              ? aspectRatio
+              : null;
       setProcessingData({
         needsProcessing: false,
         originalUri: uri,
         imageUri: uri,
+        derivativeSourceUri: normalizeUri(
+          photo?.processedPath || photo?.processedPhotoPath,
+        ),
+        rawDerivativeAspectRatio,
         exifData: {
           ...additionalExif,
           komorebiMetadata: buildKomorebiExifMetadata({
@@ -293,7 +311,7 @@ export const takePicture = async ({
             captureMode: "raw",
           }),
         },
-        doubleCaptureMode: false,
+        doubleCaptureMode,
         saveOriginalWithLUT: false,
         aspectRatio,
         captureMode: "raw",
@@ -479,7 +497,12 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
       );
     }
 
-    exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
+    // Aqui apenas regravamos metadados; os pixels do JPEG original não foram
+    // reorientados. Preserve a orientação criada pela câmera para não apagar
+    // a rotação necessária ao exibir a foto corretamente.
+    if (exifObj["0th"][piexif.ImageIFD.Orientation] == null) {
+      exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
+    }
     exifObj["0th"][piexif.ImageIFD.XResolution] = [72, 1];
     exifObj["0th"][piexif.ImageIFD.YResolution] = [72, 1];
     exifObj["0th"][piexif.ImageIFD.ResolutionUnit] = 2;

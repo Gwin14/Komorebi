@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Text, View } from "react-native";
+import { Alert, Animated, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -151,6 +151,14 @@ export default function App() {
   }, []);
 
   const handleTakePicture = useCallback(() => {
+    if (flash === "on" && !activeLens?.device?.hasFlash) {
+      Alert.alert(
+        "Flash indisponível",
+        "A lente selecionada não possui flash. Desative o flash ou escolha outra lente.",
+      );
+      return;
+    }
+
     animateShutter();
 
     const manualSettings =
@@ -273,6 +281,28 @@ export default function App() {
       !rawCapture.rawModeEnabled &&
       !livePhoto.enabled,
     portraitModeEnabled: portraitCapture.enabled,
+    unavailableReasons: {
+      flash: activeLens?.device?.hasFlash
+        ? null
+        : "A lente selecionada não possui flash.",
+      rawCapture: rawCapture.available
+        ? null
+        : "RAW/ProRAW não é suportado pela lente selecionada.",
+      livePhoto: livePhoto.available
+        ? rawCapture.rawModeEnabled
+          ? "Desative RAW/ProRAW para usar Live Photo."
+          : portraitCapture.enabled
+          ? "Desative o modo retrato para usar Live Photo."
+          : null
+        : "Live Photo não é suportada pela lente selecionada.",
+      portrait: portraitCapture.available
+        ? rawCapture.rawModeEnabled
+          ? "Desative RAW/ProRAW para usar o modo retrato."
+          : livePhoto.enabled
+          ? "Desative Live Photo para usar o modo retrato."
+          : null
+        : "O modo retrato não é suportado pela lente selecionada.",
+    },
     selectedLutId,
     smileDetectionEnabled,
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
@@ -338,6 +368,8 @@ export default function App() {
                 gridVisible={gridVisible}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
+                smileDetectionEnabled={smileDetectionEnabled}
+                onSmileDetected={handleTakePicture}
               />
             ) : (
               <CameraPreview

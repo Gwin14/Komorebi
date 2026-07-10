@@ -15,6 +15,8 @@ export type LivePhotoCameraViewProps = ViewProps & {
   deviceId?: string | null;
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
+  smileDetectionEnabled?: boolean;
+  onSmileDetected?: () => void;
   onInitialized?: () => void;
   onError?: (event: { nativeEvent?: { message?: string } }) => void;
 };

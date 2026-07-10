@@ -3,6 +3,7 @@ import AVFoundation
 import ImageIO
 import Photos
 import UniformTypeIdentifiers
+import CoreImage
 
 public class CameraPortraitCaptureModule: Module {
   enum PortraitCaptureError: Error, LocalizedError {
@@ -57,7 +58,7 @@ public class CameraPortraitCaptureModule: Module {
     }
 
     View(PortraitCameraView.self) {
-      Events("onInitialized", "onError")
+      Events("onInitialized", "onError", "onSmileDetected")
 
       Prop("deviceId") { (view, deviceId: String?) in
         view.deviceId = deviceId
@@ -69,6 +70,10 @@ public class CameraPortraitCaptureModule: Module {
 
       Prop("isActive") { (view, isActive: Bool?) in
         view.isActive = isActive ?? true
+      }
+
+      Prop("smileDetectionEnabled") { (view, enabled: Bool?) in
+        view.smileDetectionEnabled = enabled ?? false
       }
     }
 
@@ -139,13 +144,6 @@ public class CameraPortraitCaptureModule: Module {
   }
 
   static func checkPortraitSupport(device: AVCaptureDevice) throws -> PortraitSupport {
-    if device.position != .back {
-      return PortraitSupport(
-        supportsDepthData: false,
-        supportsPortraitEffectsMatte: false
-      )
-    }
-
     let session = AVCaptureSession()
     session.beginConfiguration()
     defer { session.commitConfiguration() }
@@ -190,7 +188,8 @@ public class CameraPortraitCaptureModule: Module {
     var seenDeviceIds = Set<String>()
 
     func append(_ candidate: AVCaptureDevice) {
-      guard candidate.position == .back, !seenDeviceIds.contains(candidate.uniqueID) else {
+      guard candidate.position == device.position,
+            !seenDeviceIds.contains(candidate.uniqueID) else {
         return
       }
 
@@ -205,6 +204,10 @@ public class CameraPortraitCaptureModule: Module {
       .builtInWideAngleCamera
     ]
 
+    if #available(iOS 11.1, *) {
+      deviceTypes.insert(.builtInTrueDepthCamera, at: 0)
+    }
+
     if #available(iOS 13.0, *) {
       deviceTypes.insert(.builtInDualWideCamera, at: 0)
       deviceTypes.insert(.builtInTripleCamera, at: 0)
@@ -213,7 +216,7 @@ public class CameraPortraitCaptureModule: Module {
     let discoverySession = AVCaptureDevice.DiscoverySession(
       deviceTypes: deviceTypes,
       mediaType: .video,
-      position: .back
+      position: device.position
     )
 
     discoverySession.devices.forEach(append)
@@ -397,6 +400,7 @@ public class CameraPortraitCaptureModule: Module {
 public final class PortraitCameraView: ExpoView {
   let onInitialized = EventDispatcher()
   let onError = EventDispatcher()
+  let onSmileDetected = EventDispatcher()
 
   private static weak var currentActiveView: PortraitCameraView?
   private let controller = PortraitCameraController()
@@ -408,6 +412,12 @@ public final class PortraitCameraView: ExpoView {
   }
 
   var flashMode: String = "off"
+
+  var smileDetectionEnabled: Bool = false {
+    didSet {
+      controller.smileDetectionEnabled = smileDetectionEnabled
+    }
+  }
 
   var isActive: Bool = true {
     didSet {
@@ -421,6 +431,9 @@ public final class PortraitCameraView: ExpoView {
     backgroundColor = .black
     videoPreviewLayer.videoGravity = .resizeAspectFill
     videoPreviewLayer.session = controller.session
+    controller.onSmileDetected = { [weak self] in
+      self?.onSmileDetected()
+    }
   }
 
   public override class var layerClass: AnyClass {
@@ -489,7 +502,7 @@ public final class PortraitCameraView: ExpoView {
   }
 }
 
-private final class PortraitCameraController {
+private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
   struct CaptureResult {
     let photoURL: URL
     let support: CameraPortraitCaptureModule.PortraitSupport
@@ -501,6 +514,16 @@ private final class PortraitCameraController {
   let session = AVCaptureSession()
 
   private let output = AVCapturePhotoOutput()
+  private let videoOutput = AVCaptureVideoDataOutput()
+  private let smileQueue = DispatchQueue(label: "dev.komorebi.portrait.smile")
+  private lazy var faceDetector = CIDetector(
+    ofType: CIDetectorTypeFace,
+    context: nil,
+    options: [CIDetectorAccuracy: CIDetectorAccuracyLow]
+  )
+  var smileDetectionEnabled = false
+  var onSmileDetected: (() -> Void)?
+  private var lastSmileAt = Date.distantPast
   private let sessionQueue = DispatchQueue(label: "dev.komorebi.portrait-capture.session")
   private var configuredRequestedDeviceId: String?
   private var activeCaptureDevice: AVCaptureDevice?
@@ -553,6 +576,15 @@ private final class PortraitCameraController {
         }
         self.session.addOutput(self.output)
 
+        if self.session.canAddOutput(self.videoOutput) {
+          self.videoOutput.alwaysDiscardsLateVideoFrames = true
+          self.videoOutput.videoSettings = [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+          ]
+          self.videoOutput.setSampleBufferDelegate(self, queue: self.smileQueue)
+          self.session.addOutput(self.videoOutput)
+        }
+
         let configuredSupport = CameraPortraitCaptureModule.PortraitSupport(
           supportsDepthData: self.output.isDepthDataDeliverySupported && selection.support.supportsDepthData,
           supportsPortraitEffectsMatte: self.output.isPortraitEffectsMatteDeliverySupported && selection.support.supportsPortraitEffectsMatte
@@ -598,6 +630,30 @@ private final class PortraitCameraController {
         self.session.stopRunning()
       }
     }
+  }
+
+  func captureOutput(
+    _ output: AVCaptureOutput,
+    didOutput sampleBuffer: CMSampleBuffer,
+    from connection: AVCaptureConnection
+  ) {
+    guard smileDetectionEnabled,
+          Date().timeIntervalSince(lastSmileAt) >= 2.5,
+          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+          let detector = faceDetector
+    else { return }
+
+    let image = CIImage(cvPixelBuffer: pixelBuffer)
+    let features = detector.features(
+      in: image,
+      options: [CIDetectorSmile: true]
+    )
+    guard features.contains(where: { ($0 as? CIFaceFeature)?.hasSmile == true }) else {
+      return
+    }
+
+    lastSmileAt = Date()
+    DispatchQueue.main.async { [weak self] in self?.onSmileDetected?() }
   }
 
   func capture(flashMode: String) async throws -> CaptureResult {

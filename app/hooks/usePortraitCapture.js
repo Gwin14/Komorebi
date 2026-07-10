@@ -11,15 +11,13 @@ export default function usePortraitCapture(device) {
   const [capabilities, setCapabilities] = useState(null);
 
   const deviceId = device?.id;
-  const isBackCamera = device?.position === "back";
   const canCheckCapabilities = nativeAvailable && Boolean(deviceId);
   const available =
     canCheckCapabilities &&
-    isBackCamera &&
     (capabilities === null || capabilities.supportsPortraitCapture);
 
   useEffect(() => {
-    if (!canCheckCapabilities || !isBackCamera) {
+    if (!canCheckCapabilities) {
       setCapabilities(null);
       setEnabled(false);
       return;
@@ -38,7 +36,7 @@ export default function usePortraitCapture(device) {
     return () => {
       cancelled = true;
     };
-  }, [canCheckCapabilities, deviceId, isBackCamera]);
+  }, [canCheckCapabilities, deviceId]);
 
   useEffect(() => {
     if (!available) {

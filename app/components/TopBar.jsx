@@ -3,7 +3,7 @@ import * as Location from "expo-location";
 import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
@@ -35,6 +35,7 @@ export default function TopBar({
   portraitCaptureAvailable,
   portraitModeEnabled,
   togglePortraitModeEnabled,
+  unavailableReasons = {},
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -164,14 +165,15 @@ export default function TopBar({
     <View style={styles.buttonsContainer}>
       {topBarControls.map((controlId) => {
         if (controlId === "manual" && !manualControlsAvailable) return null;
-        if (controlId === "rawCapture" && !rawCaptureAvailable) return null;
-
         const control = controlOptions[controlId];
         if (!control) return null;
 
         const disabled =
+          (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
+          (controlId === "rawCapture" && !rawCaptureAvailable) ||
           (controlId === "livePhoto" && !livePhotoAvailable) ||
           (controlId === "portrait" && !portraitCaptureAvailable);
+        const unavailableReason = unavailableReasons[controlId];
         const iconColor = control.active ? "#ffaa00" : "white";
 
         if (controlId === "weather") {
@@ -203,8 +205,17 @@ export default function TopBar({
         return (
           <TouchableOpacity
             key={controlId}
-            onPress={control.onPress}
-            disabled={disabled}
+            onPress={() => {
+              if (disabled) {
+                Alert.alert(
+                  "Recurso indisponível",
+                  unavailableReason || "Este recurso não é compatível com a lente atual.",
+                );
+                return;
+              }
+              control.onPress?.();
+            }}
+            accessibilityState={{ disabled }}
           >
             <Animated.View
               style={[animatedStyle, disabled && styles.disabledControl]}
