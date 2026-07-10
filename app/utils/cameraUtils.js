@@ -7,6 +7,10 @@ import { Image } from "react-native";
 import { captureLivePhoto } from "../../modules/camera-live-photo";
 import { capturePortraitPhoto } from "../../modules/camera-portrait-capture";
 import { toVisionCameraRawMode } from "../../modules/camera-raw-capture";
+import {
+  applyKomorebiMetadataToExifObj,
+  buildKomorebiExifMetadata,
+} from "./komorebiExifMetadata";
 import { applyLUTToImage } from "./lutProcessor";
 
 const APP_ALBUM = "Komorebi";
@@ -29,6 +33,8 @@ export async function saveToAlbum(uri) {
   } else {
     await MediaLibrary.addAssetsToAlbumAsync([asset], album, true); // true = copyAsset
   }
+
+  return asset;
 }
 
 const getLocationExif = async (locationEnabled) => {
@@ -63,22 +69,35 @@ const getLocationExif = async (locationEnabled) => {
 const buildPhotoProcessingData = async ({
   uri,
   selectedLutId,
+  selectedLut,
   lutsLoaded,
   exifData,
   doubleCaptureMode,
   saveOriginalWithLUT,
   aspectRatio,
+  captureMode = "standard",
+  manualSettings = null,
   extraData = {},
 }) => {
+  const komorebiMetadata = buildKomorebiExifMetadata({
+    selectedLut,
+    selectedLutId,
+    aspectRatio,
+    doubleCaptureMode,
+    captureMode,
+    manualSettings,
+  });
+  const baseExifData = { ...exifData, komorebiMetadata };
   const noLutData = {
     ...extraData,
     needsProcessing: false,
     originalUri: uri,
     imageUri: uri,
-    exifData,
+    exifData: baseExifData,
     doubleCaptureMode,
     saveOriginalWithLUT: false,
     aspectRatio,
+    captureMode,
     cube: null,
     grainConfig: null,
   };
@@ -93,13 +112,28 @@ const buildPhotoProcessingData = async ({
     return noLutData;
   }
 
+  const lutExifData = {
+    ...baseExifData,
+    komorebiMetadata: buildKomorebiExifMetadata({
+      selectedLut,
+      selectedLutId,
+      grainConfig: processingInfo.grainConfig,
+      aspectRatio,
+      doubleCaptureMode,
+      captureMode,
+      manualSettings,
+    }),
+  };
+
   return {
     ...extraData,
     ...processingInfo,
+    exifData: lutExifData,
     doubleCaptureMode,
     saveOriginalWithLUT,
     originalUri: uri,
     aspectRatio,
+    captureMode,
   };
 };
 
@@ -109,6 +143,7 @@ export const takePicture = async ({
   isProcessing,
   setIsProcessing,
   selectedLutId,
+  selectedLut = null,
   lutsLoaded,
   hasMediaPermission,
   setProcessingData,
@@ -168,11 +203,13 @@ export const takePicture = async ({
         await buildPhotoProcessingData({
           uri,
           selectedLutId,
+          selectedLut,
           lutsLoaded,
           exifData: { ...additionalExif, aspectRatio },
           doubleCaptureMode,
           saveOriginalWithLUT,
           aspectRatio,
+          captureMode: "live",
           extraData: {
             livePhotoMovieUri: livePhoto.movieUri,
             localIdentifier: livePhoto.localIdentifier,
@@ -207,11 +244,13 @@ export const takePicture = async ({
         await buildPhotoProcessingData({
           uri,
           selectedLutId,
+          selectedLut,
           lutsLoaded,
           exifData: { ...additionalExif, aspectRatio },
           doubleCaptureMode,
           saveOriginalWithLUT,
           aspectRatio,
+          captureMode: "portrait",
           extraData: {
             localIdentifier: portraitPhoto.localIdentifier,
             nativeSavedToLibrary: portraitPhoto.savedToLibrary,
@@ -245,10 +284,19 @@ export const takePicture = async ({
         needsProcessing: false,
         originalUri: uri,
         imageUri: uri,
-        exifData: additionalExif,
+        exifData: {
+          ...additionalExif,
+          komorebiMetadata: buildKomorebiExifMetadata({
+            selectedLutId: "none",
+            aspectRatio,
+            doubleCaptureMode: false,
+            captureMode: "raw",
+          }),
+        },
         doubleCaptureMode: false,
         saveOriginalWithLUT: false,
         aspectRatio,
+        captureMode: "raw",
         cube: null,
         grainConfig: null,
       });
@@ -279,11 +327,14 @@ export const takePicture = async ({
       await buildPhotoProcessingData({
         uri,
         selectedLutId,
+        selectedLut,
         lutsLoaded,
         exifData: completeExif,
         doubleCaptureMode,
         saveOriginalWithLUT,
         aspectRatio,
+        captureMode: "standard",
+        manualSettings,
       }),
     );
   } catch (error) {
@@ -516,6 +567,8 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
         Math.abs(exifData.GPSAltitude),
       );
     }
+
+    applyKomorebiMetadataToExifObj(exifObj, exifData.komorebiMetadata);
 
     const exifBytes = piexif.dump(exifObj);
     const newDataUrl = piexif.insert(exifBytes, dataUrl);

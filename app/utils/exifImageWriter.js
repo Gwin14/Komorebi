@@ -1,5 +1,6 @@
 import * as FileSystem from "expo-file-system/legacy";
 import * as piexif from "piexifjs";
+import { applyKomorebiMetadataToExifObj } from "./komorebiExifMetadata";
 
 const toExifFraction = (val) => {
   if (val === undefined || val === null) return [0, 1];
@@ -165,6 +166,8 @@ const applyExifToImage = (base64Data, exifData, originalExifObj = null) => {
           Math.abs(exifData.GPSAltitude),
         );
       }
+
+      applyKomorebiMetadataToExifObj(exifObj, exifData.komorebiMetadata);
     }
 
     // Converter EXIF para bytes e inserir na imagem

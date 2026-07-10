@@ -180,6 +180,7 @@ export default function App() {
       isProcessing,
       setIsProcessing,
       selectedLutId,
+      selectedLut: availableLuts.find((lut) => lut.id === selectedLutId),
       lutsLoaded,
       hasMediaPermission,
       flash,
@@ -198,6 +199,7 @@ export default function App() {
   }, [
     activeLens,
     animateShutter,
+    availableLuts,
     cameraReady,
     doubleCaptureMode,
     enqueueProcessing,

@@ -1,4 +1,8 @@
 import * as MediaLibrary from "expo-media-library";
+import {
+  readKomorebiAssetMetadata,
+  readKomorebiExifMetadataFromUri,
+} from "./komorebiExifMetadata";
 
 export const formatShutter = (seconds) => {
   if (!seconds) return null;
@@ -11,13 +15,57 @@ export const formatAperture = (f) => {
   return `f/${Number(f).toFixed(1)}`;
 };
 
+const formatCaptureMode = (mode) => {
+  const labels = {
+    live: "live",
+    portrait: "retrato",
+    raw: "raw",
+  };
+
+  return labels[mode] || null;
+};
+
+const formatKomorebiMetadata = (metadata) => {
+  if (!metadata) return {};
+  const badgeParts = [
+    formatCaptureMode(metadata.captureMode),
+    metadata.filter?.name?.toLowerCase() || null,
+  ].filter(Boolean);
+
+  return badgeParts.length ? { komorebiBadges: badgeParts } : {};
+};
+
+const inferKomorebiMetadataFromAssetInfo = (info) => {
+  const mediaSubtypes = info?.mediaSubtypes || [];
+  const filename = info?.filename || info?.localUri || info?.uri || "";
+
+  if (mediaSubtypes.includes("livePhoto")) {
+    return { app: "Komorebi", captureMode: "live" };
+  }
+
+  if (mediaSubtypes.includes("depthEffect")) {
+    return { app: "Komorebi", captureMode: "portrait" };
+  }
+
+  if (/\.(dng|raw)$/i.test(filename)) {
+    return { app: "Komorebi", captureMode: "raw" };
+  }
+
+  return null;
+};
+
 export const exifHandler = async (assetId, setExifData) => {
   try {
     const info = await MediaLibrary.getAssetInfoAsync(assetId);
     const rawExif = info.exif;
+    const komorebiMetadata =
+      (await readKomorebiExifMetadataFromUri(info.localUri || info.uri)) ||
+      (await readKomorebiAssetMetadata(assetId)) ||
+      inferKomorebiMetadataFromAssetInfo(info);
 
     if (!rawExif) {
-      setExifData(null);
+      const komorebiExif = formatKomorebiMetadata(komorebiMetadata);
+      setExifData(Object.keys(komorebiExif).length ? komorebiExif : null);
       return;
     }
 
@@ -57,6 +105,7 @@ export const exifHandler = async (assetId, setExifData) => {
               ? -Math.abs(gps.GPSLongitude)
               : Math.abs(gps.GPSLongitude)
             : null,
+      ...formatKomorebiMetadata(komorebiMetadata),
     };
 
     console.log("Formatted EXIF:", formattedExif);

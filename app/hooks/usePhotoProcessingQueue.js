@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
 import { saveProcessedPortraitPhoto } from "../../modules/camera-portrait-capture";
 import {
+  applyExifDataToImage,
   copyExifFromImage,
   cropImageToInverseAspect,
   saveToAlbum,
 } from "../utils/cameraUtils";
+import { saveKomorebiAssetMetadata } from "../utils/komorebiExifMetadata";
 
 export default function usePhotoProcessingQueue(hasMediaPermission) {
   const [processingQueue, setProcessingQueue] = useState([]);
@@ -28,7 +30,10 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
         saveOriginalWithLUT: saveOriginalWithoutLUT = false,
         originalUri,
         aspectRatio = 3 / 4,
+        captureMode = "standard",
+        exifData = null,
         livePhotoMovieUri,
+        localIdentifier,
         depthDataEmbedded = false,
         portraitEffectsMatteEmbedded = false,
       } = item;
@@ -40,38 +45,54 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
           return;
         }
 
+        const shouldApplyExifBeforeSaving =
+          !item.needsProcessing &&
+          captureMode === "standard" &&
+          Boolean(exifData);
+        const uriToSave = shouldApplyExifBeforeSaving
+          ? await applyExifDataToImage(processedUri, exifData)
+          : processedUri;
+        const komorebiMetadata = exifData?.komorebiMetadata;
+        const saveMetadataForAsset = (assetId) =>
+          saveKomorebiAssetMetadata(assetId, komorebiMetadata);
+
         if (livePhotoMovieUri) {
-          await saveLivePhotoToLibrary({
-            photoUri: processedUri,
+          const result = await saveLivePhotoToLibrary({
+            photoUri: uriToSave,
             movieUri: livePhotoMovieUri,
             originalPhotoUri: originalUri,
             albumTitle: "Komorebi",
           });
+          await saveMetadataForAsset(result.localIdentifier || localIdentifier);
         } else if (
           originalUri &&
           (depthDataEmbedded || portraitEffectsMatteEmbedded)
         ) {
-          await saveProcessedPortraitPhoto({
-            processedPhotoUri: processedUri,
+          const result = await saveProcessedPortraitPhoto({
+            processedPhotoUri: uriToSave,
             originalPhotoUri: originalUri,
             albumTitle: "Komorebi",
           });
+          await saveMetadataForAsset(result.localIdentifier || localIdentifier);
         } else if (doubleCaptureMode) {
-          await saveToAlbum(processedUri);
+          const asset = await saveToAlbum(uriToSave);
+          await saveMetadataForAsset(asset?.id);
 
           const inverseUri = await cropImageToInverseAspect(
-            processedUri,
+            uriToSave,
             aspectRatio,
           );
           if (inverseUri) {
             const inverseUriWithExif = await copyExifFromImage(
-              processedUri,
+              uriToSave,
               inverseUri,
             );
-            await saveToAlbum(inverseUriWithExif);
+            const inverseAsset = await saveToAlbum(inverseUriWithExif);
+            await saveMetadataForAsset(inverseAsset?.id);
           }
         } else {
-          await saveToAlbum(processedUri);
+          const asset = await saveToAlbum(uriToSave);
+          await saveMetadataForAsset(asset?.id);
         }
 
         if (saveOriginalWithoutLUT && originalUri) {
