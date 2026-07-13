@@ -33,10 +33,10 @@ index ecd2a94..0d17b37 100644
 
    // pragma MARK: Side-Props
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-index 12f5c07..f9548a6 100644
+index 12f5c07..f359ed0 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-@@ -39,7 +39,31 @@ extension CameraSession {
+@@ -39,7 +39,32 @@ extension CameraSession {
        VisionLogger.log(level: .info, message: "Capturing photo...")
 
        // Create photo settings
@@ -57,10 +57,11 @@ index 12f5c07..f9548a6 100644
 +                                               rawFileType: .dng,
 +                                               processedFormat: processedFormat,
 +                                               processedFileType: AVFileType("public.jpeg"))
-+        if #available(iOS 12.0, *),
-+           photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.contains(.jpeg) {
++        if photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.contains(.jpeg) {
 +          photoSettings.rawEmbeddedThumbnailPhotoFormat = [
-+            AVVideoCodecKey: AVVideoCodecType.jpeg
++            AVVideoCodecKey: AVVideoCodecType.jpeg,
++            AVVideoWidthKey: 1024,
++            AVVideoHeightKey: 1024
 +          ]
 +        }
 +      } else {
@@ -69,7 +70,7 @@ index 12f5c07..f9548a6 100644
 
        // set photo resolution
        if #available(iOS 16.0, *) {
-@@ -50,8 +74,24 @@ extension CameraSession {
+@@ -50,8 +75,24 @@ extension CameraSession {
 
        // depth data
        photoSettings.isDepthDataDeliveryEnabled = photoOutput.isDepthDataDeliveryEnabled
@@ -94,7 +95,7 @@ index 12f5c07..f9548a6 100644
        }
 
        // quality prioritization
-@@ -84,11 +124,52 @@ extension CameraSession {
+@@ -84,11 +125,52 @@ extension CameraSession {
                                                        enableShutterSound: options.enableShutterSound,
                                                        metadataProvider: self.metadataProvider,
                                                        path: options.path,
@@ -162,10 +163,18 @@ index 4d8bc38..09b528b 100644
        "supportsFocus": isFocusPointOfInterestSupported,
        "hardwareLevel": HardwareLevel.full.jsValue,
 diff --git a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
-index e845b38..ab8a387 100644
+index e845b38..f15ae14 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
-@@ -16,16 +16,25 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -7,6 +7,7 @@
+ //
+
+ import AVFoundation
++import CoreImage
+
+ // MARK: - PhotoCaptureDelegate
+
+@@ -16,16 +17,27 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
    private let cameraSessionDelegate: CameraSessionDelegate?
    private let metadataProvider: MetadataProvider
    private let path: URL
@@ -173,6 +182,8 @@ index e845b38..ab8a387 100644
 +  private let livePhotoMoviePath: URL?
 +  private var livePhotoResult: [String: Any]?
 +  private var rawPhotoResult: [String: Any]?
++  private var pendingRawPhoto: AVCapturePhoto?
++  private var rawThumbnailPixelBuffer: CVPixelBuffer?
 +  private var didFinish = false
 
    required init(promise: Promise,
@@ -191,7 +202,7 @@ index e845b38..ab8a387 100644
      self.cameraSessionDelegate = cameraSessionDelegate
      super.init()
      makeGlobal()
-@@ -42,15 +51,20 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -42,17 +54,51 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
    }
 
    func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
@@ -210,13 +221,45 @@ index e845b38..ab8a387 100644
 +        try FileUtils.writePhotoToFile(photo: photo,
 +                                       metadataProvider: metadataProvider,
 +                                       file: processedPath)
++        rawThumbnailPixelBuffer = makeOrientedThumbnailPixelBuffer(from: photo)
++        if let pendingRawPhoto {
++          self.pendingRawPhoto = nil
++          try writeCapturedPhoto(pendingRawPhoto)
++        }
 +        return
 +      }
 +
++      if photo.isRawPhoto, processedPath != nil, rawThumbnailPixelBuffer == nil {
++        pendingRawPhoto = photo
++        return
++      }
++
++      try writeCapturedPhoto(photo)
++    } catch let error as CameraError {
++      finish(with: .failure(error))
++    } catch {
++      finish(with: .failure(error))
++    }
++  }
++
++  private func writeCapturedPhoto(_ photo: AVCapturePhoto) throws {
++      let customizer: AVCapturePhotoFileDataRepresentationCustomizer
++      if photo.isRawPhoto, let rawThumbnailPixelBuffer {
++        customizer = RawThumbnailCustomizer(
++          metadataProvider: metadataProvider,
++          pixelBuffer: rawThumbnailPixelBuffer
++        )
++      } else {
++        customizer = metadataProvider
++      }
++
        try FileUtils.writePhotoToFile(photo: photo,
-                                      metadataProvider: metadataProvider,
+-                                     metadataProvider: metadataProvider,
++                                     metadataProvider: customizer,
                                       file: path)
-@@ -63,7 +77,7 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+
+       let exif = photo.metadata["{Exif}"] as? [String: Any]
+@@ -63,7 +109,7 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
        let orientation = getOrientation(forExifOrientation: cgOrientation)
        let isMirrored = getIsMirrored(forExifOrientation: cgOrientation)
 
@@ -225,11 +268,15 @@ index e845b38..ab8a387 100644
          "path": path.absoluteString,
          "width": width as Any,
          "height": height as Any,
-@@ -72,26 +86,84 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -72,26 +118,113 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
          "isRawPhoto": photo.isRawPhoto,
          "metadata": photo.metadata,
          "thumbnail": photo.embeddedThumbnailPhotoFormat as Any,
 -      ])
+-    } catch let error as CameraError {
+-      promise.reject(error: error)
+-    } catch {
+-      promise.reject(error: .capture(.unknown(message: "An unknown error occured while capturing the photo!")), cause: error as NSError)
 +      ]
 +
 +      if let processedPath {
@@ -244,18 +291,42 @@ index e845b38..ab8a387 100644
 +      } else {
 +        finish(with: .success(result))
 +      }
-     } catch let error as CameraError {
--      promise.reject(error: error)
-+      finish(with: .failure(error))
-     } catch {
--      promise.reject(error: .capture(.unknown(message: "An unknown error occured while capturing the photo!")), cause: error as NSError)
-+      finish(with: .failure(error))
-     }
-   }
-
--  func photoOutput(_: AVCapturePhotoOutput, didFinishCaptureFor _: AVCaptureResolvedPhotoSettings, error: Error?) {
--    defer {
--      removeGlobal()
++  }
++
++  private func makeOrientedThumbnailPixelBuffer(from photo: AVCapturePhoto) -> CVPixelBuffer? {
++    guard let sourcePixelBuffer = photo.pixelBuffer else { return nil }
++
++    // Preserve a orientação física do sensor. O DNG e o thumbnail compartilham
++    // a mesma tag EXIF e o visualizador aplica essa rotação uma única vez.
++    let sourceWidth = CVPixelBufferGetWidth(sourcePixelBuffer)
++    let sourceHeight = CVPixelBufferGetHeight(sourcePixelBuffer)
++    let maxDimension = 1024.0
++    let scale = min(1, maxDimension / Double(max(sourceWidth, sourceHeight)))
++    let targetWidth = max(1, Int((Double(sourceWidth) * scale).rounded()))
++    let targetHeight = max(1, Int((Double(sourceHeight) * scale).rounded()))
++
++    var pixelBuffer: CVPixelBuffer?
++    let attributes: [CFString: Any] = [
++      kCVPixelBufferCGImageCompatibilityKey: true,
++      kCVPixelBufferCGBitmapContextCompatibilityKey: true
++    ]
++    guard CVPixelBufferCreate(
++      kCFAllocatorDefault,
++      targetWidth,
++      targetHeight,
++      kCVPixelFormatType_32BGRA,
++      attributes as CFDictionary,
++      &pixelBuffer
++    ) == kCVReturnSuccess, let pixelBuffer else { return nil }
++
++    let sourceImage = CIImage(cvPixelBuffer: sourcePixelBuffer)
++    let scaledImage = sourceImage.transformed(
++      by: CGAffineTransform(scaleX: scale, y: scale)
++    )
++    CIContext().render(scaledImage, to: pixelBuffer)
++    return pixelBuffer
++  }
++
 +  func photoOutput(_: AVCapturePhotoOutput,
 +                   didFinishProcessingLivePhotoToMovieFileAt _: URL,
 +                   duration _: CMTime,
@@ -265,9 +336,12 @@ index e845b38..ab8a387 100644
 +    if let error = error as NSError? {
 +      finish(with: .failure(error))
      }
-+  }
-+
-+  func photoOutput(_: AVCapturePhotoOutput, didFinishCaptureFor _: AVCaptureResolvedPhotoSettings, error: Error?) {
+   }
+
+   func photoOutput(_: AVCapturePhotoOutput, didFinishCaptureFor _: AVCaptureResolvedPhotoSettings, error: Error?) {
+-    defer {
+-      removeGlobal()
+-    }
      if let error = error as NSError? {
        if error.code == -11807 {
 -        promise.reject(error: .capture(.insufficientStorage), cause: error)
@@ -318,6 +392,36 @@ index e845b38..ab8a387 100644
    }
 
    private func getOrientation(forExifOrientation exifOrientation: CGImagePropertyOrientation) -> String {
+@@ -118,3 +251,29 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+     }
+   }
+ }
++
++private final class RawThumbnailCustomizer: NSObject, AVCapturePhotoFileDataRepresentationCustomizer {
++  private let metadataProvider: MetadataProvider
++  private let pixelBuffer: CVPixelBuffer
++
++  init(metadataProvider: MetadataProvider, pixelBuffer: CVPixelBuffer) {
++    self.metadataProvider = metadataProvider
++    self.pixelBuffer = pixelBuffer
++  }
++
++  func replacementMetadata(for photo: AVCapturePhoto) -> [String: Any]? {
++    metadataProvider.replacementMetadata(for: photo)
++  }
++
++  func replacementEmbeddedThumbnailPixelBuffer(
++    withPhotoFormat replacementEmbeddedThumbnailPhotoFormatOut: AutoreleasingUnsafeMutablePointer<NSDictionary?>,
++    for photo: AVCapturePhoto
++  ) -> Unmanaged<CVPixelBuffer>? {
++    replacementEmbeddedThumbnailPhotoFormatOut.pointee = [
++      AVVideoCodecKey: AVVideoCodecType.jpeg,
++      AVVideoWidthKey: CVPixelBufferGetWidth(pixelBuffer),
++      AVVideoHeightKey: CVPixelBufferGetHeight(pixelBuffer)
++    ] as NSDictionary
++    return Unmanaged.passRetained(pixelBuffer)
++  }
++}
 diff --git a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
 index c569e88..6f3e211 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
@@ -365,6 +469,23 @@ index c569e88..6f3e211 100644
      }
    }
  }
+diff --git a/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift b/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
+index 489d905..855f8fc 100644
+--- a/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
+@@ -30,7 +30,11 @@ enum FileUtils {
+     }
+   }
+
+-  static func writePhotoToFile(photo: AVCapturePhoto, metadataProvider: MetadataProvider, file: URL) throws {
++  static func writePhotoToFile(
++    photo: AVCapturePhoto,
++    metadataProvider: AVCapturePhotoFileDataRepresentationCustomizer,
++    file: URL
++  ) throws {
+     guard let data = photo.fileDataRepresentation(with: metadataProvider) else {
+       throw CameraError.capture(.imageDataAccessError)
+     }
 diff --git a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts b/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
 index 2e4c2f2..5f39c85 100644
 --- a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
