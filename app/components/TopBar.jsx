@@ -134,8 +134,7 @@ export default function TopBar({
     },
     rawCapture: {
       icon: rawMode === "off" ? "aperture-outline" : "aperture",
-      label:
-        rawMode === "proRaw" ? "PRO" : rawMode === "raw" ? "RAW" : "OFF",
+      label: rawMode === "proRaw" ? "PRO" : rawMode === "raw" ? "RAW" : "OFF",
       onPress: toggleRawMode,
       active: rawMode !== "off",
     },

@@ -143,8 +143,7 @@ export default function LUTSelector({
               key={halation.id}
               style={[
                 styles.lutButton,
-                selectedHalationId === halation.id &&
-                  styles.lutButtonSelected,
+                selectedHalationId === halation.id && styles.lutButtonSelected,
               ]}
               onPress={() => onSelectHalation(halation.id)}
             >

@@ -3,12 +3,9 @@ import { StyleSheet } from "react-native";
 export default StyleSheet.create({
   container: {
     position: "absolute",
-    bottom: 0,
+    bottom: -50,
     left: 0,
     right: 0,
-    // backgroundColor: "#1a1a1a",
-    // borderTopLeftRadius: 20,
-    // borderTopRightRadius: 20,
   },
   selectorSection: {
     width: "100%",
@@ -22,6 +19,7 @@ export default StyleSheet.create({
     fontWeight: "600",
     paddingHorizontal: 16,
     marginBottom: 2,
+    display: "none",
   },
   header: {
     padding: 10,

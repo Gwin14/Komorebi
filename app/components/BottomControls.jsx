@@ -216,10 +216,7 @@ export default function BottomControls({
         </View>
 
         <View style={styles.rightControls}>
-          <TouchableOpacity
-            style={styles.flipButton}
-            onPress={onToggleFacing}
-          >
+          <TouchableOpacity style={styles.flipButton} onPress={onToggleFacing}>
             <Reanimated.View style={deviceOrientationStyle}>
               <Ionicons name="camera-reverse-outline" size={28} color="white" />
             </Reanimated.View>

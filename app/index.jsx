@@ -376,6 +376,7 @@ export default function App() {
           exposure={exposure}
           setExposure={setExposure}
           topBarBelow={topBarBelow}
+          activeControl={activeControl}
         />
       )}
 
