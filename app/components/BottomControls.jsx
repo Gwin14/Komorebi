@@ -27,12 +27,15 @@ export default function BottomControls({
   setSelectedLutId,
   selectedGrainId,
   setSelectedGrainId,
+  selectedHalationId,
+  setSelectedHalationId,
   zoomSV,
   minZoom,
   maxZoom,
   onSliderRelease,
   availableLuts,
   availableGrains,
+  availableHalations,
   isProcessing,
   processingQueueLength,
   // 🆕 Props de lentes
@@ -252,9 +255,12 @@ export default function BottomControls({
               onSelectLut={setSelectedLutId}
               selectedGrainId={selectedGrainId}
               onSelectGrain={setSelectedGrainId}
+              selectedHalationId={selectedHalationId}
+              onSelectHalation={setSelectedHalationId}
               visible={true}
               availableLuts={availableLuts}
               availableGrains={availableGrains}
+              availableHalations={availableHalations}
             />
           </View>
         )}

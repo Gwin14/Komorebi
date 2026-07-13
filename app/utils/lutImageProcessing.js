@@ -3,6 +3,7 @@ import { getCachedLUT } from "./lutStore";
 export const applyLUTToImage = async (
   imageUri,
   lutId,
+  halationConfig,
   grainConfig,
   exifData,
 ) => {
@@ -12,7 +13,7 @@ export const applyLUTToImage = async (
     console.warn(`LUT "${lutId}" não encontrado, retornando imagem original`);
   }
 
-  if (!cubeData && !grainConfig) {
+  if (!cubeData && !halationConfig && !grainConfig) {
     return { needsProcessing: false, originalUri: imageUri };
   }
 
@@ -28,6 +29,7 @@ export const applyLUTToImage = async (
       cube: cubeData || null,
       originalUri: imageUri,
       exifData: exifData || null,
+      halationConfig: halationConfig || null,
       grainConfig: grainConfig || null,
     };
   } catch (error) {

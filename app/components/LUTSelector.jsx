@@ -13,9 +13,12 @@ export default function LUTSelector({
   onSelectLut,
   selectedGrainId,
   onSelectGrain,
+  selectedHalationId,
+  onSelectHalation,
   visible,
   availableLuts,
   availableGrains,
+  availableHalations,
 }) {
   const slideAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -88,12 +91,12 @@ export default function LUTSelector({
         </ScrollView>
       </View>
 
-      <View style={styles.selectorSection}>
+      <View style={[styles.selectorSection, styles.compactSection]}>
         <Text style={styles.sectionTitle}>Grão</Text>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={styles.compactScrollContent}
         >
           {availableGrains.map((grain) => (
             <TouchableOpacity
@@ -107,10 +110,11 @@ export default function LUTSelector({
               <View
                 style={[
                   styles.lutPreview,
+                  styles.compactPreview,
                   selectedGrainId === grain.id && styles.lutPreviewSelected,
                 ]}
               >
-                <Text style={styles.lutIcon}>
+                <Text style={[styles.lutIcon, styles.compactIcon]}>
                   {grain.id === "none" ? "○" : "✦"}
                 </Text>
               </View>
@@ -121,6 +125,48 @@ export default function LUTSelector({
                 ]}
               >
                 {grain.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={[styles.selectorSection, styles.compactSection]}>
+        <Text style={styles.sectionTitle}>Halation</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.compactScrollContent}
+        >
+          {availableHalations.map((halation) => (
+            <TouchableOpacity
+              key={halation.id}
+              style={[
+                styles.lutButton,
+                selectedHalationId === halation.id &&
+                  styles.lutButtonSelected,
+              ]}
+              onPress={() => onSelectHalation(halation.id)}
+            >
+              <View
+                style={[
+                  styles.lutPreview,
+                  styles.compactPreview,
+                  selectedHalationId === halation.id &&
+                    styles.lutPreviewSelected,
+                ]}
+              >
+                <Text style={[styles.lutIcon, styles.compactIcon]}>
+                  {halation.id === "none" ? "○" : "◉"}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.lutName,
+                  selectedHalationId === halation.id && styles.lutNameSelected,
+                ]}
+              >
+                {halation.name}
               </Text>
             </TouchableOpacity>
           ))}

@@ -65,6 +65,7 @@ export const takePicture = async ({
   setIsProcessing,
   selectedLutId,
   selectedGrainConfig,
+  selectedHalationConfig,
   lutsLoaded,
   hasMediaPermission,
   setProcessingData,
@@ -109,6 +110,7 @@ export const takePicture = async ({
         saveOriginalWithoutEffects: false,
         aspectRatio,
         cube: null,
+        halationConfig: null,
         grainConfig: null,
       });
       return;
@@ -144,16 +146,19 @@ export const takePicture = async ({
       saveOriginalWithoutEffects: false,
       aspectRatio,
       cube: null,
+      halationConfig: null,
       grainConfig: null,
     };
 
     const hasLut = selectedLutId !== "none" && lutsLoaded;
     const hasGrain = Boolean(selectedGrainConfig);
+    const hasHalation = Boolean(selectedHalationConfig);
 
-    if (hasLut || hasGrain) {
+    if (hasLut || hasGrain || hasHalation) {
       const processingInfo = await applyLUTToImage(
         uri,
         hasLut ? selectedLutId : "none",
+        selectedHalationConfig,
         selectedGrainConfig,
         completeExif,
       );

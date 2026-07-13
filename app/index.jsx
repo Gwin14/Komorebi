@@ -26,8 +26,10 @@ import styles from "./index.styles";
 import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
 import {
   AVAILABLE_GRAINS,
+  AVAILABLE_HALATIONS,
   AVAILABLE_LUTS,
   getGrainConfig,
+  getHalationConfig,
   LUTProcessor,
 } from "./utils/lutProcessor";
 
@@ -62,6 +64,7 @@ export default function App() {
 
   const [selectedLutId, setSelectedLutId] = useState("none");
   const [selectedGrainId, setSelectedGrainId] = useState("none");
+  const [selectedHalationId, setSelectedHalationId] = useState("none");
 
   const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
 
@@ -203,6 +206,7 @@ export default function App() {
       setIsProcessing,
       selectedLutId,
       selectedGrainConfig: getGrainConfig(selectedGrainId),
+      selectedHalationConfig: getHalationConfig(selectedHalationId),
       lutsLoaded,
       hasMediaPermission,
       flash,
@@ -235,6 +239,7 @@ export default function App() {
     rawCapture.rawMode,
     saveOriginalWithoutEffects,
     selectedGrainId,
+    selectedHalationId,
     selectedLutId,
     setIsProcessing,
     verticalMode,
@@ -387,12 +392,15 @@ export default function App() {
         setSelectedLutId={setSelectedLutId}
         selectedGrainId={selectedGrainId}
         setSelectedGrainId={setSelectedGrainId}
+        selectedHalationId={selectedHalationId}
+        setSelectedHalationId={setSelectedHalationId}
         zoomSV={zoomSV}
         minZoom={minZoom}
         maxZoom={maxZoom}
         onSliderRelease={() => toggleMode("none")}
         availableLuts={availableLuts}
         availableGrains={AVAILABLE_GRAINS}
+        availableHalations={AVAILABLE_HALATIONS}
         isProcessing={isProcessing}
         processingQueueLength={processingQueue.length}
         lenses={lenses}

@@ -13,6 +13,9 @@ export default StyleSheet.create({
   selectorSection: {
     width: "100%",
   },
+  compactSection: {
+    marginTop: 2,
+  },
   sectionTitle: {
     color: "#fff",
     fontSize: 13,
@@ -37,6 +40,12 @@ export default StyleSheet.create({
     paddingBottom: 10,
     gap: 8,
   },
+  compactScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 7,
+    gap: 8,
+  },
   lutButton: {
     alignItems: "center",
     marginRight: 8,
@@ -56,9 +65,18 @@ export default StyleSheet.create({
     borderColor: "#ffaa00",
     backgroundColor: "#3a3a3a",
   },
+  compactPreview: {
+    width: 48,
+    height: 24,
+    borderRadius: 12,
+    marginBottom: 3,
+  },
   lutIcon: {
     fontSize: 20,
     color: "#fff",
+  },
+  compactIcon: {
+    fontSize: 14,
   },
   lutName: {
     color: "#aaa",
