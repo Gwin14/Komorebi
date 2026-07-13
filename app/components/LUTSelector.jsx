@@ -11,8 +11,11 @@ import styles from "./LUTSelector.styles";
 export default function LUTSelector({
   selectedLutId,
   onSelectLut,
+  selectedGrainId,
+  onSelectGrain,
   visible,
   availableLuts,
+  availableGrains,
 }) {
   const slideAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -22,7 +25,7 @@ export default function LUTSelector({
       duration: 300,
       useNativeDriver: true,
     }).start();
-  }, [visible]);
+  }, [slideAnim, visible]);
 
   const translateY = slideAnim.interpolate({
     inputRange: [0, 1],
@@ -46,45 +49,83 @@ export default function LUTSelector({
         },
       ]}
     >
-      {/* <View style={styles.header}>
-        <Text style={styles.title}>Escolha um filtro</Text>
-      </View> */}
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {availableLuts.map((lut) => (
-          <TouchableOpacity
-            key={lut.id}
-            style={[
-              styles.lutButton,
-              selectedLutId === lut.id && styles.lutButtonSelected,
-            ]}
-            onPress={() => onSelectLut(lut.id)}
-          >
-            <View
+      <View style={styles.selectorSection}>
+        <Text style={styles.sectionTitle}>Filtro</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {availableLuts.map((lut) => (
+            <TouchableOpacity
+              key={lut.id}
               style={[
-                styles.lutPreview,
-                selectedLutId === lut.id && styles.lutPreviewSelected,
+                styles.lutButton,
+                selectedLutId === lut.id && styles.lutButtonSelected,
               ]}
+              onPress={() => onSelectLut(lut.id)}
             >
-              <Text style={styles.lutIcon}>
-                {lut.id === "none" ? "○" : "●"}
+              <View
+                style={[
+                  styles.lutPreview,
+                  selectedLutId === lut.id && styles.lutPreviewSelected,
+                ]}
+              >
+                <Text style={styles.lutIcon}>
+                  {lut.id === "none" ? "○" : "●"}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.lutName,
+                  selectedLutId === lut.id && styles.lutNameSelected,
+                ]}
+              >
+                {lut.name}
               </Text>
-            </View>
-            <Text
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.selectorSection}>
+        <Text style={styles.sectionTitle}>Grão</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {availableGrains.map((grain) => (
+            <TouchableOpacity
+              key={grain.id}
               style={[
-                styles.lutName,
-                selectedLutId === lut.id && styles.lutNameSelected,
+                styles.lutButton,
+                selectedGrainId === grain.id && styles.lutButtonSelected,
               ]}
+              onPress={() => onSelectGrain(grain.id)}
             >
-              {lut.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+              <View
+                style={[
+                  styles.lutPreview,
+                  selectedGrainId === grain.id && styles.lutPreviewSelected,
+                ]}
+              >
+                <Text style={styles.lutIcon}>
+                  {grain.id === "none" ? "○" : "✦"}
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.lutName,
+                  selectedGrainId === grain.id && styles.lutNameSelected,
+                ]}
+              >
+                {grain.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
     </Animated.View>
   );
 }

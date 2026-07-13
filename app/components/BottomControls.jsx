@@ -25,11 +25,14 @@ export default function BottomControls({
   setExposure,
   selectedLutId,
   setSelectedLutId,
+  selectedGrainId,
+  setSelectedGrainId,
   zoomSV,
   minZoom,
   maxZoom,
   onSliderRelease,
   availableLuts,
+  availableGrains,
   isProcessing,
   processingQueueLength,
   // 🆕 Props de lentes
@@ -247,8 +250,11 @@ export default function BottomControls({
             <LUTSelector
               selectedLutId={selectedLutId}
               onSelectLut={setSelectedLutId}
+              selectedGrainId={selectedGrainId}
+              onSelectGrain={setSelectedGrainId}
               visible={true}
               availableLuts={availableLuts}
+              availableGrains={availableGrains}
             />
           </View>
         )}

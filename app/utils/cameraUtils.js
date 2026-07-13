@@ -64,13 +64,14 @@ export const takePicture = async ({
   isProcessing,
   setIsProcessing,
   selectedLutId,
+  selectedGrainConfig,
   lutsLoaded,
   hasMediaPermission,
   setProcessingData,
   location,
   flash,
   doubleCaptureMode = false,
-  saveOriginalWithLUT = false,
+  saveOriginalWithoutEffects = false,
   aspectRatio = 3 / 4,
   manualSettings = null,
   rawMode = "off",
@@ -105,7 +106,7 @@ export const takePicture = async ({
         imageUri: uri,
         exifData: additionalExif,
         doubleCaptureMode: false,
-        saveOriginalWithLUT: false,
+        saveOriginalWithoutEffects: false,
         aspectRatio,
         cube: null,
         grainConfig: null,
@@ -133,43 +134,43 @@ export const takePicture = async ({
 
     const completeExif = { ...additionalExif, ...manualExif, aspectRatio };
 
-    // Item sem LUT: needsProcessing: false → a fila salva diretamente sem passar pelo WebView
-    // saveOriginalWithLUT é sempre false aqui: sem LUT aplicado não há cópia "sem LUT" para salvar
-    const noLutData = {
+    // Sem efeitos, a fila salva diretamente sem passar pelo WebView.
+    const noEffectsData = {
       needsProcessing: false,
       originalUri: uri,
       imageUri: uri,
       exifData: completeExif,
       doubleCaptureMode,
-      saveOriginalWithLUT: false,
+      saveOriginalWithoutEffects: false,
       aspectRatio,
       cube: null,
       grainConfig: null,
     };
 
-    if (selectedLutId !== "none" && lutsLoaded) {
+    const hasLut = selectedLutId !== "none" && lutsLoaded;
+    const hasGrain = Boolean(selectedGrainConfig);
+
+    if (hasLut || hasGrain) {
       const processingInfo = await applyLUTToImage(
         uri,
-        selectedLutId,
+        hasLut ? selectedLutId : "none",
+        selectedGrainConfig,
         completeExif,
       );
 
       if (processingInfo.needsProcessing) {
-        // Tem LUT → vai pro WebView normalmente
         setProcessingData({
           ...processingInfo,
           doubleCaptureMode,
-          saveOriginalWithLUT,
+          saveOriginalWithoutEffects,
           originalUri: uri,
           aspectRatio,
         });
       } else {
-        // LUT não encontrado no cache → salva direto
-        setProcessingData(noLutData);
+        setProcessingData(noEffectsData);
       }
     } else {
-      // Sem LUT selecionada → salva direto
-      setProcessingData(noLutData);
+      setProcessingData(noEffectsData);
     }
   } catch (error) {
     console.error("Erro ao tirar foto:", error);

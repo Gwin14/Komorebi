@@ -13,7 +13,7 @@ const DEFAULT_SETTINGS = {
   gridVisible: false,
   shutterSound: false,
   location: true,
-  saveOriginalWithLUT: false,
+  saveOriginalWithoutEffects: false,
   firstTime: true,
   customLuts: [],
   topBarBelow: false,
@@ -28,8 +28,8 @@ export const SettingsProvider = ({ children }) => {
     DEFAULT_SETTINGS.shutterSound,
   );
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
-  const [saveOriginalWithLUT, setSaveOriginalWithLUT] = useState(
-    DEFAULT_SETTINGS.saveOriginalWithLUT,
+  const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
+    DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
   const [firstTime, setFirstTime] = useState(DEFAULT_SETTINGS.firstTime);
   const [customLuts, setCustomLuts] = useState(DEFAULT_SETTINGS.customLuts);
@@ -47,7 +47,7 @@ export const SettingsProvider = ({ children }) => {
         setGridVisible(savedSettings.gridVisible);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
-        setSaveOriginalWithLUT(savedSettings.saveOriginalWithLUT);
+        setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
         setTopBarBelow(savedSettings.topBarBelow);
@@ -92,15 +92,15 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [shutterSound, loading]);
 
-  // 💾 Salvar "Salvar original sem LUT"
+  // Preserva a chave legada para manter a preferência dos usuários atuais.
   useEffect(() => {
     if (!loading) {
       saveStoredSetting(
         SETTINGS_STORAGE_KEYS.SAVE_ORIGINAL_WITH_LUT,
-        saveOriginalWithLUT.toString(),
+        saveOriginalWithoutEffects.toString(),
       );
     }
-  }, [saveOriginalWithLUT, loading]);
+  }, [saveOriginalWithoutEffects, loading]);
 
   // 💾 Salvar "Custom LUTs"
   useEffect(() => {
@@ -156,8 +156,8 @@ export const SettingsProvider = ({ children }) => {
     setShutterSound,
     location,
     setLocation,
-    saveOriginalWithLUT,
-    setSaveOriginalWithLUT,
+    saveOriginalWithoutEffects,
+    setSaveOriginalWithoutEffects,
     firstTime,
     setFirstTime,
     customLuts,

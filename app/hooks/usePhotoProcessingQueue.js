@@ -22,7 +22,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
     async (processedUri, item = {}) => {
       const {
         doubleCaptureMode = false,
-        saveOriginalWithLUT: saveOriginalWithoutLUT = false,
+        saveOriginalWithoutEffects = false,
         originalUri,
         aspectRatio = 3 / 4,
       } = item;
@@ -48,7 +48,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
           await saveToAlbum(processedUri);
         }
 
-        if (saveOriginalWithoutLUT && originalUri) {
+        if (saveOriginalWithoutEffects && originalUri) {
           await saveToAlbum(originalUri);
         }
       } catch (error) {

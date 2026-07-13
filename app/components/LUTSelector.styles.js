@@ -10,6 +10,16 @@ export default StyleSheet.create({
     // borderTopLeftRadius: 20,
     // borderTopRightRadius: 20,
   },
+  selectorSection: {
+    width: "100%",
+  },
+  sectionTitle: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+    paddingHorizontal: 16,
+    marginBottom: 2,
+  },
   header: {
     padding: 10,
     // borderBottomWidth: 1,
@@ -22,30 +32,32 @@ export default StyleSheet.create({
     textAlign: "center",
   },
   scrollContent: {
-    padding: 16,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 10,
+    gap: 8,
   },
   lutButton: {
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 8,
   },
   lutPreview: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: "#2a2a2a",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 2,
     borderColor: "#444",
-    marginBottom: 8,
+    marginBottom: 5,
   },
   lutPreviewSelected: {
     borderColor: "#ffaa00",
     backgroundColor: "#3a3a3a",
   },
   lutIcon: {
-    fontSize: 24,
+    fontSize: 20,
     color: "#fff",
   },
   lutName: {
