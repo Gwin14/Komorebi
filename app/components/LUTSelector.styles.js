@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native";
 export default StyleSheet.create({
   container: {
     position: "absolute",
-    bottom: -50,
+    bottom: -40,
     left: 0,
     right: 0,
   },
@@ -11,7 +11,7 @@ export default StyleSheet.create({
     width: "100%",
   },
   compactSection: {
-    marginTop: 2,
+    marginTop: 0,
   },
   sectionTitle: {
     color: "#fff",
@@ -40,14 +40,15 @@ export default StyleSheet.create({
   },
   compactScrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 7,
-    gap: 8,
+    paddingTop: 2,
+    paddingBottom: 4,
+    gap: 4,
   },
-  lutButton: {
+  effectButton: {
     alignItems: "center",
-    marginRight: 8,
+    width: 58,
   },
+  effectButtonSelected: {},
   polaroidButton: {
     padding: 2,
   },
@@ -106,42 +107,73 @@ export default StyleSheet.create({
     color: "#9a5700",
     fontWeight: "800",
   },
-  lutPreview: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#2a2a2a",
+  filmStrip: {
+    width: 54,
+    height: 22,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#444",
-    marginBottom: 5,
+    gap: 2,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+    backgroundColor: "#151515",
+    borderRadius: 3,
+    borderWidth: 1,
+    borderColor: "#303030",
+    marginBottom: 2,
+    overflow: "hidden",
   },
-  lutPreviewSelected: {
-    borderColor: "#ffaa00",
-    backgroundColor: "#3a3a3a",
+  effectPreviewSelected: {
+    borderColor: "rgba(255,170,0,0.65)",
   },
-  compactPreview: {
-    width: 48,
-    height: 24,
-    borderRadius: 12,
-    marginBottom: 3,
+  filmPerforations: {
+    height: "100%",
+    justifyContent: "space-between",
   },
-  lutIcon: {
-    fontSize: 20,
-    color: "#fff",
+  filmPerforation: {
+    width: 3,
+    height: 3,
+    borderRadius: 1,
+    backgroundColor: "#c7bda3",
+    opacity: 0.42,
   },
-  compactIcon: {
-    fontSize: 14,
+  grainSample: {
+    flex: 1,
+    height: "100%",
+    position: "relative",
+    overflow: "hidden",
   },
-  lutName: {
-    color: "#aaa",
-    fontSize: 12,
+  grainDot: {
+    position: "absolute",
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.46)",
+  },
+  halationLens: {
+    width: 54,
+    height: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#08090b",
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#303030",
+    marginBottom: 2,
+    overflow: "hidden",
+  },
+  halationSample: {
+    width: 36,
+    height: 4,
+    borderRadius: 7,
+    opacity: 0.82,
+  },
+  effectName: {
+    color: "#777",
+    fontSize: 9,
     textAlign: "center",
-    maxWidth: 70,
+    maxWidth: 58,
   },
-  lutNameSelected: {
-    color: "#ffaa00",
+  effectNameSelected: {
+    color: "#c8953e",
     fontWeight: "600",
   },
 });
