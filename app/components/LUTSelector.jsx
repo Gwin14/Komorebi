@@ -6,7 +6,39 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import styles from "./LUTSelector.styles";
+
+const LUT_GRADIENTS = {
+  none: ["#d9d9d9", "#858585", "#252525"],
+  filtro1: ["#254d32", "#73a942", "#d8bf45"],
+  filtro2: ["#fff06a", "#f7b32b", "#e76f00"],
+  filtro3: ["#172554", "#4452a3", "#9b72cf"],
+  filtro4: ["#ff4f87", "#db2777", "#7f1d4e"],
+  filtro5: ["#ffcc80", "#e8874a", "#9f4937"],
+  filtro6: ["#172d33", "#3c6970", "#d4945b"],
+  filtro7: ["#40203f", "#773b73", "#c16a9d"],
+  filtro8: ["#fff2a6", "#f5cb42", "#bd7925"],
+};
+
+const CUSTOM_GRADIENTS = [
+  ["#315c72", "#6a8d92", "#e6c79c"],
+  ["#4d194d", "#893168", "#e56b6f"],
+  ["#386641", "#6a994e", "#dda15e"],
+  ["#3d405b", "#81739d", "#f2cc8f"],
+  ["#264653", "#2a9d8f", "#e9c46a"],
+];
+
+const getLutGradient = (lut) => {
+  if (LUT_GRADIENTS[lut.id]) return LUT_GRADIENTS[lut.id];
+
+  const hash = [...lut.name].reduce(
+    (total, character) => total + character.charCodeAt(0),
+    0,
+  );
+
+  return CUSTOM_GRADIENTS[hash % CUSTOM_GRADIENTS.length];
+};
 
 export default function LUTSelector({
   selectedLutId,
@@ -63,29 +95,40 @@ export default function LUTSelector({
             <TouchableOpacity
               key={lut.id}
               style={[
-                styles.lutButton,
-                selectedLutId === lut.id && styles.lutButtonSelected,
+                styles.polaroidButton,
+                selectedLutId === lut.id && styles.polaroidButtonSelected,
               ]}
               onPress={() => onSelectLut(lut.id)}
+              accessibilityRole="button"
+              accessibilityLabel={`Filtro ${lut.name}`}
+              accessibilityState={{ selected: selectedLutId === lut.id }}
             >
               <View
                 style={[
-                  styles.lutPreview,
-                  selectedLutId === lut.id && styles.lutPreviewSelected,
+                  styles.polaroid,
+                  selectedLutId === lut.id && styles.polaroidSelected,
                 ]}
               >
-                <Text style={styles.lutIcon}>
-                  {lut.id === "none" ? "○" : "●"}
-                </Text>
+                <LinearGradient
+                  colors={getLutGradient(lut)}
+                  start={{ x: 0.1, y: 0 }}
+                  end={{ x: 0.9, y: 1 }}
+                  style={styles.polaroidPhoto}
+                >
+                  <View style={styles.polaroidPhotoHighlight} />
+                </LinearGradient>
+                <View style={styles.polaroidCaption}>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.polaroidName,
+                      selectedLutId === lut.id && styles.polaroidNameSelected,
+                    ]}
+                  >
+                    {lut.name}
+                  </Text>
+                </View>
               </View>
-              <Text
-                style={[
-                  styles.lutName,
-                  selectedLutId === lut.id && styles.lutNameSelected,
-                ]}
-              >
-                {lut.name}
-              </Text>
             </TouchableOpacity>
           ))}
         </ScrollView>

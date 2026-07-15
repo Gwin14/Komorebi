@@ -35,7 +35,7 @@ export default StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 16,
     paddingTop: 6,
-    paddingBottom: 10,
+    paddingBottom: 12,
     gap: 8,
   },
   compactScrollContent: {
@@ -47,6 +47,64 @@ export default StyleSheet.create({
   lutButton: {
     alignItems: "center",
     marginRight: 8,
+  },
+  polaroidButton: {
+    padding: 2,
+  },
+  polaroidButtonSelected: {
+    transform: [{ translateY: -2 }],
+  },
+  polaroid: {
+    width: 64,
+    height: 76,
+    paddingTop: 1,
+    paddingHorizontal: 1,
+    paddingBottom: 0,
+    backgroundColor: "#f7f4ec",
+    borderRadius: 2,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.82)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  polaroidSelected: {
+    borderColor: "#ffaa00",
+    shadowColor: "#ffaa00",
+    shadowOpacity: 0.55,
+    shadowRadius: 5,
+    elevation: 7,
+  },
+  polaroidPhoto: {
+    width: "100%",
+    height: 48,
+    overflow: "hidden",
+  },
+  polaroidPhotoHighlight: {
+    width: "72%",
+    height: "120%",
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.09)",
+    transform: [{ rotate: "24deg" }],
+  },
+  polaroidCaption: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  polaroidName: {
+    color: "#25231f",
+    fontSize: 10,
+    fontWeight: "600",
+    textAlign: "center",
+    width: "100%",
+  },
+  polaroidNameSelected: {
+    color: "#9a5700",
+    fontWeight: "800",
   },
   lutPreview: {
     width: 48,
