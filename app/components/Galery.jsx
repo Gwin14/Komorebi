@@ -1,13 +1,13 @@
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
-  FlatList,
   Image,
   Modal,
   Pressable,
   ScrollView,
+  SectionList,
   Text,
   TouchableOpacity,
   View,
@@ -18,8 +18,84 @@ import { MapViewWeb } from "../components/MapViewWeb";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
 import BackButton from "./BackButton";
-import LoadingScreen from "./LoadingScreen";
 import styles from "./Galery.styles";
+import LoadingScreen from "./LoadingScreen";
+
+const PHOTOS_PER_ROW = 4;
+
+const startOfDay = (date) => {
+  const normalizedDate = new Date(date);
+  normalizedDate.setHours(0, 0, 0, 0);
+  return normalizedDate;
+};
+
+const getDateKey = (timestamp) => {
+  const date = new Date(timestamp);
+
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+
+const getSectionTitle = (timestamp) => {
+  const photoDate = startOfDay(timestamp);
+  const today = startOfDay(new Date());
+  const daysAgo = Math.round((today - photoDate) / 86400000);
+
+  if (daysAgo === 0) return "Hoje";
+  if (daysAgo === 1) return "Ontem";
+
+  if (daysAgo > 1 && daysAgo < 7) {
+    const weekday = new Intl.DateTimeFormat("pt-BR", {
+      weekday: "long",
+    }).format(photoDate);
+
+    return weekday.charAt(0).toUpperCase() + weekday.slice(1);
+  }
+
+  const formattedDate = new Intl.DateTimeFormat("pt-BR", {
+    day: "numeric",
+    month: "long",
+  }).format(photoDate);
+
+  return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+};
+
+const groupPhotosByDate = (photos) => {
+  const photosByDate = new Map();
+
+  [...photos]
+    .sort((a, b) => b.creationTime - a.creationTime)
+    .forEach((photo) => {
+      const dateKey = getDateKey(photo.creationTime);
+      const group = photosByDate.get(dateKey);
+
+      if (group) {
+        group.photos.push(photo);
+      } else {
+        photosByDate.set(dateKey, {
+          timestamp: photo.creationTime,
+          photos: [photo],
+        });
+      }
+    });
+
+  return Array.from(photosByDate.values()).map((group) => {
+    const rows = [];
+
+    for (let index = 0; index < group.photos.length; index += PHOTOS_PER_ROW) {
+      rows.push(group.photos.slice(index, index + PHOTOS_PER_ROW));
+    }
+
+    return {
+      title: getSectionTitle(group.timestamp),
+      data: rows,
+    };
+  });
+};
+
+const getKomorebiAlbum = async () => {
+  const albums = await MediaLibrary.getAlbumsAsync();
+  return albums.find((album) => album.title === "Komorebi") || null;
+};
 
 export default function Galery() {
   const [permission, requestPermission] = MediaLibrary.usePermissions();
@@ -31,23 +107,7 @@ export default function Galery() {
   const [exifData, setExifData] = useState(null);
   const router = useRouter();
 
-  useEffect(() => {
-    if (!permission) return;
-
-    if (!permission.granted) {
-      requestPermission();
-      return;
-    }
-
-    loadKomorebiPhotos();
-  }, [permission]);
-
-  const getKomorebiAlbum = async () => {
-    const albums = await MediaLibrary.getAlbumsAsync();
-    return albums.find((album) => album.title === "Komorebi") || null;
-  };
-
-  const loadKomorebiPhotos = async () => {
+  const loadKomorebiPhotos = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -85,7 +145,20 @@ export default function Galery() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!permission) return;
+
+    if (!permission.granted) {
+      requestPermission();
+      return;
+    }
+
+    loadKomorebiPhotos();
+  }, [loadKomorebiPhotos, permission, requestPermission]);
+
+  const photoSections = useMemo(() => groupPhotosByDate(photos), [photos]);
 
   const handleDeletePhoto = async () => {
     if (!selectedAssetId) return;
@@ -108,8 +181,10 @@ export default function Galery() {
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
-        <Text>Permissão para acessar fotos é necessária.</Text>
-        <Pressable onPress={requestPermission}>
+        <Text style={styles.permissionText}>
+          Permissão para acessar fotos é necessária.
+        </Text>
+        <Pressable style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>Permitir acesso</Text>
         </Pressable>
       </View>
@@ -122,31 +197,51 @@ export default function Galery() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <BackButton />
+      <View style={styles.navigationBar}>
+        <BackButton top={8} left={0} />
+        <Text style={styles.title}>Galeria</Text>
+      </View>
 
-      <Text style={styles.title}>Galeria</Text>
-
-      <FlatList
-        data={photos}
-        numColumns={3}
-        keyExtractor={(item) => item.id}
+      <SectionList
+        sections={photoSections}
+        keyExtractor={(row) => row.map((photo) => photo.id).join("-")}
+        stickySectionHeadersEnabled={false}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.photoItem}
-            onPress={() => {
-              setModalVisible(true);
-              setSelectedImage(item.uri);
-              setSelectedAssetId(item.id);
-              exifHandler(item.id, setExifData);
-            }}
-          >
-            <Image source={{ uri: item.uri }} style={styles.image} />
-          </TouchableOpacity>
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+        )}
+        renderItem={({ item: row }) => (
+          <View style={styles.photoRow}>
+            {row.map((photo) => (
+              <TouchableOpacity
+                key={photo.id}
+                activeOpacity={0.82}
+                style={styles.photoItem}
+                onPress={() => {
+                  setExifData(null);
+                  setModalVisible(true);
+                  setSelectedImage(photo.uri);
+                  setSelectedAssetId(photo.id);
+                  exifHandler(photo.id, setExifData);
+                }}
+              >
+                <Image source={{ uri: photo.uri }} style={styles.image} />
+              </TouchableOpacity>
+            ))}
+            {Array.from({ length: PHOTOS_PER_ROW - row.length }).map(
+              (_, index) => (
+                <View key={`empty-${index}`} style={styles.photoPlaceholder} />
+              ),
+            )}
+          </View>
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text>Nenhuma foto encontrada no álbum Komorebi.</Text>
+            <Text style={styles.emptyTitle}>Sua galeria está vazia</Text>
+            <Text style={styles.emptyText}>
+              As fotos feitas com a Komorebi aparecerão aqui.
+            </Text>
           </View>
         }
       />

@@ -34,8 +34,8 @@ export default function Settings() {
     setShutterSound,
     location,
     setLocation,
-    saveOriginalWithLUT,
-    setSaveOriginalWithLUT,
+    saveOriginalWithoutEffects,
+    setSaveOriginalWithoutEffects,
     customLuts,
     setCustomLuts,
     topBarControls,
@@ -181,9 +181,9 @@ export default function Settings() {
           <View style={styles.divider} />
 
           <CustomToggle
-            label="Salvar cópia sem LUT"
-            value={saveOriginalWithLUT}
-            onValueChange={setSaveOriginalWithLUT}
+            label="Salvar cópia sem efeitos"
+            value={saveOriginalWithoutEffects}
+            onValueChange={setSaveOriginalWithoutEffects}
           />
 
           <CustomToggle

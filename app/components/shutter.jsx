@@ -1,14 +1,12 @@
-import * as Haptics from "expo-haptics";
 import { useEffect, useRef } from "react";
 import { Animated, TouchableOpacity } from "react-native";
-import { useSettings } from "../context/SettingsContext";
-import useShutterSound from "../utils/useShutterSound";
 import styles from "./shutter.styles";
 
-export default function Shutter({ takePicture, isProcessing }) {
-  const { shutterSound } = useSettings();
-  const playShutterSound = useShutterSound();
-
+export default function Shutter({
+  takePicture,
+  isProcessing,
+  compact = false,
+}) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
 
@@ -48,7 +46,7 @@ export default function Shutter({ takePicture, isProcessing }) {
       scaleAnim.setValue(1);
       glowAnim.setValue(0);
     }
-  }, [isProcessing]);
+  }, [glowAnim, isProcessing, scaleAnim]);
 
   return (
     <Animated.View
@@ -61,16 +59,13 @@ export default function Shutter({ takePicture, isProcessing }) {
       }}
     >
       <TouchableOpacity
-        style={styles.shutter}
-        onPress={async () => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          if (shutterSound) {
-            await playShutterSound();
-          }
-          await takePicture();
-        }}
+        style={[styles.shutter, compact && styles.compactShutter]}
+        onPress={takePicture}
         disabled={isProcessing}
-      ></TouchableOpacity>
+        accessibilityRole="button"
+        accessibilityLabel={compact ? "Captura rápida" : "Tirar foto"}
+        accessibilityState={{ disabled: isProcessing }}
+      />
     </Animated.View>
   );
 }

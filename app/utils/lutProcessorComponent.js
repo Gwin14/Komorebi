@@ -38,6 +38,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
         const payload = JSON.stringify({
           base64,
           cube: data.cube,
+          halationConfig: data.halationConfig || null,
           grainConfig: data.grainConfig || null,
           aspectRatio: data.aspectRatio,
         });

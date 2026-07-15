@@ -28,6 +28,7 @@ export default function ExposureSlider({
   // essas props: não tem modo automático, sempre mostra o valor numérico.
   isAuto = false,
   onReset,
+  activeControl,
 }) {
   const displayValue = isAuto ? resetValue : exposure;
 
@@ -47,13 +48,16 @@ export default function ExposureSlider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuto]);
 
-  const progressFor = useCallback((v) => {
-    if (maxExposure === minExposure) return 0.5;
-    return Math.min(
-      1,
-      Math.max(0, (v - minExposure) / (maxExposure - minExposure)),
-    );
-  }, [maxExposure, minExposure]);
+  const progressFor = useCallback(
+    (v) => {
+      if (maxExposure === minExposure) return 0.5;
+      return Math.min(
+        1,
+        Math.max(0, (v - minExposure) / (maxExposure - minExposure)),
+      );
+    },
+    [maxExposure, minExposure],
+  );
 
   const valueFor = useCallback(
     (progress) => minExposure + progress * (maxExposure - minExposure),
@@ -155,7 +159,16 @@ export default function ExposureSlider({
       : defaultFormatLabel(exposure, unit);
 
   return (
-    <View style={[styles.container, topBarBelow && { marginVertical: -5 }]}>
+    <View
+      style={[
+        styles.container,
+        topBarBelow && { marginVertical: -5 },
+        activeControl !== "none" && {
+          opacity: 0,
+          pointerEvents: "none", // Desativa a interação quando outro controle está ativo
+        },
+      ]}
+    >
       {/* Texto com o valor atual em cima */}
       {!topBarBelow && <Text style={styles.exposureText}>{label}</Text>}
 

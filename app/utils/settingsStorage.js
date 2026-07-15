@@ -58,9 +58,9 @@ export async function loadStoredSettings(defaults) {
     gridVisible: parseBoolean(savedGridVisible, defaults.gridVisible),
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
-    saveOriginalWithLUT: parseBoolean(
+    saveOriginalWithoutEffects: parseBoolean(
       savedSaveOriginalWithLUT,
-      defaults.saveOriginalWithLUT,
+      defaults.saveOriginalWithoutEffects,
     ),
     firstTime: parseBoolean(savedFirstTime, defaults.firstTime),
     customLuts: parseJSON(savedCustomLuts, defaults.customLuts),

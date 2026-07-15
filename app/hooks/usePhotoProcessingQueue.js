@@ -30,7 +30,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
       const {
         alreadySaved = false,
         doubleCaptureMode = false,
-        saveOriginalWithLUT: saveOriginalWithoutLUT = false,
+        saveOriginalWithoutEffects = false,
         originalUri,
         aspectRatio = 3 / 4,
         captureMode = "standard",
@@ -147,7 +147,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
           mainAssetSaved = true;
         }
 
-        if (saveOriginalWithoutLUT && originalUri) {
+        if (saveOriginalWithoutEffects && originalUri) {
           await saveToAlbum(originalUri);
         }
       } catch (error) {

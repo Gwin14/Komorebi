@@ -530,7 +530,10 @@ private enum PhotoCaptureError: Error {
 
 function writeFileIfChanged(filePath, contents) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  if (fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8") === contents) {
+  if (
+    fs.existsSync(filePath) &&
+    fs.readFileSync(filePath, "utf8") === contents
+  ) {
     return;
   }
   fs.writeFileSync(filePath, contents);
@@ -561,7 +564,14 @@ function updateXcodeProject(projectPath) {
       group.children.push({ value: fileRef, comment });
     }
   };
-  const addFileRef = ({ pathValue, name, lastKnownFileType, explicitFileType, sourceTree = '"<group>"', includeInIndex }) => {
+  const addFileRef = ({
+    pathValue,
+    name,
+    lastKnownFileType,
+    explicitFileType,
+    sourceTree = '"<group>"',
+    includeInIndex,
+  }) => {
     const existing = Object.entries(section("PBXFileReference")).find(
       ([key, value]) =>
         !key.endsWith("_comment") &&
@@ -576,7 +586,8 @@ function updateXcodeProject(projectPath) {
     if (explicitFileType) obj.explicitFileType = explicitFileType;
     if (includeInIndex !== undefined) obj.includeInIndex = includeInIndex;
     section("PBXFileReference")[uuid] = obj;
-    section("PBXFileReference")[`${uuid}_comment`] = name || path.basename(pathValue);
+    section("PBXFileReference")[`${uuid}_comment`] =
+      name || path.basename(pathValue);
     return uuid;
   };
   const addBuildFile = (fileRef, comment, settings) => {
@@ -597,7 +608,8 @@ function updateXcodeProject(projectPath) {
   const getBuildPhase = (targetUuid, isa, comment) => {
     const target = section("PBXNativeTarget")[targetUuid];
     for (const phase of target.buildPhases || []) {
-      if (phase.comment === comment && section(isa)[phase.value]) return phase.value;
+      if (phase.comment === comment && section(isa)[phase.value])
+        return phase.value;
     }
     return null;
   };
@@ -613,16 +625,28 @@ function updateXcodeProject(projectPath) {
       ...extra,
     };
     section(isa)[`${uuid}_comment`] = comment;
-    section("PBXNativeTarget")[targetUuid].buildPhases.push({ value: uuid, comment });
+    section("PBXNativeTarget")[targetUuid].buildPhases.push({
+      value: uuid,
+      comment,
+    });
     return uuid;
   };
-  const addBuildFileToPhase = (phaseUuid, phaseSection, buildFileUuid, comment) => {
+  const addBuildFileToPhase = (
+    phaseUuid,
+    phaseSection,
+    buildFileUuid,
+    comment,
+  ) => {
     const phase = section(phaseSection)[phaseUuid];
     if (!phase.files.some((item) => item.value === buildFileUuid)) {
       phase.files.push({ value: buildFileUuid, comment });
     }
   };
-  const removeDuplicateEmbeddedProducts = (targetUuid, keepPhaseUuid, productRefs) => {
+  const removeDuplicateEmbeddedProducts = (
+    targetUuid,
+    keepPhaseUuid,
+    productRefs,
+  ) => {
     const target = section("PBXNativeTarget")[targetUuid];
     const productRefSet = new Set(productRefs);
 
@@ -642,7 +666,13 @@ function updateXcodeProject(projectPath) {
   const ensureTargetDependency = (targetUuid, dependencyTargetUuid) => {
     const target = section("PBXNativeTarget")[targetUuid];
     const dependencyTarget = section("PBXNativeTarget")[dependencyTargetUuid];
-    if (target.dependencies.some((dependency) => section("PBXTargetDependency")[dependency.value]?.target === dependencyTargetUuid)) {
+    if (
+      target.dependencies.some(
+        (dependency) =>
+          section("PBXTargetDependency")[dependency.value]?.target ===
+          dependencyTargetUuid,
+      )
+    ) {
       return;
     }
     const proxyUuid = project.generateUuid();
@@ -653,7 +683,8 @@ function updateXcodeProject(projectPath) {
       remoteGlobalIDString: dependencyTargetUuid,
       remoteInfo: dependencyTarget.name,
     };
-    section("PBXContainerItemProxy")[`${proxyUuid}_comment`] = "PBXContainerItemProxy";
+    section("PBXContainerItemProxy")[`${proxyUuid}_comment`] =
+      "PBXContainerItemProxy";
 
     const dependencyUuid = project.generateUuid();
     section("PBXTargetDependency")[dependencyUuid] = {
@@ -661,8 +692,12 @@ function updateXcodeProject(projectPath) {
       target: dependencyTargetUuid,
       targetProxy: proxyUuid,
     };
-    section("PBXTargetDependency")[`${dependencyUuid}_comment`] = "PBXTargetDependency";
-    target.dependencies.push({ value: dependencyUuid, comment: "PBXTargetDependency" });
+    section("PBXTargetDependency")[`${dependencyUuid}_comment`] =
+      "PBXTargetDependency";
+    target.dependencies.push({
+      value: dependencyUuid,
+      comment: "PBXTargetDependency",
+    });
   };
   const getTargetUuid = (name) => {
     for (const [key, value] of Object.entries(section("PBXNativeTarget"))) {
@@ -673,7 +708,11 @@ function updateXcodeProject(projectPath) {
   };
   const ensureBuildConfig = (name, buildSettings) => {
     const uuid = project.generateUuid();
-    section("XCBuildConfiguration")[uuid] = { isa: "XCBuildConfiguration", buildSettings, name };
+    section("XCBuildConfiguration")[uuid] = {
+      isa: "XCBuildConfiguration",
+      buildSettings,
+      name,
+    };
     section("XCBuildConfiguration")[`${uuid}_comment`] = name;
     return uuid;
   };
@@ -694,8 +733,12 @@ function updateXcodeProject(projectPath) {
   };
 
   const mainGroup = project.getFirstProject().firstProject.mainGroup;
-  const appGroup = uuidByComment("PBXGroup", "Komorebi", (group) =>
-    Array.isArray(group.children) && group.children.some((child) => child.comment === "AppDelegate.swift"),
+  const appGroup = uuidByComment(
+    "PBXGroup",
+    "Komorebi",
+    (group) =>
+      Array.isArray(group.children) &&
+      group.children.some((child) => child.comment === "AppDelegate.swift"),
   );
   const productsGroup = uuidByComment("PBXGroup", "Products");
   const frameworksGroup = uuidByComment("PBXGroup", "Frameworks");
@@ -725,7 +768,11 @@ function updateXcodeProject(projectPath) {
       GENERATE_INFOPLIST_FILE: "NO",
       INFOPLIST_FILE: `${TARGET_NAME}/Info.plist`,
       IPHONEOS_DEPLOYMENT_TARGET: 18.0,
-      LD_RUNPATH_SEARCH_PATHS: ['"$(inherited)"', '"@executable_path/Frameworks"', '"@executable_path/../../Frameworks"'],
+      LD_RUNPATH_SEARCH_PATHS: [
+        '"$(inherited)"',
+        '"@executable_path/Frameworks"',
+        '"@executable_path/../../Frameworks"',
+      ],
       MARKETING_VERSION: 1.0,
       PRODUCT_BUNDLE_IDENTIFIER: EXTENSION_BUNDLE_ID,
       PRODUCT_NAME: TARGET_NAME,
@@ -747,11 +794,26 @@ function updateXcodeProject(projectPath) {
     const sources = project.generateUuid();
     const frameworks = project.generateUuid();
     const resources = project.generateUuid();
-    section("PBXSourcesBuildPhase")[sources] = { isa: "PBXSourcesBuildPhase", buildActionMask: 2147483647, files: [], runOnlyForDeploymentPostprocessing: 0 };
+    section("PBXSourcesBuildPhase")[sources] = {
+      isa: "PBXSourcesBuildPhase",
+      buildActionMask: 2147483647,
+      files: [],
+      runOnlyForDeploymentPostprocessing: 0,
+    };
     section("PBXSourcesBuildPhase")[`${sources}_comment`] = "Sources";
-    section("PBXFrameworksBuildPhase")[frameworks] = { isa: "PBXFrameworksBuildPhase", buildActionMask: 2147483647, files: [], runOnlyForDeploymentPostprocessing: 0 };
+    section("PBXFrameworksBuildPhase")[frameworks] = {
+      isa: "PBXFrameworksBuildPhase",
+      buildActionMask: 2147483647,
+      files: [],
+      runOnlyForDeploymentPostprocessing: 0,
+    };
     section("PBXFrameworksBuildPhase")[`${frameworks}_comment`] = "Frameworks";
-    section("PBXResourcesBuildPhase")[resources] = { isa: "PBXResourcesBuildPhase", buildActionMask: 2147483647, files: [], runOnlyForDeploymentPostprocessing: 0 };
+    section("PBXResourcesBuildPhase")[resources] = {
+      isa: "PBXResourcesBuildPhase",
+      buildActionMask: 2147483647,
+      files: [],
+      runOnlyForDeploymentPostprocessing: 0,
+    };
     section("PBXResourcesBuildPhase")[`${resources}_comment`] = "Resources";
 
     extensionProductRef = addFileRef({
@@ -780,10 +842,13 @@ function updateXcodeProject(projectPath) {
     section("PBXNativeTarget")[`${extensionTarget}_comment`] = TARGET_NAME;
     const projectObj = project.getFirstProject().firstProject;
     projectObj.targets.push({ value: extensionTarget, comment: TARGET_NAME });
-    projectObj.attributes.TargetAttributes[extensionTarget] = { CreatedOnToolsVersion: 16.0 };
+    projectObj.attributes.TargetAttributes[extensionTarget] = {
+      CreatedOnToolsVersion: 16.0,
+    };
     addChildToGroup(productsGroup, extensionProductRef, `${TARGET_NAME}.appex`);
   } else {
-    extensionProductRef = section("PBXNativeTarget")[extensionTarget].productReference;
+    extensionProductRef =
+      section("PBXNativeTarget")[extensionTarget].productReference;
   }
 
   let extensionGroup = uuidByComment("PBXGroup", TARGET_NAME);
@@ -800,9 +865,20 @@ function updateXcodeProject(projectPath) {
     addChildToGroup(mainGroup, extensionGroup, TARGET_NAME);
   }
 
-  const extensionSourcesPhase = getBuildPhase(extensionTarget, "PBXSourcesBuildPhase", "Sources");
-  for (const file of ["LockedCameraCaptureExtension.swift", "LockedCameraView.swift"]) {
-    const ref = addFileRef({ pathValue: file, name: file, lastKnownFileType: "sourcecode.swift" });
+  const extensionSourcesPhase = getBuildPhase(
+    extensionTarget,
+    "PBXSourcesBuildPhase",
+    "Sources",
+  );
+  for (const file of [
+    "LockedCameraCaptureExtension.swift",
+    "LockedCameraView.swift",
+  ]) {
+    const ref = addFileRef({
+      pathValue: file,
+      name: file,
+      lastKnownFileType: "sourcecode.swift",
+    });
     addChildToGroup(extensionGroup, ref, file);
     addBuildFileToPhase(
       extensionSourcesPhase,
@@ -814,19 +890,34 @@ function updateXcodeProject(projectPath) {
   addBuildFileToPhase(
     extensionSourcesPhase,
     "PBXSourcesBuildPhase",
-    addBuildFile(intentRef, `CameraCaptureIntent.swift in ${TARGET_NAME} Sources`),
+    addBuildFile(
+      intentRef,
+      `CameraCaptureIntent.swift in ${TARGET_NAME} Sources`,
+    ),
     `CameraCaptureIntent.swift in ${TARGET_NAME} Sources`,
   );
   for (const file of ["Info.plist", `${TARGET_NAME}.entitlements`]) {
     const ref = addFileRef({
       pathValue: file,
       name: file,
-      lastKnownFileType: file.endsWith(".plist") ? "text.plist.xml" : "text.plist.entitlements",
+      lastKnownFileType: file.endsWith(".plist")
+        ? "text.plist.xml"
+        : "text.plist.entitlements",
     });
     addChildToGroup(extensionGroup, ref, file);
   }
-  const extensionFrameworksPhase = getBuildPhase(extensionTarget, "PBXFrameworksBuildPhase", "Frameworks");
-  for (const framework of ["AVFoundation.framework", "AVKit.framework", "ExtensionKit.framework", "LockedCameraCapture.framework", "SwiftUI.framework"]) {
+  const extensionFrameworksPhase = getBuildPhase(
+    extensionTarget,
+    "PBXFrameworksBuildPhase",
+    "Frameworks",
+  );
+  for (const framework of [
+    "AVFoundation.framework",
+    "AVKit.framework",
+    "ExtensionKit.framework",
+    "LockedCameraCapture.framework",
+    "SwiftUI.framework",
+  ]) {
     const ref = addFileRef({
       pathValue: `System/Library/Frameworks/${framework}`,
       name: framework,
@@ -854,7 +945,11 @@ function updateXcodeProject(projectPath) {
       GENERATE_INFOPLIST_FILE: "NO",
       INFOPLIST_FILE: `${WIDGET_TARGET_NAME}/Info.plist`,
       IPHONEOS_DEPLOYMENT_TARGET: 18.0,
-      LD_RUNPATH_SEARCH_PATHS: ['"$(inherited)"', '"@executable_path/Frameworks"', '"@executable_path/../../Frameworks"'],
+      LD_RUNPATH_SEARCH_PATHS: [
+        '"$(inherited)"',
+        '"@executable_path/Frameworks"',
+        '"@executable_path/../../Frameworks"',
+      ],
       MARKETING_VERSION: 1.0,
       PRODUCT_BUNDLE_IDENTIFIER: WIDGET_BUNDLE_ID,
       PRODUCT_NAME: WIDGET_TARGET_NAME,
@@ -878,11 +973,26 @@ function updateXcodeProject(projectPath) {
     const sources = project.generateUuid();
     const frameworks = project.generateUuid();
     const resources = project.generateUuid();
-    section("PBXSourcesBuildPhase")[sources] = { isa: "PBXSourcesBuildPhase", buildActionMask: 2147483647, files: [], runOnlyForDeploymentPostprocessing: 0 };
+    section("PBXSourcesBuildPhase")[sources] = {
+      isa: "PBXSourcesBuildPhase",
+      buildActionMask: 2147483647,
+      files: [],
+      runOnlyForDeploymentPostprocessing: 0,
+    };
     section("PBXSourcesBuildPhase")[`${sources}_comment`] = "Sources";
-    section("PBXFrameworksBuildPhase")[frameworks] = { isa: "PBXFrameworksBuildPhase", buildActionMask: 2147483647, files: [], runOnlyForDeploymentPostprocessing: 0 };
+    section("PBXFrameworksBuildPhase")[frameworks] = {
+      isa: "PBXFrameworksBuildPhase",
+      buildActionMask: 2147483647,
+      files: [],
+      runOnlyForDeploymentPostprocessing: 0,
+    };
     section("PBXFrameworksBuildPhase")[`${frameworks}_comment`] = "Frameworks";
-    section("PBXResourcesBuildPhase")[resources] = { isa: "PBXResourcesBuildPhase", buildActionMask: 2147483647, files: [], runOnlyForDeploymentPostprocessing: 0 };
+    section("PBXResourcesBuildPhase")[resources] = {
+      isa: "PBXResourcesBuildPhase",
+      buildActionMask: 2147483647,
+      files: [],
+      runOnlyForDeploymentPostprocessing: 0,
+    };
     section("PBXResourcesBuildPhase")[`${resources}_comment`] = "Resources";
 
     widgetProductRef = addFileRef({
@@ -910,11 +1020,21 @@ function updateXcodeProject(projectPath) {
     };
     section("PBXNativeTarget")[`${widgetTarget}_comment`] = WIDGET_TARGET_NAME;
     const projectObj = project.getFirstProject().firstProject;
-    projectObj.targets.push({ value: widgetTarget, comment: WIDGET_TARGET_NAME });
-    projectObj.attributes.TargetAttributes[widgetTarget] = { CreatedOnToolsVersion: 16.0 };
-    addChildToGroup(productsGroup, widgetProductRef, `${WIDGET_TARGET_NAME}.appex`);
+    projectObj.targets.push({
+      value: widgetTarget,
+      comment: WIDGET_TARGET_NAME,
+    });
+    projectObj.attributes.TargetAttributes[widgetTarget] = {
+      CreatedOnToolsVersion: 16.0,
+    };
+    addChildToGroup(
+      productsGroup,
+      widgetProductRef,
+      `${WIDGET_TARGET_NAME}.appex`,
+    );
   } else {
-    widgetProductRef = section("PBXNativeTarget")[widgetTarget].productReference;
+    widgetProductRef =
+      section("PBXNativeTarget")[widgetTarget].productReference;
   }
 
   let widgetGroup = uuidByComment("PBXGroup", WIDGET_TARGET_NAME);
@@ -931,7 +1051,11 @@ function updateXcodeProject(projectPath) {
     addChildToGroup(mainGroup, widgetGroup, WIDGET_TARGET_NAME);
   }
 
-  const widgetSourcesPhase = getBuildPhase(widgetTarget, "PBXSourcesBuildPhase", "Sources");
+  const widgetSourcesPhase = getBuildPhase(
+    widgetTarget,
+    "PBXSourcesBuildPhase",
+    "Sources",
+  );
   const widgetSwiftRef = addFileRef({
     pathValue: `${WIDGET_TARGET_NAME}.swift`,
     name: `${WIDGET_TARGET_NAME}.swift`,
@@ -947,19 +1071,32 @@ function updateXcodeProject(projectPath) {
   addBuildFileToPhase(
     widgetSourcesPhase,
     "PBXSourcesBuildPhase",
-    addBuildFile(intentRef, `CameraCaptureIntent.swift in ${WIDGET_TARGET_NAME} Sources`),
+    addBuildFile(
+      intentRef,
+      `CameraCaptureIntent.swift in ${WIDGET_TARGET_NAME} Sources`,
+    ),
     `CameraCaptureIntent.swift in ${WIDGET_TARGET_NAME} Sources`,
   );
   for (const file of ["Info.plist", `${WIDGET_TARGET_NAME}.entitlements`]) {
     const ref = addFileRef({
       pathValue: file,
       name: file,
-      lastKnownFileType: file.endsWith(".plist") ? "text.plist.xml" : "text.plist.entitlements",
+      lastKnownFileType: file.endsWith(".plist")
+        ? "text.plist.xml"
+        : "text.plist.entitlements",
     });
     addChildToGroup(widgetGroup, ref, file);
   }
-  const widgetFrameworksPhase = getBuildPhase(widgetTarget, "PBXFrameworksBuildPhase", "Frameworks");
-  for (const framework of ["AppIntents.framework", "SwiftUI.framework", "WidgetKit.framework"]) {
+  const widgetFrameworksPhase = getBuildPhase(
+    widgetTarget,
+    "PBXFrameworksBuildPhase",
+    "Frameworks",
+  );
+  for (const framework of [
+    "AppIntents.framework",
+    "SwiftUI.framework",
+    "WidgetKit.framework",
+  ]) {
     const ref = addFileRef({
       pathValue: `System/Library/Frameworks/${framework}`,
       name: framework,
@@ -975,27 +1112,43 @@ function updateXcodeProject(projectPath) {
     );
   }
 
-  const embedPhase = ensureBuildPhase(mainTarget, "PBXCopyFilesBuildPhase", "Embed App Extensions", {
-    dstPath: '""',
-    dstSubfolderSpec: 13,
-  });
+  const embedPhase = ensureBuildPhase(
+    mainTarget,
+    "PBXCopyFilesBuildPhase",
+    "Embed App Extensions",
+    {
+      dstPath: '""',
+      dstSubfolderSpec: 13,
+    },
+  );
   addBuildFileToPhase(
     embedPhase,
     "PBXCopyFilesBuildPhase",
-    addBuildFile(extensionProductRef, `${TARGET_NAME}.appex in Embed App Extensions`, {
-      ATTRIBUTES: ["RemoveHeadersOnCopy"],
-    }),
+    addBuildFile(
+      extensionProductRef,
+      `${TARGET_NAME}.appex in Embed App Extensions`,
+      {
+        ATTRIBUTES: ["RemoveHeadersOnCopy"],
+      },
+    ),
     `${TARGET_NAME}.appex in Embed App Extensions`,
   );
   addBuildFileToPhase(
     embedPhase,
     "PBXCopyFilesBuildPhase",
-    addBuildFile(widgetProductRef, `${WIDGET_TARGET_NAME}.appex in Embed App Extensions`, {
-      ATTRIBUTES: ["RemoveHeadersOnCopy"],
-    }),
+    addBuildFile(
+      widgetProductRef,
+      `${WIDGET_TARGET_NAME}.appex in Embed App Extensions`,
+      {
+        ATTRIBUTES: ["RemoveHeadersOnCopy"],
+      },
+    ),
     `${WIDGET_TARGET_NAME}.appex in Embed App Extensions`,
   );
-  removeDuplicateEmbeddedProducts(mainTarget, embedPhase, [extensionProductRef, widgetProductRef]);
+  removeDuplicateEmbeddedProducts(mainTarget, embedPhase, [
+    extensionProductRef,
+    widgetProductRef,
+  ]);
   ensureTargetDependency(mainTarget, extensionTarget);
   ensureTargetDependency(mainTarget, widgetTarget);
 
@@ -1014,15 +1167,45 @@ module.exports = function withLockedCameraCapture(config) {
     "ios",
     (cfg) => {
       const iosRoot = cfg.modRequest.platformProjectRoot;
-      writeFileIfChanged(path.join(iosRoot, "Komorebi", "CameraCaptureIntent.swift"), CAMERA_INTENT_SWIFT);
-      writeFileIfChanged(path.join(iosRoot, TARGET_NAME, "Info.plist"), EXTENSION_INFO_PLIST);
-      writeFileIfChanged(path.join(iosRoot, TARGET_NAME, `${TARGET_NAME}.entitlements`), EMPTY_ENTITLEMENTS);
-      writeFileIfChanged(path.join(iosRoot, TARGET_NAME, `${TARGET_NAME}.swift`), EXTENSION_MAIN_SWIFT);
-      writeFileIfChanged(path.join(iosRoot, TARGET_NAME, "LockedCameraView.swift"), LOCKED_CAMERA_VIEW_SWIFT);
-      writeFileIfChanged(path.join(iosRoot, WIDGET_TARGET_NAME, "Info.plist"), WIDGET_INFO_PLIST);
-      writeFileIfChanged(path.join(iosRoot, WIDGET_TARGET_NAME, `${WIDGET_TARGET_NAME}.entitlements`), EMPTY_ENTITLEMENTS);
-      writeFileIfChanged(path.join(iosRoot, WIDGET_TARGET_NAME, `${WIDGET_TARGET_NAME}.swift`), WIDGET_SWIFT);
-      updateXcodeProject(path.join(iosRoot, "Komorebi.xcodeproj", "project.pbxproj"));
+      writeFileIfChanged(
+        path.join(iosRoot, "Komorebi", "CameraCaptureIntent.swift"),
+        CAMERA_INTENT_SWIFT,
+      );
+      writeFileIfChanged(
+        path.join(iosRoot, TARGET_NAME, "Info.plist"),
+        EXTENSION_INFO_PLIST,
+      );
+      writeFileIfChanged(
+        path.join(iosRoot, TARGET_NAME, `${TARGET_NAME}.entitlements`),
+        EMPTY_ENTITLEMENTS,
+      );
+      writeFileIfChanged(
+        path.join(iosRoot, TARGET_NAME, `${TARGET_NAME}.swift`),
+        EXTENSION_MAIN_SWIFT,
+      );
+      writeFileIfChanged(
+        path.join(iosRoot, TARGET_NAME, "LockedCameraView.swift"),
+        LOCKED_CAMERA_VIEW_SWIFT,
+      );
+      writeFileIfChanged(
+        path.join(iosRoot, WIDGET_TARGET_NAME, "Info.plist"),
+        WIDGET_INFO_PLIST,
+      );
+      writeFileIfChanged(
+        path.join(
+          iosRoot,
+          WIDGET_TARGET_NAME,
+          `${WIDGET_TARGET_NAME}.entitlements`,
+        ),
+        EMPTY_ENTITLEMENTS,
+      );
+      writeFileIfChanged(
+        path.join(iosRoot, WIDGET_TARGET_NAME, `${WIDGET_TARGET_NAME}.swift`),
+        WIDGET_SWIFT,
+      );
+      updateXcodeProject(
+        path.join(iosRoot, "Komorebi.xcodeproj", "project.pbxproj"),
+      );
       return cfg;
     },
   ]);

@@ -188,7 +188,10 @@ export default function CameraPreview({
     transitionOpacity.setValue(1);
     cameraScale.setValue(1.012);
 
-    transitionFallbackTimeout.current = setTimeout(finishCameraTransition, 1100);
+    transitionFallbackTimeout.current = setTimeout(
+      finishCameraTransition,
+      1100,
+    );
 
     return () => {
       if (transitionFallbackTimeout.current) {

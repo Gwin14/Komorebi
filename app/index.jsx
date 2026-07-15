@@ -27,7 +27,14 @@ import useVolumeShutter from "./hooks/useVolumeShutter";
 import { usePhysicalCameraDevices } from "./hooks/uselensselector";
 import styles from "./index.styles";
 import { onCameraReady, saveToAlbum, takePicture } from "./utils/cameraUtils";
-import { AVAILABLE_LUTS, LUTProcessor } from "./utils/lutProcessor";
+import {
+  AVAILABLE_GRAINS,
+  AVAILABLE_HALATIONS,
+  AVAILABLE_LUTS,
+  getGrainConfig,
+  getHalationConfig,
+  LUTProcessor,
+} from "./utils/lutProcessor";
 
 export default function App() {
   const {
@@ -36,7 +43,7 @@ export default function App() {
     location,
     firstTime,
     loading,
-    saveOriginalWithLUT,
+    saveOriginalWithoutEffects,
     customLuts,
     topBarControls,
     topBarBelow,
@@ -59,6 +66,8 @@ export default function App() {
   const [activeControl, setActiveControl] = useState("none");
 
   const [selectedLutId, setSelectedLutId] = useState("none");
+  const [selectedGrainId, setSelectedGrainId] = useState("none");
+  const [selectedHalationId, setSelectedHalationId] = useState("none");
 
   const [smileDetectionEnabled, setSmileDetectionEnabled] = useState(false);
 
@@ -215,13 +224,15 @@ export default function App() {
       setIsProcessing,
       selectedLutId,
       selectedLut: availableLuts.find((lut) => lut.id === selectedLutId),
+      selectedGrainConfig: getGrainConfig(selectedGrainId),
+      selectedHalationConfig: getHalationConfig(selectedHalationId),
       lutsLoaded,
       hasMediaPermission,
       flash,
       setProcessingData: enqueueProcessing,
       location,
       doubleCaptureMode,
-      saveOriginalWithLUT,
+      saveOriginalWithoutEffects,
       aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
       manualSettings,
       rawMode: rawCapture.rawMode,
@@ -252,7 +263,9 @@ export default function App() {
     livePhoto.enabled,
     portraitCapture.enabled,
     rawCapture.rawMode,
-    saveOriginalWithLUT,
+    saveOriginalWithoutEffects,
+    selectedGrainId,
+    selectedHalationId,
     selectedLutId,
     setIsProcessing,
     verticalMode,
@@ -458,6 +471,7 @@ export default function App() {
           exposure={exposure}
           setExposure={setExposure}
           topBarBelow={topBarBelow}
+          activeControl={activeControl}
         />
       )}
 
@@ -472,11 +486,17 @@ export default function App() {
         setExposure={setExposure}
         selectedLutId={selectedLutId}
         setSelectedLutId={setSelectedLutId}
+        selectedGrainId={selectedGrainId}
+        setSelectedGrainId={setSelectedGrainId}
+        selectedHalationId={selectedHalationId}
+        setSelectedHalationId={setSelectedHalationId}
         zoomSV={zoomSV}
         minZoom={minZoom}
         maxZoom={maxZoom}
         onSliderRelease={() => toggleMode("none")}
         availableLuts={availableLuts}
+        availableGrains={AVAILABLE_GRAINS}
+        availableHalations={AVAILABLE_HALATIONS}
         isProcessing={isProcessing}
         processingQueueLength={processingQueue.length}
         lenses={lenses}

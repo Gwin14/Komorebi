@@ -7,7 +7,9 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Animated, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
+import { useSettings } from "../context/SettingsContext";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
+import useShutterSound from "../utils/useShutterSound";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
@@ -25,11 +27,17 @@ export default function BottomControls({
   setExposure,
   selectedLutId,
   setSelectedLutId,
+  selectedGrainId,
+  setSelectedGrainId,
+  selectedHalationId,
+  setSelectedHalationId,
   zoomSV,
   minZoom,
   maxZoom,
   onSliderRelease,
   availableLuts,
+  availableGrains,
+  availableHalations,
   isProcessing,
   processingQueueLength,
   // 🆕 Props de lentes
@@ -39,11 +47,21 @@ export default function BottomControls({
   galleryRefreshKey,
 }) {
   const router = useRouter();
+  const { shutterSound } = useSettings();
+  const playShutterSound = useShutterSound();
   const deviceOrientationStyle = useDeviceOrientation();
   const [lastPhotoUri, setLastPhotoUri] = useState(null);
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const isBusy = isProcessing || processingQueueLength > 0;
+
+  const handleShutterPress = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (shutterSound) {
+      await playShutterSound();
+    }
+    await takePicture();
+  };
 
   useEffect(() => {
     loadLastPhoto();
@@ -206,14 +224,14 @@ export default function BottomControls({
               : "none"
           }
         >
-          <Shutter takePicture={takePicture} isProcessing={isProcessing} />
+          <Shutter
+            takePicture={handleShutterPress}
+            isProcessing={isProcessing}
+          />
         </View>
 
         <View style={styles.rightControls}>
-          <TouchableOpacity
-            style={styles.flipButton}
-            onPress={onToggleFacing}
-          >
+          <TouchableOpacity style={styles.flipButton} onPress={onToggleFacing}>
             <Reanimated.View style={deviceOrientationStyle}>
               <Ionicons name="camera-reverse-outline" size={28} color="white" />
             </Reanimated.View>
@@ -247,8 +265,16 @@ export default function BottomControls({
             <LUTSelector
               selectedLutId={selectedLutId}
               onSelectLut={setSelectedLutId}
+              selectedGrainId={selectedGrainId}
+              onSelectGrain={setSelectedGrainId}
+              selectedHalationId={selectedHalationId}
+              onSelectHalation={setSelectedHalationId}
               visible={true}
               availableLuts={availableLuts}
+              availableGrains={availableGrains}
+              availableHalations={availableHalations}
+              takePicture={handleShutterPress}
+              isProcessing={isProcessing}
             />
           </View>
         )}

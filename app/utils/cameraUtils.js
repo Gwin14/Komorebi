@@ -70,10 +70,12 @@ const buildPhotoProcessingData = async ({
   uri,
   selectedLutId,
   selectedLut,
+  selectedGrainConfig,
+  selectedHalationConfig,
   lutsLoaded,
   exifData,
   doubleCaptureMode,
-  saveOriginalWithLUT,
+  saveOriginalWithoutEffects,
   aspectRatio,
   captureMode = "standard",
   manualSettings = null,
@@ -83,6 +85,7 @@ const buildPhotoProcessingData = async ({
   const komorebiMetadata = buildKomorebiExifMetadata({
     selectedLut,
     selectedLutId,
+    grainConfig: selectedGrainConfig,
     aspectRatio,
     doubleCaptureMode,
     captureMode,
@@ -96,21 +99,28 @@ const buildPhotoProcessingData = async ({
     imageUri: croppedUri,
     exifData: baseExifData,
     doubleCaptureMode,
-    saveOriginalWithLUT: false,
+    saveOriginalWithoutEffects: false,
     aspectRatio,
     captureMode,
     cube: null,
+    halationConfig: null,
     grainConfig: null,
   };
 
-  if (selectedLutId === "none" || !lutsLoaded) {
+  const hasLut = selectedLutId !== "none" && lutsLoaded;
+  const hasGrain = Boolean(selectedGrainConfig);
+  const hasHalation = Boolean(selectedHalationConfig);
+
+  if (!hasLut && !hasGrain && !hasHalation) {
     return noLutData;
   }
 
   const processingInfo = await applyLUTToImage(
     croppedUri,
-    selectedLutId,
-    exifData,
+    hasLut ? selectedLutId : "none",
+    selectedHalationConfig,
+    selectedGrainConfig,
+    baseExifData,
   );
 
   if (!processingInfo.needsProcessing) {
@@ -122,7 +132,7 @@ const buildPhotoProcessingData = async ({
     komorebiMetadata: buildKomorebiExifMetadata({
       selectedLut,
       selectedLutId,
-      grainConfig: processingInfo.grainConfig,
+      grainConfig: selectedGrainConfig,
       aspectRatio,
       doubleCaptureMode,
       captureMode,
@@ -135,7 +145,7 @@ const buildPhotoProcessingData = async ({
     ...processingInfo,
     exifData: lutExifData,
     doubleCaptureMode,
-    saveOriginalWithLUT,
+    saveOriginalWithoutEffects,
     originalUri: uri,
     aspectRatio,
     captureMode,
@@ -149,13 +159,15 @@ export const takePicture = async ({
   setIsProcessing,
   selectedLutId,
   selectedLut = null,
+  selectedGrainConfig,
+  selectedHalationConfig,
   lutsLoaded,
   hasMediaPermission,
   setProcessingData,
   location,
   flash,
   doubleCaptureMode = false,
-  saveOriginalWithLUT = false,
+  saveOriginalWithoutEffects = false,
   aspectRatio = 3 / 4,
   manualSettings = null,
   rawMode = "off",
@@ -209,10 +221,12 @@ export const takePicture = async ({
           uri,
           selectedLutId,
           selectedLut,
+          selectedGrainConfig,
+          selectedHalationConfig,
           lutsLoaded,
           exifData: { ...additionalExif, aspectRatio },
           doubleCaptureMode,
-          saveOriginalWithLUT,
+          saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "live",
           extraData: {
@@ -250,10 +264,12 @@ export const takePicture = async ({
           uri,
           selectedLutId,
           selectedLut,
+          selectedGrainConfig,
+          selectedHalationConfig,
           lutsLoaded,
           exifData: { ...additionalExif, aspectRatio },
           doubleCaptureMode,
-          saveOriginalWithLUT,
+          saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "portrait",
           extraData: {
@@ -311,11 +327,12 @@ export const takePicture = async ({
             captureMode: "raw",
           }),
         },
-        doubleCaptureMode,
-        saveOriginalWithLUT: false,
+        doubleCaptureMode: false,
+        saveOriginalWithoutEffects: false,
         aspectRatio,
         captureMode: "raw",
         cube: null,
+        halationConfig: null,
         grainConfig: null,
       });
       return;
@@ -346,10 +363,12 @@ export const takePicture = async ({
         uri,
         selectedLutId,
         selectedLut,
+        selectedGrainConfig,
+        selectedHalationConfig,
         lutsLoaded,
         exifData: completeExif,
         doubleCaptureMode,
-        saveOriginalWithLUT,
+        saveOriginalWithoutEffects,
         aspectRatio,
         captureMode: "standard",
         manualSettings,

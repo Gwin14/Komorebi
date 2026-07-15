@@ -3,6 +3,7 @@ export const generateProcessingHTML = (
   cube,
   grainConfig,
   aspectRatio = 3 / 4,
+  halationConfig = null,
 ) => {
   return `
 <!DOCTYPE html>
@@ -178,6 +179,49 @@ export const generateProcessingHTML = (
         ctx.putImageData(imageData, 0, 0);
       }
 
+      // --- HALATION ---
+      if (${JSON.stringify(halationConfig ? true : false)}) {
+        const hc = ${JSON.stringify(halationConfig)};
+        const maskScale = 0.5;
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = Math.max(1, Math.round(canvas.width * maskScale));
+        maskCanvas.height = Math.max(1, Math.round(canvas.height * maskScale));
+        const maskCtx = maskCanvas.getContext('2d');
+        const maskImage = maskCtx.createImageData(maskCanvas.width, maskCanvas.height);
+        const maskData = maskImage.data;
+        const sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+        for (let y = 0; y < maskCanvas.height; y++) {
+          for (let x = 0; x < maskCanvas.width; x++) {
+            const sourceX = Math.min(canvas.width - 1, Math.round(x / maskScale));
+            const sourceY = Math.min(canvas.height - 1, Math.round(y / maskScale));
+            const sourceIndex = (sourceY * canvas.width + sourceX) * 4;
+            const luma = (
+              0.2126 * sourceData[sourceIndex] +
+              0.7152 * sourceData[sourceIndex + 1] +
+              0.0722 * sourceData[sourceIndex + 2]
+            ) / 255;
+            const edge0 = Math.max(0, hc.threshold - hc.softness);
+            const normalized = Math.max(0, Math.min(1, (luma - edge0) / Math.max(0.001, hc.softness)));
+            const highlightMask = normalized * normalized * (3 - 2 * normalized);
+            const maskIndex = (y * maskCanvas.width + x) * 4;
+            maskData[maskIndex] = Math.round(255 * hc.red);
+            maskData[maskIndex + 1] = Math.round(255 * hc.green);
+            maskData[maskIndex + 2] = Math.round(255 * hc.blue);
+            maskData[maskIndex + 3] = Math.round(255 * highlightMask);
+          }
+        }
+
+        maskCtx.putImageData(maskImage, 0, 0);
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = hc.intensity;
+        ctx.filter = 'blur(' + hc.radius + 'px)';
+        ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      }
+      // --- FIM HALATION ---
+
       // --- GRAIN ---
       if (${JSON.stringify(grainConfig ? true : false)}) {
         const gc = ${JSON.stringify(grainConfig)};
@@ -308,7 +352,7 @@ export const generateRuntimeHTML = () => `
       return lerp(c0, c1, bFrac);
     };
 
-    function processImage({ base64, cube, grainConfig }) {
+    function processImage({ base64, cube, halationConfig, grainConfig }) {
       const img = new Image();
       img.onerror = () => {
         window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: 'Erro ao carregar imagem' }));
@@ -346,6 +390,43 @@ export const generateRuntimeHTML = () => `
             data[i+2] = Math.round(clamp(fc.b) * 255);
           }
           ctx.putImageData(imageData, 0, 0);
+        }
+
+        if (halationConfig) {
+          const hc = halationConfig;
+          const maskScale = 0.5;
+          const maskCanvas = document.createElement('canvas');
+          maskCanvas.width = Math.max(1, Math.round(canvas.width * maskScale));
+          maskCanvas.height = Math.max(1, Math.round(canvas.height * maskScale));
+          const maskCtx = maskCanvas.getContext('2d');
+          const maskImage = maskCtx.createImageData(maskCanvas.width, maskCanvas.height);
+          const maskData = maskImage.data;
+          const sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+          for (let y = 0; y < maskCanvas.height; y++) {
+            for (let x = 0; x < maskCanvas.width; x++) {
+              const sourceX = Math.min(canvas.width - 1, Math.round(x / maskScale));
+              const sourceY = Math.min(canvas.height - 1, Math.round(y / maskScale));
+              const sourceIndex = (sourceY * canvas.width + sourceX) * 4;
+              const luma = (0.2126 * sourceData[sourceIndex] + 0.7152 * sourceData[sourceIndex + 1] + 0.0722 * sourceData[sourceIndex + 2]) / 255;
+              const edge0 = Math.max(0, hc.threshold - hc.softness);
+              const normalized = Math.max(0, Math.min(1, (luma - edge0) / Math.max(0.001, hc.softness)));
+              const highlightMask = normalized * normalized * (3 - 2 * normalized);
+              const maskIndex = (y * maskCanvas.width + x) * 4;
+              maskData[maskIndex] = Math.round(255 * hc.red);
+              maskData[maskIndex + 1] = Math.round(255 * hc.green);
+              maskData[maskIndex + 2] = Math.round(255 * hc.blue);
+              maskData[maskIndex + 3] = Math.round(255 * highlightMask);
+            }
+          }
+
+          maskCtx.putImageData(maskImage, 0, 0);
+          ctx.save();
+          ctx.globalCompositeOperation = 'screen';
+          ctx.globalAlpha = hc.intensity;
+          ctx.filter = 'blur(' + hc.radius + 'px)';
+          ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
         }
 
         if (grainConfig) {
