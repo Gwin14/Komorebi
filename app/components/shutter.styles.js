@@ -16,4 +16,15 @@ export default StyleSheet.create({
     alignSelf: "center",
     marginHorizontal: 20,
   },
+  compactShutter: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 2,
+    marginHorizontal: 0,
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 5,
+    transform: [{ translateX: -35 }, { translateY: 0 }],
+  },
 });

@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native";
 export default StyleSheet.create({
   container: {
     position: "absolute",
-    bottom: -40,
+    bottom: -30,
     left: 0,
     right: 0,
   },
@@ -11,7 +11,22 @@ export default StyleSheet.create({
     width: "100%",
   },
   compactSection: {
-    marginTop: 0,
+    marginTop: 10,
+  },
+  effectsArea: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  effectsColumn: {
+    flex: 1,
+    minWidth: 0,
+  },
+  quickShutterSlot: {
+    width: 64,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingRight: 12,
   },
   sectionTitle: {
     color: "#fff",

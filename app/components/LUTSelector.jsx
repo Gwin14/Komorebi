@@ -7,6 +7,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import Shutter from "./shutter";
 import styles from "./LUTSelector.styles";
 
 const LUT_GRADIENTS = {
@@ -86,6 +87,8 @@ export default function LUTSelector({
   availableLuts,
   availableGrains,
   availableHalations,
+  takePicture,
+  isProcessing,
 }) {
   const slideAnim = React.useRef(new Animated.Value(0)).current;
 
@@ -169,129 +172,148 @@ export default function LUTSelector({
         </ScrollView>
       </View>
 
-      <View style={[styles.selectorSection, styles.compactSection]}>
-        <Text style={styles.sectionTitle}>Grão</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.compactScrollContent}
-        >
-          {availableGrains.map((grain) => (
-            <TouchableOpacity
-              key={grain.id}
-              style={[
-                styles.effectButton,
-                selectedGrainId === grain.id && styles.effectButtonSelected,
-              ]}
-              onPress={() => onSelectGrain(grain.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Grão ${grain.name}`}
-              accessibilityState={{ selected: selectedGrainId === grain.id }}
+      <View style={styles.effectsArea}>
+        <View style={styles.effectsColumn}>
+          <View style={[styles.selectorSection, styles.compactSection]}>
+            <Text style={styles.sectionTitle}>Grão</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.compactScrollContent}
             >
-              <View
-                style={[
-                  styles.filmStrip,
-                  selectedGrainId === grain.id && styles.effectPreviewSelected,
-                ]}
-              >
-                <View style={styles.filmPerforations}>
-                  {[0, 1, 2].map((hole) => (
-                    <View key={hole} style={styles.filmPerforation} />
-                  ))}
-                </View>
-                <LinearGradient
-                  colors={["#b8b5ab", "#5e5c58", "#242424"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.grainSample}
+              {availableGrains.map((grain) => (
+                <TouchableOpacity
+                  key={grain.id}
+                  style={[
+                    styles.effectButton,
+                    selectedGrainId === grain.id &&
+                      styles.effectButtonSelected,
+                  ]}
+                  onPress={() => onSelectGrain(grain.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Grão ${grain.name}`}
+                  accessibilityState={{
+                    selected: selectedGrainId === grain.id,
+                  }}
                 >
-                  {GRAIN_DOTS.slice(0, GRAIN_DOT_COUNTS[grain.id] || 0).map(
-                    (dot, index) => (
-                      <View
-                        key={index}
-                        style={[
-                          styles.grainDot,
-                          {
-                            left: dot.left,
-                            top: dot.top,
-                            width: dot.size,
-                            height: dot.size,
-                          },
-                        ]}
-                      />
-                    ),
-                  )}
-                </LinearGradient>
-                <View style={styles.filmPerforations}>
-                  {[0, 1, 2].map((hole) => (
-                    <View key={hole} style={styles.filmPerforation} />
-                  ))}
-                </View>
-              </View>
-              <Text
-                style={[
-                  styles.effectName,
-                  selectedGrainId === grain.id && styles.effectNameSelected,
-                ]}
-              >
-                {grain.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
+                  <View
+                    style={[
+                      styles.filmStrip,
+                      selectedGrainId === grain.id &&
+                        styles.effectPreviewSelected,
+                    ]}
+                  >
+                    <View style={styles.filmPerforations}>
+                      {[0, 1, 2].map((hole) => (
+                        <View key={hole} style={styles.filmPerforation} />
+                      ))}
+                    </View>
+                    <LinearGradient
+                      colors={["#b8b5ab", "#5e5c58", "#242424"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.grainSample}
+                    >
+                      {GRAIN_DOTS.slice(
+                        0,
+                        GRAIN_DOT_COUNTS[grain.id] || 0,
+                      ).map((dot, index) => (
+                        <View
+                          key={index}
+                          style={[
+                            styles.grainDot,
+                            {
+                              left: dot.left,
+                              top: dot.top,
+                              width: dot.size,
+                              height: dot.size,
+                            },
+                          ]}
+                        />
+                      ))}
+                    </LinearGradient>
+                    <View style={styles.filmPerforations}>
+                      {[0, 1, 2].map((hole) => (
+                        <View key={hole} style={styles.filmPerforation} />
+                      ))}
+                    </View>
+                  </View>
+                  <Text
+                    style={[
+                      styles.effectName,
+                      selectedGrainId === grain.id &&
+                        styles.effectNameSelected,
+                    ]}
+                  >
+                    {grain.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
 
-      <View style={[styles.selectorSection, styles.compactSection]}>
-        <Text style={styles.sectionTitle}>Halation</Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.compactScrollContent}
-        >
-          {availableHalations.map((halation) => (
-            <TouchableOpacity
-              key={halation.id}
-              style={[
-                styles.effectButton,
-                selectedHalationId === halation.id &&
-                  styles.effectButtonSelected,
-              ]}
-              onPress={() => onSelectHalation(halation.id)}
-              accessibilityRole="button"
-              accessibilityLabel={`Halation ${halation.name}`}
-              accessibilityState={{
-                selected: selectedHalationId === halation.id,
-              }}
+          <View style={[styles.selectorSection, styles.compactSection]}>
+            <Text style={styles.sectionTitle}>Halation</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.compactScrollContent}
             >
-              <View
-                style={[
-                  styles.halationLens,
-                  selectedHalationId === halation.id &&
-                    styles.effectPreviewSelected,
-                ]}
-              >
-                <LinearGradient
-                  colors={
-                    HALATION_PREVIEWS[halation.id] || HALATION_PREVIEWS.none
-                  }
-                  locations={[0, 0.42, 1]}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                  style={styles.halationSample}
-                />
-              </View>
-              <Text
-                style={[
-                  styles.effectName,
-                  selectedHalationId === halation.id &&
-                    styles.effectNameSelected,
-                ]}
-              >
-                {halation.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+              {availableHalations.map((halation) => (
+                <TouchableOpacity
+                  key={halation.id}
+                  style={[
+                    styles.effectButton,
+                    selectedHalationId === halation.id &&
+                      styles.effectButtonSelected,
+                  ]}
+                  onPress={() => onSelectHalation(halation.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Halation ${halation.name}`}
+                  accessibilityState={{
+                    selected: selectedHalationId === halation.id,
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.halationLens,
+                      selectedHalationId === halation.id &&
+                        styles.effectPreviewSelected,
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={
+                        HALATION_PREVIEWS[halation.id] ||
+                        HALATION_PREVIEWS.none
+                      }
+                      locations={[0, 0.42, 1]}
+                      start={{ x: 0, y: 0.5 }}
+                      end={{ x: 1, y: 0.5 }}
+                      style={styles.halationSample}
+                    />
+                  </View>
+                  <Text
+                    style={[
+                      styles.effectName,
+                      selectedHalationId === halation.id &&
+                        styles.effectNameSelected,
+                    ]}
+                  >
+                    {halation.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+
+        <View style={styles.quickShutterSlot}>
+          <Shutter
+            takePicture={takePicture}
+            isProcessing={isProcessing}
+            compact
+          />
+        </View>
       </View>
     </Animated.View>
   );
