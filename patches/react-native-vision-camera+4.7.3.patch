@@ -1,18 +1,21 @@
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
-index ecd2a94..7a8f877 100644
+index ecd2a94..0d17b37 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
-@@ -89,6 +89,9 @@ extension CameraSession {
+@@ -89,6 +89,12 @@ extension CameraSession {
        if photoOutput.isPortraitEffectsMatteDeliverySupported {
          photoOutput.isPortraitEffectsMatteDeliveryEnabled = photo.enablePortraitEffectsMatte
        }
++      if photoOutput.isLivePhotoCaptureSupported {
++        photoOutput.isLivePhotoCaptureEnabled = true
++      }
 +      if #available(iOS 14.3, *), photoOutput.isAppleProRAWSupported {
 +        photoOutput.isAppleProRAWEnabled = true
 +      }
        photoOutput.isMirrored = configuration.isMirrored
        // TODO: Enable isResponsiveCaptureEnabled? (iOS 17+)
        // TODO: Enable isFastCapturePrioritizationEnabled? (iOS 17+)
-@@ -240,6 +243,16 @@ extension CameraSession {
+@@ -240,6 +246,16 @@ extension CameraSession {
      } else {
        photoOutput.isHighResolutionCaptureEnabled = true
      }
@@ -27,15 +30,15 @@ index ecd2a94..7a8f877 100644
 +      VisionLogger.log(level: .info, message: "Photo RAW support: rawFormats=\(photoOutput.availableRawPhotoPixelFormatTypes), rawFileTypes=\(photoOutput.availableRawPhotoFileTypes)")
 +    }
    }
- 
+
    // pragma MARK: Side-Props
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-index 12f5c07..a88037f 100644
+index 12f5c07..f359ed0 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-@@ -39,7 +39,34 @@ extension CameraSession {
+@@ -39,7 +39,32 @@ extension CameraSession {
        VisionLogger.log(level: .info, message: "Capturing photo...")
- 
+
        // Create photo settings
 -      let photoSettings = AVCapturePhotoSettings()
 +      let photoSettings: AVCapturePhotoSettings
@@ -54,25 +57,61 @@ index 12f5c07..a88037f 100644
 +                                               rawFileType: .dng,
 +                                               processedFormat: processedFormat,
 +                                               processedFileType: AVFileType("public.jpeg"))
-+        if #available(iOS 12.0, *),
-+           photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.contains(.jpeg) {
-+          let dimensions = CMVideoFormatDescriptionGetDimensions(videoDeviceInput.device.activeFormat.formatDescription)
++        if photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.contains(.jpeg) {
 +          photoSettings.rawEmbeddedThumbnailPhotoFormat = [
 +            AVVideoCodecKey: AVVideoCodecType.jpeg,
-+            AVVideoWidthKey: Int(dimensions.width),
-+            AVVideoHeightKey: Int(dimensions.height)
++            AVVideoWidthKey: 1024,
++            AVVideoHeightKey: 1024
 +          ]
 +        }
 +      } else {
 +        photoSettings = AVCapturePhotoSettings()
 +      }
- 
+
        // set photo resolution
        if #available(iOS 16.0, *) {
-@@ -91,4 +118,40 @@ extension CameraSession {
-       photoOutput.setPreparedPhotoSettingsArray([photoSettings], completionHandler: nil)
-     }
-   }
+@@ -50,8 +75,24 @@ extension CameraSession {
+
+       // depth data
+       photoSettings.isDepthDataDeliveryEnabled = photoOutput.isDepthDataDeliveryEnabled
++      photoSettings.embedsDepthDataInPhoto = photoOutput.isDepthDataDeliveryEnabled
+       if #available(iOS 12.0, *) {
+         photoSettings.isPortraitEffectsMatteDeliveryEnabled = photoOutput.isPortraitEffectsMatteDeliveryEnabled
++        photoSettings.embedsPortraitEffectsMatteInPhoto = photoOutput.isPortraitEffectsMatteDeliveryEnabled
++      }
++
++      // Live Photo paired movie
++      if options.livePhoto {
++        guard options.rawMode == "off" else {
++          promise.reject(error: .capture(.unknown(message: "Live Photo capture cannot be combined with RAW capture.")))
++          return
++        }
++        guard photoOutput.isLivePhotoCaptureSupported,
++              let livePhotoMoviePath = options.livePhotoMoviePath else {
++          promise.reject(error: .capture(.unknown(message: "Live Photo capture is not supported by this camera configuration.")))
++          return
++        }
++        photoSettings.livePhotoMovieFileURL = livePhotoMoviePath
+       }
+
+       // quality prioritization
+@@ -84,11 +125,52 @@ extension CameraSession {
+                                                       enableShutterSound: options.enableShutterSound,
+                                                       metadataProvider: self.metadataProvider,
+                                                       path: options.path,
++                                                      processedPath: options.processedPath,
++                                                      livePhotoMoviePath: options.livePhotoMoviePath,
+                                                       cameraSessionDelegate: self.delegate)
+       photoOutput.capturePhoto(with: photoSettings, delegate: photoCaptureDelegate)
+
+       // Assume that `takePhoto` is always called with the same parameters, so prepare the next call too.
+-      photoOutput.setPreparedPhotoSettingsArray([photoSettings], completionHandler: nil)
++      // Live Photos need a fresh movie file URL for every capture, so don't reuse those settings.
++      if !options.livePhoto {
++        photoOutput.setPreparedPhotoSettingsArray([photoSettings], completionHandler: nil)
++      }
++    }
++  }
 +
 +  private func getRawPixelFormat(for rawMode: String, availableFormats: [OSType]) -> OSType? {
 +    guard !availableFormats.isEmpty else {
@@ -85,7 +124,7 @@ index 12f5c07..a88037f 100644
 +      }
 +
 +      return availableFormats.first(where: { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) })
-+    }
+     }
 +
 +    return rawMode == "raw" ? availableFormats.first : nil
 +  }
@@ -108,7 +147,7 @@ index 12f5c07..a88037f 100644
 +    }
 +
 +    return "\(rawMode) capture is not supported by this camera configuration."
-+  }
+   }
  }
 diff --git a/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift b/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift
 index 4d8bc38..09b528b 100644
@@ -124,39 +163,294 @@ index 4d8bc38..09b528b 100644
        "supportsFocus": isFocusPointOfInterestSupported,
        "hardwareLevel": HardwareLevel.full.jsValue,
 diff --git a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
-index e845b38..03ab85e 100644
+index e845b38..f15ae14 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
-@@ -42,6 +42,10 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -7,6 +7,7 @@
+ //
+
+ import AVFoundation
++import CoreImage
+
+ // MARK: - PhotoCaptureDelegate
+
+@@ -16,16 +17,27 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+   private let cameraSessionDelegate: CameraSessionDelegate?
+   private let metadataProvider: MetadataProvider
+   private let path: URL
++  private let processedPath: URL?
++  private let livePhotoMoviePath: URL?
++  private var livePhotoResult: [String: Any]?
++  private var rawPhotoResult: [String: Any]?
++  private var pendingRawPhoto: AVCapturePhoto?
++  private var rawThumbnailPixelBuffer: CVPixelBuffer?
++  private var didFinish = false
+
+   required init(promise: Promise,
+                 enableShutterSound: Bool,
+                 metadataProvider: MetadataProvider,
+                 path: URL,
++                processedPath: URL? = nil,
++                livePhotoMoviePath: URL? = nil,
+                 cameraSessionDelegate: CameraSessionDelegate?) {
+     self.promise = promise
+     self.enableShutterSound = enableShutterSound
+     self.metadataProvider = metadataProvider
+     self.path = path
++    self.processedPath = processedPath
++    self.livePhotoMoviePath = livePhotoMoviePath
+     self.cameraSessionDelegate = cameraSessionDelegate
+     super.init()
+     makeGlobal()
+@@ -42,17 +54,51 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
    }
- 
+
    func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-+    if path.pathExtension.lowercased() == "dng" && !photo.isRawPhoto {
+-    defer {
+-      removeGlobal()
+-    }
+     if let error = error as NSError? {
+-      promise.reject(error: .capture(.unknown(message: error.description)), cause: error)
++      finish(with: .failure(error))
+       return
+     }
+
+     do {
++      if path.pathExtension.lowercased() == "dng" && !photo.isRawPhoto {
++        guard let processedPath else { return }
++        try FileUtils.writePhotoToFile(photo: photo,
++                                       metadataProvider: metadataProvider,
++                                       file: processedPath)
++        rawThumbnailPixelBuffer = makeOrientedThumbnailPixelBuffer(from: photo)
++        if let pendingRawPhoto {
++          self.pendingRawPhoto = nil
++          try writeCapturedPhoto(pendingRawPhoto)
++        }
++        return
++      }
++
++      if photo.isRawPhoto, processedPath != nil, rawThumbnailPixelBuffer == nil {
++        pendingRawPhoto = photo
++        return
++      }
++
++      try writeCapturedPhoto(photo)
++    } catch let error as CameraError {
++      finish(with: .failure(error))
++    } catch {
++      finish(with: .failure(error))
++    }
++  }
++
++  private func writeCapturedPhoto(_ photo: AVCapturePhoto) throws {
++      let customizer: AVCapturePhotoFileDataRepresentationCustomizer
++      if photo.isRawPhoto, let rawThumbnailPixelBuffer {
++        customizer = RawThumbnailCustomizer(
++          metadataProvider: metadataProvider,
++          pixelBuffer: rawThumbnailPixelBuffer
++        )
++      } else {
++        customizer = metadataProvider
++      }
++
+       try FileUtils.writePhotoToFile(photo: photo,
+-                                     metadataProvider: metadataProvider,
++                                     metadataProvider: customizer,
+                                      file: path)
+
+       let exif = photo.metadata["{Exif}"] as? [String: Any]
+@@ -63,7 +109,7 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+       let orientation = getOrientation(forExifOrientation: cgOrientation)
+       let isMirrored = getIsMirrored(forExifOrientation: cgOrientation)
+
+-      promise.resolve([
++      var result: [String: Any] = [
+         "path": path.absoluteString,
+         "width": width as Any,
+         "height": height as Any,
+@@ -72,26 +118,113 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+         "isRawPhoto": photo.isRawPhoto,
+         "metadata": photo.metadata,
+         "thumbnail": photo.embeddedThumbnailPhotoFormat as Any,
+-      ])
+-    } catch let error as CameraError {
+-      promise.reject(error: error)
+-    } catch {
+-      promise.reject(error: .capture(.unknown(message: "An unknown error occured while capturing the photo!")), cause: error as NSError)
++      ]
++
++      if let processedPath {
++        result["processedPath"] = processedPath.absoluteString
++      }
++
++      if let livePhotoMoviePath {
++        result["livePhotoMoviePath"] = livePhotoMoviePath.absoluteString
++        livePhotoResult = result
++      } else if processedPath != nil {
++        rawPhotoResult = result
++      } else {
++        finish(with: .success(result))
++      }
++  }
++
++  private func makeOrientedThumbnailPixelBuffer(from photo: AVCapturePhoto) -> CVPixelBuffer? {
++    guard let sourcePixelBuffer = photo.pixelBuffer else { return nil }
++
++    // Preserve a orientação física do sensor. O DNG e o thumbnail compartilham
++    // a mesma tag EXIF e o visualizador aplica essa rotação uma única vez.
++    let sourceWidth = CVPixelBufferGetWidth(sourcePixelBuffer)
++    let sourceHeight = CVPixelBufferGetHeight(sourcePixelBuffer)
++    let maxDimension = 1024.0
++    let scale = min(1, maxDimension / Double(max(sourceWidth, sourceHeight)))
++    let targetWidth = max(1, Int((Double(sourceWidth) * scale).rounded()))
++    let targetHeight = max(1, Int((Double(sourceHeight) * scale).rounded()))
++
++    var pixelBuffer: CVPixelBuffer?
++    let attributes: [CFString: Any] = [
++      kCVPixelBufferCGImageCompatibilityKey: true,
++      kCVPixelBufferCGBitmapContextCompatibilityKey: true
++    ]
++    guard CVPixelBufferCreate(
++      kCFAllocatorDefault,
++      targetWidth,
++      targetHeight,
++      kCVPixelFormatType_32BGRA,
++      attributes as CFDictionary,
++      &pixelBuffer
++    ) == kCVReturnSuccess, let pixelBuffer else { return nil }
++
++    let sourceImage = CIImage(cvPixelBuffer: sourcePixelBuffer)
++    let scaledImage = sourceImage.transformed(
++      by: CGAffineTransform(scaleX: scale, y: scale)
++    )
++    CIContext().render(scaledImage, to: pixelBuffer)
++    return pixelBuffer
++  }
++
++  func photoOutput(_: AVCapturePhotoOutput,
++                   didFinishProcessingLivePhotoToMovieFileAt _: URL,
++                   duration _: CMTime,
++                   photoDisplayTime _: CMTime,
++                   resolvedSettings _: AVCaptureResolvedPhotoSettings,
++                   error: Error?) {
++    if let error = error as NSError? {
++      finish(with: .failure(error))
+     }
+   }
+
+   func photoOutput(_: AVCapturePhotoOutput, didFinishCaptureFor _: AVCaptureResolvedPhotoSettings, error: Error?) {
+-    defer {
+-      removeGlobal()
+-    }
+     if let error = error as NSError? {
+       if error.code == -11807 {
+-        promise.reject(error: .capture(.insufficientStorage), cause: error)
++        finish(with: .failure(CameraError.capture(.insufficientStorage)))
+       } else {
+-        promise.reject(error: .capture(.unknown(message: error.description)), cause: error)
++        finish(with: .failure(error))
+       }
+       return
+     }
++
++    if let rawPhotoResult {
++      finish(with: .success(rawPhotoResult))
 +      return
 +    }
 +
-     defer {
-       removeGlobal()
++    guard let livePhotoMoviePath else {
++      return
++    }
++
++    guard FileManager.default.fileExists(atPath: livePhotoMoviePath.path),
++          let livePhotoResult else {
++      finish(with: .failure(CameraError.capture(.unknown(message: "Live Photo movie file was not created."))))
++      return
++    }
++
++    finish(with: .success(livePhotoResult))
++  }
++
++  private func finish(with result: Result<[String: Any], Error>) {
++    guard !didFinish else {
++      return
++    }
++
++    didFinish = true
++    removeGlobal()
++
++    switch result {
++    case .success(let value):
++      promise.resolve(value)
++    case .failure(let error as CameraError):
++      promise.reject(error: error)
++    case .failure(let error as NSError):
++      promise.reject(error: .capture(.unknown(message: error.description)), cause: error)
++    case .failure(let error):
++      promise.reject(error: .capture(.unknown(message: error.localizedDescription)), cause: error as NSError)
++    }
+   }
+
+   private func getOrientation(forExifOrientation exifOrientation: CGImagePropertyOrientation) -> String {
+@@ -118,3 +251,29 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
      }
+   }
+ }
++
++private final class RawThumbnailCustomizer: NSObject, AVCapturePhotoFileDataRepresentationCustomizer {
++  private let metadataProvider: MetadataProvider
++  private let pixelBuffer: CVPixelBuffer
++
++  init(metadataProvider: MetadataProvider, pixelBuffer: CVPixelBuffer) {
++    self.metadataProvider = metadataProvider
++    self.pixelBuffer = pixelBuffer
++  }
++
++  func replacementMetadata(for photo: AVCapturePhoto) -> [String: Any]? {
++    metadataProvider.replacementMetadata(for: photo)
++  }
++
++  func replacementEmbeddedThumbnailPixelBuffer(
++    withPhotoFormat replacementEmbeddedThumbnailPhotoFormatOut: AutoreleasingUnsafeMutablePointer<NSDictionary?>,
++    for photo: AVCapturePhoto
++  ) -> Unmanaged<CVPixelBuffer>? {
++    replacementEmbeddedThumbnailPhotoFormatOut.pointee = [
++      AVVideoCodecKey: AVVideoCodecType.jpeg,
++      AVVideoWidthKey: CVPixelBufferGetWidth(pixelBuffer),
++      AVVideoHeightKey: CVPixelBufferGetHeight(pixelBuffer)
++    ] as NSDictionary
++    return Unmanaged.passRetained(pixelBuffer)
++  }
++}
 diff --git a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
-index c569e88..4e10f92 100644
+index c569e88..6f3e211 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
-@@ -14,6 +14,7 @@ struct TakePhotoOptions {
+@@ -11,9 +11,13 @@ import Foundation
+ struct TakePhotoOptions {
+   var flash: Flash = .off
+   var path: URL
++  var processedPath: URL?
    var enableAutoRedEyeReduction = false
    var enableAutoDistortionCorrection = false
    var enableShutterSound = true
 +  var rawMode = "off"
- 
++  var livePhoto = false
++  var livePhotoMoviePath: URL?
+
    init(fromJSValue dictionary: NSDictionary) throws {
      // Flash
-@@ -32,11 +33,16 @@ struct TakePhotoOptions {
+@@ -32,11 +36,26 @@ struct TakePhotoOptions {
      if let enable = dictionary["enableShutterSound"] as? Bool {
        enableShutterSound = enable
      }
 +    // RAW capture mode: "off", "raw" (Bayer RAW) or "proRaw" (Apple ProRAW)
 +    if let mode = dictionary["rawMode"] as? String {
 +      rawMode = mode
++    }
++    // Live Photo capture
++    if let enable = dictionary["livePhoto"] as? Bool {
++      livePhoto = enable
 +    }
      // Custom Path
 +    let fileExtension = rawMode == "off" ? "jpg" : "dng"
@@ -166,6 +460,113 @@ index c569e88..4e10f92 100644
      } else {
 -      path = try FileUtils.getFilePath(fileExtension: "jpg")
 +      path = try FileUtils.getFilePath(fileExtension: fileExtension)
++    }
++    if rawMode != "off" {
++      processedPath = try FileUtils.getFilePath(fileExtension: "jpg")
++    }
++    if livePhoto {
++      livePhotoMoviePath = try FileUtils.getFilePath(fileExtension: "mov")
      }
    }
  }
+diff --git a/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift b/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
+index 489d905..855f8fc 100644
+--- a/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
+@@ -30,7 +30,11 @@ enum FileUtils {
+     }
+   }
+
+-  static func writePhotoToFile(photo: AVCapturePhoto, metadataProvider: MetadataProvider, file: URL) throws {
++  static func writePhotoToFile(
++    photo: AVCapturePhoto,
++    metadataProvider: AVCapturePhotoFileDataRepresentationCustomizer,
++    file: URL
++  ) throws {
+     guard let data = photo.fileDataRepresentation(with: metadataProvider) else {
+       throw CameraError.capture(.imageDataAccessError)
+     }
+diff --git a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts b/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
+index 2e4c2f2..5f39c85 100644
+--- a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
++++ b/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
+@@ -37,6 +37,13 @@ export interface TakePhotoOptions {
+      * @default true
+      */
+     enableShutterSound?: boolean;
++    /**
++     * Whether to capture a Live Photo paired video alongside this photo.
++     *
++     * @platform iOS
++     * @default false
++     */
++    livePhoto?: boolean;
+ }
+ /**
+  * Represents a Photo taken by the Camera written to the local filesystem.
+@@ -56,6 +63,8 @@ export interface PhotoFile extends TemporaryFile {
+      * Whether this photo is in RAW format or not.
+      */
+     isRawPhoto: boolean;
++    /** Processed JPEG captured alongside a RAW/DNG photo. (iOS only) */
++    processedPath?: string;
+     /**
+      * Display orientation of the photo, relative to the Camera's sensor orientation.
+      *
+@@ -67,6 +76,12 @@ export interface PhotoFile extends TemporaryFile {
+      */
+     isMirrored: boolean;
+     thumbnail?: Record<string, unknown>;
++    /**
++     * The paired movie path when this photo was captured as a Live Photo.
++     *
++     * @platform iOS
++     */
++    livePhotoMoviePath?: string;
+     /**
+      * Metadata information describing the captured image. (iOS only)
+      *
+diff --git a/node_modules/react-native-vision-camera/src/types/PhotoFile.ts b/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
+index 85098d6..04872ba 100644
+--- a/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
++++ b/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
+@@ -38,6 +38,13 @@ export interface TakePhotoOptions {
+    * @default true
+    */
+   enableShutterSound?: boolean
++  /**
++   * Whether to capture a Live Photo paired video alongside this photo.
++   *
++   * @platform iOS
++   * @default false
++   */
++  livePhoto?: boolean
+ }
+
+ /**
+@@ -58,6 +65,12 @@ export interface PhotoFile extends TemporaryFile {
+    * Whether this photo is in RAW format or not.
+    */
+   isRawPhoto: boolean
++  /**
++   * Processed JPEG captured alongside a RAW/DNG photo.
++   *
++   * @platform iOS
++   */
++  processedPath?: string
+   /**
+    * Display orientation of the photo, relative to the Camera's sensor orientation.
+    *
+@@ -69,6 +82,12 @@ export interface PhotoFile extends TemporaryFile {
+    */
+   isMirrored: boolean
+   thumbnail?: Record<string, unknown>
++  /**
++   * The paired movie path when this photo was captured as a Live Photo.
++   *
++   * @platform iOS
++   */
++  livePhotoMoviePath?: string
+   /**
+    * Metadata information describing the captured image. (iOS only)
+    *

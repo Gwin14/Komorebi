@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
+import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
@@ -28,6 +29,13 @@ export default function TopBar({
   rawCaptureAvailable,
   rawMode,
   toggleRawMode,
+  livePhotoAvailable,
+  livePhotoEnabled,
+  toggleLivePhotoEnabled,
+  portraitCaptureAvailable,
+  portraitModeEnabled,
+  togglePortraitModeEnabled,
+  unavailableReasons = {},
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -139,16 +147,34 @@ export default function TopBar({
       onPress: toggleRawMode,
       active: rawMode !== "off",
     },
+    livePhoto: {
+      icon: livePhotoEnabled ? "radio-button-on" : "radio-button-on-outline",
+      symbol: livePhotoEnabled ? "livephoto" : "livephoto.slash",
+      onPress: toggleLivePhotoEnabled,
+      active: livePhotoEnabled,
+    },
+    portrait: {
+      icon: portraitModeEnabled ? "person" : "person-outline",
+      symbol: portraitModeEnabled ? "f.cursive.circle.fill" : "f.cursive.circle",
+      onPress: togglePortraitModeEnabled,
+      active: portraitModeEnabled,
+    },
   };
 
   return (
     <View style={styles.buttonsContainer}>
       {topBarControls.map((controlId) => {
         if (controlId === "manual" && !manualControlsAvailable) return null;
-        if (controlId === "rawCapture" && !rawCaptureAvailable) return null;
-
         const control = controlOptions[controlId];
         if (!control) return null;
+
+        const disabled =
+          (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
+          (controlId === "rawCapture" && !rawCaptureAvailable) ||
+          (controlId === "livePhoto" && !livePhotoAvailable) ||
+          (controlId === "portrait" && !portraitCaptureAvailable);
+        const unavailableReason = unavailableReasons[controlId];
+        const iconColor = control.active ? "#ffaa00" : "white";
 
         if (controlId === "weather") {
           return (
@@ -177,14 +203,29 @@ export default function TopBar({
         }
 
         return (
-          <TouchableOpacity key={controlId} onPress={control.onPress}>
-            <Animated.View style={animatedStyle}>
+          <TouchableOpacity
+            key={controlId}
+            onPress={() => {
+              if (disabled) {
+                Alert.alert(
+                  "Recurso indisponível",
+                  unavailableReason || "Este recurso não é compatível com a lente atual.",
+                );
+                return;
+              }
+              control.onPress?.();
+            }}
+            accessibilityState={{ disabled }}
+          >
+            <Animated.View
+              style={[animatedStyle, disabled && styles.disabledControl]}
+            >
               {controlId === "rawCapture" ? (
                 <View style={styles.rawControl}>
                   <Ionicons
                     name={control.icon}
                     size={28}
-                    color={control.active ? "#ffaa00" : "white"}
+                    color={iconColor}
                   />
                   <Text
                     style={[
@@ -196,12 +237,31 @@ export default function TopBar({
                   </Text>
                 </View>
               ) : (
-                <Ionicons
-                  name={control.icon}
-                  size={32}
-                  style={styles.button}
-                  color={control.active ? "#ffaa00" : "white"}
-                />
+                control.symbol ? (
+                  <SymbolView
+                    name={control.symbol}
+                    size={32}
+                    type="monochrome"
+                    tintColor={iconColor}
+                    resizeMode="scaleAspectFit"
+                    style={styles.symbolButton}
+                    fallback={
+                      <Ionicons
+                        name={control.icon}
+                        size={32}
+                        style={styles.button}
+                        color={iconColor}
+                      />
+                    }
+                  />
+                ) : (
+                  <Ionicons
+                    name={control.icon}
+                    size={32}
+                    style={styles.button}
+                    color={iconColor}
+                  />
+                )
               )}
             </Animated.View>
           </TouchableOpacity>

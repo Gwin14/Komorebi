@@ -169,6 +169,15 @@ export default function Galery() {
 
           <View style={styles.header}>
             <Text style={styles.infoTitle}>Informações</Text>
+            {exifData?.komorebiBadges?.length ? (
+              <View style={styles.badgeContainer}>
+                {exifData.komorebiBadges.map((badge) => (
+                  <View key={badge} style={styles.badge}>
+                    <Text style={styles.badgeText}>{badge}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             <TouchableOpacity
               style={styles.exifFrameButton}
               onPress={() => {

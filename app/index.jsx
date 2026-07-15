@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Text, View } from "react-native";
+import { Alert, Animated, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -9,6 +9,7 @@ import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import ExposureSlider from "./components/ExposureSlider";
 import ManualControlsPanel from "./components/ManualControlsPanel";
+import NativeCapturePreview from "./components/NativeCapturePreview";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
@@ -17,7 +18,9 @@ import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
 import useControlsAnimation from "./hooks/useControlsAnimation";
 import useManualCameraControls from "./hooks/useManualCameraControls";
+import useLivePhotoCapture from "./hooks/useLivePhotoCapture";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
+import usePortraitCapture from "./hooks/usePortraitCapture";
 import useRawCapture from "./hooks/useRawCapture";
 import useShutterAnimation from "./hooks/useShutterAnimation";
 import useVolumeShutter from "./hooks/useVolumeShutter";
@@ -69,6 +72,13 @@ export default function App() {
 
   const manual = useManualCameraControls(activeLens?.device);
   const rawCapture = useRawCapture(activeLens?.device);
+  const livePhoto = useLivePhotoCapture(activeLens?.device);
+  const portraitCapture = usePortraitCapture(activeLens?.device);
+  const nativeCaptureMode = livePhoto.enabled
+    ? "live"
+    : portraitCapture.enabled
+      ? "portrait"
+      : null;
 
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
@@ -167,6 +177,14 @@ export default function App() {
   }, []);
 
   const handleTakePicture = useCallback(() => {
+    if (flash === "on" && !activeLens?.device?.hasFlash) {
+      Alert.alert(
+        "Flash indisponível",
+        "A lente selecionada não possui flash. Desative o flash ou escolha outra lente.",
+      );
+      return;
+    }
+
     animateShutter();
 
     const manualSettings =
@@ -196,6 +214,7 @@ export default function App() {
       isProcessing,
       setIsProcessing,
       selectedLutId,
+      selectedLut: availableLuts.find((lut) => lut.id === selectedLutId),
       lutsLoaded,
       hasMediaPermission,
       flash,
@@ -206,10 +225,15 @@ export default function App() {
       aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
       manualSettings,
       rawMode: rawCapture.rawMode,
+      livePhotoEnabled: livePhoto.enabled,
+      livePhotoDeviceId: activeLens?.device?.id,
+      portraitModeEnabled: portraitCapture.enabled,
+      portraitDeviceId: activeLens?.device?.id,
     });
   }, [
     activeLens,
     animateShutter,
+    availableLuts,
     cameraReady,
     doubleCaptureMode,
     enqueueProcessing,
@@ -225,6 +249,8 @@ export default function App() {
     manual.manualWBKelvin,
     manual.shutterAuto,
     manual.wbAuto,
+    livePhoto.enabled,
+    portraitCapture.enabled,
     rawCapture.rawMode,
     saveOriginalWithLUT,
     selectedLutId,
@@ -233,12 +259,24 @@ export default function App() {
   ]);
 
   const handleCameraReady = useCallback(() => {
+    if (nativeCaptureMode) {
+      setPictureSize(null);
+      setCameraReady(true);
+      return;
+    }
+
     onCameraReady(cameraRef, setPictureSize, setCameraReady);
-  }, []);
+  }, [nativeCaptureMode]);
 
   useEffect(() => {
     setCameraReady(false);
   }, [activeLens?.device?.id, rawCapture.rawModeEnabled]);
+
+  useEffect(() => {
+    if (!rawCapture.rawModeEnabled) return;
+    livePhoto.setEnabled(false);
+    portraitCapture.setEnabled(false);
+  }, [livePhoto, portraitCapture, rawCapture.rawModeEnabled]);
 
   useVolumeShutter({
     enabled: !firstTime && cameraPermission === "granted" && cameraReady,
@@ -259,6 +297,38 @@ export default function App() {
     manualMode: manual.manualMode,
     rawCaptureAvailable: rawCapture.available,
     rawMode: rawCapture.rawMode,
+    livePhotoAvailable:
+      livePhoto.available &&
+      !rawCapture.rawModeEnabled &&
+      !portraitCapture.enabled,
+    livePhotoEnabled: livePhoto.enabled,
+    portraitCaptureAvailable:
+      portraitCapture.available &&
+      !rawCapture.rawModeEnabled &&
+      !livePhoto.enabled,
+    portraitModeEnabled: portraitCapture.enabled,
+    unavailableReasons: {
+      flash: activeLens?.device?.hasFlash
+        ? null
+        : "A lente selecionada não possui flash.",
+      rawCapture: rawCapture.available
+        ? null
+        : "RAW/ProRAW não é suportado pela lente selecionada.",
+      livePhoto: livePhoto.available
+        ? rawCapture.rawModeEnabled
+          ? "Desative RAW/ProRAW para usar Live Photo."
+          : portraitCapture.enabled
+          ? "Desative o modo retrato para usar Live Photo."
+          : null
+        : "Live Photo não é suportada pela lente selecionada.",
+      portrait: portraitCapture.available
+        ? rawCapture.rawModeEnabled
+          ? "Desative RAW/ProRAW para usar o modo retrato."
+          : livePhoto.enabled
+          ? "Desative Live Photo para usar o modo retrato."
+          : null
+        : "O modo retrato não é suportado pela lente selecionada.",
+    },
     selectedLutId,
     smileDetectionEnabled,
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
@@ -268,6 +338,16 @@ export default function App() {
       if (mode === "manual") manual.toggleManualMode();
     },
     toggleRawMode: rawCapture.toggleRawMode,
+    toggleLivePhotoEnabled: () => {
+      setCameraReady(false);
+      if (!livePhoto.enabled) portraitCapture.setEnabled(false);
+      livePhoto.toggleEnabled();
+    },
+    togglePortraitModeEnabled: () => {
+      setCameraReady(false);
+      if (!portraitCapture.enabled) livePhoto.setEnabled(false);
+      portraitCapture.toggleEnabled();
+    },
     toggleSmileDetectionEnabled: () =>
       setSmileDetectionEnabled((value) => !value),
     toggleVerticalMode,
@@ -304,29 +384,44 @@ export default function App() {
       {!firstTime && cameraPermission === "granted" && (
         <GestureDetector gesture={composedGestures}>
           <View style={styles.previewContainer}>
-            <CameraPreview
-              retroStyle={retroStyle}
-              cameraRef={cameraRef}
-              facing={facing}
-              device={activeLens?.device}
-              flash={flash}
-              zoom={zoom}
-              exposure={exposure}
-              pictureSize={pictureSize}
-              onCameraReady={handleCameraReady}
-              gridVisible={gridVisible}
-              setMinZoom={setMinZoom}
-              setMaxZoom={setMaxZoom}
-              onSmileDetected={handleTakePicture}
-              smileDetectionEnabled={smileDetectionEnabled}
-              location={location}
-              verticalMode={verticalMode}
-              doubleCaptureMode={doubleCaptureMode}
-              isActive={!firstTime}
-              manualPhotoMode={manual.manualMode === "manual"}
-              rawPhotoMode={rawCapture.rawModeEnabled}
-              onFocusAtPoint={manual.focusAtPoint}
-            />
+            {nativeCaptureMode ? (
+              <NativeCapturePreview
+                mode={nativeCaptureMode}
+                retroStyle={retroStyle}
+                device={activeLens?.device}
+                flash={flash}
+                onCameraReady={handleCameraReady}
+                gridVisible={gridVisible}
+                verticalMode={verticalMode}
+                doubleCaptureMode={doubleCaptureMode}
+                smileDetectionEnabled={smileDetectionEnabled}
+                onSmileDetected={handleTakePicture}
+              />
+            ) : (
+              <CameraPreview
+                retroStyle={retroStyle}
+                cameraRef={cameraRef}
+                facing={facing}
+                device={activeLens?.device}
+                flash={flash}
+                zoom={zoom}
+                exposure={exposure}
+                pictureSize={pictureSize}
+                onCameraReady={handleCameraReady}
+                gridVisible={gridVisible}
+                setMinZoom={setMinZoom}
+                setMaxZoom={setMaxZoom}
+                onSmileDetected={handleTakePicture}
+                smileDetectionEnabled={smileDetectionEnabled}
+                location={location}
+                verticalMode={verticalMode}
+                doubleCaptureMode={doubleCaptureMode}
+                isActive={!firstTime}
+                manualPhotoMode={manual.manualMode === "manual"}
+                rawPhotoMode={rawCapture.rawModeEnabled}
+                onFocusAtPoint={manual.focusAtPoint}
+              />
+            )}
           </View>
         </GestureDetector>
       )}

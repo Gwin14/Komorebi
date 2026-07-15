@@ -4,7 +4,13 @@ import * as Location from "expo-location";
 import * as MediaLibrary from "expo-media-library";
 import * as piexif from "piexifjs";
 import { Image } from "react-native";
+import { captureLivePhoto } from "../../modules/camera-live-photo";
+import { capturePortraitPhoto } from "../../modules/camera-portrait-capture";
 import { toVisionCameraRawMode } from "../../modules/camera-raw-capture";
+import {
+  applyKomorebiMetadataToExifObj,
+  buildKomorebiExifMetadata,
+} from "./komorebiExifMetadata";
 import { applyLUTToImage } from "./lutProcessor";
 
 const APP_ALBUM = "Komorebi";
@@ -27,6 +33,8 @@ export async function saveToAlbum(uri) {
   } else {
     await MediaLibrary.addAssetsToAlbumAsync([asset], album, true); // true = copyAsset
   }
+
+  return asset;
 }
 
 const getLocationExif = async (locationEnabled) => {
@@ -58,12 +66,89 @@ const getLocationExif = async (locationEnabled) => {
   return additionalExif;
 };
 
+const buildPhotoProcessingData = async ({
+  uri,
+  selectedLutId,
+  selectedLut,
+  lutsLoaded,
+  exifData,
+  doubleCaptureMode,
+  saveOriginalWithLUT,
+  aspectRatio,
+  captureMode = "standard",
+  manualSettings = null,
+  extraData = {},
+}) => {
+  const croppedUri = (await cropImageToAspect(uri, aspectRatio)) || uri;
+  const komorebiMetadata = buildKomorebiExifMetadata({
+    selectedLut,
+    selectedLutId,
+    aspectRatio,
+    doubleCaptureMode,
+    captureMode,
+    manualSettings,
+  });
+  const baseExifData = { ...exifData, komorebiMetadata };
+  const noLutData = {
+    ...extraData,
+    needsProcessing: false,
+    originalUri: uri,
+    imageUri: croppedUri,
+    exifData: baseExifData,
+    doubleCaptureMode,
+    saveOriginalWithLUT: false,
+    aspectRatio,
+    captureMode,
+    cube: null,
+    grainConfig: null,
+  };
+
+  if (selectedLutId === "none" || !lutsLoaded) {
+    return noLutData;
+  }
+
+  const processingInfo = await applyLUTToImage(
+    croppedUri,
+    selectedLutId,
+    exifData,
+  );
+
+  if (!processingInfo.needsProcessing) {
+    return noLutData;
+  }
+
+  const lutExifData = {
+    ...baseExifData,
+    komorebiMetadata: buildKomorebiExifMetadata({
+      selectedLut,
+      selectedLutId,
+      grainConfig: processingInfo.grainConfig,
+      aspectRatio,
+      doubleCaptureMode,
+      captureMode,
+      manualSettings,
+    }),
+  };
+
+  return {
+    ...extraData,
+    ...processingInfo,
+    exifData: lutExifData,
+    doubleCaptureMode,
+    saveOriginalWithLUT,
+    originalUri: uri,
+    aspectRatio,
+    captureMode,
+  };
+};
+
 export const takePicture = async ({
   cameraRef,
   cameraReady,
   isProcessing,
   setIsProcessing,
   selectedLutId,
+  selectedLut = null,
   lutsLoaded,
   hasMediaPermission,
   setProcessingData,
@@ -74,15 +159,116 @@ export const takePicture = async ({
   aspectRatio = 3 / 4,
   manualSettings = null,
   rawMode = "off",
+  livePhotoEnabled = false,
+  livePhotoDeviceId = null,
+  portraitModeEnabled = false,
+  portraitDeviceId = null,
 }) => {
-  if (!cameraRef.current || !cameraReady || isProcessing) return;
+  const normalizedRawMode = toVisionCameraRawMode(rawMode);
+  const rawModeEnabled = normalizedRawMode !== "off";
+  const nativeCaptureEnabled =
+    (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) ||
+    (portraitModeEnabled && portraitDeviceId && !rawModeEnabled);
+
+  if ((!nativeCaptureEnabled && !cameraRef.current) || !cameraReady || isProcessing) {
+    console.warn("[CameraUtils] takePicture blocked", {
+      nativeCaptureEnabled,
+      hasCameraRef: Boolean(cameraRef.current),
+      cameraReady,
+      isProcessing,
+      livePhotoEnabled,
+      portraitModeEnabled,
+      rawMode: normalizedRawMode,
+    });
+    return;
+  }
 
   try {
     setIsProcessing(true);
 
+    if (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) {
+      console.log("[CameraUtils] live photo capture start", {
+        deviceId: livePhotoDeviceId,
+        flash,
+      });
+      const livePhoto = await captureLivePhoto({
+        deviceId: livePhotoDeviceId,
+        flashMode: flash === "on" ? "on" : "off",
+      });
+      console.log("[CameraUtils] live photo capture result", {
+        photoUri: livePhoto.photoUri,
+        movieUri: livePhoto.movieUri,
+        localIdentifier: livePhoto.localIdentifier,
+        savedToLibrary: livePhoto.savedToLibrary,
+      });
+      const additionalExif = await getLocationExif(location);
+      const uri = normalizeUri(livePhoto.photoUri);
+
+      setProcessingData(
+        await buildPhotoProcessingData({
+          uri,
+          selectedLutId,
+          selectedLut,
+          lutsLoaded,
+          exifData: { ...additionalExif, aspectRatio },
+          doubleCaptureMode,
+          saveOriginalWithLUT,
+          aspectRatio,
+          captureMode: "live",
+          extraData: {
+            livePhotoMovieUri: livePhoto.movieUri,
+            localIdentifier: livePhoto.localIdentifier,
+            nativeSavedToLibrary: livePhoto.savedToLibrary,
+          },
+        }),
+      );
+      return;
+    }
+
+    if (portraitModeEnabled && portraitDeviceId && !rawModeEnabled) {
+      console.log("[CameraUtils] portrait capture start", {
+        deviceId: portraitDeviceId,
+        flash,
+      });
+      const portraitPhoto = await capturePortraitPhoto({
+        deviceId: portraitDeviceId,
+        flashMode: flash === "on" ? "on" : "off",
+      });
+      console.log("[CameraUtils] portrait capture result", {
+        photoUri: portraitPhoto.photoUri,
+        localIdentifier: portraitPhoto.localIdentifier,
+        savedToLibrary: portraitPhoto.savedToLibrary,
+        depthDataEmbedded: portraitPhoto.depthDataEmbedded,
+        portraitEffectsMatteEmbedded:
+          portraitPhoto.portraitEffectsMatteEmbedded,
+      });
+      const additionalExif = await getLocationExif(location);
+      const uri = normalizeUri(portraitPhoto.photoUri);
+
+      setProcessingData(
+        await buildPhotoProcessingData({
+          uri,
+          selectedLutId,
+          selectedLut,
+          lutsLoaded,
+          exifData: { ...additionalExif, aspectRatio },
+          doubleCaptureMode,
+          saveOriginalWithLUT,
+          aspectRatio,
+          captureMode: "portrait",
+          extraData: {
+            localIdentifier: portraitPhoto.localIdentifier,
+            nativeSavedToLibrary: portraitPhoto.savedToLibrary,
+            depthDataEmbedded: portraitPhoto.depthDataEmbedded,
+            portraitEffectsMatteEmbedded:
+              portraitPhoto.portraitEffectsMatteEmbedded,
+          },
+        }),
+      );
+      return;
+    }
+
     const additionalExif = await getLocationExif(location);
-    const normalizedRawMode = toVisionCameraRawMode(rawMode);
-    const rawModeEnabled = normalizedRawMode !== "off";
     // Com manual ativo, força "speed" (frame único, sem fusão Deep Fusion/
     // Smart HDR): em modo "quality"/"balanced" o AVCapturePhotoOutput funde
     // múltiplos frames em exposições diferentes, ignorando o ISO/obturador
@@ -99,14 +285,36 @@ export const takePicture = async ({
     const uri = normalizeUri(photo?.path || photo?.filePath || photo?.uri);
 
     if (rawModeEnabled) {
+      const isVerticalCrop = Math.abs(aspectRatio - 9 / 16) < 0.01;
+      const rawDerivativeAspectRatio =
+        flash === "on"
+          ? null
+          : doubleCaptureMode
+            ? 1 / aspectRatio
+            : isVerticalCrop
+              ? aspectRatio
+              : null;
       setProcessingData({
         needsProcessing: false,
         originalUri: uri,
         imageUri: uri,
-        exifData: additionalExif,
-        doubleCaptureMode: false,
+        derivativeSourceUri: normalizeUri(
+          photo?.processedPath || photo?.processedPhotoPath,
+        ),
+        rawDerivativeAspectRatio,
+        exifData: {
+          ...additionalExif,
+          komorebiMetadata: buildKomorebiExifMetadata({
+            selectedLutId: "none",
+            aspectRatio,
+            doubleCaptureMode: false,
+            captureMode: "raw",
+          }),
+        },
+        doubleCaptureMode,
         saveOriginalWithLUT: false,
         aspectRatio,
+        captureMode: "raw",
         cube: null,
         grainConfig: null,
       });
@@ -133,44 +341,20 @@ export const takePicture = async ({
 
     const completeExif = { ...additionalExif, ...manualExif, aspectRatio };
 
-    // Item sem LUT: needsProcessing: false → a fila salva diretamente sem passar pelo WebView
-    // saveOriginalWithLUT é sempre false aqui: sem LUT aplicado não há cópia "sem LUT" para salvar
-    const noLutData = {
-      needsProcessing: false,
-      originalUri: uri,
-      imageUri: uri,
-      exifData: completeExif,
-      doubleCaptureMode,
-      saveOriginalWithLUT: false,
-      aspectRatio,
-      cube: null,
-      grainConfig: null,
-    };
-
-    if (selectedLutId !== "none" && lutsLoaded) {
-      const processingInfo = await applyLUTToImage(
+    setProcessingData(
+      await buildPhotoProcessingData({
         uri,
         selectedLutId,
-        completeExif,
-      );
-
-      if (processingInfo.needsProcessing) {
-        // Tem LUT → vai pro WebView normalmente
-        setProcessingData({
-          ...processingInfo,
-          doubleCaptureMode,
-          saveOriginalWithLUT,
-          originalUri: uri,
-          aspectRatio,
-        });
-      } else {
-        // LUT não encontrado no cache → salva direto
-        setProcessingData(noLutData);
-      }
-    } else {
-      // Sem LUT selecionada → salva direto
-      setProcessingData(noLutData);
-    }
+        selectedLut,
+        lutsLoaded,
+        exifData: completeExif,
+        doubleCaptureMode,
+        saveOriginalWithLUT,
+        aspectRatio,
+        captureMode: "standard",
+        manualSettings,
+      }),
+    );
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
   } finally {
@@ -313,7 +497,12 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
       );
     }
 
-    exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
+    // Aqui apenas regravamos metadados; os pixels do JPEG original não foram
+    // reorientados. Preserve a orientação criada pela câmera para não apagar
+    // a rotação necessária ao exibir a foto corretamente.
+    if (exifObj["0th"][piexif.ImageIFD.Orientation] == null) {
+      exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
+    }
     exifObj["0th"][piexif.ImageIFD.XResolution] = [72, 1];
     exifObj["0th"][piexif.ImageIFD.YResolution] = [72, 1];
     exifObj["0th"][piexif.ImageIFD.ResolutionUnit] = 2;
@@ -401,6 +590,8 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
         Math.abs(exifData.GPSAltitude),
       );
     }
+
+    applyKomorebiMetadataToExifObj(exifObj, exifData.komorebiMetadata);
 
     const exifBytes = piexif.dump(exifObj);
     const newDataUrl = piexif.insert(exifBytes, dataUrl);

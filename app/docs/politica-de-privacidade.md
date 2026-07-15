@@ -1,139 +1,136 @@
-# Política de Privacidade — Komorebi
+# Política de Privacidade - Komorebi
 
-**Última atualização:** maio de 2025
-**Versão:** 1.0.0
-
----
-
-## 1. Introdução
-
-Bem-vindo ao **Komorebi**, um aplicativo de câmera desenvolvido por **Fábio Santos** ("a Equipe Komorebi"). Esta Política de Privacidade explica quais informações são coletadas, como são utilizadas e quais direitos você tem em relação aos seus dados ao usar o aplicativo.
-
-Ao usar o Komorebi, você concorda com as práticas descritas nesta política. Se não concordar, por favor, não utilize o aplicativo.
+**Última atualização:** julho de 2026
+**Versão do app:** 1.0.0
 
 ---
 
-## 2. Informações que São Coletadas
+## 1. Visão geral
 
-### 2.1 Dados coletados diretamente no dispositivo
+O **Komorebi** é um aplicativo de câmera desenvolvido por **Fábio Santos** com foco em captura fotográfica, processamento local de imagens, filtros LUT e preservação de metadados. Esta Política de Privacidade explica quais dados o app usa, onde eles ficam armazenados e quando serviços externos podem ser acessados.
 
-O Komorebi opera **localmente no seu dispositivo**. As seguintes informações são geradas e armazenadas exclusivamente no seu aparelho:
-
-- **Fotos capturadas:** Todas as imagens tiradas pelo aplicativo são salvas no álbum "Komorebi" na sua galeria local.
-- **Metadados EXIF:** Ao capturar uma foto, o app pode incorporar automaticamente metadados técnicos na imagem, incluindo:
-  - Data e hora da captura
-  - Configurações de câmera (ISO, abertura, velocidade do obturador, distância focal)
-  - Modelo da lente utilizada
-  - Informações de espaço de cores
-- **Coordenadas GPS (opcional):** Se você autorizar e ativar a função de localização, as coordenadas geográficas no momento da captura (latitude, longitude e altitude) são incorporadas nos metadados EXIF da foto. **Esses dados são gravados apenas na imagem e nunca transmitidos a servidores externos pelo Komorebi.**
-
-### 2.2 Preferências e configurações
-
-As seguintes preferências são armazenadas localmente no seu dispositivo via `AsyncStorage` e nunca são enviadas a servidores externos:
-
-- Estilo visual do viewfinder (retrô ou padrão)
-- Visibilidade da grade de composição
-- Ativação do som do obturador
-- Permissão para salvar localização nas fotos
-- Opção de salvar cópia original junto de fotos com filtro LUT
-- Filtros LUT personalizados importados por você
-- Configuração dos controles da barra superior
-
-### 2.3 Dados de LUTs personalizados
-
-Quando você importa um arquivo `.cube` de filtro LUT personalizado, o conteúdo desse arquivo é armazenado localmente no dispositivo para uso futuro. Esses arquivos não são transmitidos a terceiros.
+O Komorebi não possui contas de usuário, não mantém servidores próprios com dados pessoais, não vende dados, não exibe anúncios e não usa redes de publicidade.
 
 ---
 
-## 3. Dados de Localização
+## 2. Dados processados no dispositivo
 
-O Komorebi solicita permissão de acesso à localização do dispositivo **exclusivamente** para as seguintes finalidades:
+A maior parte do funcionamento do Komorebi acontece localmente no seu aparelho.
 
-- Incorporar coordenadas GPS nos metadados EXIF das fotos capturadas (quando ativado nas configurações);
-- Exibir informações climáticas e de localização no painel meteorológico integrado ao aplicativo (consultando APIs públicas de terceiros descritas na Seção 5).
+O app pode criar, ler ou armazenar localmente:
 
-**Você pode desativar o salvamento de localização nas fotos a qualquer momento** nas configurações do aplicativo. Ao desativar, os campos GPS são removidos dos metadados de imagens futuras.
+- **Fotos e arquivos de captura:** imagens feitas pelo app, incluindo fotos padrão, fotos em modo retrato, Live Photos e arquivos RAW/ProRAW quando o dispositivo oferecer suporte.
+- **Álbum "Komorebi":** álbum criado na biblioteca de mídia para organizar as imagens capturadas.
+- **Metadados EXIF:** dados técnicos gravados ou preservados nas fotos, como data, orientação, lente, ISO, velocidade do obturador, balanço de branco, modo de captura, filtro usado e informações próprias do Komorebi.
+- **Localização GPS nas fotos:** latitude, longitude e altitude podem ser gravadas nos metadados EXIF quando a permissão de localização estiver concedida e a opção "Salvar Localização nas Fotos" estiver ativada.
+- **Preferências do app:** configurações como estilo retrô do viewfinder, grade, som do obturador, salvamento de localização, cópia original sem LUT, posição/ordem dos controles da TopBar e lista de LUTs personalizados.
+- **LUTs personalizados:** arquivos `.cube` importados por você são lidos e salvos localmente para uso nos filtros.
 
-O acesso à localização é do tipo **"apenas durante o uso"** (`foreground permission`). O aplicativo não acessa sua localização em segundo plano.
-
----
-
-## 4. Câmera e Galeria
-
-O Komorebi requer acesso à:
-
-- **Câmera:** Para captura de fotos. Nenhuma imagem é transmitida a servidores sem sua ação explícita.
-- **Biblioteca de mídia:** Para salvar fotos no álbum "Komorebi" e para leitura das imagens na galeria integrada do app.
-
-Todas as fotos permanecem **no seu dispositivo**. O aplicativo não realiza upload automático de imagens a nenhum serviço externo.
+Esses dados permanecem no dispositivo, exceto nos casos descritos na seção "Serviços de terceiros".
 
 ---
 
-## 5. Serviços de Terceiros
+## 3. Permissões
 
-O Komorebi integra-se a serviços externos **apenas para funcionalidades específicas e não relacionadas à coleta de dados pessoais identificáveis**:
+O Komorebi solicita permissões do sistema operacional apenas para habilitar funcionalidades do app:
 
-| Serviço                                                                  | Finalidade                                     | Dados enviados                                                           |
-| ------------------------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------ |
-| **Open-Meteo API** (`api.open-meteo.com`)                                | Previsão do tempo no painel meteorológico      | Coordenadas geográficas aproximadas (latitude/longitude)                 |
-| **BigDataCloud API** (`api.bigdatacloud.net`)                            | Geocodificação reversa (nome da cidade/região) | Coordenadas geográficas                                                  |
-| **Leaflet.js / CartoDB**                                                 | Exibição de mapa na galeria para fotos com GPS | Apenas carregamento de tiles de mapa; coordenadas processadas localmente |
-| **Site do Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criação de molduras de exibição de metadados   | Imagem selecionada pelo usuário (processada no navegador)                |
-| **Notion** (`fabiosantoss.notion.site`)                                  | Formulário de feedback                         | Apenas o que você digitar voluntariamente                                |
+| Permissão | Finalidade |
+| --- | --- |
+| Câmera | Capturar fotos e exibir o preview da câmera. |
+| Biblioteca de mídia / Fotos | Salvar fotos no álbum "Komorebi", exibir a galeria integrada, ler metadados e excluir fotos quando você solicitar. |
+| Localização durante o uso | Gravar GPS nas fotos, quando ativado, e buscar clima/localidade para o painel de tempo. |
+| Microfone | Declarada na configuração nativa para compatibilidade com recursos de câmera/vídeo, mas o app atual é focado em fotografia. |
 
-Esses serviços possuem suas próprias políticas de privacidade, pelas quais a Equipe Komorebi não se responsabiliza.
-
----
-
-## 6. Publicidade
-
-**O Komorebi não exibe anúncios e não integra redes de publicidade.** Nenhum dado seu é utilizado para fins publicitários.
+Você pode revogar permissões nas configurações do iOS ou Android. A revogação pode impedir recursos correspondentes, como captura, salvamento na galeria, mapa ou clima.
 
 ---
 
-## 7. Compartilhamento de Dados
+## 4. Localização
 
-A Equipe Komorebi **não vende, aluga ou compartilha** suas informações pessoais com terceiros, exceto:
+O app pode usar sua localização em dois contextos:
 
-- Quando exigido por lei ou ordem judicial;
-- Para proteger direitos legais da Equipe Komorebi.
+- **EXIF das fotos:** quando "Salvar Localização nas Fotos" estiver ativado, a localização pode ser incorporada aos metadados das fotos futuras.
+- **Painel de tempo:** a TopBar pode solicitar localização para consultar temperatura, nuvens, vento, precipitação, nascer/pôr do sol e nome aproximado da cidade/região.
 
----
+O Komorebi usa permissão de localização **durante o uso**. O app não acessa localização em segundo plano.
 
-## 8. Segurança
-
-Todos os dados gerados pelo Komorebi são armazenados localmente no seu dispositivo, sujeitos às proteções de segurança do próprio sistema operacional (iOS ou Android). A Equipe Komorebi não mantém servidores próprios com dados de usuários.
+Se você desativar "Salvar Localização nas Fotos", o Komorebi deixa de gravar coordenadas GPS em novas fotos. Fotos já salvas podem continuar contendo localização nos seus metadados até que você edite ou remova esses dados fora do app.
 
 ---
 
-## 9. Crianças
+## 5. Fotos, galeria e metadados
 
-O Komorebi não é direcionado a crianças menores de 13 anos e não coleta intencionalmente informações de menores. Se você é pai ou responsável e acredita que seu filho forneceu dados ao aplicativo, entre em contato com a Equipe Komorebi para que as medidas adequadas sejam tomadas.
+As fotos são salvas na biblioteca de mídia do dispositivo, geralmente no álbum "Komorebi". A galeria integrada mostra fotos desse álbum, exibe metadados EXIF, pode abrir um mapa quando houver coordenadas GPS e permite excluir a foto selecionada.
 
----
-
-## 10. Seus Direitos
-
-Você tem o direito de:
-
-- **Acessar** as configurações e dados armazenados localmente pelo app;
-- **Excluir** qualquer foto salva diretamente pela galeria do dispositivo ou pela galeria integrada do app;
-- **Revogar** permissões de câmera, galeria e localização a qualquer momento nas configurações do sistema operacional;
-- **Remover** filtros LUT personalizados importados diretamente nas configurações do app.
-
-Como o app não coleta dados em servidores próprios, não há necessidade de solicitação formal de exclusão de dados remotos.
+O Komorebi não faz upload automático das suas fotos. Compartilhamentos ou envios para outros serviços acontecem apenas quando você usa recursos externos ou ações do próprio sistema.
 
 ---
 
-## 11. Alterações nesta Política
+## 6. Serviços de terceiros
 
-Esta Política de Privacidade pode ser atualizada periodicamente. Quando isso ocorrer, a data no topo do documento será atualizada. Recomenda-se que você a revise regularmente.
+Algumas funções dependem de serviços externos. Nesses casos, dados necessários para a função podem ser enviados ao provedor correspondente:
+
+| Serviço | Finalidade | Dados enviados ou acessados |
+| --- | --- | --- |
+| **Open-Meteo** (`api.open-meteo.com`) | Dados meteorológicos no painel de tempo. | Latitude e longitude aproximadas. |
+| **BigDataCloud** (`api.bigdatacloud.net`) | Geocodificação reversa para cidade/região/país. | Latitude e longitude aproximadas. |
+| **Leaflet / Carto basemaps / unpkg** | Exibir mapa na galeria para fotos com GPS. | Carregamento de scripts, estilos e tiles de mapa; o mapa é centrado nas coordenadas da foto. |
+| **Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criar molduras com foto e metadados. | Quando você abre uma foto nesse recurso, a imagem pode ser enviada/injetada no site em WebView para processamento. |
+| **Notion** (`fabiosantoss.notion.site`) | Formulário de feedback. | Informações que você digitar voluntariamente no formulário. |
+| **Links externos** | Abrir site, GitHub, Instagram, Threads ou YouTube. | O acesso passa a ocorrer fora do app ou em WebView, conforme o serviço. |
+
+Esses serviços têm políticas próprias. O Komorebi não controla as práticas de privacidade, disponibilidade ou segurança desses terceiros.
+
+---
+
+## 7. Publicidade, analytics e venda de dados
+
+O Komorebi não exibe anúncios, não integra redes de publicidade e não vende, aluga ou comercializa dados pessoais.
+
+O projeto atual também não inclui serviço próprio de analytics de uso ou rastreamento comportamental.
+
+---
+
+## 8. Segurança e retenção
+
+Os dados locais ficam sujeitos às proteções do seu dispositivo e do sistema operacional. O Komorebi não mantém cópias em servidor próprio.
+
+Você controla a retenção dos seus dados ao:
+
+- excluir fotos pela galeria do sistema ou pela galeria integrada;
+- remover LUTs personalizados nas configurações;
+- revogar permissões do app;
+- desinstalar o aplicativo, o que pode remover preferências locais do app, mas não necessariamente fotos já salvas na biblioteca de mídia.
+
+---
+
+## 9. Direitos do usuário
+
+Como o Komorebi não mantém uma base remota própria de dados pessoais, seus principais controles estão no dispositivo:
+
+- acessar e alterar preferências nas configurações do app;
+- excluir fotos e metadados associados;
+- remover arquivos LUT personalizados;
+- revogar permissões de câmera, fotos e localização;
+- não usar serviços externos como feedback, mapa ou EXIF Frame.
+
+Solicitações ou dúvidas sobre privacidade podem ser enviadas pelos canais de contato abaixo.
+
+---
+
+## 10. Crianças e adolescentes
+
+O Komorebi não é direcionado especificamente a crianças. O app não coleta intencionalmente dados de menores em servidores próprios. Responsáveis devem orientar o uso de câmera, localização, galeria e compartilhamento de imagens conforme a legislação aplicável.
+
+---
+
+## 11. Alterações nesta política
+
+Esta Política de Privacidade pode ser atualizada quando o app mudar suas funcionalidades, permissões ou integrações. A data no topo indicará a versão mais recente.
 
 ---
 
 ## 12. Contato
-
-Se tiver dúvidas sobre esta Política de Privacidade, entre em contato com a Equipe Komorebi:
 
 - **Desenvolvedor:** Fábio Santos
 - **Site:** [fotoessencia.fabiosantos.dev.br](https://fotoessencia.fabiosantos.dev.br/)
@@ -142,4 +139,4 @@ Se tiver dúvidas sobre esta Política de Privacidade, entre em contato com a Eq
 
 ---
 
-_Este documento foi elaborado com base nas funcionalidades implementadas no Komorebi v1.0.0 e é regido pelas leis brasileiras, em especial a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018)._
+_Esta política foi escrita com base nas funcionalidades atuais do Komorebi e considera a legislação brasileira aplicável, incluindo a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018)._

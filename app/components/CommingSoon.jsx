@@ -6,38 +6,34 @@ import Backbutton from "../components/BackButton";
 import styles from "./CommingSoon.styles";
 
 export default function ComingSoon() {
-  // Itens separados por seção
   const recentlyAdded = [
-    { id: "1", title: "Importação de LUTs personalizados" },
-    { id: "2", title: "Metadados nas fotos" },
-    { id: "3", title: "Previsão do tempo" },
-    { id: "4", title: "Zoom com gesto de pinça" },
-    { id: "5", title: "Compensação de exposição" },
-    { id: "6", title: "Aspect ratio customizável" },
-    { id: "7", title: "Detecção de sorriso" },
-    { id: "8", title: "Migração para câmera nativa" },
-    { id: "9", title: "Salvar original junto da foto com LUT" },
-    { id: "10", title: "Galeria melhorada" },
-    { id: "22", title: "Controles manuais (ISO, obturador, WB, foco)" },
+    { id: "1", title: "Controles manuais (ISO, obturador, WB e foco)" },
+    { id: "2", title: "RAW / ProRAW em dispositivos compatíveis" },
+    { id: "3", title: "Live Photo no iOS" },
+    { id: "4", title: "Modo retrato com captura nativa" },
+    { id: "5", title: "Disparo pelo botão de volume e Camera Control" },
+    { id: "6", title: "TopBar configurável e controles invertidos" },
+    { id: "7", title: "LUTs Ameixa e Banana" },
+    { id: "8", title: "Badges do Komorebi na galeria" },
   ];
 
   const comingSoon = [
+    { id: "9", title: "Timer para fotos" },
+    { id: "10", title: "Grid customizável" },
     { id: "11", title: "Configuração do feedback háptil" },
-    { id: "12", title: "Timer para fotos" },
-    { id: "13", title: "Grid customizável" },
-    { id: "14", title: "Indicador de zoom" },
-    { id: "15", title: "Formato de arquivo" },
-    { id: "16", title: "Desativar álbum automático" },
-    { id: "17", title: "HDR" },
+    { id: "12", title: "Escolha de formato de arquivo" },
+    { id: "13", title: "Opção para desativar álbum automático" },
+    { id: "14", title: "Melhorias no painel de clima" },
+    { id: "15", title: "Ajustes finos no fluxo de EXIF Frame" },
   ];
 
   const whoKnows = [
-    { id: "18", title: "Widget com sugestões baseadas no clima" },
-    { id: "20", title: "RAW" },
-    { id: "21", title: "Sistema de conquistas" },
+    { id: "16", title: "HDR" },
+    { id: "17", title: "Widget com sugestões baseadas no clima" },
+    { id: "18", title: "Receitas de LUT por cena" },
+    { id: "19", title: "Sistema de conquistas fotográficas" },
   ];
 
-  // renderItem agora recebe IconComponent e iconName como parâmetros
   const renderItem = (IconComponent, iconName) => {
     function SectionItem({ item }) {
       return (
@@ -58,7 +54,7 @@ export default function ComingSoon() {
         data={data}
         keyExtractor={(item) => item.id}
         renderItem={renderItem(IconComponent, iconName)}
-        scrollEnabled={false} // para o FlatList não interferir na rolagem geral
+        scrollEnabled={false}
       />
     </View>
   );
@@ -68,7 +64,7 @@ export default function ComingSoon() {
       <Backbutton />
       <Text style={styles.header}>Em breve...</Text>
       <FlatList
-        data={[{ key: "sections" }]} // apenas para habilitar rolagem geral
+        data={[{ key: "sections" }]}
         renderItem={() => (
           <>
             {renderSection(
