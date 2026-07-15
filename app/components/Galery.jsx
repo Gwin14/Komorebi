@@ -265,13 +265,18 @@ export default function Galery() {
           <View style={styles.header}>
             <Text style={styles.infoTitle}>Informações</Text>
             {exifData?.komorebiBadges?.length ? (
-              <View style={styles.badgeContainer}>
+              <ScrollView
+                horizontal
+                contentContainerStyle={styles.badgeContainer}
+                showsHorizontalScrollIndicator={false}
+                style={styles.badgeScroll}
+              >
                 {exifData.komorebiBadges.map((badge) => (
                   <View key={badge} style={styles.badge}>
                     <Text style={styles.badgeText}>{badge}</Text>
                   </View>
                 ))}
-              </View>
+              </ScrollView>
             ) : null}
             <TouchableOpacity
               style={styles.exifFrameButton}

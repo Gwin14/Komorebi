@@ -2,11 +2,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system/legacy";
 import * as piexif from "piexifjs";
+import { AVAILABLE_GRAINS } from "./grainCatalog";
+import { AVAILABLE_HALATIONS } from "./halationCatalog";
 import { AVAILABLE_LUTS } from "./lutCatalog";
 
 const KOMOREBI_USER_COMMENT_PREFIX = "KOMOREBI_JSON_BASE64:";
 const KOMOREBI_ASSET_METADATA_PREFIX = "@komorebi/assetMetadata/";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const base64Chars =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -128,10 +130,34 @@ const compactObject = (object) =>
     Object.entries(object).filter(([, value]) => value !== undefined),
   );
 
+const configsMatch = (first, second) =>
+  Boolean(first && second) && JSON.stringify(first) === JSON.stringify(second);
+
+const buildEffectMetadata = ({ catalog, id, config }) => {
+  const enabled = Boolean(config);
+  const selectedEffect =
+    catalog.find((effect) => enabled && id !== "none" && effect.id === id) ||
+    catalog.find((effect) => configsMatch(effect.config, config));
+
+  return compactObject({
+    enabled,
+    id: enabled
+      ? selectedEffect?.id || (id !== "none" ? id : "custom")
+      : "none",
+    name: enabled
+      ? selectedEffect?.name || (id !== "none" ? id : "Personalizado")
+      : undefined,
+    config: config || undefined,
+  });
+};
+
 export const buildKomorebiExifMetadata = ({
   selectedLut,
   selectedLutId = "none",
+  grainId = "none",
   grainConfig = null,
+  halationId = "none",
+  halationConfig = null,
   aspectRatio,
   doubleCaptureMode = false,
   captureMode = "standard",
@@ -159,10 +185,16 @@ export const buildKomorebiExifMetadata = ({
           source: isBuiltInLut(lutId) ? "built-in" : "custom",
         }
       : null,
-    grain: {
-      enabled: Boolean(grainConfig),
-      config: grainConfig || undefined,
-    },
+    grain: buildEffectMetadata({
+      catalog: AVAILABLE_GRAINS,
+      id: grainId,
+      config: grainConfig,
+    }),
+    halation: buildEffectMetadata({
+      catalog: AVAILABLE_HALATIONS,
+      id: halationId,
+      config: halationConfig,
+    }),
     aspectRatio,
     aspectRatioLabel: formatAspectRatio(aspectRatio),
     doubleCaptureMode: Boolean(doubleCaptureMode),

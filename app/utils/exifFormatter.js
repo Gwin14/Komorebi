@@ -25,11 +25,16 @@ const formatCaptureMode = (mode) => {
   return labels[mode] || null;
 };
 
+const formatEffectBadge = (effect, label) =>
+  effect?.enabled ? label : null;
+
 const formatKomorebiMetadata = (metadata) => {
   if (!metadata) return {};
   const badgeParts = [
     formatCaptureMode(metadata.captureMode),
     metadata.filter?.name?.toLowerCase() || null,
+    formatEffectBadge(metadata.grain, "grão"),
+    formatEffectBadge(metadata.halation, "halation"),
   ].filter(Boolean);
 
   return badgeParts.length ? { komorebiBadges: badgeParts } : {};

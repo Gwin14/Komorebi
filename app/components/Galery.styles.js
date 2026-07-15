@@ -18,17 +18,19 @@ export default StyleSheet.create({
     padding: 6,
     borderRadius: 6,
   },
-  badgeContainer: {
-    alignItems: "center",
+  badgeScroll: {
     flex: 1,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    justifyContent: "flex-end",
-    paddingHorizontal: 6,
     borderWidth: 0,
     borderRightWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.18)",
+  },
+  badgeContainer: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexGrow: 1,
+    gap: 4,
+    justifyContent: "flex-end",
+    paddingHorizontal: 6,
   },
   badge: {
     backgroundColor: "rgba(255, 255, 255, 0.08)",
