@@ -180,6 +180,14 @@ export default function Settings() {
           />
 
           <CustomToggle
+            label="Controles invertidos"
+            value={topBarBelow}
+            onValueChange={setTopBarBelow}
+          />
+
+          <View style={[styles.divider, { width: "100%" }]} />
+
+          <CustomToggle
             label="Salvar cópia sem efeitos"
             value={saveOriginalWithoutEffects}
             onValueChange={setSaveOriginalWithoutEffects}
@@ -189,12 +197,6 @@ export default function Settings() {
             label="Salvar Localização nas Fotos"
             value={location}
             onValueChange={setLocation}
-          />
-
-          <CustomToggle
-            label="Controles invertidos"
-            value={topBarBelow}
-            onValueChange={setTopBarBelow}
           />
         </View>
 
@@ -349,6 +351,38 @@ export default function Settings() {
           />
         </TouchableOpacity>
 
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/TermosDeUso");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Termos de Uso" disabled />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/PoliticaDePrivacidade");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Política de Privacidade" disabled />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/CommingSoon");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Em breve..." disabled />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
         <ExternalLink
           label="Código fonte"
           url="https://github.com/Gwin14/Komorebi"
@@ -376,36 +410,6 @@ export default function Settings() {
             description="Ajude a melhorar o app!"
             disabled
           />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            router.push("components/CommingSoon");
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          style={styles.linkButtonWrapper}
-        >
-          <ExternalLink label="Em breve..." disabled />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            router.push("components/TermosDeUso");
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          style={styles.linkButtonWrapper}
-        >
-          <ExternalLink label="Termos de Uso" disabled />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            router.push("components/PoliticaDePrivacidade");
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          style={styles.linkButtonWrapper}
-        >
-          <ExternalLink label="Política de Privacidade" disabled />
         </TouchableOpacity>
 
         <View style={styles.divider} />
