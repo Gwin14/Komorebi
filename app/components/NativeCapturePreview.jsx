@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { LivePhotoCameraView } from "../../modules/camera-live-photo";
 import { PortraitCameraView } from "../../modules/camera-portrait-capture";
+import CameraLevel from "./CameraLevel";
 import styles from "./CameraPreview.styles";
 
 export default function NativeCapturePreview({
@@ -11,6 +12,7 @@ export default function NativeCapturePreview({
   flash,
   onCameraReady,
   gridVisible,
+  levelVisible,
   verticalMode,
   doubleCaptureMode,
   smileDetectionEnabled,
@@ -87,6 +89,8 @@ export default function NativeCapturePreview({
           <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
         </View>
       )}
+
+      {levelVisible && <CameraLevel />}
 
       {doubleCaptureMode &&
         (() => {

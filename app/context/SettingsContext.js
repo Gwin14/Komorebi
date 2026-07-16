@@ -11,6 +11,7 @@ const SettingsContext = createContext(null);
 const DEFAULT_SETTINGS = {
   retroStyle: false,
   gridVisible: false,
+  levelVisible: false,
   shutterSound: false,
   location: true,
   saveOriginalWithoutEffects: false,
@@ -23,6 +24,9 @@ const DEFAULT_SETTINGS = {
 export const SettingsProvider = ({ children }) => {
   const [retroStyle, setRetroStyle] = useState(DEFAULT_SETTINGS.retroStyle);
   const [gridVisible, setGridVisible] = useState(DEFAULT_SETTINGS.gridVisible);
+  const [levelVisible, setLevelVisible] = useState(
+    DEFAULT_SETTINGS.levelVisible,
+  );
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(
     DEFAULT_SETTINGS.shutterSound,
@@ -45,6 +49,7 @@ export const SettingsProvider = ({ children }) => {
 
         setRetroStyle(savedSettings.retroStyle);
         setGridVisible(savedSettings.gridVisible);
+        setLevelVisible(savedSettings.levelVisible);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
@@ -81,6 +86,16 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [gridVisible, loading]);
+
+  // Salvar "Nível da Câmera"
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.LEVEL_VISIBLE,
+        levelVisible.toString(),
+      );
+    }
+  }, [levelVisible, loading]);
 
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
@@ -151,6 +166,8 @@ export const SettingsProvider = ({ children }) => {
     setRetroStyle,
     gridVisible,
     setGridVisible,
+    levelVisible,
+    setLevelVisible,
     loading,
     shutterSound,
     setShutterSound,

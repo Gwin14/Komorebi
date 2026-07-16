@@ -5,6 +5,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
+import CameraLevel from "./CameraLevel";
 import styles from "./CameraPreview.styles";
 
 export default function CameraPreview({
@@ -17,6 +18,7 @@ export default function CameraPreview({
   pictureSize,
   onCameraReady,
   gridVisible,
+  levelVisible,
   setMinZoom,
   setMaxZoom,
   onSmileDetected,
@@ -315,6 +317,8 @@ export default function CameraPreview({
             <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
           </View>
         )}
+
+        {levelVisible && <CameraLevel />}
 
         {doubleCaptureMode &&
           (() => {
