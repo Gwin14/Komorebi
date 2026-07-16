@@ -42,6 +42,7 @@ export default function Settings() {
     setTopBarControls,
     topBarBelow,
     setTopBarBelow,
+    setFirstTime,
   } = useSettings();
 
   const controlsMap = {};
@@ -177,8 +178,6 @@ export default function Settings() {
             value={shutterSound}
             onValueChange={setShutterSound}
           />
-
-          <View style={styles.divider} />
 
           <CustomToggle
             label="Salvar cópia sem efeitos"
@@ -331,6 +330,24 @@ export default function Settings() {
         </View>
 
         <View style={styles.divider} />
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Rever apresentação inicial"
+          accessibilityHint="Fecha as configurações e abre novamente o onboarding"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setFirstTime(true);
+            router.back();
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink
+            label="Rever apresentação"
+            description="Veja novamente os recursos principais do Komorebi."
+            disabled
+          />
+        </TouchableOpacity>
 
         <ExternalLink
           label="Código fonte"

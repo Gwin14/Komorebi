@@ -28,7 +28,6 @@ export default StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 24,
-    paddingTop: 8,
   },
   brand: {
     flexDirection: "row",
@@ -94,7 +93,6 @@ export default StyleSheet.create({
   },
   footer: {
     paddingHorizontal: 24,
-    paddingBottom: 10,
   },
   footerShade: {
     position: "absolute",

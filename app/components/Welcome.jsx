@@ -5,13 +5,18 @@ import {
   Image,
   ImageBackground,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   Text,
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  initialWindowMetrics,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
 import styles from "./Welcome.styles";
 
@@ -192,10 +197,17 @@ function Slide({ item, width }) {
 
 export default function Welcome() {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const { setFirstTime } = useSettings();
   const isLastSlide = currentIndex === FLOW.length - 1;
+  const safeTop =
+    insets.top ||
+    initialWindowMetrics?.insets.top ||
+    (Platform.OS === "android" ? StatusBar.currentHeight || 24 : 44);
+  const safeBottom =
+    insets.bottom || initialWindowMetrics?.insets.bottom || 16;
 
   const finish = () => setFirstTime(false);
 
@@ -241,14 +253,14 @@ export default function Welcome() {
           ))}
         </ScrollView>
 
-        <SafeAreaView pointerEvents="box-none" style={styles.chrome}>
+        <View pointerEvents="box-none" style={styles.chrome}>
           <LinearGradient
             pointerEvents="none"
             colors={["rgba(0,0,0,0.76)", "transparent"]}
             style={styles.headerShade}
           />
 
-          <View style={styles.header}>
+          <View style={[styles.header, { paddingTop: safeTop + 8 }]}>
             <Brand />
             {!isLastSlide && (
               <Pressable
@@ -266,7 +278,7 @@ export default function Welcome() {
             )}
           </View>
 
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: safeBottom + 10 }]}>
             <LinearGradient
               pointerEvents="none"
               colors={["transparent", "rgba(0,0,0,0.98)"]}
@@ -327,7 +339,7 @@ export default function Welcome() {
               </Pressable>
             </View>
           </View>
-        </SafeAreaView>
+        </View>
       </View>
     </Modal>
   );

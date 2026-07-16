@@ -48,7 +48,7 @@ export const SettingsProvider = ({ children }) => {
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
-        setFirstTime(True);
+        setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
         setTopBarBelow(savedSettings.topBarBelow);
         setTopBarControls(savedSettings.topBarControls);
