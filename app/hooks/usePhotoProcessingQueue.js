@@ -52,10 +52,10 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
 
         const shouldApplyExifBeforeSaving =
           !item.needsProcessing &&
-          captureMode === "standard" &&
+          captureMode !== "raw" &&
           Boolean(exifData);
         const uriToSave = shouldApplyExifBeforeSaving
-          ? await applyExifDataToImage(processedUri, exifData)
+          ? await applyExifDataToImage(processedUri, exifData, originalUri)
           : processedUri;
         const komorebiMetadata = exifData?.komorebiMetadata;
         const saveMetadataForAsset = (assetId) =>

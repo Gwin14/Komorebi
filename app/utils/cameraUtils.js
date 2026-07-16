@@ -488,7 +488,11 @@ const toExifFraction = (val) => {
   return [h1, k1];
 };
 
-export const applyExifDataToImage = async (imageUri, exifData) => {
+export const applyExifDataToImage = async (
+  imageUri,
+  exifData,
+  sourceImageUri = null,
+) => {
   if (!exifData || Object.keys(exifData).length === 0) {
     return imageUri;
   }
@@ -503,14 +507,28 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
     let exifObj = { "0th": {}, Exif: {}, GPS: {}, "1st": {}, thumbnail: null };
 
     try {
-      const existingExif = piexif.load(dataUrl);
+      const exifSourceUri = sourceImageUri || imageUri;
+      const exifSourceBase64 =
+        exifSourceUri === imageUri
+          ? base64Data
+          : await FileSystem.readAsStringAsync(exifSourceUri, {
+              encoding: "base64",
+            });
+      const existingExif = piexif.load(
+        `data:image/jpeg;base64,${exifSourceBase64}`,
+      );
       if (existingExif) {
         exifObj = JSON.parse(JSON.stringify(existingExif));
         exifObj["thumbnail"] = null;
       }
     } catch (_e) {
-      console.log("Criando novo objeto EXIF");
+      console.log("Não foi possível carregar o EXIF da imagem de origem");
     }
+
+    exifObj["0th"] = exifObj["0th"] || {};
+    exifObj["Exif"] = exifObj["Exif"] || {};
+    exifObj["GPS"] = exifObj["GPS"] || {};
+    exifObj["1st"] = exifObj["1st"] || {};
 
     if (exifData.Make) {
       exifObj["0th"][piexif.ImageIFD.Make] = String(exifData.Make);
@@ -532,10 +550,12 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
       );
     }
 
-    // Aqui apenas regravamos metadados; os pixels do JPEG original não foram
-    // reorientados. Preserve a orientação criada pela câmera para não apagar
-    // a rotação necessária ao exibir a foto corretamente.
-    if (exifObj["0th"][piexif.ImageIFD.Orientation] == null) {
+    // ImageManipulator e o processador de efeitos normalizam os pixels. Ao
+    // importar o EXIF do arquivo original, normalize também a orientação para
+    // que os visualizadores não apliquem uma segunda rotação.
+    if (sourceImageUri && sourceImageUri !== imageUri) {
+      exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
+    } else if (exifObj["0th"][piexif.ImageIFD.Orientation] == null) {
       exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
     }
     exifObj["0th"][piexif.ImageIFD.XResolution] = [72, 1];
