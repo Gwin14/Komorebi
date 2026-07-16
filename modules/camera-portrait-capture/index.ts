@@ -18,7 +18,12 @@ export type PortraitCameraViewProps = ViewProps & {
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
+  histogramEnabled?: boolean;
   onSmileDetected?: () => void;
+  onHistogramUpdated?: (event: {
+    nativeEvent?: { bins?: number[] };
+    bins?: number[];
+  }) => void;
   onInitialized?: () => void;
   onError?: (event: { nativeEvent?: { message?: string } }) => void;
 };

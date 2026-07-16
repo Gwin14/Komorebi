@@ -52,7 +52,7 @@ public class CameraLivePhotoModule: Module {
     }
 
     View(LivePhotoCameraView.self) {
-      Events("onInitialized", "onError", "onSmileDetected")
+      Events("onInitialized", "onError", "onSmileDetected", "onHistogramUpdated")
 
       Prop("deviceId") { (view, deviceId: String?) in
         view.deviceId = deviceId
@@ -68,6 +68,10 @@ public class CameraLivePhotoModule: Module {
 
       Prop("smileDetectionEnabled") { (view, enabled: Bool?) in
         view.smileDetectionEnabled = enabled ?? false
+      }
+
+      Prop("histogramEnabled") { (view, enabled: Bool?) in
+        view.histogramEnabled = enabled ?? false
       }
     }
 
@@ -302,6 +306,7 @@ public final class LivePhotoCameraView: ExpoView {
   let onInitialized = EventDispatcher()
   let onError = EventDispatcher()
   let onSmileDetected = EventDispatcher()
+  let onHistogramUpdated = EventDispatcher()
 
   private static weak var currentActiveView: LivePhotoCameraView?
   private let controller = LivePhotoCameraController()
@@ -320,6 +325,12 @@ public final class LivePhotoCameraView: ExpoView {
     }
   }
 
+  var histogramEnabled: Bool = false {
+    didSet {
+      controller.histogramEnabled = histogramEnabled
+    }
+  }
+
   var isActive: Bool = true {
     didSet {
       updateSession()
@@ -334,6 +345,9 @@ public final class LivePhotoCameraView: ExpoView {
     videoPreviewLayer.session = controller.session
     controller.onSmileDetected = { [weak self] in
       self?.onSmileDetected()
+    }
+    controller.onHistogramUpdated = { [weak self] bins in
+      self?.onHistogramUpdated(["bins": bins])
     }
   }
 
@@ -417,7 +431,10 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
   )
   var smileDetectionEnabled = false
   var onSmileDetected: (() -> Void)?
+  var histogramEnabled = false
+  var onHistogramUpdated: (([Double]) -> Void)?
   private var lastSmileAt = Date.distantPast
+  private var lastHistogramAt = Date.distantPast
   private let sessionQueue = DispatchQueue(label: "dev.komorebi.live-photo.session")
   private var configuredDeviceId: String?
   private var isSessionReady = false
@@ -513,9 +530,23 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
+    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+      return
+    }
+
+    let now = Date()
+    if histogramEnabled,
+       now.timeIntervalSince(lastHistogramAt) >= 0.2
+    {
+      lastHistogramAt = now
+      let bins = makeHistogram(from: pixelBuffer)
+      DispatchQueue.main.async { [weak self] in
+        self?.onHistogramUpdated?(bins)
+      }
+    }
+
     guard smileDetectionEnabled,
-          Date().timeIntervalSince(lastSmileAt) >= 2.5,
-          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+          now.timeIntervalSince(lastSmileAt) >= 2.5,
           let detector = faceDetector
     else { return }
 
@@ -528,8 +559,71 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
       return
     }
 
-    lastSmileAt = Date()
+    lastSmileAt = now
     DispatchQueue.main.async { [weak self] in self?.onSmileDetected?() }
+  }
+
+  private func makeHistogram(from pixelBuffer: CVPixelBuffer) -> [Double] {
+    let binCount = 64
+    var bins = [Int](repeating: 0, count: binCount)
+
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer {
+      CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+    }
+
+    var peak = 0
+
+    if CVPixelBufferIsPlanar(pixelBuffer),
+       CVPixelBufferGetPlaneCount(pixelBuffer) > 0,
+       let lumaAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)
+    {
+      let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+      let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+      let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+      let sampleStep = max(1, Int(sqrt(Double(width * height) / 4096.0)))
+
+      for y in stride(from: 0, to: height, by: sampleStep) {
+        let row = lumaAddress
+          .advanced(by: y * bytesPerRow)
+          .assumingMemoryBound(to: UInt8.self)
+
+        for x in stride(from: 0, to: width, by: sampleStep) {
+          let bin = min(binCount - 1, Int(row[x]) >> 2)
+          bins[bin] += 1
+          peak = max(peak, bins[bin])
+        }
+      }
+    } else if let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) {
+      let width = CVPixelBufferGetWidth(pixelBuffer)
+      let height = CVPixelBufferGetHeight(pixelBuffer)
+      let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+      let sampleStep = max(1, Int(sqrt(Double(width * height) / 4096.0)))
+
+      for y in stride(from: 0, to: height, by: sampleStep) {
+        let row = baseAddress
+          .advanced(by: y * bytesPerRow)
+          .assumingMemoryBound(to: UInt8.self)
+
+        for x in stride(from: 0, to: width, by: sampleStep) {
+          let offset = x * 4
+          let blue = Int(row[offset])
+          let green = Int(row[offset + 1])
+          let red = Int(row[offset + 2])
+          let luminance = (29 * blue + 150 * green + 77 * red) >> 8
+          let bin = min(binCount - 1, luminance >> 2)
+
+          bins[bin] += 1
+          peak = max(peak, bins[bin])
+        }
+      }
+    }
+
+    guard peak > 0 else {
+      return [Double](repeating: 0, count: binCount)
+    }
+
+    return bins.map { Double($0) / Double(peak) }
   }
 
   func capture(flashMode: String) async throws -> CaptureResult {

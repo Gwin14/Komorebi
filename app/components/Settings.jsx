@@ -31,6 +31,8 @@ export default function Settings() {
     setGridVisible,
     levelVisible,
     setLevelVisible,
+    histogramVisible,
+    setHistogramVisible,
     loading,
     shutterSound,
     setShutterSound,
@@ -178,6 +180,12 @@ export default function Settings() {
             label="Nível da Câmera"
             value={levelVisible}
             onValueChange={setLevelVisible}
+          />
+
+          <CustomToggle
+            label="Histograma em tempo real"
+            value={histogramVisible}
+            onValueChange={setHistogramVisible}
           />
 
           <CustomToggle

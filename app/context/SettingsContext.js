@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   retroStyle: false,
   gridVisible: false,
   levelVisible: false,
+  histogramVisible: false,
   shutterSound: false,
   location: true,
   saveOriginalWithoutEffects: false,
@@ -26,6 +27,9 @@ export const SettingsProvider = ({ children }) => {
   const [gridVisible, setGridVisible] = useState(DEFAULT_SETTINGS.gridVisible);
   const [levelVisible, setLevelVisible] = useState(
     DEFAULT_SETTINGS.levelVisible,
+  );
+  const [histogramVisible, setHistogramVisible] = useState(
+    DEFAULT_SETTINGS.histogramVisible,
   );
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(
@@ -50,6 +54,7 @@ export const SettingsProvider = ({ children }) => {
         setRetroStyle(savedSettings.retroStyle);
         setGridVisible(savedSettings.gridVisible);
         setLevelVisible(savedSettings.levelVisible);
+        setHistogramVisible(savedSettings.histogramVisible);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
@@ -96,6 +101,16 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [levelVisible, loading]);
+
+  // Salvar "Histograma em tempo real"
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.HISTOGRAM_VISIBLE,
+        histogramVisible.toString(),
+      );
+    }
+  }, [histogramVisible, loading]);
 
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
@@ -168,6 +183,8 @@ export const SettingsProvider = ({ children }) => {
     setGridVisible,
     levelVisible,
     setLevelVisible,
+    histogramVisible,
+    setHistogramVisible,
     loading,
     shutterSound,
     setShutterSound,

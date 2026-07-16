@@ -41,6 +41,7 @@ export default function App() {
     retroStyle,
     gridVisible,
     levelVisible,
+    histogramVisible,
     location,
     firstTime,
     loading,
@@ -409,6 +410,7 @@ export default function App() {
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
                 levelVisible={levelVisible}
+                histogramVisible={histogramVisible}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
                 smileDetectionEnabled={smileDetectionEnabled}
@@ -427,6 +429,7 @@ export default function App() {
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
                 levelVisible={levelVisible}
+                histogramVisible={histogramVisible}
                 setMinZoom={setMinZoom}
                 setMaxZoom={setMaxZoom}
                 onSmileDetected={handleTakePicture}
