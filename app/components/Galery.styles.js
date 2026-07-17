@@ -143,9 +143,48 @@ export default StyleSheet.create({
     alignItems: "center",
     paddingBottom: 40,
   },
+  selectedImagePage: {
+    height: 350,
+    width: "100%",
+  },
   selectedImage: {
     width: "100%",
-    height: 350,
+    height: "100%",
+  },
+  photoDataLoading: {
+    alignItems: "center",
+    height: 110,
+    justifyContent: "center",
+    width: "100%",
+  },
+  photoDataContent: {
+    alignItems: "center",
+    width: "100%",
+  },
+  modalSwitchBackdrop: {
+    backgroundColor: "#000",
+    position: "absolute",
+    zIndex: 50,
+  },
+  fullScreenModal: {
+    backgroundColor: "#000",
+    flex: 1,
+  },
+  fullScreenContent: {
+    flex: 1,
+    zIndex: 1,
+  },
+  fullScreenPage: {
+    alignItems: "center",
+    backgroundColor: "#000",
+    justifyContent: "center",
+  },
+  fullScreenImage: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
   },
   infoTitle: {
     color: "#fff",
