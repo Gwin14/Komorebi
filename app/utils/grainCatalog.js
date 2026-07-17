@@ -49,6 +49,51 @@ export const AVAILABLE_GRAINS = [
       octaves: 3,
     },
   },
+  {
+    id: "rough",
+    name: "Granulado",
+    config: {
+      lumaStd: 12.5,
+      rStd: 3.2,
+      gStd: 1.9,
+      bStd: 4.6,
+      shadowBoost: 1.1,
+      highlightReduction: 0.4,
+      clumpFreq: 0.055,
+      clumpAmp: 0.42,
+      octaves: 3,
+    },
+  },
+  {
+    id: "sixteen",
+    name: "16 mm",
+    config: {
+      lumaStd: 16,
+      rStd: 3.8,
+      gStd: 2.2,
+      bStd: 5.4,
+      shadowBoost: 1.25,
+      highlightReduction: 0.32,
+      clumpFreq: 0.042,
+      clumpAmp: 0.62,
+      octaves: 4,
+    },
+  },
+  {
+    id: "push",
+    name: "Push",
+    config: {
+      lumaStd: 20,
+      rStd: 5,
+      gStd: 3,
+      bStd: 7,
+      shadowBoost: 1.6,
+      highlightReduction: 0.22,
+      clumpFreq: 0.032,
+      clumpAmp: 0.82,
+      octaves: 4,
+    },
+  },
 ];
 
 export const getGrainConfig = (grainId) =>

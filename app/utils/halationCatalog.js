@@ -43,6 +43,45 @@ export const AVAILABLE_HALATIONS = [
       blue: 0.03,
     },
   },
+  {
+    id: "amber",
+    name: "Âmbar",
+    config: {
+      threshold: 0.66,
+      softness: 0.22,
+      radius: 20,
+      intensity: 0.32,
+      red: 1,
+      green: 0.34,
+      blue: 0.06,
+    },
+  },
+  {
+    id: "neon",
+    name: "Neon",
+    config: {
+      threshold: 0.6,
+      softness: 0.26,
+      radius: 28,
+      intensity: 0.42,
+      red: 1,
+      green: 0.1,
+      blue: 0.015,
+    },
+  },
+  {
+    id: "aura",
+    name: "Aura",
+    config: {
+      threshold: 0.54,
+      softness: 0.32,
+      radius: 36,
+      intensity: 0.5,
+      red: 1,
+      green: 0.24,
+      blue: 0.08,
+    },
+  },
 ];
 
 export const getHalationConfig = (halationId) =>

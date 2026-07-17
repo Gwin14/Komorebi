@@ -457,7 +457,7 @@ export default function Galery() {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar hidden={fullScreenVisible} />
 
       <View style={styles.navigationBar}>
