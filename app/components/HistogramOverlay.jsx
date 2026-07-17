@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import Svg, {
@@ -14,6 +14,7 @@ import styles from "./HistogramOverlay.styles";
 const CHART_WIDTH = 148;
 const CHART_HEIGHT = 62;
 const CHART_PADDING = 3;
+const VIEWFINDER_INSET = 12;
 
 const createHistogramPath = (bins, closePath = false) => {
   if (!bins?.length) return "";
@@ -37,18 +38,35 @@ const createHistogramPath = (bins, closePath = false) => {
 
 function HistogramOverlay({ bins }) {
   const { animatedStyle, orientation } = useDeviceOrientationState();
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const linePath = useMemo(() => createHistogramPath(bins), [bins]);
   const fillPath = useMemo(() => createHistogramPath(bins, true), [bins]);
   const isLandscape = Math.abs(orientation) === 90;
+  const rotationOffset = isLandscape
+    ? (containerSize.width - containerSize.height) / 2
+    : 0;
+  const positionStyle = {
+    top: VIEWFINDER_INSET + rotationOffset,
+    right: VIEWFINDER_INSET - rotationOffset,
+  };
+
+  const handleLayout = useCallback((event) => {
+    const { width, height } = event.nativeEvent.layout;
+
+    setContainerSize((currentSize) => {
+      if (currentSize.width === width && currentSize.height === height) {
+        return currentSize;
+      }
+
+      return { width, height };
+    });
+  }, []);
 
   return (
     <Animated.View
       pointerEvents="none"
-      style={[
-        styles.container,
-        isLandscape && styles.containerLandscape,
-        animatedStyle,
-      ]}
+      onLayout={handleLayout}
+      style={[styles.container, positionStyle, animatedStyle]}
     >
       <View style={styles.header}>
         <Text style={styles.label}>LUMA</Text>

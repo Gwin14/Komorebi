@@ -3,8 +3,6 @@ import { StyleSheet } from "react-native";
 export default StyleSheet.create({
   container: {
     position: "absolute",
-    top: 12,
-    right: 12,
     width: 160,
     paddingHorizontal: 6,
     paddingTop: 6,
@@ -14,9 +12,6 @@ export default StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "rgba(8,8,8,0.58)",
     overflow: "hidden",
-  },
-  containerLandscape: {
-    top: 50,
   },
   header: {
     flexDirection: "row",
