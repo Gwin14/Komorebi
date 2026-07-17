@@ -304,7 +304,13 @@ export default function Galery() {
                   if (key === "latitude" || key === "longitude") return null;
 
                   return (
-                    <View key={key} style={styles.exifItemWrapper}>
+                    <View
+                      key={key}
+                      style={[
+                        styles.exifItemWrapper,
+                        key === "date" && styles.exifItemWide,
+                      ]}
+                    >
                       <ExifItem
                         icon={config.icon}
                         label={config.label}

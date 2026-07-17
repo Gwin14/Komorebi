@@ -15,6 +15,30 @@ export const formatAperture = (f) => {
   return `f/${Number(f).toFixed(1)}`;
 };
 
+export const formatExifDate = (value) => {
+  if (value == null || value === "") return null;
+
+  const text = String(value).trim();
+  const match = text.match(
+    /^(\d{4})[:/-](\d{2})[:/-](\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/,
+  );
+
+  if (match) {
+    const [, year, month, day, hours, minutes] = match;
+    const date = `${day}/${month}/${year}`;
+
+    return hours && minutes ? `${date} às ${hours}:${minutes}` : date;
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return text;
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(parsedDate);
+};
+
 const formatCaptureMode = (mode) => {
   const labels = {
     live: "live",
@@ -69,13 +93,17 @@ export const exifHandler = async (assetId, setExifData) => {
       inferKomorebiMetadataFromAssetInfo(info);
 
     if (!rawExif) {
-      const komorebiExif = formatKomorebiMetadata(komorebiMetadata);
+      const komorebiExif = {
+        date: formatExifDate(info.creationTime),
+        ...formatKomorebiMetadata(komorebiMetadata),
+      };
       setExifData(Object.keys(komorebiExif).length ? komorebiExif : null);
       return;
     }
 
     const exif = rawExif["{Exif}"] || rawExif;
     const gps = rawExif["{GPS}"] || rawExif;
+    const tiff = rawExif["{TIFF}"] || rawExif;
 
     const formattedExif = {
       iso: exif?.ISOSpeedRatings?.[0] ?? exif?.ISOSpeedRatings ?? null,
@@ -89,7 +117,13 @@ export const exifHandler = async (assetId, setExifData) => {
         ? `${exif.FocalLenIn35mmFilm}mm`
         : null,
       lens: exif?.LensModel ?? null,
-      date: exif?.DateTimeOriginal ?? exif?.DateTime ?? null,
+      date: formatExifDate(
+        exif?.DateTimeOriginal ??
+          exif?.DateTimeDigitized ??
+          exif?.DateTime ??
+          tiff?.DateTime ??
+          info.creationTime,
+      ),
       latitude:
         gps?.Latitude !== undefined
           ? gps.LatitudeRef === "S"

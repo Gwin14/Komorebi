@@ -5,7 +5,11 @@ export default StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    width: "105%",
+    width: "95%",
+    backgroundColor: "#ffffff12",
+    borderColor: "#ffffff08",
+    marginVertical: 10,
+    borderRadius: 10,
   },
   title: {
     fontSize: 18,
@@ -14,7 +18,6 @@ export default StyleSheet.create({
     textAlign: "center",
   },
   exifFrameButton: {
-    marginRight: 15,
     padding: 6,
     borderRadius: 6,
   },
@@ -22,7 +25,7 @@ export default StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     borderRightWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.18)",
+    borderColor: "#ffffff1f",
   },
   badgeContainer: {
     alignItems: "center",
@@ -33,8 +36,8 @@ export default StyleSheet.create({
     paddingHorizontal: 6,
   },
   badge: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderColor: "rgba(255, 255, 255, 0.18)",
+    backgroundColor: "#ffffff0f",
+    borderColor: "#ffffff14",
     borderRadius: 5,
     borderWidth: 1,
     minHeight: 30,
@@ -150,7 +153,6 @@ export default StyleSheet.create({
     fontSize: 20,
     margin: 10,
     textAlign: "left",
-    paddingLeft: 15,
   },
   exifFrameIcon: {
     width: 30,
@@ -161,10 +163,18 @@ export default StyleSheet.create({
     flexWrap: "wrap", // permite quebra de linha
     justifyContent: "space-between", // espaçamento entre as colunas
     padding: 10,
+    backgroundColor: "#ffffff12",
+    borderColor: "#ffffff08",
+    width: "95%",
+    borderRadius: 10,
+    marginBottom: 10,
   },
   exifItemWrapper: {
     width: "45%", // cerca de metade da tela (menos espaço de margem)
     marginBottom: 10,
+  },
+  exifItemWide: {
+    width: "100%",
   },
   mapContainer: {
     width: "95%",
