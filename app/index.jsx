@@ -335,15 +335,15 @@ export default function App() {
         ? rawCapture.rawModeEnabled
           ? "Desative RAW/ProRAW para usar Live Photo."
           : portraitCapture.enabled
-          ? "Desative o modo retrato para usar Live Photo."
-          : null
+            ? "Desative o modo retrato para usar Live Photo."
+            : null
         : "Live Photo não é suportada pela lente selecionada.",
       portrait: portraitCapture.available
         ? rawCapture.rawModeEnabled
           ? "Desative RAW/ProRAW para usar o modo retrato."
           : livePhoto.enabled
-          ? "Desative Live Photo para usar o modo retrato."
-          : null
+            ? "Desative Live Photo para usar o modo retrato."
+            : null
         : "O modo retrato não é suportado pela lente selecionada.",
     },
     selectedLutId,
@@ -375,7 +375,7 @@ export default function App() {
   if (loading) return null;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <Animated.View
         pointerEvents="none"
         style={[

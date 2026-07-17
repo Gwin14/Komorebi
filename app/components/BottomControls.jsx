@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Animated, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import useShutterSound from "../utils/useShutterSound";
@@ -14,7 +15,7 @@ import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
 import Shutter from "./shutter";
-import styles from "./BottomControls.styles";
+import styles, { BOTTOM_CONTROLS_MARGIN } from "./BottomControls.styles";
 
 export default function BottomControls({
   controlsAnim,
@@ -47,6 +48,7 @@ export default function BottomControls({
   galleryRefreshKey,
 }) {
   const router = useRouter();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const { shutterSound } = useSettings();
   const playShutterSound = useShutterSound();
   const deviceOrientationStyle = useDeviceOrientation();
@@ -142,7 +144,12 @@ export default function BottomControls({
     (activeControl === "none" || activeControl === "manual");
 
   return (
-    <View style={styles.shutterContainer}>
+    <View
+      style={[
+        styles.shutterContainer,
+        { marginBottom: BOTTOM_CONTROLS_MARGIN + bottomInset },
+      ]}
+    >
       {/* 🆕 Seletor de lentes — acima da linha do shutter, sempre visível quando inativo */}
       {showLensSelector && (
         <LensSelector

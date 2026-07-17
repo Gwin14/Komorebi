@@ -55,12 +55,12 @@ Recursos avançados, especialmente os nativos de iOS, só aparecem quando o disp
 
 O Komorebi pode solicitar:
 
-| Permissão | Uso |
-| --- | --- |
-| Câmera | Capturar fotos e exibir o preview. |
-| Biblioteca de mídia / Fotos | Salvar imagens, criar/usar o álbum "Komorebi", carregar a galeria integrada e excluir fotos quando solicitado. |
-| Localização durante o uso | Gravar GPS em fotos, quando ativado, e consultar clima/localidade. |
-| Microfone | Declarada na configuração nativa para compatibilidade com recursos de câmera/vídeo, embora o app atual seja focado em fotografia. |
+| Permissão                   | Uso                                                                                                                               |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Câmera                      | Capturar fotos e exibir o preview.                                                                                                |
+| Biblioteca de mídia / Fotos | Salvar imagens, criar/usar o álbum "Komorebi", carregar a galeria integrada e excluir fotos quando solicitado.                    |
+| Localização durante o uso   | Gravar GPS em fotos, quando ativado, e consultar clima/localidade.                                                                |
+| Microfone                   | Declarada na configuração nativa para compatibilidade com recursos de câmera/vídeo, embora o app atual seja focado em fotografia. |
 
 Você pode gerenciar permissões nas configurações do sistema. Recursos que dependem de permissões negadas podem parar de funcionar.
 

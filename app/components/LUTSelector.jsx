@@ -186,8 +186,7 @@ export default function LUTSelector({
                   key={grain.id}
                   style={[
                     styles.effectButton,
-                    selectedGrainId === grain.id &&
-                      styles.effectButtonSelected,
+                    selectedGrainId === grain.id && styles.effectButtonSelected,
                   ]}
                   onPress={() => onSelectGrain(grain.id)}
                   accessibilityRole="button"
@@ -214,23 +213,22 @@ export default function LUTSelector({
                       end={{ x: 1, y: 1 }}
                       style={styles.grainSample}
                     >
-                      {GRAIN_DOTS.slice(
-                        0,
-                        GRAIN_DOT_COUNTS[grain.id] || 0,
-                      ).map((dot, index) => (
-                        <View
-                          key={index}
-                          style={[
-                            styles.grainDot,
-                            {
-                              left: dot.left,
-                              top: dot.top,
-                              width: dot.size,
-                              height: dot.size,
-                            },
-                          ]}
-                        />
-                      ))}
+                      {GRAIN_DOTS.slice(0, GRAIN_DOT_COUNTS[grain.id] || 0).map(
+                        (dot, index) => (
+                          <View
+                            key={index}
+                            style={[
+                              styles.grainDot,
+                              {
+                                left: dot.left,
+                                top: dot.top,
+                                width: dot.size,
+                                height: dot.size,
+                              },
+                            ]}
+                          />
+                        ),
+                      )}
                     </LinearGradient>
                     <View style={styles.filmPerforations}>
                       {[0, 1, 2].map((hole) => (
@@ -241,8 +239,7 @@ export default function LUTSelector({
                   <Text
                     style={[
                       styles.effectName,
-                      selectedGrainId === grain.id &&
-                        styles.effectNameSelected,
+                      selectedGrainId === grain.id && styles.effectNameSelected,
                     ]}
                   >
                     {grain.name}
@@ -283,8 +280,7 @@ export default function LUTSelector({
                   >
                     <LinearGradient
                       colors={
-                        HALATION_PREVIEWS[halation.id] ||
-                        HALATION_PREVIEWS.none
+                        HALATION_PREVIEWS[halation.id] || HALATION_PREVIEWS.none
                       }
                       locations={[0, 0.42, 1]}
                       start={{ x: 0, y: 0.5 }}

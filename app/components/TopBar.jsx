@@ -154,7 +154,9 @@ export default function TopBar({
     },
     portrait: {
       icon: portraitModeEnabled ? "person" : "person-outline",
-      symbol: portraitModeEnabled ? "f.cursive.circle.fill" : "f.cursive.circle",
+      symbol: portraitModeEnabled
+        ? "f.cursive.circle.fill"
+        : "f.cursive.circle",
       onPress: togglePortraitModeEnabled,
       active: portraitModeEnabled,
     },
@@ -208,7 +210,8 @@ export default function TopBar({
               if (disabled) {
                 Alert.alert(
                   "Recurso indisponível",
-                  unavailableReason || "Este recurso não é compatível com a lente atual.",
+                  unavailableReason ||
+                    "Este recurso não é compatível com a lente atual.",
                 );
                 return;
               }
@@ -221,11 +224,7 @@ export default function TopBar({
             >
               {controlId === "rawCapture" ? (
                 <View style={styles.rawControl}>
-                  <Ionicons
-                    name={control.icon}
-                    size={28}
-                    color={iconColor}
-                  />
+                  <Ionicons name={control.icon} size={28} color={iconColor} />
                   <Text
                     style={[
                       styles.rawLabel,
@@ -235,32 +234,30 @@ export default function TopBar({
                     {control.label}
                   </Text>
                 </View>
+              ) : control.symbol ? (
+                <SymbolView
+                  name={control.symbol}
+                  size={32}
+                  type="monochrome"
+                  tintColor={iconColor}
+                  resizeMode="scaleAspectFit"
+                  style={styles.symbolButton}
+                  fallback={
+                    <Ionicons
+                      name={control.icon}
+                      size={32}
+                      style={styles.button}
+                      color={iconColor}
+                    />
+                  }
+                />
               ) : (
-                control.symbol ? (
-                  <SymbolView
-                    name={control.symbol}
-                    size={32}
-                    type="monochrome"
-                    tintColor={iconColor}
-                    resizeMode="scaleAspectFit"
-                    style={styles.symbolButton}
-                    fallback={
-                      <Ionicons
-                        name={control.icon}
-                        size={32}
-                        style={styles.button}
-                        color={iconColor}
-                      />
-                    }
-                  />
-                ) : (
-                  <Ionicons
-                    name={control.icon}
-                    size={32}
-                    style={styles.button}
-                    color={iconColor}
-                  />
-                )
+                <Ionicons
+                  name={control.icon}
+                  size={32}
+                  style={styles.button}
+                  color={iconColor}
+                />
               )}
             </Animated.View>
           </TouchableOpacity>

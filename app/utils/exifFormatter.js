@@ -49,8 +49,7 @@ const formatCaptureMode = (mode) => {
   return labels[mode] || null;
 };
 
-const formatEffectBadge = (effect, label) =>
-  effect?.enabled ? label : null;
+const formatEffectBadge = (effect, label) => (effect?.enabled ? label : null);
 
 const formatKomorebiMetadata = (metadata) => {
   if (!metadata) return {};

@@ -49,14 +49,17 @@ export default function NativeCapturePreview({
     onCameraReady?.();
   }, [device?.id, mode, onCameraReady]);
 
-  const handleError = useCallback((event) => {
-    const message = event?.nativeEvent?.message;
-    console.warn("[NativeCapturePreview] error", {
-      mode,
-      deviceId: device?.id,
-      message: message || "Unknown native capture preview error",
-    });
-  }, [device?.id, mode]);
+  const handleError = useCallback(
+    (event) => {
+      const message = event?.nativeEvent?.message;
+      console.warn("[NativeCapturePreview] error", {
+        mode,
+        deviceId: device?.id,
+        message: message || "Unknown native capture preview error",
+      });
+    },
+    [device?.id, mode],
+  );
 
   const handleHistogramUpdated = useCallback((event) => {
     // Paper entrega eventos de view dentro de nativeEvent; algumas versões

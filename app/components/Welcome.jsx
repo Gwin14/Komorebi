@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   Image,
   ImageBackground,
   Modal,
@@ -199,6 +201,9 @@ export default function Welcome() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef(null);
+  const isClosingRef = useRef(false);
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+  const screenTranslateY = useRef(new Animated.Value(10)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
   const { setFirstTime } = useSettings();
   const isLastSlide = currentIndex === FLOW.length - 1;
@@ -206,10 +211,50 @@ export default function Welcome() {
     insets.top ||
     initialWindowMetrics?.insets.top ||
     (Platform.OS === "android" ? StatusBar.currentHeight || 24 : 44);
-  const safeBottom =
-    insets.bottom || initialWindowMetrics?.insets.bottom || 16;
+  const safeBottom = insets.bottom || initialWindowMetrics?.insets.bottom || 16;
 
-  const finish = () => setFirstTime(false);
+  useEffect(() => {
+    const entranceAnimation = Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 1,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenTranslateY, {
+        toValue: 0,
+        duration: 420,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+
+    entranceAnimation.start();
+
+    return () => entranceAnimation.stop();
+  }, [screenOpacity, screenTranslateY]);
+
+  const finish = () => {
+    if (isClosingRef.current) return;
+
+    isClosingRef.current = true;
+    Animated.parallel([
+      Animated.timing(screenOpacity, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(screenTranslateY, {
+        toValue: 6,
+        duration: 260,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) setFirstTime(false);
+    });
+  };
 
   const goTo = (index) => {
     scrollRef.current?.scrollTo({ x: index * width, animated: true });
@@ -232,114 +277,124 @@ export default function Welcome() {
 
   return (
     <Modal
-      animationType="fade"
+      animationType="none"
       presentationStyle="fullScreen"
       statusBarTranslucent
       onRequestClose={finish}
     >
       <View style={styles.container}>
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          pagingEnabled
-          bounces={false}
-          showsHorizontalScrollIndicator={false}
-          decelerationRate="fast"
-          onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={16}
+        <Animated.View
+          style={[
+            styles.animatedContent,
+            {
+              opacity: screenOpacity,
+              transform: [{ translateY: screenTranslateY }],
+            },
+          ]}
         >
-          {FLOW.map((item) => (
-            <Slide key={item.id} item={item} width={width} />
-          ))}
-        </ScrollView>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            pagingEnabled
+            bounces={false}
+            showsHorizontalScrollIndicator={false}
+            decelerationRate="fast"
+            onMomentumScrollEnd={handleScrollEnd}
+            scrollEventThrottle={16}
+          >
+            {FLOW.map((item) => (
+              <Slide key={item.id} item={item} width={width} />
+            ))}
+          </ScrollView>
 
-        <View pointerEvents="box-none" style={styles.chrome}>
-          <LinearGradient
-            pointerEvents="none"
-            colors={["rgba(0,0,0,0.76)", "transparent"]}
-            style={styles.headerShade}
-          />
-
-          <View style={[styles.header, { paddingTop: safeTop + 8 }]}>
-            <Brand />
-            {!isLastSlide && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Pular apresentação"
-                hitSlop={12}
-                onPress={finish}
-                style={({ pressed }) => [
-                  styles.skipButton,
-                  pressed && styles.buttonPressed,
-                ]}
-              >
-                <Text style={styles.skipText}>Pular</Text>
-              </Pressable>
-            )}
-          </View>
-
-          <View style={[styles.footer, { paddingBottom: safeBottom + 10 }]}>
+          <View pointerEvents="box-none" style={styles.chrome}>
             <LinearGradient
               pointerEvents="none"
-              colors={["transparent", "rgba(0,0,0,0.98)"]}
-              style={styles.footerShade}
+              colors={["rgba(0,0,0,0.76)", "transparent"]}
+              style={styles.headerShade}
             />
 
-            <View style={styles.pagination}>
-              {FLOW.map((item, index) => (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Ir para a etapa ${index + 1}`}
-                  hitSlop={8}
-                  onPress={() => goTo(index)}
-                  style={[
-                    styles.paginationDot,
-                    index === currentIndex && styles.paginationDotActive,
-                  ]}
-                />
-              ))}
-            </View>
-
-            <View style={styles.actions}>
-              {currentIndex > 0 && (
+            <View style={[styles.header, { paddingTop: safeTop + 8 }]}>
+              <Brand />
+              {!isLastSlide && (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Voltar"
-                  onPress={() => goTo(currentIndex - 1)}
+                  accessibilityLabel="Pular apresentação"
+                  hitSlop={12}
+                  onPress={finish}
                   style={({ pressed }) => [
-                    styles.backButton,
+                    styles.skipButton,
                     pressed && styles.buttonPressed,
                   ]}
                 >
-                  <Ionicons name="arrow-back" size={20} color="#fff" />
+                  <Text style={styles.skipText}>Pular</Text>
                 </Pressable>
               )}
+            </View>
 
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isLastSlide ? "Abrir a câmera" : "Continuar"
-                }
-                onPress={advance}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  currentIndex === 0 && styles.primaryButtonFull,
-                  pressed && styles.primaryButtonPressed,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {isLastSlide ? "Abrir a câmera" : "Continuar"}
-                </Text>
-                <Ionicons
-                  name={isLastSlide ? "camera-outline" : "arrow-forward"}
-                  size={20}
-                  color="#111"
-                />
-              </Pressable>
+            <View style={[styles.footer, { paddingBottom: safeBottom + 10 }]}>
+              <LinearGradient
+                pointerEvents="none"
+                colors={["transparent", "rgba(0,0,0,0.98)"]}
+                style={styles.footerShade}
+              />
+
+              <View style={styles.pagination}>
+                {FLOW.map((item, index) => (
+                  <Pressable
+                    key={item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Ir para a etapa ${index + 1}`}
+                    hitSlop={8}
+                    onPress={() => goTo(index)}
+                    style={[
+                      styles.paginationDot,
+                      index === currentIndex && styles.paginationDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+
+              <View style={styles.actions}>
+                {currentIndex > 0 && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Voltar"
+                    onPress={() => goTo(currentIndex - 1)}
+                    style={({ pressed }) => [
+                      styles.backButton,
+                      pressed && styles.buttonPressed,
+                    ]}
+                  >
+                    <Ionicons name="arrow-back" size={20} color="#fff" />
+                  </Pressable>
+                )}
+
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    isLastSlide ? "Abrir a câmera" : "Continuar"
+                  }
+                  onPress={advance}
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    currentIndex === 0 && styles.primaryButtonFull,
+                    pressed && styles.primaryButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {isLastSlide ? "Abrir a câmera" : "Continuar"}
+                  </Text>
+                  <Ionicons
+                    name={isLastSlide ? "camera-outline" : "arrow-forward"}
+                    size={20}
+                    color="#111"
+                  />
+                </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );

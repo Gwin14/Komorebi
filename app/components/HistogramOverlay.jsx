@@ -1,13 +1,7 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { Text, View } from "react-native";
 import Animated from "react-native-reanimated";
-import Svg, {
-  Defs,
-  Line,
-  LinearGradient,
-  Path,
-  Stop,
-} from "react-native-svg";
+import Svg, { Defs, Line, LinearGradient, Path, Stop } from "react-native-svg";
 import { useDeviceOrientationState } from "../hooks/useDeviceOrientation";
 import styles from "./HistogramOverlay.styles";
 
@@ -24,7 +18,8 @@ const createHistogramPath = (bins, closePath = false) => {
   const points = bins.map((value, index) => {
     const x = CHART_PADDING + (index / (bins.length - 1)) * usableWidth;
     const y =
-      CHART_HEIGHT - CHART_PADDING -
+      CHART_HEIGHT -
+      CHART_PADDING -
       Math.max(0, Math.min(1, value)) * usableHeight;
 
     return `${x.toFixed(1)} ${y.toFixed(1)}`;

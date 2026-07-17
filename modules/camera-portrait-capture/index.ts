@@ -109,9 +109,7 @@ export async function capturePortraitPhoto(
     localIdentifier: result.localIdentifier ?? null,
     savedToLibrary: Boolean(result.savedToLibrary),
     depthDataEmbedded: Boolean(result.depthDataEmbedded),
-    portraitEffectsMatteEmbedded: Boolean(
-      result.portraitEffectsMatteEmbedded,
-    ),
+    portraitEffectsMatteEmbedded: Boolean(result.portraitEffectsMatteEmbedded),
   };
 }
 

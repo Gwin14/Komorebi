@@ -51,9 +51,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
         }
 
         const shouldApplyExifBeforeSaving =
-          !item.needsProcessing &&
-          captureMode !== "raw" &&
-          Boolean(exifData);
+          !item.needsProcessing && captureMode !== "raw" && Boolean(exifData);
         const uriToSave = shouldApplyExifBeforeSaving
           ? await applyExifDataToImage(processedUri, exifData, originalUri)
           : processedUri;
@@ -99,8 +97,12 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
               uriToSave,
               aspectRatio,
             );
-            if (!inverseUri) throw new Error("Falha na segunda foto da Live Photo");
-            const inverseWithExif = await copyExifFromImage(uriToSave, inverseUri);
+            if (!inverseUri)
+              throw new Error("Falha na segunda foto da Live Photo");
+            const inverseWithExif = await copyExifFromImage(
+              uriToSave,
+              inverseUri,
+            );
             const inverseAsset = await saveToAlbum(inverseWithExif);
             await saveMetadataForAsset(inverseAsset?.id);
           }
@@ -120,8 +122,12 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
               uriToSave,
               aspectRatio,
             );
-            if (!inverseUri) throw new Error("Falha na segunda foto do retrato");
-            const inverseWithExif = await copyExifFromImage(uriToSave, inverseUri);
+            if (!inverseUri)
+              throw new Error("Falha na segunda foto do retrato");
+            const inverseWithExif = await copyExifFromImage(
+              uriToSave,
+              inverseUri,
+            );
             const inverseAsset = await saveToAlbum(inverseWithExif);
             await saveMetadataForAsset(inverseAsset?.id);
           }
@@ -153,7 +159,9 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
       } catch (error) {
         console.error("Erro ao salvar imagem processada:", error);
         Alert.alert(
-          mainAssetSaved ? "Captura salva parcialmente" : "Falha ao salvar captura",
+          mainAssetSaved
+            ? "Captura salva parcialmente"
+            : "Falha ao salvar captura",
           mainAssetSaved
             ? "O arquivo principal foi preservado, mas uma versão derivada não pôde ser criada."
             : "Não foi possível salvar o arquivo principal desta captura.",

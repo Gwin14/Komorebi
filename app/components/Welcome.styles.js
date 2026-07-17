@@ -5,6 +5,9 @@ export default StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
+  animatedContent: {
+    flex: 1,
+  },
   slide: {
     flex: 1,
     backgroundColor: "#000",

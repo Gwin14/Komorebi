@@ -1,10 +1,12 @@
 import { StyleSheet } from "react-native";
 
+export const BOTTOM_CONTROLS_MARGIN = 54;
+
 export default StyleSheet.create({
   shutterContainer: {
     width: "100%",
     alignItems: "center",
-    marginBottom: 54,
+    marginBottom: BOTTOM_CONTROLS_MARGIN,
   },
   shutterRow: {
     flexDirection: "row",

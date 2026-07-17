@@ -105,8 +105,7 @@ const buildPhotoProcessingData = async ({
   extraData = {},
 }) => {
   const captureAspectRatio = await resolveCaptureAspectRatio(uri, aspectRatio);
-  const croppedUri =
-    (await cropImageToAspect(uri, captureAspectRatio)) || uri;
+  const croppedUri = (await cropImageToAspect(uri, captureAspectRatio)) || uri;
   const komorebiMetadata = buildKomorebiExifMetadata({
     selectedLut,
     selectedLutId,
@@ -215,7 +214,11 @@ export const takePicture = async ({
     (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) ||
     (portraitModeEnabled && portraitDeviceId && !rawModeEnabled);
 
-  if ((!nativeCaptureEnabled && !cameraRef.current) || !cameraReady || isProcessing) {
+  if (
+    (!nativeCaptureEnabled && !cameraRef.current) ||
+    !cameraReady ||
+    isProcessing
+  ) {
     console.warn("[CameraUtils] takePicture blocked", {
       nativeCaptureEnabled,
       hasCameraRef: Boolean(cameraRef.current),

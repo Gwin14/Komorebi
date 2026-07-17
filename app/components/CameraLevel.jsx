@@ -16,12 +16,8 @@ const gravityInScreenCoordinates = ({ x, y }, orientation) => {
   const orientationRadians = (orientation * Math.PI) / 180;
 
   return {
-    x:
-      x * Math.cos(orientationRadians) +
-      y * Math.sin(orientationRadians),
-    y:
-      -x * Math.sin(orientationRadians) +
-      y * Math.cos(orientationRadians),
+    x: x * Math.cos(orientationRadians) + y * Math.sin(orientationRadians),
+    y: -x * Math.sin(orientationRadians) + y * Math.cos(orientationRadians),
   };
 };
 

@@ -104,7 +104,9 @@ export default function CameraPreview({
     () => [
       // RAW precisa permanecer em um formato de sensor 4:3. O 9:16 é um
       // enquadramento/crop derivado; selecionar 3840x2160 elimina rawFormats.
-      { photoAspectRatio: rawPhotoMode ? 4 / 3 : verticalMode ? 16 / 9 : 4 / 3 },
+      {
+        photoAspectRatio: rawPhotoMode ? 4 / 3 : verticalMode ? 16 / 9 : 4 / 3,
+      },
       ...(manualPhotoMode ? [] : [{ photoResolution: "max" }]),
       { videoResolution: "max" },
     ],
