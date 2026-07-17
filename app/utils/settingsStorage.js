@@ -4,6 +4,8 @@ import { normalizeTopBarControls } from "./topBarControls";
 export const SETTINGS_STORAGE_KEYS = {
   RETRO_STYLE: "@settings/retroStyle",
   GRID_VISIBLE: "@settings/gridVisible",
+  LEVEL_VISIBLE: "@settings/levelVisible",
+  HISTOGRAM_VISIBLE: "@settings/histogramVisible",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
@@ -34,6 +36,8 @@ export async function loadStoredSettings(defaults) {
   const [
     savedRetroStyle,
     savedGridVisible,
+    savedLevelVisible,
+    savedHistogramVisible,
     savedShutterSound,
     savedLocation,
     savedSaveOriginalWithLUT,
@@ -44,6 +48,8 @@ export async function loadStoredSettings(defaults) {
   ] = await Promise.all([
     AsyncStorage.getItem(keys.RETRO_STYLE),
     AsyncStorage.getItem(keys.GRID_VISIBLE),
+    AsyncStorage.getItem(keys.LEVEL_VISIBLE),
+    AsyncStorage.getItem(keys.HISTOGRAM_VISIBLE),
     AsyncStorage.getItem(keys.SHUTTER_SOUND),
     AsyncStorage.getItem(keys.LOCATION),
     AsyncStorage.getItem(keys.SAVE_ORIGINAL_WITH_LUT),
@@ -56,6 +62,11 @@ export async function loadStoredSettings(defaults) {
   return {
     retroStyle: parseBoolean(savedRetroStyle, defaults.retroStyle),
     gridVisible: parseBoolean(savedGridVisible, defaults.gridVisible),
+    levelVisible: parseBoolean(savedLevelVisible, defaults.levelVisible),
+    histogramVisible: parseBoolean(
+      savedHistogramVisible,
+      defaults.histogramVisible,
+    ),
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
     saveOriginalWithoutEffects: parseBoolean(

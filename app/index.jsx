@@ -40,6 +40,8 @@ export default function App() {
   const {
     retroStyle,
     gridVisible,
+    levelVisible,
+    histogramVisible,
     location,
     firstTime,
     loading,
@@ -407,6 +409,8 @@ export default function App() {
                 flash={flash}
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
+                levelVisible={levelVisible}
+                histogramVisible={histogramVisible}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
                 smileDetectionEnabled={smileDetectionEnabled}
@@ -424,6 +428,8 @@ export default function App() {
                 pictureSize={pictureSize}
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
+                levelVisible={levelVisible}
+                histogramVisible={histogramVisible}
                 setMinZoom={setMinZoom}
                 setMaxZoom={setMaxZoom}
                 onSmileDetected={handleTakePicture}

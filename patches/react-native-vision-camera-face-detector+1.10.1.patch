@@ -1,0 +1,108 @@
+diff --git a/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx b/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
+index 44ce80c..6c4c404 100644
+--- a/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
++++ b/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
+@@ -44,10 +44,15 @@ type CallbackType = (
+   frame: Frame
+ ) => void | Promise<void>
+ 
++type HistogramCallbackType = (
++  bins: number[]
++) => void | Promise<void>
++
+ type ComponentType = {
+   ref: RefObject<VisionCamera | null>
+   faceDetectionOptions?: FrameFaceDetectionOptions
+   faceDetectionCallback: CallbackType
++  histogramCallback?: HistogramCallbackType
+   skiaActions?: (
+     faces: Face[],
+     frame: DrawableFrame
+@@ -101,6 +106,7 @@ export function Camera( {
+   ref,
+   faceDetectionOptions,
+   faceDetectionCallback,
++  histogramCallback,
+   skiaActions,
+   ...props
+ }: ComponentType ) {
+@@ -109,6 +115,8 @@ export function Camera( {
+    */
+   const isAsyncContextBusy = useSharedValue( false )
+   const faces = useSharedValue<string>( '[]' )
++  const lastHistogramUpdate = useSharedValue( 0 )
++  const histogramEnabled = Boolean( histogramCallback )
+   const {
+     detectFaces,
+     stopListeners
+@@ -139,6 +146,10 @@ export function Camera( {
+     faceDetectionCallback
+   ] )
+ 
++  const runHistogramOnJs = React.useMemo( () => (
++    Worklets.createRunOnJS( histogramCallback ?? ( () => {} ) )
++  ), [ histogramCallback ] )
++
+   /**
+    * Async context that will handle face detection
+    */
+@@ -147,6 +158,49 @@ export function Camera( {
+   ) => {
+     'worklet'
+     try {
++      const now = performance.now()
++      if (
++        histogramEnabled &&
++        now - lastHistogramUpdate.value >= 200
++      ) {
++        lastHistogramUpdate.value = now
++
++        const binCount = 64
++        const bins = new Array<number>( binCount ).fill( 0 )
++        const pixels = new Uint8Array( frame.toArrayBuffer() )
++        const sampleStep = Math.max(
++          1,
++          Math.floor(
++            Math.sqrt(
++              ( frame.width * frame.height ) / 4096
++            )
++          )
++        )
++        let peak = 0
++
++        for ( let y = 0; y < frame.height; y += sampleStep ) {
++          const rowOffset = y * frame.bytesPerRow
++
++          for ( let x = 0; x < frame.width; x += sampleStep ) {
++            const value = pixels[ rowOffset + x ] ?? 0
++            const bin = Math.min(
++              binCount - 1,
++              Math.floor( value / 4 )
++            )
++            bins[ bin ] += 1
++            peak = Math.max( peak, bins[ bin ] )
++          }
++        }
++
++        if ( peak > 0 ) {
++          for ( let index = 0; index < binCount; index += 1 ) {
++            bins[ index ] /= peak
++          }
++        }
++
++        runHistogramOnJs( bins )
++      }
++
+       faces.value = JSON.stringify(
+         detectFaces( frame )
+       )
+@@ -170,6 +224,9 @@ export function Camera( {
+     }
+   }, [
+     detectFaces,
++    histogramEnabled,
++    lastHistogramUpdate,
++    runHistogramOnJs,
+     runOnJs
+   ] )
+ 

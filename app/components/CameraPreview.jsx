@@ -5,7 +5,11 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
+import CameraLevel from "./CameraLevel";
+import HistogramOverlay from "./HistogramOverlay";
 import styles from "./CameraPreview.styles";
+
+const EMPTY_HISTOGRAM = Array(64).fill(0);
 
 export default function CameraPreview({
   retroStyle,
@@ -17,6 +21,8 @@ export default function CameraPreview({
   pictureSize,
   onCameraReady,
   gridVisible,
+  levelVisible,
+  histogramVisible,
   setMinZoom,
   setMaxZoom,
   onSmileDetected,
@@ -31,6 +37,8 @@ export default function CameraPreview({
 }) {
   const isTakingPhoto = useRef(false);
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
+  const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
+  const previousHistogramBins = useRef(null);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const transitionOpacity = useRef(new Animated.Value(0)).current;
   const cameraScale = useRef(new Animated.Value(1)).current;
@@ -133,6 +141,24 @@ export default function CameraPreview({
     }),
     [],
   );
+
+  const handleHistogramUpdate = useCallback((nextBins) => {
+    if (!Array.isArray(nextBins) || nextBins.length !== 64) return;
+
+    const previousBins = previousHistogramBins.current;
+    const smoothedBins = nextBins.map((value, index) => {
+      const safeValue = Number.isFinite(value)
+        ? Math.max(0, Math.min(1, value))
+        : 0;
+
+      return previousBins
+        ? previousBins[index] * 0.42 + safeValue * 0.58
+        : safeValue;
+    });
+
+    previousHistogramBins.current = smoothedBins;
+    setHistogramBins(smoothedBins);
+  }, []);
 
   const finishCameraTransition = useCallback(() => {
     if (transitionFallbackTimeout.current) {
@@ -281,10 +307,13 @@ export default function CameraPreview({
             photo={true}
             video={false}
             audio={false}
-            outputOrientation="preview"
+            outputOrientation="device"
             zoom={zoom}
             exposure={exposure}
             onInitialized={handleCameraInitialized}
+            histogramCallback={
+              histogramVisible ? handleHistogramUpdate : undefined
+            }
             {...faceDetectionProps}
             enableLocation={location}
             photoQualityBalance={rawPhotoMode ? "quality" : "balanced"}
@@ -315,6 +344,10 @@ export default function CameraPreview({
             <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
           </View>
         )}
+
+        {levelVisible && <CameraLevel />}
+
+        {histogramVisible && <HistogramOverlay bins={histogramBins} />}
 
         {doubleCaptureMode &&
           (() => {

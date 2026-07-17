@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import AVFoundation
+import CoreMotion
 import ImageIO
 import Photos
 import UniformTypeIdentifiers
@@ -58,7 +59,7 @@ public class CameraPortraitCaptureModule: Module {
     }
 
     View(PortraitCameraView.self) {
-      Events("onInitialized", "onError", "onSmileDetected")
+      Events("onInitialized", "onError", "onSmileDetected", "onHistogramUpdated")
 
       Prop("deviceId") { (view, deviceId: String?) in
         view.deviceId = deviceId
@@ -74,6 +75,10 @@ public class CameraPortraitCaptureModule: Module {
 
       Prop("smileDetectionEnabled") { (view, enabled: Bool?) in
         view.smileDetectionEnabled = enabled ?? false
+      }
+
+      Prop("histogramEnabled") { (view, enabled: Bool?) in
+        view.histogramEnabled = enabled ?? false
       }
     }
 
@@ -401,6 +406,7 @@ public final class PortraitCameraView: ExpoView {
   let onInitialized = EventDispatcher()
   let onError = EventDispatcher()
   let onSmileDetected = EventDispatcher()
+  let onHistogramUpdated = EventDispatcher()
 
   private static weak var currentActiveView: PortraitCameraView?
   private let controller = PortraitCameraController()
@@ -419,6 +425,12 @@ public final class PortraitCameraView: ExpoView {
     }
   }
 
+  var histogramEnabled: Bool = false {
+    didSet {
+      controller.histogramEnabled = histogramEnabled
+    }
+  }
+
   var isActive: Bool = true {
     didSet {
       updateSession()
@@ -433,6 +445,9 @@ public final class PortraitCameraView: ExpoView {
     videoPreviewLayer.session = controller.session
     controller.onSmileDetected = { [weak self] in
       self?.onSmileDetected()
+    }
+    controller.onHistogramUpdated = { [weak self] bins in
+      self?.onHistogramUpdated(["bins": bins])
     }
   }
 
@@ -502,6 +517,61 @@ public final class PortraitCameraView: ExpoView {
   }
 }
 
+private final class CaptureOrientationTracker {
+  private let motionManager = CMMotionManager()
+  private let operationQueue = OperationQueue()
+  private let lock = NSLock()
+  private var currentOrientation = AVCaptureVideoOrientation.portrait
+
+  var outputOrientation: AVCaptureVideoOrientation {
+    lock.lock()
+    defer { lock.unlock() }
+    return currentOrientation
+  }
+
+  init() {
+    operationQueue.name = "dev.komorebi.portrait-capture.orientation"
+    operationQueue.maxConcurrentOperationCount = 1
+    motionManager.accelerometerUpdateInterval = 0.1
+
+    guard motionManager.isAccelerometerAvailable else { return }
+    motionManager.startAccelerometerUpdates(to: operationQueue) { [weak self] data, _ in
+      guard
+        let self,
+        let acceleration = data?.acceleration,
+        let orientation = Self.outputOrientation(for: acceleration)
+      else { return }
+
+      self.lock.lock()
+      self.currentOrientation = orientation
+      self.lock.unlock()
+    }
+  }
+
+  deinit {
+    motionManager.stopAccelerometerUpdates()
+  }
+
+  private static func outputOrientation(
+    for acceleration: CMAcceleration
+  ) -> AVCaptureVideoOrientation? {
+    let horizontal = abs(acceleration.x)
+    let vertical = abs(acceleration.y)
+    let flat = abs(acceleration.z)
+
+    // Quando o aparelho está praticamente plano, preserve a última orientação
+    // estável em vez de alternar o arquivo durante o disparo.
+    guard flat <= horizontal || flat <= vertical else { return nil }
+
+    if horizontal > vertical {
+      // A orientação do output é a contrarrotação da orientação física.
+      return acceleration.x > 0 ? .landscapeLeft : .landscapeRight
+    }
+
+    return acceleration.y > 0 ? .portraitUpsideDown : .portrait
+  }
+}
+
 private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
   struct CaptureResult {
     let photoURL: URL
@@ -515,6 +585,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
 
   private let output = AVCapturePhotoOutput()
   private let videoOutput = AVCaptureVideoDataOutput()
+  private let orientationTracker = CaptureOrientationTracker()
   private let smileQueue = DispatchQueue(label: "dev.komorebi.portrait.smile")
   private lazy var faceDetector = CIDetector(
     ofType: CIDetectorTypeFace,
@@ -523,7 +594,10 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   )
   var smileDetectionEnabled = false
   var onSmileDetected: (() -> Void)?
+  var histogramEnabled = false
+  var onHistogramUpdated: (([Double]) -> Void)?
   private var lastSmileAt = Date.distantPast
+  private var lastHistogramAt = Date.distantPast
   private let sessionQueue = DispatchQueue(label: "dev.komorebi.portrait-capture.session")
   private var configuredRequestedDeviceId: String?
   private var activeCaptureDevice: AVCaptureDevice?
@@ -637,9 +711,23 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
+    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+      return
+    }
+
+    let now = Date()
+    if histogramEnabled,
+       now.timeIntervalSince(lastHistogramAt) >= 0.2
+    {
+      lastHistogramAt = now
+      let bins = makeHistogram(from: pixelBuffer)
+      DispatchQueue.main.async { [weak self] in
+        self?.onHistogramUpdated?(bins)
+      }
+    }
+
     guard smileDetectionEnabled,
-          Date().timeIntervalSince(lastSmileAt) >= 2.5,
-          let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer),
+          now.timeIntervalSince(lastSmileAt) >= 2.5,
           let detector = faceDetector
     else { return }
 
@@ -652,8 +740,71 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
       return
     }
 
-    lastSmileAt = Date()
+    lastSmileAt = now
     DispatchQueue.main.async { [weak self] in self?.onSmileDetected?() }
+  }
+
+  private func makeHistogram(from pixelBuffer: CVPixelBuffer) -> [Double] {
+    let binCount = 64
+    var bins = [Int](repeating: 0, count: binCount)
+
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer {
+      CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+    }
+
+    var peak = 0
+
+    if CVPixelBufferIsPlanar(pixelBuffer),
+       CVPixelBufferGetPlaneCount(pixelBuffer) > 0,
+       let lumaAddress = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)
+    {
+      let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+      let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+      let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+      let sampleStep = max(1, Int(sqrt(Double(width * height) / 4096.0)))
+
+      for y in stride(from: 0, to: height, by: sampleStep) {
+        let row = lumaAddress
+          .advanced(by: y * bytesPerRow)
+          .assumingMemoryBound(to: UInt8.self)
+
+        for x in stride(from: 0, to: width, by: sampleStep) {
+          let bin = min(binCount - 1, Int(row[x]) >> 2)
+          bins[bin] += 1
+          peak = max(peak, bins[bin])
+        }
+      }
+    } else if let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) {
+      let width = CVPixelBufferGetWidth(pixelBuffer)
+      let height = CVPixelBufferGetHeight(pixelBuffer)
+      let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+      let sampleStep = max(1, Int(sqrt(Double(width * height) / 4096.0)))
+
+      for y in stride(from: 0, to: height, by: sampleStep) {
+        let row = baseAddress
+          .advanced(by: y * bytesPerRow)
+          .assumingMemoryBound(to: UInt8.self)
+
+        for x in stride(from: 0, to: width, by: sampleStep) {
+          let offset = x * 4
+          let blue = Int(row[offset])
+          let green = Int(row[offset + 1])
+          let red = Int(row[offset + 2])
+          let luminance = (29 * blue + 150 * green + 77 * red) >> 8
+          let bin = min(binCount - 1, luminance >> 2)
+
+          bins[bin] += 1
+          peak = max(peak, bins[bin])
+        }
+      }
+    }
+
+    guard peak > 0 else {
+      return [Double](repeating: 0, count: binCount)
+    }
+
+    return bins.map { Double($0) / Double(peak) }
   }
 
   func capture(flashMode: String) async throws -> CaptureResult {
@@ -689,6 +840,13 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         settings.isPortraitEffectsMatteDeliveryEnabled = support.supportsPortraitEffectsMatte
         settings.embedsDepthDataInPhoto = support.supportsDepthData
         settings.embedsPortraitEffectsMatteInPhoto = support.supportsPortraitEffectsMatte
+
+        if
+          let connection = self.output.connection(with: .video),
+          connection.isVideoOrientationSupported
+        {
+          connection.videoOrientation = self.orientationTracker.outputOrientation
+        }
 
         let delegate = PortraitPhotoCaptureDelegate(
           photoURL: photoURL,

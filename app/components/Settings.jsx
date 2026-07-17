@@ -29,6 +29,10 @@ export default function Settings() {
     setRetroStyle,
     gridVisible,
     setGridVisible,
+    levelVisible,
+    setLevelVisible,
+    histogramVisible,
+    setHistogramVisible,
     loading,
     shutterSound,
     setShutterSound,
@@ -171,6 +175,18 @@ export default function Settings() {
             label="Grade da Câmera"
             value={gridVisible}
             onValueChange={setGridVisible}
+          />
+
+          <CustomToggle
+            label="Nível da Câmera"
+            value={levelVisible}
+            onValueChange={setLevelVisible}
+          />
+
+          <CustomToggle
+            label="Histograma em tempo real"
+            value={histogramVisible}
+            onValueChange={setHistogramVisible}
           />
 
           <CustomToggle

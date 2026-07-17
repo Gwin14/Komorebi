@@ -1,8 +1,12 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { LivePhotoCameraView } from "../../modules/camera-live-photo";
 import { PortraitCameraView } from "../../modules/camera-portrait-capture";
+import CameraLevel from "./CameraLevel";
+import HistogramOverlay from "./HistogramOverlay";
 import styles from "./CameraPreview.styles";
+
+const EMPTY_HISTOGRAM = Array(64).fill(0);
 
 export default function NativeCapturePreview({
   mode,
@@ -11,11 +15,15 @@ export default function NativeCapturePreview({
   flash,
   onCameraReady,
   gridVisible,
+  levelVisible,
+  histogramVisible,
   verticalMode,
   doubleCaptureMode,
   smileDetectionEnabled,
   onSmileDetected,
 }) {
+  const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
+  const previousHistogramBins = useRef(null);
   const NativeCameraView =
     mode === "live" ? LivePhotoCameraView : PortraitCameraView;
   const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
@@ -50,6 +58,27 @@ export default function NativeCapturePreview({
     });
   }, [device?.id, mode]);
 
+  const handleHistogramUpdated = useCallback((event) => {
+    // Paper entrega eventos de view dentro de nativeEvent; algumas versões
+    // do Fabric/Expo Modules podem encaminhar o payload diretamente.
+    const nextBins = event?.nativeEvent?.bins ?? event?.bins;
+    if (!Array.isArray(nextBins) || nextBins.length !== 64) return;
+
+    const previousBins = previousHistogramBins.current;
+    const smoothedBins = nextBins.map((value, index) => {
+      const safeValue = Number.isFinite(value)
+        ? Math.max(0, Math.min(1, value))
+        : 0;
+
+      return previousBins
+        ? previousBins[index] * 0.42 + safeValue * 0.58
+        : safeValue;
+    });
+
+    previousHistogramBins.current = smoothedBins;
+    setHistogramBins(smoothedBins);
+  }, []);
+
   if (!device || !mode) {
     return null;
   }
@@ -76,6 +105,10 @@ export default function NativeCapturePreview({
         onError={handleError}
         smileDetectionEnabled={smileDetectionEnabled}
         onSmileDetected={onSmileDetected}
+        histogramEnabled={histogramVisible}
+        onHistogramUpdated={
+          histogramVisible ? handleHistogramUpdated : undefined
+        }
       />
 
       {gridVisible && (
@@ -87,6 +120,10 @@ export default function NativeCapturePreview({
           <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
         </View>
       )}
+
+      {levelVisible && <CameraLevel />}
+
+      {histogramVisible && <HistogramOverlay bins={histogramBins} />}
 
       {doubleCaptureMode &&
         (() => {
