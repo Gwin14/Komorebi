@@ -307,7 +307,7 @@ export default function CameraPreview({
             photo={true}
             video={false}
             audio={false}
-            outputOrientation="preview"
+            outputOrientation="device"
             zoom={zoom}
             exposure={exposure}
             onInitialized={handleCameraInitialized}

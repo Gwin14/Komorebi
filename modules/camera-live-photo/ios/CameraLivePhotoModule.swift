@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import AVFoundation
+import CoreMotion
 import ImageIO
 import Photos
 import UniformTypeIdentifiers
@@ -413,6 +414,61 @@ public final class LivePhotoCameraView: ExpoView {
   }
 }
 
+private final class CaptureOrientationTracker {
+  private let motionManager = CMMotionManager()
+  private let operationQueue = OperationQueue()
+  private let lock = NSLock()
+  private var currentOrientation = AVCaptureVideoOrientation.portrait
+
+  var outputOrientation: AVCaptureVideoOrientation {
+    lock.lock()
+    defer { lock.unlock() }
+    return currentOrientation
+  }
+
+  init() {
+    operationQueue.name = "dev.komorebi.live-photo.orientation"
+    operationQueue.maxConcurrentOperationCount = 1
+    motionManager.accelerometerUpdateInterval = 0.1
+
+    guard motionManager.isAccelerometerAvailable else { return }
+    motionManager.startAccelerometerUpdates(to: operationQueue) { [weak self] data, _ in
+      guard
+        let self,
+        let acceleration = data?.acceleration,
+        let orientation = Self.outputOrientation(for: acceleration)
+      else { return }
+
+      self.lock.lock()
+      self.currentOrientation = orientation
+      self.lock.unlock()
+    }
+  }
+
+  deinit {
+    motionManager.stopAccelerometerUpdates()
+  }
+
+  private static func outputOrientation(
+    for acceleration: CMAcceleration
+  ) -> AVCaptureVideoOrientation? {
+    let horizontal = abs(acceleration.x)
+    let vertical = abs(acceleration.y)
+    let flat = abs(acceleration.z)
+
+    // Quando o aparelho está praticamente plano, preserve a última orientação
+    // estável em vez de alternar o arquivo durante o disparo.
+    guard flat <= horizontal || flat <= vertical else { return nil }
+
+    if horizontal > vertical {
+      // A orientação do output é a contrarrotação da orientação física.
+      return acceleration.x > 0 ? .landscapeLeft : .landscapeRight
+    }
+
+    return acceleration.y > 0 ? .portraitUpsideDown : .portrait
+  }
+}
+
 private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
   struct CaptureResult {
     let photoURL: URL
@@ -423,6 +479,7 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
 
   private let output = AVCapturePhotoOutput()
   private let videoOutput = AVCaptureVideoDataOutput()
+  private let orientationTracker = CaptureOrientationTracker()
   private let smileQueue = DispatchQueue(label: "dev.komorebi.live-photo.smile")
   private lazy var faceDetector = CIDetector(
     ofType: CIDetectorTypeFace,
@@ -649,6 +706,13 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
           print("[LivePhotoNative] requested flash unsupported flashMode=\(flashMode)")
         }
         settings.livePhotoMovieFileURL = movieURL
+
+        if
+          let connection = self.output.connection(with: .video),
+          connection.isVideoOrientationSupported
+        {
+          connection.videoOrientation = self.orientationTracker.outputOrientation
+        }
 
         print("[LivePhotoNative] capturePhoto now configuredDeviceId=\(self.configuredDeviceId ?? "nil") flashMode=\(settings.flashMode.rawValue) photoURL=\(photoURL.lastPathComponent) movieURL=\(movieURL.lastPathComponent)")
         let delegate = LivePhotoCaptureDelegate(photoURL: photoURL, movieURL: movieURL)
