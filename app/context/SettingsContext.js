@@ -20,6 +20,8 @@ const DEFAULT_SETTINGS = {
   customLuts: [],
   topBarBelow: false,
   topBarControls: DEFAULT_TOP_BAR_CONTROLS,
+  projects: [],
+  activeProjectId: null,
 };
 
 export const SettingsProvider = ({ children }) => {
@@ -45,6 +47,10 @@ export const SettingsProvider = ({ children }) => {
   const [topBarControls, setTopBarControls] = useState(
     DEFAULT_SETTINGS.topBarControls,
   );
+  const [projects, setProjects] = useState(DEFAULT_SETTINGS.projects);
+  const [activeProjectId, setActiveProjectId] = useState(
+    DEFAULT_SETTINGS.activeProjectId,
+  );
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -62,6 +68,8 @@ export const SettingsProvider = ({ children }) => {
         setCustomLuts(savedSettings.customLuts);
         setTopBarBelow(savedSettings.topBarBelow);
         setTopBarControls(savedSettings.topBarControls);
+        setProjects(savedSettings.projects);
+        setActiveProjectId(savedSettings.activeProjectId);
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
@@ -176,6 +184,26 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [topBarControls, loading]);
 
+  // 💾 Salvar "Projetos" (álbuns)
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.PROJECTS,
+        JSON.stringify(projects),
+      );
+    }
+  }, [projects, loading]);
+
+  // 💾 Salvar "Projeto ativo"
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.ACTIVE_PROJECT_ID,
+        activeProjectId,
+      );
+    }
+  }, [activeProjectId, loading]);
+
   const value = {
     retroStyle,
     setRetroStyle,
@@ -200,6 +228,10 @@ export const SettingsProvider = ({ children }) => {
     setTopBarControls,
     topBarBelow,
     setTopBarBelow,
+    projects,
+    setProjects,
+    activeProjectId,
+    setActiveProjectId,
   };
 
   return (

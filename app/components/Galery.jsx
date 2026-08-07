@@ -26,7 +26,13 @@ import { ExifItem } from "../components/ExifItem";
 import { MapViewWeb } from "../components/MapViewWeb";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
+import { useSettings } from "../context/SettingsContext";
+import {
+  getProjectAlbumName,
+  moveAssetToProject,
+} from "../utils/projects";
 import BackButton from "./BackButton";
+import ProjectSelector from "./ProjectSelector";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
 
@@ -110,9 +116,13 @@ const groupPhotosByDate = (photos) => {
   });
 };
 
-const getKomorebiAlbum = async () => {
+const getKomorebiAlbum = async (project = null) => {
+  if (!project) return null;
+
   const albums = await MediaLibrary.getAlbumsAsync();
-  return albums.find((album) => album.title === "Komorebi") || null;
+  const albumName = getProjectAlbumName(project);
+
+  return albums.find((album) => album.title === albumName) || null;
 };
 
 const getContainedImageSize = (photo, maxWidth, maxHeight) => {
@@ -143,6 +153,12 @@ const getContainedImageSize = (photo, maxWidth, maxHeight) => {
 };
 
 export default function Galery() {
+  const { projects, activeProjectId, setProjects } =
+    useSettings();
+  const [viewProjectId, setViewProjectId] = useState(activeProjectId);
+  const viewProject = viewProjectId
+    ? projects.find((project) => project.id === viewProjectId) || null
+    : null;
   const [permission, requestPermission] = MediaLibrary.usePermissions();
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -167,45 +183,73 @@ export default function Galery() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
 
-  const loadKomorebiPhotos = useCallback(async () => {
-    try {
-      setLoading(true);
+  const loadKomorebiPhotos = useCallback(
+    async (project = viewProject) => {
+      try {
+        setLoading(true);
 
-      const album = await getKomorebiAlbum();
+        // Sem projeto selecionado: mostra TODAS as fotos da biblioteca.
+        if (!project) {
+          const allAssets = await MediaLibrary.getAssetsAsync({
+            mediaType: "photo",
+            sortBy: MediaLibrary.SortBy.creationTime,
+            first: 100,
+          });
 
-      if (!album) {
-        setPhotos([]);
+          const resolvedAssets = await Promise.all(
+            allAssets.assets.map(async (asset) => {
+              if (asset.uri.startsWith("ph://")) {
+                const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+                return {
+                  ...asset,
+                  uri: info.localUri || asset.uri,
+                };
+              }
+              return asset;
+            }),
+          );
+
+          setPhotos(resolvedAssets);
+          return;
+        }
+
+        const album = await getKomorebiAlbum(project);
+
+        if (!album) {
+          setPhotos([]);
+          setLoading(false);
+          return;
+        }
+
+        const assets = await MediaLibrary.getAssetsAsync({
+          album,
+          mediaType: "photo",
+          sortBy: MediaLibrary.SortBy.creationTime,
+          first: 100,
+        });
+
+        const resolvedAssets = await Promise.all(
+          assets.assets.map(async (asset) => {
+            if (asset.uri.startsWith("ph://")) {
+              const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+              return {
+                ...asset,
+                uri: info.localUri || asset.uri,
+              };
+            }
+            return asset;
+          }),
+        );
+
+        setPhotos(resolvedAssets);
+      } catch (e) {
+        console.log("Erro ao carregar fotos:", e);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const assets = await MediaLibrary.getAssetsAsync({
-        album,
-        mediaType: "photo",
-        sortBy: MediaLibrary.SortBy.creationTime,
-        first: 100,
-      });
-
-      const resolvedAssets = await Promise.all(
-        assets.assets.map(async (asset) => {
-          if (asset.uri.startsWith("ph://")) {
-            const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-            return {
-              ...asset,
-              uri: info.localUri || asset.uri,
-            };
-          }
-          return asset;
-        }),
-      );
-
-      setPhotos(resolvedAssets);
-    } catch (e) {
-      console.log("Erro ao carregar fotos:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [viewProject],
+  );
 
   useEffect(() => {
     if (!permission) return;
@@ -229,6 +273,43 @@ export default function Galery() {
   const selectedIndex = useMemo(
     () => orderedPhotos.findIndex((photo) => photo.id === selectedAssetId),
     [orderedPhotos, selectedAssetId],
+  );
+
+  const handleChangeViewProject = useCallback(
+    (projectId) => {
+      setViewProjectId(projectId);
+      loadKomorebiPhotos(
+        projects.find((project) => project.id === projectId),
+      );
+    },
+    [loadKomorebiPhotos, projects],
+  );
+
+  const handleCreateProject = useCallback(
+    (project) => {
+      setProjects((prev) => [...prev, project]);
+      setViewProjectId(project.id);
+      loadKomorebiPhotos(project);
+    },
+    [loadKomorebiPhotos, setProjects],
+  );
+
+  const handleMovePhotoToProject = useCallback(
+    async (assetId, targetProjectId) => {
+      const source = viewProjectId
+        ? projects.find((project) => project.id === viewProjectId)
+        : null;
+      const target = targetProjectId
+        ? projects.find((project) => project.id === targetProjectId)
+        : null;
+      if (source && target && source.id === target.id) return;
+
+      await moveAssetToProject(assetId, source, target);
+      setSelectedAssetId(null);
+      closeDetails();
+      loadKomorebiPhotos(source);
+    },
+    [closeDetails, loadKomorebiPhotos, projects, viewProjectId],
   );
 
   const selectPhotoAtIndex = useCallback(
@@ -463,6 +544,17 @@ export default function Galery() {
       <View style={styles.navigationBar}>
         <BackButton top={8} left={0} />
         <Text style={styles.title}>Galeria</Text>
+        <View style={styles.navigationProjectSelector}>
+          <ProjectSelector
+            projects={projects}
+            activeProjectId={viewProjectId}
+            onChangeProject={handleChangeViewProject}
+            onCreateProject={handleCreateProject}
+            includeNoneOption
+            noneOptionLabel="Todas as fotos"
+            triggerIcon="folder"
+          />
+        </View>
       </View>
 
       <SectionList
@@ -675,6 +767,23 @@ export default function Galery() {
                       title="Fechar"
                       onPress={closeDetails}
                       color="#ffaa00"
+                    />
+
+                    <ProjectSelector
+                      projects={projects.filter(
+                        (project) => project.id !== viewProjectId,
+                      )}
+                      activeProjectId={viewProjectId}
+                      onChangeProject={(targetId) =>
+                        handleMovePhotoToProject(photo.id, targetId)
+                      }
+                      onCreateProject={(project) => {
+                        setProjects((prev) => [...prev, project]);
+                        handleMovePhotoToProject(photo.id, project.id);
+                      }}
+                      includeNoneOption
+                      noneOptionLabel="Remover de projeto"
+                      triggerIcon="swap-horizontal-outline"
                     />
 
                     <Button

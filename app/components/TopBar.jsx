@@ -7,6 +7,7 @@ import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
+import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
 import styles from "./TopBar.styles";
 
@@ -36,6 +37,10 @@ export default function TopBar({
   portraitModeEnabled,
   togglePortraitModeEnabled,
   unavailableReasons = {},
+  projects = [],
+  activeProjectId,
+  onChangeProject,
+  onCreateProject,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -164,6 +169,16 @@ export default function TopBar({
 
   return (
     <View style={styles.buttonsContainer}>
+      <ProjectSelector
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onChangeProject={onChangeProject}
+        onCreateProject={onCreateProject}
+        includeNoneOption
+        noneOptionLabel="Nenhum projeto"
+        compact
+      />
+
       {topBarControls.map((controlId) => {
         if (controlId === "manual" && !manualControlsAvailable) return null;
         const control = controlOptions[controlId];

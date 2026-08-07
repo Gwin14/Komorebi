@@ -12,6 +12,7 @@ import {
   buildKomorebiExifMetadata,
 } from "./komorebiExifMetadata";
 import { applyLUTToImage } from "./lutProcessor";
+import { getProjectAlbumName } from "./projects";
 
 const APP_ALBUM = "Komorebi";
 
@@ -42,17 +43,29 @@ const resolveCaptureAspectRatio = async (uri, requestedRatio) => {
   }
 };
 
-export async function saveToAlbum(uri) {
+export async function saveToAlbum(project, uri) {
   const fileUri = normalizeUri(uri);
   const asset = await MediaLibrary.createAssetAsync(fileUri);
 
   const albums = await MediaLibrary.getAlbumsAsync();
-  const album = albums.find((a) => a.title === APP_ALBUM);
 
-  if (!album) {
+  // Toda foto vai para o álbum padrão do app (Komorebi), independente de projeto.
+  const defaultAlbum = albums.find((a) => a.title === APP_ALBUM);
+  if (!defaultAlbum) {
     await MediaLibrary.createAlbumAsync(APP_ALBUM, asset, true); // true = copyAsset
   } else {
-    await MediaLibrary.addAssetsToAlbumAsync([asset], album, true); // true = copyAsset
+    await MediaLibrary.addAssetsToAlbumAsync([asset], defaultAlbum, true); // true = copyAsset
+  }
+
+  // Se um projeto estiver selecionado, a foto também vai para o álbum dele.
+  const projectName = project ? getProjectAlbumName(project) : "";
+  if (projectName) {
+    const projectAlbum = albums.find((a) => a.title === projectName);
+    if (!projectAlbum) {
+      await MediaLibrary.createAlbumAsync(projectName, asset, true); // true = copyAsset
+    } else {
+      await MediaLibrary.addAssetsToAlbumAsync([asset], projectAlbum, true); // true = copyAsset
+    }
   }
 
   return asset;

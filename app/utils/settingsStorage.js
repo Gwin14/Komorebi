@@ -13,6 +13,8 @@ export const SETTINGS_STORAGE_KEYS = {
   CUSTOM_LUTS: "@settings/customLuts",
   TOP_BAR_BELOW: "@settings/topBarBelow",
   TOP_BAR_CONTROLS: "@settings/topBarControls",
+  PROJECTS: "@settings/projects",
+  ACTIVE_PROJECT_ID: "@settings/activeProjectId",
 };
 
 const parseBoolean = (value, fallback) => {
@@ -45,7 +47,9 @@ export async function loadStoredSettings(defaults) {
     savedCustomLuts,
     savedTopBarBelow,
     savedTopBarControls,
-  ] = await Promise.all([
+    savedProjects,
+    savedActiveProjectId,
+    ] = await Promise.all([
     AsyncStorage.getItem(keys.RETRO_STYLE),
     AsyncStorage.getItem(keys.GRID_VISIBLE),
     AsyncStorage.getItem(keys.LEVEL_VISIBLE),
@@ -57,9 +61,11 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.CUSTOM_LUTS),
     AsyncStorage.getItem(keys.TOP_BAR_BELOW),
     AsyncStorage.getItem(keys.TOP_BAR_CONTROLS),
-  ]);
+    AsyncStorage.getItem(keys.PROJECTS),
+    AsyncStorage.getItem(keys.ACTIVE_PROJECT_ID),
+    ]);
 
-  return {
+    return {
     retroStyle: parseBoolean(savedRetroStyle, defaults.retroStyle),
     gridVisible: parseBoolean(savedGridVisible, defaults.gridVisible),
     levelVisible: parseBoolean(savedLevelVisible, defaults.levelVisible),
@@ -79,7 +85,9 @@ export async function loadStoredSettings(defaults) {
     topBarControls: normalizeTopBarControls(
       parseJSON(savedTopBarControls, defaults.topBarControls),
     ),
-  };
+    projects: parseJSON(savedProjects, defaults.projects),
+    activeProjectId: savedActiveProjectId || defaults.activeProjectId,
+    };
 }
 
 export function saveStoredSetting(key, value) {

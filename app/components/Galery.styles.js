@@ -87,6 +87,9 @@ export default StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 14,
   },
+  navigationProjectSelector: {
+    marginLeft: "auto",
+  },
   listContent: {
     flexGrow: 1,
     paddingBottom: 32,
