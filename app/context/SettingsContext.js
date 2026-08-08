@@ -5,6 +5,7 @@ import {
   SETTINGS_STORAGE_KEYS,
 } from "../utils/settingsStorage";
 import { DEFAULT_TOP_BAR_CONTROLS } from "../utils/topBarControls";
+import { reconcileProjectsWithAlbums } from "../utils/projects";
 
 const SettingsContext = createContext(null);
 
@@ -70,6 +71,23 @@ export const SettingsProvider = ({ children }) => {
         setTopBarControls(savedSettings.topBarControls);
         setProjects(savedSettings.projects);
         setActiveProjectId(savedSettings.activeProjectId);
+
+        // 🔄 Sincroniza os projetos salvos com os álbuns reais da biblioteca
+        // (remove projetos de álbuns apagados e descobre álbuns novos).
+        try {
+          const reconciled = await reconcileProjectsWithAlbums(
+            savedSettings.projects,
+          );
+          setProjects(reconciled);
+          if (
+            savedSettings.activeProjectId &&
+            !reconciled.some((p) => p.id === savedSettings.activeProjectId)
+          ) {
+            setActiveProjectId(null);
+          }
+        } catch (reconcileError) {
+          console.warn("Falha ao reconciliar projetos:", reconcileError);
+        }
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {

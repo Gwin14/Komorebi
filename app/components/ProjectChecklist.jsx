@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -10,29 +10,51 @@ import {
   View,
 } from "react-native";
 import Popover from "react-native-popover-view";
-import { createProject } from "../utils/projects";
+import {
+  createProject,
+  getAlbumNamesForAsset,
+  getProjectAlbumName,
+  toggleAssetInProject,
+} from "../utils/projects";
 import styles from "./ProjectSelector.styles";
 
-export default function ProjectSelector({
+export default function ProjectChecklist({
+  assetId,
   projects = [],
-  activeProjectId = null,
-  onChangeProject,
+  onProjectsChange,
   onCreateProject,
   triggerIcon = "folder-outline",
-  compact = false,
-  triggerActive = false,
-  triggerIconSize,
-  bare = false,
-  includeNoneOption = false,
-  noneOptionLabel = "Nenhum projeto",
 }) {
   const [visible, setVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  const [memberNames, setMemberNames] = useState([]);
 
-  const activeProject = projects.find(
-    (project) => project.id === activeProjectId,
-  );
+  const loadMembership = useCallback(async () => {
+    if (!assetId) {
+      setMemberNames([]);
+      return;
+    }
+    const names = await getAlbumNamesForAsset(assetId);
+    setMemberNames(names);
+  }, [assetId]);
+
+  useEffect(() => {
+    if (visible) {
+      loadMembership();
+      setIsCreating(false);
+      setNewName("");
+    }
+  }, [visible, assetId, loadMembership]);
+
+  const isMember = (project) =>
+    memberNames.includes(getProjectAlbumName(project));
+
+  const handleToggle = async (project) => {
+    const currentlyMember = isMember(project);
+    await toggleAssetInProject(assetId, project, currentlyMember);
+    await loadMembership();
+  };
 
   const handleCreate = () => {
     const trimmed = newName.trim();
@@ -54,44 +76,24 @@ export default function ProjectSelector({
     onCreateProject(project);
     setNewName("");
     setIsCreating(false);
-    setVisible(false);
+
+    // Se a foto já existe, adiciona ao novo álbum imediatamente.
+    if (assetId) {
+      toggleAssetInProject(assetId, project, false);
+    }
   };
 
   const trigger = (
     <TouchableOpacity
       onPress={() => setVisible(true)}
-      accessibilityLabel="Selecionar projeto"
+      accessibilityLabel="Selecionar projetos"
       accessibilityRole="button"
     >
-      {bare ? (
-        <Ionicons
-          name="folder-outline"
-          size={triggerIconSize || 32}
-          color={triggerActive ? "#ffaa00" : "#ffffff"}
-        />
-      ) : (
-        <View style={[styles.trigger, compact && styles.triggerCompact]}>
-          <Ionicons
-            name={triggerActive ? "folder" : triggerIcon}
-            size={triggerIconSize || (compact ? 22 : 26)}
-            color={triggerActive ? "#ffaa00" : "#ffffff"}
-          />
-          {!compact && (
-            <Text style={styles.triggerLabel} numberOfLines={1}>
-              {activeProject?.name || noneOptionLabel}
-            </Text>
-          )}
-        </View>
-      )}
+      <View style={[styles.trigger, styles.triggerCompact]}>
+        <Ionicons name={triggerIcon} size={22} color="#ffaa00" />
+      </View>
     </TouchableOpacity>
   );
-
-  const listItems = [
-    ...(includeNoneOption
-      ? [{ id: "none", name: noneOptionLabel, isNone: true }]
-      : []),
-    ...projects.map((project) => ({ ...project, isNone: false })),
-  ];
 
   return (
     <Popover
@@ -100,6 +102,7 @@ export default function ProjectSelector({
         setIsCreating(false);
         setNewName("");
         setVisible(false);
+        onProjectsChange?.();
       }}
       backgroundStyle={{ backgroundColor: "transparent" }}
       popoverStyle={styles.popover}
@@ -138,41 +141,36 @@ export default function ProjectSelector({
           </View>
         ) : (
           <FlatList
-            data={listItems}
+            data={projects}
             keyExtractor={(item) => item.id}
             style={styles.list}
+            ListEmptyComponent={
+              <Text style={styles.emptyText}>Nenhum projeto ainda</Text>
+            }
             renderItem={({ item }) => {
-              const isActive = item.isNone
-                ? activeProjectId == null
-                : item.id === activeProjectId;
+              const member = isMember(item);
 
               return (
                 <TouchableOpacity
                   style={styles.row}
-                  onPress={() => {
-                    onChangeProject(item.isNone ? null : item.id);
-                    setVisible(false);
-                  }}
+                  onPress={() => handleToggle(item)}
                 >
                   <View style={styles.rowLabelContainer}>
                     <Ionicons
-                      name={isActive ? "folder" : "folder-outline"}
+                      name={member ? "checkbox" : "checkbox-outline"}
                       size={18}
-                      color={isActive ? "#ffaa00" : "rgba(255,255,255,0.62)"}
+                      color={member ? "#ffaa00" : "rgba(255,255,255,0.62)"}
                     />
                     <Text
                       style={[
                         styles.rowLabel,
-                        isActive && styles.rowLabelActive,
+                        member && styles.rowLabelActive,
                       ]}
                       numberOfLines={1}
                     >
                       {item.name}
                     </Text>
                   </View>
-                  {isActive && (
-                    <Ionicons name="checkmark" size={16} color="#ffaa00" />
-                  )}
                 </TouchableOpacity>
               );
             }}

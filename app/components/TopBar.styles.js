@@ -6,6 +6,9 @@ export default StyleSheet.create({
     width: "100%",
     justifyContent: "space-around",
   },
+  popoverTransparent: {
+    backgroundColor: "transparent",
+  },
   button: {},
   symbolButton: {
     width: 32,

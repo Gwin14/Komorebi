@@ -28,11 +28,12 @@ import { MapViewWeb } from "../components/MapViewWeb";
 import { useSettings } from "../context/SettingsContext";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
-import { getProjectAlbumName, moveAssetToProject } from "../utils/projects";
+import { DEFAULT_ALBUM_NAME, getProjectAlbumName } from "../utils/projects";
 import BackButton from "./BackButton";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
-import ProjectSelector from "./ProjectSelector";
+import ProjectChecklist from "./ProjectChecklist";
+import ProjectSwipeList from "./ProjectSwipeList";
 
 const PHOTOS_PER_ROW = 4;
 const FULL_SCREEN_DISMISS_DISTANCE = 80;
@@ -115,9 +116,12 @@ const groupPhotosByDate = (photos) => {
 };
 
 const getKomorebiAlbum = async (project = null) => {
-  if (!project) return null;
-
   const albums = await MediaLibrary.getAlbumsAsync();
+
+  if (!project) {
+    return albums.find((album) => album.title === DEFAULT_ALBUM_NAME) || null;
+  }
+
   const albumName = getProjectAlbumName(project);
 
   return albums.find((album) => album.title === albumName) || null;
@@ -185,31 +189,8 @@ export default function Galery() {
       try {
         setLoading(true);
 
-        // Sem projeto selecionado: mostra TODAS as fotos da biblioteca.
-        if (!project) {
-          const allAssets = await MediaLibrary.getAssetsAsync({
-            mediaType: "photo",
-            sortBy: MediaLibrary.SortBy.creationTime,
-            first: 100,
-          });
-
-          const resolvedAssets = await Promise.all(
-            allAssets.assets.map(async (asset) => {
-              if (asset.uri.startsWith("ph://")) {
-                const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-                return {
-                  ...asset,
-                  uri: info.localUri || asset.uri,
-                };
-              }
-              return asset;
-            }),
-          );
-
-          setPhotos(resolvedAssets);
-          return;
-        }
-
+        // Sem projeto: mostra o álbum padrão do app (Komorebi).
+        // Com projeto: mostra o álbum daquele projeto.
         const album = await getKomorebiAlbum(project);
 
         if (!album) {
@@ -289,23 +270,32 @@ export default function Galery() {
     [loadKomorebiPhotos, setProjects],
   );
 
-  const handleMovePhotoToProject = useCallback(
-    async (assetId, targetProjectId) => {
-      const source = viewProjectId
-        ? projects.find((project) => project.id === viewProjectId)
-        : null;
-      const target = targetProjectId
-        ? projects.find((project) => project.id === targetProjectId)
-        : null;
-      if (source && target && source.id === target.id) return;
+  const handleDeleteProject = useCallback(
+    async (project) => {
+      try {
+        const albums = await MediaLibrary.getAlbumsAsync();
+        const album = albums.find(
+          (a) => a.title === getProjectAlbumName(project),
+        );
 
-      await moveAssetToProject(assetId, source, target);
-      setSelectedAssetId(null);
-      closeDetails();
-      loadKomorebiPhotos(source);
+        if (album) {
+          // Remove o álbum (as fotos ficam no Komorebi / em outros álbuns).
+          await MediaLibrary.deleteAlbumsAsync(album, false);
+        }
+
+        setProjects((prev) => prev.filter((p) => p.id !== project.id));
+
+        if (viewProjectId === project.id) {
+          setViewProjectId(null);
+          loadKomorebiPhotos(null);
+        }
+      } catch (error) {
+        console.warn("Erro ao excluir projeto:", error);
+      }
     },
-    [closeDetails, loadKomorebiPhotos, projects, viewProjectId],
+    [loadKomorebiPhotos, setProjects, viewProjectId],
   );
+
 
   const selectPhotoAtIndex = useCallback(
     (index) => {
@@ -550,14 +540,14 @@ export default function Galery() {
         <BackButton top={70} left={5} />
         <Text style={styles.title}>Galeria</Text>
         <View style={styles.navigationProjectSelector}>
-          <ProjectSelector
+          <ProjectSwipeList
             projects={projects}
             activeProjectId={viewProjectId}
             onChangeProject={handleChangeViewProject}
             onCreateProject={handleCreateProject}
+            onDeleteProject={handleDeleteProject}
             includeNoneOption
             noneOptionLabel="Todas as fotos"
-            triggerIcon="folder"
           />
         </View>
       </BlurView>
@@ -774,21 +764,14 @@ export default function Galery() {
                       color="#ffaa00"
                     />
 
-                    <ProjectSelector
-                      projects={projects.filter(
-                        (project) => project.id !== viewProjectId,
-                      )}
-                      activeProjectId={viewProjectId}
-                      onChangeProject={(targetId) =>
-                        handleMovePhotoToProject(photo.id, targetId)
-                      }
+                    <ProjectChecklist
+                      assetId={photo.id}
+                      projects={projects}
+                      onProjectsChange={loadKomorebiPhotos}
                       onCreateProject={(project) => {
                         setProjects((prev) => [...prev, project]);
-                        handleMovePhotoToProject(photo.id, project.id);
                       }}
-                      includeNoneOption
-                      noneOptionLabel="Remover de projeto"
-                      triggerIcon="swap-horizontal-outline"
+                      triggerIcon="folder-outline"
                     />
 
                     <Button

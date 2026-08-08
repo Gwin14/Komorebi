@@ -55,6 +55,11 @@ export default StyleSheet.create({
   list: {
     maxHeight: 220,
   },
+  emptyText: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 11,
+    paddingVertical: 8,
+  },
   row: {
     alignItems: "center",
     flexDirection: "row",
@@ -135,5 +140,22 @@ export default StyleSheet.create({
     color: "#ffaa00",
     fontSize: 11,
     fontWeight: "600",
+  },
+  swipeRowContainer: {
+    position: "relative",
+    overflow: "hidden",
+  },
+  swipeDeleteButton: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 80,
+    backgroundColor: "#ff4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  swipeRow: {
+    backgroundColor: "transparent",
   },
 });

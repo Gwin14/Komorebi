@@ -165,20 +165,15 @@ export default function TopBar({
       onPress: togglePortraitModeEnabled,
       active: portraitModeEnabled,
     },
+    projects: {
+      icon: activeProjectId ? "folder" : "folder-outline",
+      onPress: () => {},
+      active: Boolean(activeProjectId),
+    },
   };
 
   return (
     <View style={styles.buttonsContainer}>
-      <ProjectSelector
-        projects={projects}
-        activeProjectId={activeProjectId}
-        onChangeProject={onChangeProject}
-        onCreateProject={onCreateProject}
-        includeNoneOption
-        noneOptionLabel="Nenhum projeto"
-        compact
-      />
-
       {topBarControls.map((controlId) => {
         if (controlId === "manual" && !manualControlsAvailable) return null;
         const control = controlOptions[controlId];
@@ -213,6 +208,27 @@ export default function TopBar({
                 >
                   <PhotoWeather data={data} place={place} />
                 </Popover>
+              </Animated.View>
+            </View>
+          );
+        }
+
+        if (controlId === "projects") {
+          return (
+            <View key={controlId}>
+              <Animated.View style={animatedStyle}>
+                <ProjectSelector
+                  projects={projects}
+                  activeProjectId={activeProjectId}
+                  onChangeProject={onChangeProject}
+                  onCreateProject={onCreateProject}
+                  includeNoneOption
+                  noneOptionLabel="Nenhum projeto"
+                  compact
+                  bare
+                  triggerActive={Boolean(activeProjectId)}
+                  triggerIconSize={32}
+                />
               </Animated.View>
             </View>
           );
