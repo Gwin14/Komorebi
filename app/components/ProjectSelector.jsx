@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { useState } from "react";
 import {
   Alert,
@@ -60,11 +61,7 @@ export default function ProjectSelector({
       accessibilityRole="button"
     >
       <View style={[styles.trigger, compact && styles.triggerCompact]}>
-        <Ionicons
-          name={triggerIcon}
-          size={compact ? 22 : 26}
-          color="#ffaa00"
-        />
+        <Ionicons name={triggerIcon} size={compact ? 22 : 26} color="#ffaa00" />
         {!compact && (
           <Text style={styles.triggerLabel} numberOfLines={1}>
             {activeProject?.name || noneOptionLabel}
@@ -93,15 +90,17 @@ export default function ProjectSelector({
       popoverStyle={styles.popover}
       from={trigger}
     >
-      <View style={styles.container}>
-        <Text style={styles.title}>Projetos</Text>
+      <BlurView intensity={30} tint="dark" style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>PROJETOS</Text>
+        </View>
 
         {isCreating ? (
           <View style={styles.createContainer}>
             <TextInput
               style={styles.input}
               placeholder="Nome do projeto"
-              placeholderTextColor="#8c8c8c"
+              placeholderTextColor="rgba(255,255,255,0.4)"
               value={newName}
               autoFocus
               onChangeText={setNewName}
@@ -134,25 +133,30 @@ export default function ProjectSelector({
 
               return (
                 <TouchableOpacity
-                  style={[styles.item, isActive && styles.itemActive]}
+                  style={styles.row}
                   onPress={() => {
                     onChangeProject(item.isNone ? null : item.id);
                     setVisible(false);
                   }}
                 >
-                  <Ionicons
-                    name={isActive ? "folder" : "folder-outline"}
-                    size={20}
-                    color={isActive ? "#ffaa00" : "#cfcfcf"}
-                  />
-                  <Text
-                    style={[styles.itemLabel, isActive && styles.itemLabelActive]}
-                    numberOfLines={1}
-                  >
-                    {item.name}
-                  </Text>
+                  <View style={styles.rowLabelContainer}>
+                    <Ionicons
+                      name={isActive ? "folder" : "folder-outline"}
+                      size={18}
+                      color={isActive ? "#ffaa00" : "rgba(255,255,255,0.62)"}
+                    />
+                    <Text
+                      style={[
+                        styles.rowLabel,
+                        isActive && styles.rowLabelActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.name}
+                    </Text>
+                  </View>
                   {isActive && (
-                    <Ionicons name="checkmark" size={18} color="#ffaa00" />
+                    <Ionicons name="checkmark" size={16} color="#ffaa00" />
                   )}
                 </TouchableOpacity>
               );
@@ -161,15 +165,18 @@ export default function ProjectSelector({
         )}
 
         {!isCreating && (
-          <TouchableOpacity
-            style={styles.newButton}
-            onPress={() => setIsCreating(true)}
-          >
-            <Ionicons name="add-outline" size={18} color="#ffaa00" />
-            <Text style={styles.newButtonText}>Novo projeto</Text>
-          </TouchableOpacity>
+          <>
+            <View style={styles.divider} />
+            <TouchableOpacity
+              style={styles.newButton}
+              onPress={() => setIsCreating(true)}
+            >
+              <Ionicons name="add-outline" size={16} color="#ffaa00" />
+              <Text style={styles.newButtonText}>Novo projeto</Text>
+            </TouchableOpacity>
+          </>
         )}
-      </View>
+      </BlurView>
     </Popover>
   );
 }

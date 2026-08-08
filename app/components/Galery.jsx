@@ -1,3 +1,4 @@
+import { BlurView } from "expo-blur";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -24,17 +25,14 @@ import {
 } from "react-native-safe-area-context";
 import { ExifItem } from "../components/ExifItem";
 import { MapViewWeb } from "../components/MapViewWeb";
+import { useSettings } from "../context/SettingsContext";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
-import { useSettings } from "../context/SettingsContext";
-import {
-  getProjectAlbumName,
-  moveAssetToProject,
-} from "../utils/projects";
+import { getProjectAlbumName, moveAssetToProject } from "../utils/projects";
 import BackButton from "./BackButton";
-import ProjectSelector from "./ProjectSelector";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
+import ProjectSelector from "./ProjectSelector";
 
 const PHOTOS_PER_ROW = 4;
 const FULL_SCREEN_DISMISS_DISTANCE = 80;
@@ -153,8 +151,7 @@ const getContainedImageSize = (photo, maxWidth, maxHeight) => {
 };
 
 export default function Galery() {
-  const { projects, activeProjectId, setProjects } =
-    useSettings();
+  const { projects, activeProjectId, setProjects } = useSettings();
   const [viewProjectId, setViewProjectId] = useState(activeProjectId);
   const viewProject = viewProjectId
     ? projects.find((project) => project.id === viewProjectId) || null
@@ -278,9 +275,7 @@ export default function Galery() {
   const handleChangeViewProject = useCallback(
     (projectId) => {
       setViewProjectId(projectId);
-      loadKomorebiPhotos(
-        projects.find((project) => project.id === projectId),
-      );
+      loadKomorebiPhotos(projects.find((project) => project.id === projectId));
     },
     [loadKomorebiPhotos, projects],
   );
@@ -541,8 +536,18 @@ export default function Galery() {
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar hidden={fullScreenVisible} />
 
-      <View style={styles.navigationBar}>
-        <BackButton top={8} left={0} />
+      <BlurView
+        intensity={30}
+        tint="dark"
+        style={[
+          styles.navigationBar,
+          {
+            paddingTop: safeAreaInsets.top,
+            height: 48 + safeAreaInsets.top,
+          },
+        ]}
+      >
+        <BackButton top={70} left={5} />
         <Text style={styles.title}>Galeria</Text>
         <View style={styles.navigationProjectSelector}>
           <ProjectSelector
@@ -555,7 +560,7 @@ export default function Galery() {
             triggerIcon="folder"
           />
         </View>
-      </View>
+      </BlurView>
 
       <SectionList
         sections={photoSections}

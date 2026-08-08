@@ -1,6 +1,7 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  // Gatilho (botão da topbar / galeria) — discreto, combina com a UI escura.
   trigger: {
     alignItems: "center",
     flexDirection: "row",
@@ -8,7 +9,9 @@ export default StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.12)",
   },
   triggerCompact: {
     paddingHorizontal: 6,
@@ -20,64 +23,68 @@ export default StyleSheet.create({
     fontWeight: "600",
     maxWidth: 160,
   },
+
+  // Popover — mesmo visual do painel de clima (PhotoWeather).
   popover: {
-    backgroundColor: "#1c1c1e",
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    width: 260,
+    backgroundColor: "transparent",
   },
   container: {
-    maxHeight: 360,
-    padding: 14,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(8,8,8,0.72)",
+    borderColor: "rgba(255,255,255,0.18)",
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 230,
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingBottom: 9,
+    paddingTop: 8,
+  },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
   title: {
-    color: "#fff",
-    fontSize: 16,
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 8,
     fontWeight: "700",
-    marginBottom: 10,
+    letterSpacing: 1.1,
   },
   list: {
     maxHeight: 220,
   },
-  item: {
+  row: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    minHeight: 23,
   },
-  itemActive: {
-    backgroundColor: "rgba(255,170,0,0.12)",
-  },
-  itemLabel: {
-    flex: 1,
-    color: "#cfcfcf",
-    fontSize: 15,
-  },
-  itemLabelActive: {
-    color: "#ffaa00",
-    fontWeight: "600",
-  },
-  newButton: {
+  rowLabelContainer: {
     alignItems: "center",
     flexDirection: "row",
-    justifyContent: "center",
     gap: 6,
-    marginTop: 8,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(255,170,0,0.4)",
+    flex: 1,
   },
-  newButtonText: {
-    color: "#ffaa00",
-    fontSize: 14,
+  rowLabel: {
+    color: "rgba(255,255,255,0.88)",
+    flexShrink: 1,
+    fontSize: 11,
     fontWeight: "600",
+    lineHeight: 15,
   },
+  rowLabelActive: {
+    color: "#ffaa00",
+  },
+  divider: {
+    backgroundColor: "rgba(255,255,255,0.14)",
+    height: 1,
+    marginVertical: 8,
+  },
+
+  // Formulário de criação — reaproveita as cores/espaçamentos do painel.
   createContainer: {
-    marginBottom: 8,
+    marginTop: 4,
   },
   input: {
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -85,9 +92,10 @@ export default StyleSheet.create({
     borderColor: "rgba(255,255,255,0.12)",
     borderRadius: 8,
     color: "#fff",
-    fontSize: 15,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    fontSize: 13,
+    fontWeight: "600",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
   },
   createActions: {
     flexDirection: "row",
@@ -96,22 +104,36 @@ export default StyleSheet.create({
     marginTop: 10,
   },
   cancelButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   cancelText: {
-    color: "#cfcfcf",
-    fontSize: 14,
+    color: "rgba(255,255,255,0.72)",
+    fontSize: 11,
+    fontWeight: "600",
   },
   addButton: {
     backgroundColor: "#ffaa00",
     borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
   addText: {
     color: "#111",
-    fontSize: 14,
+    fontSize: 11,
     fontWeight: "700",
+  },
+  newButton: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+  },
+  newButtonText: {
+    color: "#ffaa00",
+    fontSize: 11,
+    fontWeight: "600",
   },
 });

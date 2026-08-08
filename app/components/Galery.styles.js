@@ -16,6 +16,7 @@ export default StyleSheet.create({
     fontWeight: "600",
     color: "#fff",
     textAlign: "center",
+    marginLeft: 20,
   },
   exifFrameButton: {
     padding: 6,
@@ -74,6 +75,7 @@ export default StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: 20,
     paddingVertical: 11,
+    border: "none",
   },
   permissionButtonText: {
     color: "#111",
@@ -86,12 +88,20 @@ export default StyleSheet.create({
     height: 48,
     justifyContent: "center",
     paddingHorizontal: 14,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.88)",
+    borderBottomWidth: 1,
   },
   navigationProjectSelector: {
     marginLeft: "auto",
   },
   listContent: {
     flexGrow: 1,
+    paddingTop: 40,
     paddingBottom: 32,
     paddingHorizontal: 14,
   },
