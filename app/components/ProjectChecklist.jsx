@@ -24,6 +24,9 @@ export default function ProjectChecklist({
   onProjectsChange,
   onCreateProject,
   triggerIcon = "folder-outline",
+  triggerText,
+  triggerStyle,
+  triggerTextStyle,
 }) {
   const [visible, setVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -88,10 +91,15 @@ export default function ProjectChecklist({
       onPress={() => setVisible(true)}
       accessibilityLabel="Selecionar projetos"
       accessibilityRole="button"
+      style={triggerText ? triggerStyle : undefined}
     >
-      <View style={[styles.trigger, styles.triggerCompact]}>
-        <Ionicons name={triggerIcon} size={22} color="#ffaa00" />
-      </View>
+      {triggerText ? (
+        <Text style={triggerTextStyle}>{triggerText}</Text>
+      ) : (
+        <View style={[styles.trigger, styles.triggerCompact]}>
+          <Ionicons name={triggerIcon} size={22} color="#ffaa00" />
+        </View>
+      )}
     </TouchableOpacity>
   );
 

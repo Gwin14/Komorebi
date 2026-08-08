@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Button,
   FlatList,
   Image,
   Modal,
@@ -758,11 +757,12 @@ export default function Galery() {
                   ) : null}
 
                   <View style={styles.modalActions}>
-                    <Button
-                      title="Fechar"
+                    <TouchableOpacity
+                      style={styles.modalActionButton}
                       onPress={closeDetails}
-                      color="#ffaa00"
-                    />
+                    >
+                      <Text style={styles.modalActionButtonText}>Fechar</Text>
+                    </TouchableOpacity>
 
                     <ProjectChecklist
                       assetId={photo.id}
@@ -771,14 +771,19 @@ export default function Galery() {
                       onCreateProject={(project) => {
                         setProjects((prev) => [...prev, project]);
                       }}
-                      triggerIcon="folder-outline"
+                      triggerText="Projetos"
+                      triggerStyle={styles.modalActionButton}
+                      triggerTextStyle={styles.modalActionButtonText}
                     />
 
-                    <Button
-                      title="Excluir foto"
+                    <TouchableOpacity
+                      style={styles.modalActionButtonDanger}
                       onPress={() => handleDeletePhoto(photo.id)}
-                      color="#ff4444"
-                    />
+                    >
+                      <Text style={styles.modalActionButtonDangerText}>
+                        Excluir foto
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </ScrollView>
               );
