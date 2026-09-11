@@ -21,12 +21,15 @@ export default StyleSheet.create({
   effectsColumn: {
     flex: 1,
     minWidth: 0,
+    marginRight: 48,
+    overflow: "hidden",
   },
   quickShutterSlot: {
-    width: 64,
+    width: 76,
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "center",
-    paddingRight: 12,
+    paddingHorizontal: 12,
   },
   sectionTitle: {
     color: "#fff",
@@ -54,10 +57,22 @@ export default StyleSheet.create({
     gap: 8,
   },
   compactScrollContent: {
-    paddingHorizontal: 16,
+    paddingLeft: 16,
+    paddingRight: 40,
     paddingTop: 2,
     paddingBottom: 4,
     gap: 4,
+  },
+  compactScrollViewport: {
+    position: "relative",
+    overflow: "hidden",
+  },
+  scrollEndFade: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 32,
   },
   effectButton: {
     alignItems: "center",

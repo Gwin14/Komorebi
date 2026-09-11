@@ -29,8 +29,13 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
           });
         }
         try {
+          const exifSourceBase64 = data.originalUri
+            ? await FileSystem.readAsStringAsync(data.originalUri, {
+                encoding: FileSystem.EncodingType.Base64,
+              })
+            : base64;
           originalExifRef.current = piexif.load(
-            "data:image/jpeg;base64," + base64,
+            "data:image/jpeg;base64," + exifSourceBase64,
           );
         } catch {
           originalExifRef.current = null;

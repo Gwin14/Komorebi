@@ -7,14 +7,16 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Animated, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import useShutterSound from "../utils/useShutterSound";
+import { getProjectAlbumName } from "../utils/projects";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
 import Shutter from "./shutter";
-import styles from "./BottomControls.styles";
+import styles, { BOTTOM_CONTROLS_MARGIN } from "./BottomControls.styles";
 
 export default function BottomControls({
   controlsAnim,
@@ -45,8 +47,10 @@ export default function BottomControls({
   activeLensId,
   onSelectLens,
   galleryRefreshKey,
+  activeProject = null,
 }) {
   const router = useRouter();
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const { shutterSound } = useSettings();
   const playShutterSound = useShutterSound();
   const deviceOrientationStyle = useDeviceOrientation();
@@ -65,20 +69,26 @@ export default function BottomControls({
 
   useEffect(() => {
     loadLastPhoto();
-  }, [galleryRefreshKey]);
+  }, [galleryRefreshKey, activeProject]);
 
   const loadLastPhoto = async () => {
     try {
       const albums = await MediaLibrary.getAlbumsAsync();
 
-      const komorebiAlbum = albums.find(
-        (a) => a.title.toLowerCase() === "komorebi",
+      // Sem projeto: mostra a última foto do álbum padrão (Komorebi).
+      // Com projeto: mostra a última foto do álbum do projeto.
+      const albumName = activeProject
+        ? getProjectAlbumName(activeProject)
+        : "Komorebi";
+
+      const targetAlbum = albums.find(
+        (a) => a.title.toLowerCase() === albumName.toLowerCase(),
       );
 
-      if (!komorebiAlbum) return;
+      if (!targetAlbum) return;
 
       const photos = await MediaLibrary.getAssetsAsync({
-        album: komorebiAlbum,
+        album: targetAlbum,
         mediaType: "photo",
         first: 1,
         sortBy: [["creationTime", false]],
@@ -142,7 +152,12 @@ export default function BottomControls({
     (activeControl === "none" || activeControl === "manual");
 
   return (
-    <View style={styles.shutterContainer}>
+    <View
+      style={[
+        styles.shutterContainer,
+        { marginBottom: BOTTOM_CONTROLS_MARGIN + bottomInset },
+      ]}
+    >
       {/* 🆕 Seletor de lentes — acima da linha do shutter, sempre visível quando inativo */}
       {showLensSelector && (
         <LensSelector

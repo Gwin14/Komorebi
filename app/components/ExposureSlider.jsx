@@ -28,7 +28,7 @@ export default function ExposureSlider({
   // essas props: não tem modo automático, sempre mostra o valor numérico.
   isAuto = false,
   onReset,
-  activeControl,
+  activeControl = "none",
 }) {
   const displayValue = isAuto ? resetValue : exposure;
 

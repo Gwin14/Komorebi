@@ -71,6 +71,12 @@ export const TOP_BAR_CONTROLS = [
     icon: "person-outline",
     alwaysEnabled: false,
   },
+  {
+    id: "projects",
+    label: "Projetos",
+    icon: "folder-outline",
+    alwaysEnabled: false,
+  },
 ];
 
 export const DEFAULT_TOP_BAR_CONTROLS = [
@@ -81,6 +87,7 @@ export const DEFAULT_TOP_BAR_CONTROLS = [
   "rawCapture",
   "livePhoto",
   "portrait",
+  "projects",
   "settings",
 ];
 
@@ -98,6 +105,12 @@ export function normalizeTopBarControls(savedControls) {
 
   if (!parsed.includes("settings")) {
     parsed.push("settings");
+  }
+
+  // Garante que o controle de projetos apareça mesmo em settings antigos
+  // (migração). O usuário ainda pode removê-lo nas configurações.
+  if (!parsed.includes("projects")) {
+    parsed.push("projects");
   }
 
   return parsed.slice(0, TOP_BAR_MAX_CONTROLS);

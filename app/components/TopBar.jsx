@@ -7,6 +7,7 @@ import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
+import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
 import styles from "./TopBar.styles";
 
@@ -36,6 +37,10 @@ export default function TopBar({
   portraitModeEnabled,
   togglePortraitModeEnabled,
   unavailableReasons = {},
+  projects = [],
+  activeProjectId,
+  onChangeProject,
+  onCreateProject,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -154,9 +159,16 @@ export default function TopBar({
     },
     portrait: {
       icon: portraitModeEnabled ? "person" : "person-outline",
-      symbol: portraitModeEnabled ? "f.cursive.circle.fill" : "f.cursive.circle",
+      symbol: portraitModeEnabled
+        ? "f.cursive.circle.fill"
+        : "f.cursive.circle",
       onPress: togglePortraitModeEnabled,
       active: portraitModeEnabled,
+    },
+    projects: {
+      icon: activeProjectId ? "folder" : "folder-outline",
+      onPress: () => {},
+      active: Boolean(activeProjectId),
     },
   };
 
@@ -201,6 +213,27 @@ export default function TopBar({
           );
         }
 
+        if (controlId === "projects") {
+          return (
+            <View key={controlId}>
+              <Animated.View style={animatedStyle}>
+                <ProjectSelector
+                  projects={projects}
+                  activeProjectId={activeProjectId}
+                  onChangeProject={onChangeProject}
+                  onCreateProject={onCreateProject}
+                  includeNoneOption
+                  noneOptionLabel="Nenhum projeto"
+                  compact
+                  bare
+                  triggerActive={Boolean(activeProjectId)}
+                  triggerIconSize={32}
+                />
+              </Animated.View>
+            </View>
+          );
+        }
+
         return (
           <TouchableOpacity
             key={controlId}
@@ -208,7 +241,8 @@ export default function TopBar({
               if (disabled) {
                 Alert.alert(
                   "Recurso indisponível",
-                  unavailableReason || "Este recurso não é compatível com a lente atual.",
+                  unavailableReason ||
+                    "Este recurso não é compatível com a lente atual.",
                 );
                 return;
               }
@@ -221,11 +255,7 @@ export default function TopBar({
             >
               {controlId === "rawCapture" ? (
                 <View style={styles.rawControl}>
-                  <Ionicons
-                    name={control.icon}
-                    size={28}
-                    color={iconColor}
-                  />
+                  <Ionicons name={control.icon} size={28} color={iconColor} />
                   <Text
                     style={[
                       styles.rawLabel,
@@ -235,32 +265,30 @@ export default function TopBar({
                     {control.label}
                   </Text>
                 </View>
+              ) : control.symbol ? (
+                <SymbolView
+                  name={control.symbol}
+                  size={32}
+                  type="monochrome"
+                  tintColor={iconColor}
+                  resizeMode="scaleAspectFit"
+                  style={styles.symbolButton}
+                  fallback={
+                    <Ionicons
+                      name={control.icon}
+                      size={32}
+                      style={styles.button}
+                      color={iconColor}
+                    />
+                  }
+                />
               ) : (
-                control.symbol ? (
-                  <SymbolView
-                    name={control.symbol}
-                    size={32}
-                    type="monochrome"
-                    tintColor={iconColor}
-                    resizeMode="scaleAspectFit"
-                    style={styles.symbolButton}
-                    fallback={
-                      <Ionicons
-                        name={control.icon}
-                        size={32}
-                        style={styles.button}
-                        color={iconColor}
-                      />
-                    }
-                  />
-                ) : (
-                  <Ionicons
-                    name={control.icon}
-                    size={32}
-                    style={styles.button}
-                    color={iconColor}
-                  />
-                )
+                <Ionicons
+                  name={control.icon}
+                  size={32}
+                  style={styles.button}
+                  color={iconColor}
+                />
               )}
             </Animated.View>
           </TouchableOpacity>

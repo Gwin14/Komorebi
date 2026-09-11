@@ -11,7 +11,10 @@ import {
 } from "../utils/cameraUtils";
 import { saveKomorebiAssetMetadata } from "../utils/komorebiExifMetadata";
 
-export default function usePhotoProcessingQueue(hasMediaPermission) {
+export default function usePhotoProcessingQueue(
+  hasMediaPermission,
+  activeProject = null,
+) {
   const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
@@ -25,7 +28,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
   }, []);
 
   const handleProcessed = useCallback(
-    async (processedUri, item = {}) => {
+    async (processedUri, item = {}, project = activeProject) => {
       let mainAssetSaved = false;
       const {
         alreadySaved = false,
@@ -51,18 +54,16 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
         }
 
         const shouldApplyExifBeforeSaving =
-          !item.needsProcessing &&
-          captureMode === "standard" &&
-          Boolean(exifData);
+          !item.needsProcessing && captureMode !== "raw" && Boolean(exifData);
         const uriToSave = shouldApplyExifBeforeSaving
-          ? await applyExifDataToImage(processedUri, exifData)
+          ? await applyExifDataToImage(processedUri, exifData, originalUri)
           : processedUri;
         const komorebiMetadata = exifData?.komorebiMetadata;
         const saveMetadataForAsset = (assetId) =>
           saveKomorebiAssetMetadata(assetId, komorebiMetadata);
 
         if (captureMode === "raw") {
-          const rawAsset = await saveToAlbum(originalUri || processedUri);
+          const rawAsset = await saveToAlbum(project,originalUri || processedUri);
           await saveMetadataForAsset(rawAsset?.id);
           mainAssetSaved = true;
 
@@ -83,7 +84,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
             derivativeSourceUri,
             derivedUri,
           );
-          const derivedAsset = await saveToAlbum(derivedWithExif);
+          const derivedAsset = await saveToAlbum(project,derivedWithExif);
           await saveMetadataForAsset(derivedAsset?.id);
         } else if (livePhotoMovieUri) {
           const result = await saveLivePhotoToLibrary({
@@ -99,9 +100,13 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
               uriToSave,
               aspectRatio,
             );
-            if (!inverseUri) throw new Error("Falha na segunda foto da Live Photo");
-            const inverseWithExif = await copyExifFromImage(uriToSave, inverseUri);
-            const inverseAsset = await saveToAlbum(inverseWithExif);
+            if (!inverseUri)
+              throw new Error("Falha na segunda foto da Live Photo");
+            const inverseWithExif = await copyExifFromImage(
+              uriToSave,
+              inverseUri,
+            );
+            const inverseAsset = await saveToAlbum(project,inverseWithExif);
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (
@@ -120,13 +125,17 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
               uriToSave,
               aspectRatio,
             );
-            if (!inverseUri) throw new Error("Falha na segunda foto do retrato");
-            const inverseWithExif = await copyExifFromImage(uriToSave, inverseUri);
-            const inverseAsset = await saveToAlbum(inverseWithExif);
+            if (!inverseUri)
+              throw new Error("Falha na segunda foto do retrato");
+            const inverseWithExif = await copyExifFromImage(
+              uriToSave,
+              inverseUri,
+            );
+            const inverseAsset = await saveToAlbum(project,inverseWithExif);
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (doubleCaptureMode) {
-          const asset = await saveToAlbum(uriToSave);
+          const asset = await saveToAlbum(project,uriToSave);
           await saveMetadataForAsset(asset?.id);
           mainAssetSaved = true;
 
@@ -139,21 +148,23 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
             uriToSave,
             inverseUri,
           );
-          const inverseAsset = await saveToAlbum(inverseUriWithExif);
+          const inverseAsset = await saveToAlbum(project,inverseUriWithExif);
           await saveMetadataForAsset(inverseAsset?.id);
         } else {
-          const asset = await saveToAlbum(uriToSave);
+          const asset = await saveToAlbum(project,uriToSave);
           await saveMetadataForAsset(asset?.id);
           mainAssetSaved = true;
         }
 
         if (saveOriginalWithoutEffects && originalUri) {
-          await saveToAlbum(originalUri);
+          await saveToAlbum(project,originalUri);
         }
       } catch (error) {
         console.error("Erro ao salvar imagem processada:", error);
         Alert.alert(
-          mainAssetSaved ? "Captura salva parcialmente" : "Falha ao salvar captura",
+          mainAssetSaved
+            ? "Captura salva parcialmente"
+            : "Falha ao salvar captura",
           mainAssetSaved
             ? "O arquivo principal foi preservado, mas uma versão derivada não pôde ser criada."
             : "Não foi possível salvar o arquivo principal desta captura.",
@@ -163,7 +174,7 @@ export default function usePhotoProcessingQueue(hasMediaPermission) {
         setGalleryRefreshKey((value) => value + 1);
       }
     },
-    [hasMediaPermission, removeCurrentProcessing],
+    [hasMediaPermission, removeCurrentProcessing, activeProject],
   );
 
   useEffect(() => {

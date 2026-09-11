@@ -4,6 +4,8 @@ import { normalizeTopBarControls } from "./topBarControls";
 export const SETTINGS_STORAGE_KEYS = {
   RETRO_STYLE: "@settings/retroStyle",
   GRID_VISIBLE: "@settings/gridVisible",
+  LEVEL_VISIBLE: "@settings/levelVisible",
+  HISTOGRAM_VISIBLE: "@settings/histogramVisible",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
@@ -11,6 +13,8 @@ export const SETTINGS_STORAGE_KEYS = {
   CUSTOM_LUTS: "@settings/customLuts",
   TOP_BAR_BELOW: "@settings/topBarBelow",
   TOP_BAR_CONTROLS: "@settings/topBarControls",
+  PROJECTS: "@settings/projects",
+  ACTIVE_PROJECT_ID: "@settings/activeProjectId",
 };
 
 const parseBoolean = (value, fallback) => {
@@ -34,6 +38,8 @@ export async function loadStoredSettings(defaults) {
   const [
     savedRetroStyle,
     savedGridVisible,
+    savedLevelVisible,
+    savedHistogramVisible,
     savedShutterSound,
     savedLocation,
     savedSaveOriginalWithLUT,
@@ -41,9 +47,13 @@ export async function loadStoredSettings(defaults) {
     savedCustomLuts,
     savedTopBarBelow,
     savedTopBarControls,
-  ] = await Promise.all([
+    savedProjects,
+    savedActiveProjectId,
+    ] = await Promise.all([
     AsyncStorage.getItem(keys.RETRO_STYLE),
     AsyncStorage.getItem(keys.GRID_VISIBLE),
+    AsyncStorage.getItem(keys.LEVEL_VISIBLE),
+    AsyncStorage.getItem(keys.HISTOGRAM_VISIBLE),
     AsyncStorage.getItem(keys.SHUTTER_SOUND),
     AsyncStorage.getItem(keys.LOCATION),
     AsyncStorage.getItem(keys.SAVE_ORIGINAL_WITH_LUT),
@@ -51,11 +61,18 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.CUSTOM_LUTS),
     AsyncStorage.getItem(keys.TOP_BAR_BELOW),
     AsyncStorage.getItem(keys.TOP_BAR_CONTROLS),
-  ]);
+    AsyncStorage.getItem(keys.PROJECTS),
+    AsyncStorage.getItem(keys.ACTIVE_PROJECT_ID),
+    ]);
 
-  return {
+    return {
     retroStyle: parseBoolean(savedRetroStyle, defaults.retroStyle),
     gridVisible: parseBoolean(savedGridVisible, defaults.gridVisible),
+    levelVisible: parseBoolean(savedLevelVisible, defaults.levelVisible),
+    histogramVisible: parseBoolean(
+      savedHistogramVisible,
+      defaults.histogramVisible,
+    ),
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
     saveOriginalWithoutEffects: parseBoolean(
@@ -68,7 +85,9 @@ export async function loadStoredSettings(defaults) {
     topBarControls: normalizeTopBarControls(
       parseJSON(savedTopBarControls, defaults.topBarControls),
     ),
-  };
+    projects: parseJSON(savedProjects, defaults.projects),
+    activeProjectId: savedActiveProjectId || defaults.activeProjectId,
+    };
 }
 
 export function saveStoredSetting(key, value) {

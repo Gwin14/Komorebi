@@ -5,16 +5,20 @@ export default StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
-    width: "105%",
+    width: "95%",
+    backgroundColor: "#ffffff12",
+    borderColor: "#ffffff08",
+    marginVertical: 10,
+    borderRadius: 10,
   },
   title: {
     fontSize: 18,
     fontWeight: "600",
     color: "#fff",
     textAlign: "center",
+    marginLeft: 20,
   },
   exifFrameButton: {
-    marginRight: 15,
     padding: 6,
     borderRadius: 6,
   },
@@ -22,7 +26,7 @@ export default StyleSheet.create({
     flex: 1,
     borderWidth: 0,
     borderRightWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.18)",
+    borderColor: "#ffffff1f",
   },
   badgeContainer: {
     alignItems: "center",
@@ -33,8 +37,8 @@ export default StyleSheet.create({
     paddingHorizontal: 6,
   },
   badge: {
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
-    borderColor: "rgba(255, 255, 255, 0.18)",
+    backgroundColor: "#ffffff0f",
+    borderColor: "#ffffff14",
     borderRadius: 5,
     borderWidth: 1,
     minHeight: 30,
@@ -71,6 +75,7 @@ export default StyleSheet.create({
     marginTop: 18,
     paddingHorizontal: 20,
     paddingVertical: 11,
+    border: "none",
   },
   permissionButtonText: {
     color: "#111",
@@ -83,9 +88,20 @@ export default StyleSheet.create({
     height: 48,
     justifyContent: "center",
     paddingHorizontal: 14,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: "rgba(0, 0, 0, 0.88)",
+    borderBottomWidth: 1,
+  },
+  navigationProjectSelector: {
+    marginLeft: "auto",
   },
   listContent: {
     flexGrow: 1,
+    paddingTop: 40,
     paddingBottom: 32,
     paddingHorizontal: 14,
   },
@@ -140,9 +156,48 @@ export default StyleSheet.create({
     alignItems: "center",
     paddingBottom: 40,
   },
+  selectedImagePage: {
+    height: 350,
+    width: "100%",
+  },
   selectedImage: {
     width: "100%",
-    height: 350,
+    height: "100%",
+  },
+  photoDataLoading: {
+    alignItems: "center",
+    height: 110,
+    justifyContent: "center",
+    width: "100%",
+  },
+  photoDataContent: {
+    alignItems: "center",
+    width: "100%",
+  },
+  modalSwitchBackdrop: {
+    backgroundColor: "#000",
+    position: "absolute",
+    zIndex: 50,
+  },
+  fullScreenModal: {
+    backgroundColor: "#000",
+    flex: 1,
+  },
+  fullScreenContent: {
+    flex: 1,
+    zIndex: 1,
+  },
+  fullScreenPage: {
+    alignItems: "center",
+    backgroundColor: "#000",
+    justifyContent: "center",
+  },
+  fullScreenImage: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
   },
   infoTitle: {
     color: "#fff",
@@ -150,7 +205,6 @@ export default StyleSheet.create({
     fontSize: 20,
     margin: 10,
     textAlign: "left",
-    paddingLeft: 15,
   },
   exifFrameIcon: {
     width: 30,
@@ -161,10 +215,18 @@ export default StyleSheet.create({
     flexWrap: "wrap", // permite quebra de linha
     justifyContent: "space-between", // espaçamento entre as colunas
     padding: 10,
+    backgroundColor: "#ffffff12",
+    borderColor: "#ffffff08",
+    width: "95%",
+    borderRadius: 10,
+    marginBottom: 10,
   },
   exifItemWrapper: {
     width: "45%", // cerca de metade da tela (menos espaço de margem)
     marginBottom: 10,
+  },
+  exifItemWide: {
+    width: "100%",
   },
   mapContainer: {
     width: "95%",
@@ -176,5 +238,38 @@ export default StyleSheet.create({
     display: "flex",
     flexDirection: "row",
     justifyContent: "space-around",
+    gap: 12,
+    paddingHorizontal: 10,
+    marginTop: -10,
+  },
+  modalActionButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255, 170, 0, 0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 170, 0, 0.15)",
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  modalActionButtonText: {
+    color: "#ffaa00",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  modalActionButtonDanger: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,68,68,0.03)",
+    borderWidth: 1,
+    borderColor: "rgba(255,68,68,0.15)",
+    borderRadius: 10,
+    paddingVertical: 12,
+  },
+  modalActionButtonDangerText: {
+    color: "#ff4444",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

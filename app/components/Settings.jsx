@@ -29,6 +29,10 @@ export default function Settings() {
     setRetroStyle,
     gridVisible,
     setGridVisible,
+    levelVisible,
+    setLevelVisible,
+    histogramVisible,
+    setHistogramVisible,
     loading,
     shutterSound,
     setShutterSound,
@@ -42,6 +46,7 @@ export default function Settings() {
     setTopBarControls,
     topBarBelow,
     setTopBarBelow,
+    setFirstTime,
   } = useSettings();
 
   const controlsMap = {};
@@ -173,12 +178,30 @@ export default function Settings() {
           />
 
           <CustomToggle
+            label="Nível da Câmera"
+            value={levelVisible}
+            onValueChange={setLevelVisible}
+          />
+
+          <CustomToggle
+            label="Histograma em tempo real"
+            value={histogramVisible}
+            onValueChange={setHistogramVisible}
+          />
+
+          <CustomToggle
             label="Som do Obturador"
             value={shutterSound}
             onValueChange={setShutterSound}
           />
 
-          <View style={styles.divider} />
+          <CustomToggle
+            label="Controles invertidos"
+            value={topBarBelow}
+            onValueChange={setTopBarBelow}
+          />
+
+          <View style={[styles.divider, { width: "100%" }]} />
 
           <CustomToggle
             label="Salvar cópia sem efeitos"
@@ -190,12 +213,6 @@ export default function Settings() {
             label="Salvar Localização nas Fotos"
             value={location}
             onValueChange={setLocation}
-          />
-
-          <CustomToggle
-            label="Controles invertidos"
-            value={topBarBelow}
-            onValueChange={setTopBarBelow}
           />
         </View>
 
@@ -332,6 +349,56 @@ export default function Settings() {
 
         <View style={styles.divider} />
 
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Rever apresentação inicial"
+          accessibilityHint="Fecha as configurações e abre novamente o onboarding"
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setFirstTime(true);
+            router.back();
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink
+            label="Rever apresentação"
+            description="Veja novamente os recursos principais do Komorebi."
+            disabled
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/TermosDeUso");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Termos de Uso" disabled />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/PoliticaDePrivacidade");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Política de Privacidade" disabled />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => {
+            router.push("components/CommingSoon");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          }}
+          style={styles.linkButtonWrapper}
+        >
+          <ExternalLink label="Em breve..." disabled />
+        </TouchableOpacity>
+
+        <View style={styles.divider} />
+
         <ExternalLink
           label="Código fonte"
           url="https://github.com/Gwin14/Komorebi"
@@ -359,36 +426,6 @@ export default function Settings() {
             description="Ajude a melhorar o app!"
             disabled
           />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            router.push("components/CommingSoon");
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          style={styles.linkButtonWrapper}
-        >
-          <ExternalLink label="Em breve..." disabled />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            router.push("components/TermosDeUso");
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          style={styles.linkButtonWrapper}
-        >
-          <ExternalLink label="Termos de Uso" disabled />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => {
-            router.push("components/PoliticaDePrivacidade");
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          }}
-          style={styles.linkButtonWrapper}
-        >
-          <ExternalLink label="Política de Privacidade" disabled />
         </TouchableOpacity>
 
         <View style={styles.divider} />

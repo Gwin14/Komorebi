@@ -18,7 +18,12 @@ export type PortraitCameraViewProps = ViewProps & {
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
+  histogramEnabled?: boolean;
   onSmileDetected?: () => void;
+  onHistogramUpdated?: (event: {
+    nativeEvent?: { bins?: number[] };
+    bins?: number[];
+  }) => void;
   onInitialized?: () => void;
   onError?: (event: { nativeEvent?: { message?: string } }) => void;
 };
@@ -104,9 +109,7 @@ export async function capturePortraitPhoto(
     localIdentifier: result.localIdentifier ?? null,
     savedToLibrary: Boolean(result.savedToLibrary),
     depthDataEmbedded: Boolean(result.depthDataEmbedded),
-    portraitEffectsMatteEmbedded: Boolean(
-      result.portraitEffectsMatteEmbedded,
-    ),
+    portraitEffectsMatteEmbedded: Boolean(result.portraitEffectsMatteEmbedded),
   };
 }
 

@@ -6,7 +6,8 @@ import {
 } from "../../modules/camera-live-photo";
 
 export default function useLivePhotoCapture(device) {
-  const nativeAvailable = Platform.OS === "ios" && isLivePhotoCaptureAvailable();
+  const nativeAvailable =
+    Platform.OS === "ios" && isLivePhotoCaptureAvailable();
   const [enabled, setEnabled] = useState(false);
   const [capabilities, setCapabilities] = useState(null);
 

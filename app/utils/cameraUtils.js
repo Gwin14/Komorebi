@@ -12,6 +12,7 @@ import {
   buildKomorebiExifMetadata,
 } from "./komorebiExifMetadata";
 import { applyLUTToImage } from "./lutProcessor";
+import { getProjectAlbumName } from "./projects";
 
 const APP_ALBUM = "Komorebi";
 
@@ -21,17 +22,50 @@ const normalizeUri = (uri) => {
   return uri.startsWith("file://") ? uri : `file://${uri}`;
 };
 
-export async function saveToAlbum(uri) {
+const getImageDimensions = (uri) =>
+  new Promise((resolve, reject) => {
+    Image.getSize(uri, (width, height) => resolve({ width, height }), reject);
+  });
+
+const resolveCaptureAspectRatio = async (uri, requestedRatio) => {
+  if (!uri || !requestedRatio || requestedRatio === 1) return requestedRatio;
+
+  try {
+    const { width, height } = await getImageDimensions(uri);
+    const imageIsLandscape = width > height;
+    const ratioIsLandscape = requestedRatio > 1;
+
+    return imageIsLandscape === ratioIsLandscape
+      ? requestedRatio
+      : 1 / requestedRatio;
+  } catch (_error) {
+    return requestedRatio;
+  }
+};
+
+export async function saveToAlbum(project, uri) {
   const fileUri = normalizeUri(uri);
   const asset = await MediaLibrary.createAssetAsync(fileUri);
 
   const albums = await MediaLibrary.getAlbumsAsync();
-  const album = albums.find((a) => a.title === APP_ALBUM);
 
-  if (!album) {
+  // Toda foto vai para o álbum padrão do app (Komorebi), independente de projeto.
+  const defaultAlbum = albums.find((a) => a.title === APP_ALBUM);
+  if (!defaultAlbum) {
     await MediaLibrary.createAlbumAsync(APP_ALBUM, asset, true); // true = copyAsset
   } else {
-    await MediaLibrary.addAssetsToAlbumAsync([asset], album, true); // true = copyAsset
+    await MediaLibrary.addAssetsToAlbumAsync([asset], defaultAlbum, true); // true = copyAsset
+  }
+
+  // Se um projeto estiver selecionado, a foto também vai para o álbum dele.
+  const projectName = project ? getProjectAlbumName(project) : "";
+  if (projectName) {
+    const projectAlbum = albums.find((a) => a.title === projectName);
+    if (!projectAlbum) {
+      await MediaLibrary.createAlbumAsync(projectName, asset, true); // true = copyAsset
+    } else {
+      await MediaLibrary.addAssetsToAlbumAsync([asset], projectAlbum, true); // true = copyAsset
+    }
   }
 
   return asset;
@@ -83,7 +117,8 @@ const buildPhotoProcessingData = async ({
   manualSettings = null,
   extraData = {},
 }) => {
-  const croppedUri = (await cropImageToAspect(uri, aspectRatio)) || uri;
+  const captureAspectRatio = await resolveCaptureAspectRatio(uri, aspectRatio);
+  const croppedUri = (await cropImageToAspect(uri, captureAspectRatio)) || uri;
   const komorebiMetadata = buildKomorebiExifMetadata({
     selectedLut,
     selectedLutId,
@@ -91,7 +126,7 @@ const buildPhotoProcessingData = async ({
     grainConfig: selectedGrainConfig,
     halationId: selectedHalationId,
     halationConfig: selectedHalationConfig,
-    aspectRatio,
+    aspectRatio: captureAspectRatio,
     doubleCaptureMode,
     captureMode,
     manualSettings,
@@ -105,7 +140,7 @@ const buildPhotoProcessingData = async ({
     exifData: baseExifData,
     doubleCaptureMode,
     saveOriginalWithoutEffects: false,
-    aspectRatio,
+    aspectRatio: captureAspectRatio,
     captureMode,
     cube: null,
     halationConfig: null,
@@ -141,7 +176,7 @@ const buildPhotoProcessingData = async ({
       grainConfig: selectedGrainConfig,
       halationId: selectedHalationId,
       halationConfig: selectedHalationConfig,
-      aspectRatio,
+      aspectRatio: captureAspectRatio,
       doubleCaptureMode,
       captureMode,
       manualSettings,
@@ -155,7 +190,7 @@ const buildPhotoProcessingData = async ({
     doubleCaptureMode,
     saveOriginalWithoutEffects,
     originalUri: uri,
-    aspectRatio,
+    aspectRatio: captureAspectRatio,
     captureMode,
   };
 };
@@ -192,7 +227,11 @@ export const takePicture = async ({
     (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) ||
     (portraitModeEnabled && portraitDeviceId && !rawModeEnabled);
 
-  if ((!nativeCaptureEnabled && !cameraRef.current) || !cameraReady || isProcessing) {
+  if (
+    (!nativeCaptureEnabled && !cameraRef.current) ||
+    !cameraReady ||
+    isProcessing
+  ) {
     console.warn("[CameraUtils] takePicture blocked", {
       nativeCaptureEnabled,
       hasCameraRef: Boolean(cameraRef.current),
@@ -315,35 +354,40 @@ export const takePicture = async ({
     const uri = normalizeUri(photo?.path || photo?.filePath || photo?.uri);
 
     if (rawModeEnabled) {
+      const derivativeSourceUri = normalizeUri(
+        photo?.processedPath || photo?.processedPhotoPath,
+      );
+      const captureAspectRatio = await resolveCaptureAspectRatio(
+        derivativeSourceUri || uri,
+        aspectRatio,
+      );
       const isVerticalCrop = Math.abs(aspectRatio - 9 / 16) < 0.01;
       const rawDerivativeAspectRatio =
         flash === "on"
           ? null
           : doubleCaptureMode
-            ? 1 / aspectRatio
+            ? 1 / captureAspectRatio
             : isVerticalCrop
-              ? aspectRatio
+              ? captureAspectRatio
               : null;
       setProcessingData({
         needsProcessing: false,
         originalUri: uri,
         imageUri: uri,
-        derivativeSourceUri: normalizeUri(
-          photo?.processedPath || photo?.processedPhotoPath,
-        ),
+        derivativeSourceUri,
         rawDerivativeAspectRatio,
         exifData: {
           ...additionalExif,
           komorebiMetadata: buildKomorebiExifMetadata({
             selectedLutId: "none",
-            aspectRatio,
+            aspectRatio: captureAspectRatio,
             doubleCaptureMode: false,
             captureMode: "raw",
           }),
         },
         doubleCaptureMode: false,
         saveOriginalWithoutEffects: false,
-        aspectRatio,
+        aspectRatio: captureAspectRatio,
         captureMode: "raw",
         cube: null,
         halationConfig: null,
@@ -396,11 +440,6 @@ export const takePicture = async ({
     setIsProcessing(false);
   }
 };
-
-const getImageDimensions = (uri) =>
-  new Promise((resolve, reject) => {
-    Image.getSize(uri, (width, height) => resolve({ width, height }), reject);
-  });
 
 const getCropRect = (width, height, ratio) => {
   const currentRatio = width / height;
@@ -488,7 +527,11 @@ const toExifFraction = (val) => {
   return [h1, k1];
 };
 
-export const applyExifDataToImage = async (imageUri, exifData) => {
+export const applyExifDataToImage = async (
+  imageUri,
+  exifData,
+  sourceImageUri = null,
+) => {
   if (!exifData || Object.keys(exifData).length === 0) {
     return imageUri;
   }
@@ -503,14 +546,28 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
     let exifObj = { "0th": {}, Exif: {}, GPS: {}, "1st": {}, thumbnail: null };
 
     try {
-      const existingExif = piexif.load(dataUrl);
+      const exifSourceUri = sourceImageUri || imageUri;
+      const exifSourceBase64 =
+        exifSourceUri === imageUri
+          ? base64Data
+          : await FileSystem.readAsStringAsync(exifSourceUri, {
+              encoding: "base64",
+            });
+      const existingExif = piexif.load(
+        `data:image/jpeg;base64,${exifSourceBase64}`,
+      );
       if (existingExif) {
         exifObj = JSON.parse(JSON.stringify(existingExif));
         exifObj["thumbnail"] = null;
       }
     } catch (_e) {
-      console.log("Criando novo objeto EXIF");
+      console.log("Não foi possível carregar o EXIF da imagem de origem");
     }
+
+    exifObj["0th"] = exifObj["0th"] || {};
+    exifObj["Exif"] = exifObj["Exif"] || {};
+    exifObj["GPS"] = exifObj["GPS"] || {};
+    exifObj["1st"] = exifObj["1st"] || {};
 
     if (exifData.Make) {
       exifObj["0th"][piexif.ImageIFD.Make] = String(exifData.Make);
@@ -532,10 +589,12 @@ export const applyExifDataToImage = async (imageUri, exifData) => {
       );
     }
 
-    // Aqui apenas regravamos metadados; os pixels do JPEG original não foram
-    // reorientados. Preserve a orientação criada pela câmera para não apagar
-    // a rotação necessária ao exibir a foto corretamente.
-    if (exifObj["0th"][piexif.ImageIFD.Orientation] == null) {
+    // ImageManipulator e o processador de efeitos normalizam os pixels. Ao
+    // importar o EXIF do arquivo original, normalize também a orientação para
+    // que os visualizadores não apliquem uma segunda rotação.
+    if (sourceImageUri && sourceImageUri !== imageUri) {
+      exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
+    } else if (exifObj["0th"][piexif.ImageIFD.Orientation] == null) {
       exifObj["0th"][piexif.ImageIFD.Orientation] = 1;
     }
     exifObj["0th"][piexif.ImageIFD.XResolution] = [72, 1];

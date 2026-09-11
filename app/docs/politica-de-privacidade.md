@@ -34,12 +34,12 @@ Esses dados permanecem no dispositivo, exceto nos casos descritos na seção "Se
 
 O Komorebi solicita permissões do sistema operacional apenas para habilitar funcionalidades do app:
 
-| Permissão | Finalidade |
-| --- | --- |
-| Câmera | Capturar fotos e exibir o preview da câmera. |
-| Biblioteca de mídia / Fotos | Salvar fotos no álbum "Komorebi", exibir a galeria integrada, ler metadados e excluir fotos quando você solicitar. |
-| Localização durante o uso | Gravar GPS nas fotos, quando ativado, e buscar clima/localidade para o painel de tempo. |
-| Microfone | Declarada na configuração nativa para compatibilidade com recursos de câmera/vídeo, mas o app atual é focado em fotografia. |
+| Permissão                   | Finalidade                                                                                                                  |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Câmera                      | Capturar fotos e exibir o preview da câmera.                                                                                |
+| Biblioteca de mídia / Fotos | Salvar fotos no álbum "Komorebi", exibir a galeria integrada, ler metadados e excluir fotos quando você solicitar.          |
+| Localização durante o uso   | Gravar GPS nas fotos, quando ativado, e buscar clima/localidade para o painel de tempo.                                     |
+| Microfone                   | Declarada na configuração nativa para compatibilidade com recursos de câmera/vídeo, mas o app atual é focado em fotografia. |
 
 Você pode revogar permissões nas configurações do iOS ou Android. A revogação pode impedir recursos correspondentes, como captura, salvamento na galeria, mapa ou clima.
 
@@ -70,14 +70,14 @@ O Komorebi não faz upload automático das suas fotos. Compartilhamentos ou envi
 
 Algumas funções dependem de serviços externos. Nesses casos, dados necessários para a função podem ser enviados ao provedor correspondente:
 
-| Serviço | Finalidade | Dados enviados ou acessados |
-| --- | --- | --- |
-| **Open-Meteo** (`api.open-meteo.com`) | Dados meteorológicos no painel de tempo. | Latitude e longitude aproximadas. |
-| **BigDataCloud** (`api.bigdatacloud.net`) | Geocodificação reversa para cidade/região/país. | Latitude e longitude aproximadas. |
-| **Leaflet / Carto basemaps / unpkg** | Exibir mapa na galeria para fotos com GPS. | Carregamento de scripts, estilos e tiles de mapa; o mapa é centrado nas coordenadas da foto. |
-| **Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criar molduras com foto e metadados. | Quando você abre uma foto nesse recurso, a imagem pode ser enviada/injetada no site em WebView para processamento. |
-| **Notion** (`fabiosantoss.notion.site`) | Formulário de feedback. | Informações que você digitar voluntariamente no formulário. |
-| **Links externos** | Abrir site, GitHub, Instagram, Threads ou YouTube. | O acesso passa a ocorrer fora do app ou em WebView, conforme o serviço. |
+| Serviço                                                          | Finalidade                                         | Dados enviados ou acessados                                                                                        |
+| ---------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Open-Meteo** (`api.open-meteo.com`)                            | Dados meteorológicos no painel de tempo.           | Latitude e longitude aproximadas.                                                                                  |
+| **BigDataCloud** (`api.bigdatacloud.net`)                        | Geocodificação reversa para cidade/região/país.    | Latitude e longitude aproximadas.                                                                                  |
+| **Leaflet / Carto basemaps / unpkg**                             | Exibir mapa na galeria para fotos com GPS.         | Carregamento de scripts, estilos e tiles de mapa; o mapa é centrado nas coordenadas da foto.                       |
+| **Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criar molduras com foto e metadados.               | Quando você abre uma foto nesse recurso, a imagem pode ser enviada/injetada no site em WebView para processamento. |
+| **Notion** (`fabiosantoss.notion.site`)                          | Formulário de feedback.                            | Informações que você digitar voluntariamente no formulário.                                                        |
+| **Links externos**                                               | Abrir site, GitHub, Instagram, Threads ou YouTube. | O acesso passa a ocorrer fora do app ou em WebView, conforme o serviço.                                            |
 
 Esses serviços têm políticas próprias. O Komorebi não controla as práticas de privacidade, disponibilidade ou segurança desses terceiros.
 

@@ -35,11 +35,14 @@ import {
   getHalationConfig,
   LUTProcessor,
 } from "./utils/lutProcessor";
+import { getProjectById } from "./utils/projects";
 
 export default function App() {
   const {
     retroStyle,
     gridVisible,
+    levelVisible,
+    histogramVisible,
     location,
     firstTime,
     loading,
@@ -47,6 +50,10 @@ export default function App() {
     customLuts,
     topBarControls,
     topBarBelow,
+    projects,
+    activeProjectId,
+    setActiveProjectId,
+    setProjects,
   } = useSettings();
 
   const [facing, setFacing] = useState("back");
@@ -108,6 +115,11 @@ export default function App() {
     ),
   });
 
+  const activeProject = useMemo(
+    () => (activeProjectId ? getProjectById(projects, activeProjectId) : null),
+    [projects, activeProjectId],
+  );
+
   const {
     enqueueProcessing,
     galleryRefreshKey,
@@ -116,7 +128,7 @@ export default function App() {
     processingQueue,
     removeCurrentProcessing,
     setIsProcessing,
-  } = usePhotoProcessingQueue(hasMediaPermission);
+  } = usePhotoProcessingQueue(hasMediaPermission, activeProject);
 
   useEffect(() => {
     if (!hasMediaPermission) return;
@@ -129,7 +141,7 @@ export default function App() {
         if (cancelled || !pendingUris.length) return;
 
         for (const uri of pendingUris) {
-          await saveToAlbum(uri);
+          await saveToAlbum(activeProject, uri);
         }
       } catch (error) {
         console.warn("Erro ao importar capturas da tela bloqueada:", error);
@@ -141,7 +153,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [hasMediaPermission]);
+  }, [hasMediaPermission, activeProject]);
 
   useEffect(() => {
     if (
@@ -303,6 +315,22 @@ export default function App() {
     onPress: handleTakePicture,
   });
 
+  const handleChangeProject = useCallback(
+    (projectId) => {
+      if (projectId === activeProjectId) return;
+      setActiveProjectId(projectId);
+    },
+    [activeProjectId, setActiveProjectId],
+  );
+
+  const handleCreateProject = useCallback(
+    (project) => {
+      setProjects((prev) => [...prev, project]);
+      setActiveProjectId(project.id);
+    },
+    [setActiveProjectId, setProjects],
+  );
+
   const topBarProps = {
     activeControl,
     doubleCaptureMode,
@@ -333,15 +361,15 @@ export default function App() {
         ? rawCapture.rawModeEnabled
           ? "Desative RAW/ProRAW para usar Live Photo."
           : portraitCapture.enabled
-          ? "Desative o modo retrato para usar Live Photo."
-          : null
+            ? "Desative o modo retrato para usar Live Photo."
+            : null
         : "Live Photo não é suportada pela lente selecionada.",
       portrait: portraitCapture.available
         ? rawCapture.rawModeEnabled
           ? "Desative RAW/ProRAW para usar o modo retrato."
           : livePhoto.enabled
-          ? "Desative Live Photo para usar o modo retrato."
-          : null
+            ? "Desative Live Photo para usar o modo retrato."
+            : null
         : "O modo retrato não é suportado pela lente selecionada.",
     },
     selectedLutId,
@@ -368,12 +396,16 @@ export default function App() {
     toggleVerticalMode,
     topBarControls,
     verticalMode,
+    projects,
+    activeProjectId,
+    onChangeProject: handleChangeProject,
+    onCreateProject: handleCreateProject,
   };
 
   if (loading) return null;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <Animated.View
         pointerEvents="none"
         style={[
@@ -407,6 +439,8 @@ export default function App() {
                 flash={flash}
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
+                levelVisible={levelVisible}
+                histogramVisible={histogramVisible}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
                 smileDetectionEnabled={smileDetectionEnabled}
@@ -424,6 +458,8 @@ export default function App() {
                 pictureSize={pictureSize}
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
+                levelVisible={levelVisible}
+                histogramVisible={histogramVisible}
                 setMinZoom={setMinZoom}
                 setMaxZoom={setMaxZoom}
                 onSmileDetected={handleTakePicture}
@@ -505,6 +541,7 @@ export default function App() {
         activeLensId={activeLensId}
         onSelectLens={handleSelectLens}
         galleryRefreshKey={galleryRefreshKey}
+        activeProject={activeProject}
       />
     </SafeAreaView>
   );

@@ -5,12 +5,15 @@ import {
   SETTINGS_STORAGE_KEYS,
 } from "../utils/settingsStorage";
 import { DEFAULT_TOP_BAR_CONTROLS } from "../utils/topBarControls";
+import { reconcileProjectsWithAlbums } from "../utils/projects";
 
 const SettingsContext = createContext(null);
 
 const DEFAULT_SETTINGS = {
   retroStyle: false,
   gridVisible: false,
+  levelVisible: false,
+  histogramVisible: false,
   shutterSound: false,
   location: true,
   saveOriginalWithoutEffects: false,
@@ -18,11 +21,19 @@ const DEFAULT_SETTINGS = {
   customLuts: [],
   topBarBelow: false,
   topBarControls: DEFAULT_TOP_BAR_CONTROLS,
+  projects: [],
+  activeProjectId: null,
 };
 
 export const SettingsProvider = ({ children }) => {
   const [retroStyle, setRetroStyle] = useState(DEFAULT_SETTINGS.retroStyle);
   const [gridVisible, setGridVisible] = useState(DEFAULT_SETTINGS.gridVisible);
+  const [levelVisible, setLevelVisible] = useState(
+    DEFAULT_SETTINGS.levelVisible,
+  );
+  const [histogramVisible, setHistogramVisible] = useState(
+    DEFAULT_SETTINGS.histogramVisible,
+  );
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(
     DEFAULT_SETTINGS.shutterSound,
@@ -37,6 +48,10 @@ export const SettingsProvider = ({ children }) => {
   const [topBarControls, setTopBarControls] = useState(
     DEFAULT_SETTINGS.topBarControls,
   );
+  const [projects, setProjects] = useState(DEFAULT_SETTINGS.projects);
+  const [activeProjectId, setActiveProjectId] = useState(
+    DEFAULT_SETTINGS.activeProjectId,
+  );
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -45,6 +60,8 @@ export const SettingsProvider = ({ children }) => {
 
         setRetroStyle(savedSettings.retroStyle);
         setGridVisible(savedSettings.gridVisible);
+        setLevelVisible(savedSettings.levelVisible);
+        setHistogramVisible(savedSettings.histogramVisible);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
@@ -52,6 +69,25 @@ export const SettingsProvider = ({ children }) => {
         setCustomLuts(savedSettings.customLuts);
         setTopBarBelow(savedSettings.topBarBelow);
         setTopBarControls(savedSettings.topBarControls);
+        setProjects(savedSettings.projects);
+        setActiveProjectId(savedSettings.activeProjectId);
+
+        // 🔄 Sincroniza os projetos salvos com os álbuns reais da biblioteca
+        // (remove projetos de álbuns apagados e descobre álbuns novos).
+        try {
+          const reconciled = await reconcileProjectsWithAlbums(
+            savedSettings.projects,
+          );
+          setProjects(reconciled);
+          if (
+            savedSettings.activeProjectId &&
+            !reconciled.some((p) => p.id === savedSettings.activeProjectId)
+          ) {
+            setActiveProjectId(null);
+          }
+        } catch (reconcileError) {
+          console.warn("Falha ao reconciliar projetos:", reconcileError);
+        }
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
@@ -81,6 +117,26 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [gridVisible, loading]);
+
+  // Salvar "Nível da Câmera"
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.LEVEL_VISIBLE,
+        levelVisible.toString(),
+      );
+    }
+  }, [levelVisible, loading]);
+
+  // Salvar "Histograma em tempo real"
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.HISTOGRAM_VISIBLE,
+        histogramVisible.toString(),
+      );
+    }
+  }, [histogramVisible, loading]);
 
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
@@ -146,11 +202,35 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [topBarControls, loading]);
 
+  // 💾 Salvar "Projetos" (álbuns)
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.PROJECTS,
+        JSON.stringify(projects),
+      );
+    }
+  }, [projects, loading]);
+
+  // 💾 Salvar "Projeto ativo"
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.ACTIVE_PROJECT_ID,
+        activeProjectId,
+      );
+    }
+  }, [activeProjectId, loading]);
+
   const value = {
     retroStyle,
     setRetroStyle,
     gridVisible,
     setGridVisible,
+    levelVisible,
+    setLevelVisible,
+    histogramVisible,
+    setHistogramVisible,
     loading,
     shutterSound,
     setShutterSound,
@@ -166,6 +246,10 @@ export const SettingsProvider = ({ children }) => {
     setTopBarControls,
     topBarBelow,
     setTopBarBelow,
+    projects,
+    setProjects,
+    activeProjectId,
+    setActiveProjectId,
   };
 
   return (
