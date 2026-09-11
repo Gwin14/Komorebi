@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import useShutterSound from "../utils/useShutterSound";
+import { getProjectAlbumName } from "../utils/projects";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
@@ -46,6 +47,7 @@ export default function BottomControls({
   activeLensId,
   onSelectLens,
   galleryRefreshKey,
+  activeProject = null,
 }) {
   const router = useRouter();
   const { bottom: bottomInset } = useSafeAreaInsets();
@@ -67,20 +69,26 @@ export default function BottomControls({
 
   useEffect(() => {
     loadLastPhoto();
-  }, [galleryRefreshKey]);
+  }, [galleryRefreshKey, activeProject]);
 
   const loadLastPhoto = async () => {
     try {
       const albums = await MediaLibrary.getAlbumsAsync();
 
-      const komorebiAlbum = albums.find(
-        (a) => a.title.toLowerCase() === "komorebi",
+      // Sem projeto: mostra a última foto do álbum padrão (Komorebi).
+      // Com projeto: mostra a última foto do álbum do projeto.
+      const albumName = activeProject
+        ? getProjectAlbumName(activeProject)
+        : "Komorebi";
+
+      const targetAlbum = albums.find(
+        (a) => a.title.toLowerCase() === albumName.toLowerCase(),
       );
 
-      if (!komorebiAlbum) return;
+      if (!targetAlbum) return;
 
       const photos = await MediaLibrary.getAssetsAsync({
-        album: komorebiAlbum,
+        album: targetAlbum,
         mediaType: "photo",
         first: 1,
         sortBy: [["creationTime", false]],

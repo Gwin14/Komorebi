@@ -1,3 +1,4 @@
+import { BlurView } from "expo-blur";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -5,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
-  Button,
   FlatList,
   Image,
   Modal,
@@ -24,11 +24,15 @@ import {
 } from "react-native-safe-area-context";
 import { ExifItem } from "../components/ExifItem";
 import { MapViewWeb } from "../components/MapViewWeb";
+import { useSettings } from "../context/SettingsContext";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
+import { DEFAULT_ALBUM_NAME, getProjectAlbumName } from "../utils/projects";
 import BackButton from "./BackButton";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
+import ProjectChecklist from "./ProjectChecklist";
+import ProjectSwipeList from "./ProjectSwipeList";
 
 const PHOTOS_PER_ROW = 4;
 const FULL_SCREEN_DISMISS_DISTANCE = 80;
@@ -110,9 +114,16 @@ const groupPhotosByDate = (photos) => {
   });
 };
 
-const getKomorebiAlbum = async () => {
+const getKomorebiAlbum = async (project = null) => {
   const albums = await MediaLibrary.getAlbumsAsync();
-  return albums.find((album) => album.title === "Komorebi") || null;
+
+  if (!project) {
+    return albums.find((album) => album.title === DEFAULT_ALBUM_NAME) || null;
+  }
+
+  const albumName = getProjectAlbumName(project);
+
+  return albums.find((album) => album.title === albumName) || null;
 };
 
 const getContainedImageSize = (photo, maxWidth, maxHeight) => {
@@ -143,6 +154,11 @@ const getContainedImageSize = (photo, maxWidth, maxHeight) => {
 };
 
 export default function Galery() {
+  const { projects, activeProjectId, setProjects } = useSettings();
+  const [viewProjectId, setViewProjectId] = useState(activeProjectId);
+  const viewProject = viewProjectId
+    ? projects.find((project) => project.id === viewProjectId) || null
+    : null;
   const [permission, requestPermission] = MediaLibrary.usePermissions();
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -167,45 +183,50 @@ export default function Galery() {
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
 
-  const loadKomorebiPhotos = useCallback(async () => {
-    try {
-      setLoading(true);
+  const loadKomorebiPhotos = useCallback(
+    async (project = viewProject) => {
+      try {
+        setLoading(true);
 
-      const album = await getKomorebiAlbum();
+        // Sem projeto: mostra o álbum padrão do app (Komorebi).
+        // Com projeto: mostra o álbum daquele projeto.
+        const album = await getKomorebiAlbum(project);
 
-      if (!album) {
-        setPhotos([]);
+        if (!album) {
+          setPhotos([]);
+          setLoading(false);
+          return;
+        }
+
+        const assets = await MediaLibrary.getAssetsAsync({
+          album,
+          mediaType: "photo",
+          sortBy: MediaLibrary.SortBy.creationTime,
+          first: 100,
+        });
+
+        const resolvedAssets = await Promise.all(
+          assets.assets.map(async (asset) => {
+            if (asset.uri.startsWith("ph://")) {
+              const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+              return {
+                ...asset,
+                uri: info.localUri || asset.uri,
+              };
+            }
+            return asset;
+          }),
+        );
+
+        setPhotos(resolvedAssets);
+      } catch (e) {
+        console.log("Erro ao carregar fotos:", e);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const assets = await MediaLibrary.getAssetsAsync({
-        album,
-        mediaType: "photo",
-        sortBy: MediaLibrary.SortBy.creationTime,
-        first: 100,
-      });
-
-      const resolvedAssets = await Promise.all(
-        assets.assets.map(async (asset) => {
-          if (asset.uri.startsWith("ph://")) {
-            const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-            return {
-              ...asset,
-              uri: info.localUri || asset.uri,
-            };
-          }
-          return asset;
-        }),
-      );
-
-      setPhotos(resolvedAssets);
-    } catch (e) {
-      console.log("Erro ao carregar fotos:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [viewProject],
+  );
 
   useEffect(() => {
     if (!permission) return;
@@ -230,6 +251,50 @@ export default function Galery() {
     () => orderedPhotos.findIndex((photo) => photo.id === selectedAssetId),
     [orderedPhotos, selectedAssetId],
   );
+
+  const handleChangeViewProject = useCallback(
+    (projectId) => {
+      setViewProjectId(projectId);
+      loadKomorebiPhotos(projects.find((project) => project.id === projectId));
+    },
+    [loadKomorebiPhotos, projects],
+  );
+
+  const handleCreateProject = useCallback(
+    (project) => {
+      setProjects((prev) => [...prev, project]);
+      setViewProjectId(project.id);
+      loadKomorebiPhotos(project);
+    },
+    [loadKomorebiPhotos, setProjects],
+  );
+
+  const handleDeleteProject = useCallback(
+    async (project) => {
+      try {
+        const albums = await MediaLibrary.getAlbumsAsync();
+        const album = albums.find(
+          (a) => a.title === getProjectAlbumName(project),
+        );
+
+        if (album) {
+          // Remove o álbum (as fotos ficam no Komorebi / em outros álbuns).
+          await MediaLibrary.deleteAlbumsAsync(album, false);
+        }
+
+        setProjects((prev) => prev.filter((p) => p.id !== project.id));
+
+        if (viewProjectId === project.id) {
+          setViewProjectId(null);
+          loadKomorebiPhotos(null);
+        }
+      } catch (error) {
+        console.warn("Erro ao excluir projeto:", error);
+      }
+    },
+    [loadKomorebiPhotos, setProjects, viewProjectId],
+  );
+
 
   const selectPhotoAtIndex = useCallback(
     (index) => {
@@ -460,10 +525,31 @@ export default function Galery() {
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar hidden={fullScreenVisible} />
 
-      <View style={styles.navigationBar}>
-        <BackButton top={8} left={0} />
+      <BlurView
+        intensity={30}
+        tint="dark"
+        style={[
+          styles.navigationBar,
+          {
+            paddingTop: safeAreaInsets.top,
+            height: 48 + safeAreaInsets.top,
+          },
+        ]}
+      >
+        <BackButton top={70} left={5} />
         <Text style={styles.title}>Galeria</Text>
-      </View>
+        <View style={styles.navigationProjectSelector}>
+          <ProjectSwipeList
+            projects={projects}
+            activeProjectId={viewProjectId}
+            onChangeProject={handleChangeViewProject}
+            onCreateProject={handleCreateProject}
+            onDeleteProject={handleDeleteProject}
+            includeNoneOption
+            noneOptionLabel="Todas as fotos"
+          />
+        </View>
+      </BlurView>
 
       <SectionList
         sections={photoSections}
@@ -671,17 +757,33 @@ export default function Galery() {
                   ) : null}
 
                   <View style={styles.modalActions}>
-                    <Button
-                      title="Fechar"
+                    <TouchableOpacity
+                      style={styles.modalActionButton}
                       onPress={closeDetails}
-                      color="#ffaa00"
+                    >
+                      <Text style={styles.modalActionButtonText}>Fechar</Text>
+                    </TouchableOpacity>
+
+                    <ProjectChecklist
+                      assetId={photo.id}
+                      projects={projects}
+                      onProjectsChange={loadKomorebiPhotos}
+                      onCreateProject={(project) => {
+                        setProjects((prev) => [...prev, project]);
+                      }}
+                      triggerText="Projetos"
+                      triggerStyle={styles.modalActionButton}
+                      triggerTextStyle={styles.modalActionButtonText}
                     />
 
-                    <Button
-                      title="Excluir foto"
+                    <TouchableOpacity
+                      style={styles.modalActionButtonDanger}
                       onPress={() => handleDeletePhoto(photo.id)}
-                      color="#ff4444"
-                    />
+                    >
+                      <Text style={styles.modalActionButtonDangerText}>
+                        Excluir foto
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 </ScrollView>
               );

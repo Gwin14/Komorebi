@@ -7,6 +7,7 @@ import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
+import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
 import styles from "./TopBar.styles";
 
@@ -36,6 +37,10 @@ export default function TopBar({
   portraitModeEnabled,
   togglePortraitModeEnabled,
   unavailableReasons = {},
+  projects = [],
+  activeProjectId,
+  onChangeProject,
+  onCreateProject,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -160,6 +165,11 @@ export default function TopBar({
       onPress: togglePortraitModeEnabled,
       active: portraitModeEnabled,
     },
+    projects: {
+      icon: activeProjectId ? "folder" : "folder-outline",
+      onPress: () => {},
+      active: Boolean(activeProjectId),
+    },
   };
 
   return (
@@ -198,6 +208,27 @@ export default function TopBar({
                 >
                   <PhotoWeather data={data} place={place} />
                 </Popover>
+              </Animated.View>
+            </View>
+          );
+        }
+
+        if (controlId === "projects") {
+          return (
+            <View key={controlId}>
+              <Animated.View style={animatedStyle}>
+                <ProjectSelector
+                  projects={projects}
+                  activeProjectId={activeProjectId}
+                  onChangeProject={onChangeProject}
+                  onCreateProject={onCreateProject}
+                  includeNoneOption
+                  noneOptionLabel="Nenhum projeto"
+                  compact
+                  bare
+                  triggerActive={Boolean(activeProjectId)}
+                  triggerIconSize={32}
+                />
               </Animated.View>
             </View>
           );

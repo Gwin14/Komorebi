@@ -35,6 +35,7 @@ import {
   getHalationConfig,
   LUTProcessor,
 } from "./utils/lutProcessor";
+import { getProjectById } from "./utils/projects";
 
 export default function App() {
   const {
@@ -49,6 +50,10 @@ export default function App() {
     customLuts,
     topBarControls,
     topBarBelow,
+    projects,
+    activeProjectId,
+    setActiveProjectId,
+    setProjects,
   } = useSettings();
 
   const [facing, setFacing] = useState("back");
@@ -110,6 +115,11 @@ export default function App() {
     ),
   });
 
+  const activeProject = useMemo(
+    () => (activeProjectId ? getProjectById(projects, activeProjectId) : null),
+    [projects, activeProjectId],
+  );
+
   const {
     enqueueProcessing,
     galleryRefreshKey,
@@ -118,7 +128,7 @@ export default function App() {
     processingQueue,
     removeCurrentProcessing,
     setIsProcessing,
-  } = usePhotoProcessingQueue(hasMediaPermission);
+  } = usePhotoProcessingQueue(hasMediaPermission, activeProject);
 
   useEffect(() => {
     if (!hasMediaPermission) return;
@@ -131,7 +141,7 @@ export default function App() {
         if (cancelled || !pendingUris.length) return;
 
         for (const uri of pendingUris) {
-          await saveToAlbum(uri);
+          await saveToAlbum(activeProject, uri);
         }
       } catch (error) {
         console.warn("Erro ao importar capturas da tela bloqueada:", error);
@@ -143,7 +153,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [hasMediaPermission]);
+  }, [hasMediaPermission, activeProject]);
 
   useEffect(() => {
     if (
@@ -305,6 +315,22 @@ export default function App() {
     onPress: handleTakePicture,
   });
 
+  const handleChangeProject = useCallback(
+    (projectId) => {
+      if (projectId === activeProjectId) return;
+      setActiveProjectId(projectId);
+    },
+    [activeProjectId, setActiveProjectId],
+  );
+
+  const handleCreateProject = useCallback(
+    (project) => {
+      setProjects((prev) => [...prev, project]);
+      setActiveProjectId(project.id);
+    },
+    [setActiveProjectId, setProjects],
+  );
+
   const topBarProps = {
     activeControl,
     doubleCaptureMode,
@@ -370,6 +396,10 @@ export default function App() {
     toggleVerticalMode,
     topBarControls,
     verticalMode,
+    projects,
+    activeProjectId,
+    onChangeProject: handleChangeProject,
+    onCreateProject: handleCreateProject,
   };
 
   if (loading) return null;
@@ -511,6 +541,7 @@ export default function App() {
         activeLensId={activeLensId}
         onSelectLens={handleSelectLens}
         galleryRefreshKey={galleryRefreshKey}
+        activeProject={activeProject}
       />
     </SafeAreaView>
   );
