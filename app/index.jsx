@@ -16,7 +16,9 @@ import { useSettings } from "./context/SettingsContext";
 import useCameraBootstrap from "./hooks/useCameraBootstrap";
 import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
+import useCompositionScan from "./hooks/useCompositionScan";
 import useControlsAnimation from "./hooks/useControlsAnimation";
+import { useDeviceOrientationState } from "./hooks/useDeviceOrientation";
 import useManualCameraControls from "./hooks/useManualCameraControls";
 import useLivePhotoCapture from "./hooks/useLivePhotoCapture";
 import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
@@ -68,6 +70,8 @@ export default function App() {
   const lastZoom = useSharedValue(1);
 
   const cameraRef = useRef(null);
+  const [scanPreviewLayout, setScanPreviewLayout] = useState({ width: 0, height: 0 });
+  const { orientation: scanOrientation } = useDeviceOrientationState();
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [activeControl, setActiveControl] = useState("none");
@@ -129,6 +133,19 @@ export default function App() {
     removeCurrentProcessing,
     setIsProcessing,
   } = usePhotoProcessingQueue(hasMediaPermission, activeProject);
+
+  const compositionScan = useCompositionScan({
+    enabled:
+      !firstTime && !nativeCaptureMode && cameraReady &&
+      cameraPermission === "granted" && !isProcessing && processingQueue.length === 0,
+    configurationKey: `${activeLens?.device?.id}:${nativeCaptureMode}:${rawCapture.rawMode}:${manual.manualMode}:${verticalMode}:${doubleCaptureMode}:${retroStyle}:${zoom}:${scanOrientation}`,
+    preview: {
+      ...scanPreviewLayout,
+      mirrored: facing === "front",
+      rotation: (scanOrientation + 360) % 360,
+    },
+  });
+  const cancelCompositionScan = compositionScan.cancel;
 
   useEffect(() => {
     if (!hasMediaPermission) return;
@@ -198,6 +215,7 @@ export default function App() {
   }, []);
 
   const handleTakePicture = useCallback(() => {
+    cancelCompositionScan();
     if (flash === "on" && !activeLens?.device?.hasFlash) {
       Alert.alert(
         "Flash indisponível",
@@ -257,6 +275,7 @@ export default function App() {
     });
   }, [
     activeLens,
+    cancelCompositionScan,
     animateShutter,
     availableLuts,
     cameraReady,
@@ -471,6 +490,8 @@ export default function App() {
                 manualPhotoMode={manual.manualMode === "manual"}
                 rawPhotoMode={rawCapture.rawModeEnabled}
                 onFocusAtPoint={manual.focusAtPoint}
+                compositionScan={compositionScan}
+                onPreviewLayout={setScanPreviewLayout}
               />
             )}
           </View>

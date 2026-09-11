@@ -5,6 +5,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
+import CompositionScanOverlay from "./CompositionScanOverlay";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
 import styles from "./CameraPreview.styles";
@@ -34,8 +35,12 @@ export default function CameraPreview({
   manualPhotoMode = false,
   rawPhotoMode = false,
   onFocusAtPoint,
+  compositionScan,
+  onPreviewLayout,
 }) {
   const isTakingPhoto = useRef(false);
+  const smileAllowed = useRef(false);
+  smileAllowed.current = smileDetectionEnabled && !compositionScan?.busy;
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
   const previousHistogramBins = useRef(null);
@@ -116,7 +121,7 @@ export default function CameraPreview({
 
   const handleFacesDetection = useCallback(
     (faces) => {
-      if (!smileDetectionEnabled) return;
+      if (!smileAllowed.current) return;
       if (!faces.length || isTakingPhoto.current) return;
 
       const face = faces[0];
@@ -132,7 +137,7 @@ export default function CameraPreview({
         }, 2500);
       }
     },
-    [onSmileDetected, smileDetectionEnabled],
+    [onSmileDetected],
   );
 
   const faceDetectionOptions = useMemo(
@@ -275,24 +280,33 @@ export default function CameraPreview({
   const faceDetectionProps = {
     faceDetectionCallback: handleFacesDetection,
     faceDetectionOptions,
+    faceDetectionEnabled: smileDetectionEnabled && !compositionScan?.busy,
+    compositionScanId: compositionScan?.scanId,
+    compositionScanRotation: compositionScan?.captureRotation,
+    compositionCapturePlugin: compositionScan?.capturePlugin,
+    compositionCaptureCallback: compositionScan?.onCaptured,
   };
 
   return (
-    <GestureDetector gesture={focusGesture}>
-      <View
-        onLayout={(event) => setPreviewLayout(event.nativeEvent.layout)}
-        style={[
-          retroStyle ? styles.retroStyle : styles.cameraWrapper,
-          {
-            aspectRatio,
-            width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
-            alignSelf: "center",
-            borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
-            borderWidth: doubleCaptureMode ? 3 : 0,
-          },
-        ]}
-      >
+    <View
+      style={[
+        retroStyle ? styles.retroStyle : styles.cameraWrapper,
+        {
+          aspectRatio,
+          width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
+          alignSelf: "center",
+          borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
+          borderWidth: doubleCaptureMode ? 3 : 0,
+        },
+      ]}
+    >
+      <GestureDetector gesture={focusGesture}>
         <Animated.View
+          onLayout={(event) => {
+            const { width, height } = event.nativeEvent.layout;
+            setPreviewLayout({ width, height });
+            onPreviewLayout?.({ width, height });
+          }}
           style={[
             styles.camera,
             {
@@ -321,84 +335,92 @@ export default function CameraPreview({
             photoQualityBalance={rawPhotoMode ? "quality" : "balanced"}
           />
         </Animated.View>
-        {transitionVisible && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.cameraTransitionOverlay,
-              { opacity: transitionOpacity },
-            ]}
-          >
-            <BlurView
-              intensity={42}
-              tint="dark"
-              style={StyleSheet.absoluteFill}
-            />
-            <View style={styles.cameraTransitionScrim} />
-          </Animated.View>
-        )}
-        {gridVisible && (
-          <View pointerEvents="none" style={styles.gridOverlay}>
-            <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
-            <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
+      </GestureDetector>
+      {transitionVisible && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.cameraTransitionOverlay,
+            { opacity: transitionOpacity },
+          ]}
+        >
+          <BlurView
+            intensity={42}
+            tint="dark"
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.cameraTransitionScrim} />
+        </Animated.View>
+      )}
+      {gridVisible && (
+        <View pointerEvents="none" style={styles.gridOverlay}>
+          <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
+          <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
 
-            <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
-            <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
-          </View>
-        )}
+          <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
+          <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
+        </View>
+      )}
 
-        {levelVisible && <CameraLevel />}
+      {levelVisible && <CameraLevel />}
 
-        {histogramVisible && <HistogramOverlay bins={histogramBins} />}
+      {histogramVisible && <HistogramOverlay bins={histogramBins} />}
 
-        {doubleCaptureMode &&
-          (() => {
-            const marginPct = `${(((1 - aspectRatio * aspectRatio) / 2) * 100).toFixed(4)}%`;
-            return (
-              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                <View style={[styles.doubleCropZone, { height: marginPct }]}>
-                  <View style={styles.doubleCropBorder} />
-                </View>
+      {doubleCaptureMode &&
+        (() => {
+          const marginPct = `${(((1 - aspectRatio * aspectRatio) / 2) * 100).toFixed(4)}%`;
+          return (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <View style={[styles.doubleCropZone, { height: marginPct }]}>
+                <View style={styles.doubleCropBorder} />
+              </View>
+              <View
+                style={[
+                  styles.doubleCropZone,
+                  styles.doubleCropZoneBottom,
+                  { height: marginPct },
+                ]}
+              >
                 <View
                   style={[
-                    styles.doubleCropZone,
-                    styles.doubleCropZoneBottom,
-                    { height: marginPct },
+                    styles.doubleCropBorder,
+                    { top: 0, bottom: undefined },
                   ]}
-                >
-                  <View
-                    style={[
-                      styles.doubleCropBorder,
-                      { top: 0, bottom: undefined },
-                    ]}
-                  />
-                </View>
+                />
               </View>
-            );
-          })()}
+            </View>
+          );
+        })()}
 
-        {focusPoint && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.focusSquare,
-              {
-                left: focusPoint.x,
-                top: focusPoint.y,
-                opacity: focusAnim,
-                transform: [
-                  {
-                    scale: focusAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1.3, 1],
-                    }),
-                  },
-                ],
-              },
-            ]}
-          />
-        )}
-      </View>
-    </GestureDetector>
+      {focusPoint && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.focusSquare,
+            {
+              left: focusPoint.x,
+              top: focusPoint.y,
+              opacity: focusAnim,
+              transform: [
+                {
+                  scale: focusAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1.3, 1],
+                  }),
+                },
+              ],
+            },
+          ]}
+        />
+      )}
+      {compositionScan?.available && (
+        <View pointerEvents="box-none" style={[
+          StyleSheet.absoluteFill,
+          doubleCaptureMode && { top: 3, left: 3, right: 3, bottom: 3 },
+        ]}>
+          <CompositionScanOverlay scan={compositionScan} layout={previewLayout} />
+        </View>
+      )}
+    </View>
   );
 }
