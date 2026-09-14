@@ -7,3 +7,7 @@
 #endif
 
 VISION_EXPORT_SWIFT_FRAME_PROCESSOR(CompositionScanPlugin, captureCompositionFrame)
+
+// Referenced by the Expo module so the linker cannot discard this object file.
+// The registration macro above relies on its constructor running at app launch.
+void CompositionScanEnsurePluginLinked(void) {}

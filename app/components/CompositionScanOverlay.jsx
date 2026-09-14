@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, Animated, Pressable, Text } from "react-native";
-import Svg, { Circle, G, Line } from "react-native-svg";
+import Svg, { Circle, G, Line, Rect, Text as SvgText } from "react-native-svg";
 import { SCAN_ENTER_DURATION, SCAN_EXIT_DURATION } from "../utils/compositionScanSession";
 import styles from "./CompositionScanOverlay.styles";
 
@@ -21,6 +21,29 @@ export default function CompositionScanOverlay({ scan, layout }) {
   }, [opacity, scan.result, scan.phase]);
 
   const { width, height } = layout;
+  const drawLabel = (gizmo) => {
+    const label = gizmo.type === "alignment" ? "Nivele a câmera" : "Mova a pessoa aqui";
+    const labelWidth = gizmo.type === "alignment" ? 94 : 112;
+    const x = gizmo.type === "target" ? gizmo.point.x * width : width / 2;
+    const anchorY = gizmo.type === "target" ? gizmo.point.y * height + 19 : height / 2 + 22;
+    const y = Math.min(height - 15, Math.max(15, anchorY));
+    const left = Math.min(width - labelWidth - 6, Math.max(6, x - labelWidth / 2));
+    return (
+      <G key={`${gizmo.id}-label`}>
+        <Rect x={left} y={y - 10} width={labelWidth} height={19} rx={9.5} fill="rgba(0,0,0,0.58)" />
+        <SvgText
+          x={left + labelWidth / 2}
+          y={y + 3.5}
+          fill="rgba(255,255,255,0.92)"
+          fontSize={9.5}
+          fontWeight="500"
+          textAnchor="middle"
+        >
+          {label}
+        </SvgText>
+      </G>
+    );
+  };
   const draw = (gizmo, shadow) => {
     const stroke = shadow ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.9)";
     const strokeWidth = shadow ? 3.5 : 1.25;
@@ -56,6 +79,7 @@ export default function CompositionScanOverlay({ scan, layout }) {
           <Svg width={width} height={height}>
             {scan.result.gizmos.map((g) => draw(g, true))}
             {scan.result.gizmos.map((g) => draw(g, false))}
+            {scan.result.gizmos.map(drawLabel)}
           </Svg>
         </Animated.View>
       )}

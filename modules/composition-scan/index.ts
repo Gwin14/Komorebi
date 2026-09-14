@@ -29,10 +29,8 @@ const nativeModule = Platform.OS === "ios"
   ? requireOptionalNativeModule<NativeScan>("CompositionScan")
   : null;
 let plugin: FrameProcessorPlugin | undefined;
-let initialized = false;
 export function getCompositionCapturePlugin() {
-  if (!initialized && nativeModule) {
-    initialized = true;
+  if (!plugin && nativeModule) {
     try {
       plugin = VisionCameraProxy.initFrameProcessorPlugin("captureCompositionFrame", {});
     } catch {
@@ -43,6 +41,9 @@ export function getCompositionCapturePlugin() {
 }
 export function isCompositionScanAvailable() {
   return Boolean(nativeModule && getCompositionCapturePlugin());
+}
+export function isCompositionScanSupported() {
+  return Platform.OS === "ios";
 }
 export async function armCompositionScan(scanId: string) {
   return nativeModule?.arm(scanId) ?? false;

@@ -53,6 +53,8 @@ export default function CameraPreview({
   const transitionFallbackTimeout = useRef(null);
   const transitionFinishTimeout = useRef(null);
   const transitionStartedAt = useRef(0);
+  const frameProcessorActive =
+    histogramVisible || smileDetectionEnabled || compositionScan?.busy;
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);
@@ -112,10 +114,19 @@ export default function CameraPreview({
       {
         photoAspectRatio: rawPhotoMode ? 4 / 3 : verticalMode ? 16 / 9 : 4 / 3,
       },
-      ...(manualPhotoMode ? [] : [{ photoResolution: "max" }]),
-      { videoResolution: "max" },
+      // O output de frame processor não é compatível com alguns formatos
+      // fotográficos de resolução máxima (48 MP nos iPhones recentes).
+      // Durante análise, use o formato leve recomendado pela VisionCamera.
+      ...(!manualPhotoMode && !frameProcessorActive
+        ? [{ photoResolution: "max" }]
+        : []),
+      {
+        videoResolution: frameProcessorActive
+          ? { width: 1080, height: 720 }
+          : "max",
+      },
     ],
-    [manualPhotoMode, rawPhotoMode, verticalMode],
+    [frameProcessorActive, manualPhotoMode, rawPhotoMode, verticalMode],
   );
   const format = useCameraFormat(device, formatFilters);
 
@@ -413,7 +424,7 @@ export default function CameraPreview({
           ]}
         />
       )}
-      {compositionScan?.available && (
+      {compositionScan?.supported && (
         <View pointerEvents="box-none" style={[
           StyleSheet.absoluteFill,
           doubleCaptureMode && { top: 3, left: 3, right: 3, bottom: 3 },

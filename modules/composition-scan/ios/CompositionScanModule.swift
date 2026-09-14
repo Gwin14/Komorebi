@@ -5,6 +5,9 @@ import CoreImage
 import AVFoundation
 import ImageIO
 
+@_silgen_name("CompositionScanEnsurePluginLinked")
+private func ensureCompositionScanPluginLinked()
+
 // The lock protects ownership; Vision and image work never execute under it.
 // One slot is shared by Expo calls and the frame processor runtime.
 final class CompositionScanSession {
@@ -194,6 +197,7 @@ public class CompositionScanPlugin: FrameProcessorPlugin {
 public class CompositionScanModule: Module {
   public func definition() -> ModuleDefinition {
     Name("CompositionScan")
+    OnCreate { ensureCompositionScanPluginLinked() }
     OnDestroy { CompositionScanSession.shared.cancelCurrent() }
     AsyncFunction("arm") { (id: String) -> Bool in
       CompositionScanSession.shared.arm(id)

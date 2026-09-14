@@ -4,6 +4,7 @@ export default StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject },
   button: {
     position: "absolute", right: 10, bottom: 10,
+    zIndex: 10, elevation: 10,
     minWidth: 58, height: 44, paddingHorizontal: 12,
     alignItems: "center", justifyContent: "center",
     backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 22,

@@ -4,7 +4,7 @@ import { AppState } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import {
   analyze, armCompositionScan, cancel, getCompositionCapturePlugin,
-  isCompositionScanAvailable,
+  isCompositionScanAvailable, isCompositionScanSupported,
 } from "../../modules/composition-scan";
 import { generateCompositionResult } from "../utils/compositionAnalysis";
 import { createCompositionScanSession } from "../utils/compositionScanSession";
@@ -14,8 +14,14 @@ export default function useCompositionScan({ enabled, configurationKey, preview 
   const [foreground, setForeground] = useState(AppState.currentState === "active");
   const [snapshot, setSnapshot] = useState({ state: "idle", result: null, scanId: null, phase: null });
   const controllerRef = useRef(null);
-  const [available] = useState(isCompositionScanAvailable);
+  const [available, setAvailable] = useState(false);
+  const supported = isCompositionScanSupported();
   const canScan = available && enabled && isFocused && foreground && preview.width > 0 && preview.height > 0;
+
+  useEffect(() => {
+    if (!supported) return;
+    setAvailable(isCompositionScanAvailable());
+  }, [configurationKey, enabled, supported]);
 
   useEffect(() => {
     const controller = createCompositionScanSession({
@@ -50,7 +56,7 @@ export default function useCompositionScan({ enabled, configurationKey, preview 
     void controllerRef.current?.captured(token, id);
   }, []);
   return {
-    ...snapshot, available, canScan, start, cancel: cancelScan, onCaptured,
+    ...snapshot, supported, available, canScan, start, cancel: cancelScan, onCaptured,
     captureRotation: preview.rotation,
     capturePlugin: available ? getCompositionCapturePlugin() : undefined,
     busy: snapshot.state === "capturing" || snapshot.state === "analyzing",

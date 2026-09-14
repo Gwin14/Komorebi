@@ -91,5 +91,6 @@ export async function loadStoredSettings(defaults) {
 }
 
 export function saveStoredSetting(key, value) {
+  if (value == null) return AsyncStorage.removeItem(key);
   return AsyncStorage.setItem(key, value);
 }
