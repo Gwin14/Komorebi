@@ -1,4 +1,4 @@
-export const SCAN_RESULT_DURATION = 5000;
+export const SCAN_RESULT_DURATION = 7500;
 export const SCAN_TIMEOUT = 8000;
 export const SCAN_ENTER_DURATION = 150;
 export const SCAN_EXIT_DURATION = 200;

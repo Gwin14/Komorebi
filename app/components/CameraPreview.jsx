@@ -55,6 +55,11 @@ export default function CameraPreview({
   const transitionStartedAt = useRef(0);
   const frameProcessorActive =
     histogramVisible || smileDetectionEnabled || Boolean(compositionScan?.capturePlugin);
+  const captureCompositionBackdrop = useCallback(async () => {
+    const snapshot = await cameraRef.current?.takeSnapshot?.({ quality: 70 });
+    if (!snapshot?.path) return null;
+    return snapshot.path.startsWith("file://") ? snapshot.path : `file://${snapshot.path}`;
+  }, [cameraRef]);
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);
@@ -429,7 +434,11 @@ export default function CameraPreview({
           StyleSheet.absoluteFill,
           doubleCaptureMode && { top: 3, left: 3, right: 3, bottom: 3 },
         ]}>
-          <CompositionScanOverlay scan={compositionScan} layout={previewLayout} />
+          <CompositionScanOverlay
+            scan={compositionScan}
+            layout={previewLayout}
+            captureBackdrop={captureCompositionBackdrop}
+          />
         </View>
       )}
     </View>

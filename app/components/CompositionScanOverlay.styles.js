@@ -10,27 +10,17 @@ export default StyleSheet.create({
     position: "absolute",
     left: "-10%",
     width: "120%",
-    height: 94,
-    borderBottomLeftRadius: 999,
-    borderBottomRightRadius: 999,
+    height: 170,
     overflow: "hidden",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.42)",
-    shadowColor: "white",
-    shadowOpacity: 0.22,
-    shadowRadius: 7,
+  },
+  liquidMask: {
+    ...StyleSheet.absoluteFillObject,
   },
   liquidRefraction: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "transparent",
+    height: 170,
   },
-  liquidHighlight: {
+  liquidBackdrop: {
     position: "absolute",
-    left: "9%",
-    right: "9%",
-    bottom: 0,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255,255,255,0.55)",
   },
   button: {
     position: "absolute", right: 10, bottom: 10,

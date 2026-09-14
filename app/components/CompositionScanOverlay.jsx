@@ -1,14 +1,58 @@
-import { BlurView } from "expo-blur";
-import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, Pressable, Text } from "react-native";
+import { LiquidGlassView } from "@uginy/react-native-liquid-glass";
+import MaskedView from "@react-native-masked-view/masked-view";
+import { LinearGradient } from "expo-linear-gradient";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Animated, Easing, Pressable, Text, UIManager, View } from "react-native";
 import Svg, { Circle, G, Line, Rect, Text as SvgText } from "react-native-svg";
 import { SCAN_ENTER_DURATION, SCAN_EXIT_DURATION } from "../utils/compositionScanSession";
 import styles from "./CompositionScanOverlay.styles";
 
-export default function CompositionScanOverlay({ scan, layout }) {
+const hasNativeMaskedView = Boolean(UIManager.getViewManagerConfig?.("RNCMaskedView"));
+
+function LiquidWaveContent({ backdropUri, height, index, inverseLiquidTravel, width }) {
+  return (
+    <View style={styles.liquidMask}>
+      {backdropUri && (
+        <Animated.Image
+          source={{ uri: backdropUri }}
+          resizeMode="cover"
+          style={[
+            styles.liquidBackdrop,
+            {
+              width,
+              height,
+              left: width * 0.1,
+              top: 180 + index * 54,
+              transform: [{ translateY: inverseLiquidTravel }],
+            },
+          ]}
+        />
+      )}
+      <LiquidGlassView
+        blurRadius={0}
+        refractionStrength={0.82 - index * 0.09}
+        ior={1.48}
+        magnification={1.32 - index * 0.035}
+        glassOpacity={0}
+        chromaticAberration={0}
+        edgeGlowIntensity={0}
+        glareIntensity={0}
+        borderIntensity={0}
+        edgeWidth={0}
+        liquidPower={3.4}
+        cornerRadius={0}
+        shadowOpacity={0}
+        style={[styles.liquidRefraction, { width: width * 1.2 }]}
+      />
+    </View>
+  );
+}
+
+export default function CompositionScanOverlay({ scan, layout, captureBackdrop }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const liquidProgress = useRef(new Animated.Value(0)).current;
   const [liquidVisible, setLiquidVisible] = useState(false);
+  const [backdropUri, setBackdropUri] = useState(null);
   const liquidStartedAt = useRef(0);
   const liquidHideTimer = useRef(null);
 
@@ -21,7 +65,7 @@ export default function CompositionScanOverlay({ scan, layout }) {
       return;
     }
     if (!liquidStartedAt.current) return;
-    const remaining = Math.max(0, 1350 - (Date.now() - liquidStartedAt.current));
+    const remaining = Math.max(0, 1750 - (Date.now() - liquidStartedAt.current));
     liquidHideTimer.current = setTimeout(() => {
       setLiquidVisible(false);
       liquidStartedAt.current = 0;
@@ -41,7 +85,7 @@ export default function CompositionScanOverlay({ scan, layout }) {
     const animation = Animated.loop(
       Animated.timing(liquidProgress, {
         toValue: 1,
-        duration: 1350,
+        duration: 1750,
         easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
@@ -51,9 +95,7 @@ export default function CompositionScanOverlay({ scan, layout }) {
   }, [liquidProgress, liquidVisible]);
   useEffect(() => {
     opacity.stopAnimation();
-    if (!scan.result) { opacity.setValue(0); return; }
-    if (scan.phase === "visible") { opacity.setValue(1); return; }
-    if (scan.phase === "entering") opacity.setValue(0);
+    if (!scan.result || liquidVisible) { opacity.setValue(0); return; }
     const animation = Animated.timing(opacity, {
       toValue: scan.phase === "leaving" ? 0 : 1,
       duration: scan.phase === "leaving" ? SCAN_EXIT_DURATION : SCAN_ENTER_DURATION,
@@ -61,17 +103,31 @@ export default function CompositionScanOverlay({ scan, layout }) {
     });
     animation.start();
     return () => animation.stop();
-  }, [opacity, scan.result, scan.phase]);
+  }, [liquidVisible, opacity, scan.result, scan.phase]);
 
   const { width, height } = layout;
   const liquidTravel = liquidProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, height + 150],
+    outputRange: [0, height + 230],
   });
   const liquidPulse = liquidProgress.interpolate({
     inputRange: [0, 0.5, 1],
-    outputRange: [0.72, 1, 0.72],
+    outputRange: [0.9, 1, 0.9],
   });
+  const inverseLiquidTravel = Animated.multiply(liquidTravel, -1);
+  const startScan = useCallback(async () => {
+    if (!scan.canScan || scan.busy) return;
+    try {
+      const uri = await captureBackdrop?.();
+      if (uri) {
+        setBackdropUri(uri);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    } catch (error) {
+      if (__DEV__) console.warn("[CompositionScan] Unable to capture glass backdrop", error);
+    }
+    scan.start();
+  }, [captureBackdrop, scan]);
   const drawLabel = (gizmo) => {
     const label = gizmo.label;
     const labelWidth = Math.min(132, Math.max(62, label.length * 5.7 + 16));
@@ -87,11 +143,14 @@ export default function CompositionScanOverlay({ scan, layout }) {
     const left = Math.min(width - labelWidth - 6, Math.max(6, x - labelWidth / 2));
     return (
       <G key={`${gizmo.id}-label`}>
-        <Rect x={left} y={y - 10} width={labelWidth} height={19} rx={9.5} fill="rgba(0,0,0,0.58)" />
+        <Rect
+          x={left} y={y - 10} width={labelWidth} height={19} rx={9.5}
+          fill="rgba(20,15,2,0.82)" stroke="rgba(255,170,0,0.9)" strokeWidth={0.7}
+        />
         <SvgText
           x={left + labelWidth / 2}
           y={y + 3.5}
-          fill="rgba(255,255,255,0.92)"
+          fill="#FFD36A"
           fontSize={9.5}
           fontWeight="500"
           textAnchor="middle"
@@ -102,7 +161,7 @@ export default function CompositionScanOverlay({ scan, layout }) {
     );
   };
   const draw = (gizmo, shadow) => {
-    const stroke = shadow ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.9)";
+    const stroke = shadow ? "rgba(0,0,0,0.72)" : "#FFAA00";
     const strokeWidth = shadow ? 3.5 : 1.25;
     if (gizmo.type === "alignment") {
       const half = Math.min(width * 0.24, 85);
@@ -172,24 +231,52 @@ export default function CompositionScanOverlay({ scan, layout }) {
           pointerEvents="none"
           style={[styles.liquidLayer, { opacity: liquidPulse }]}
         >
-          {[0, 1, 2].map((index) => (
+          {[0].map((index) => (
             <Animated.View
               key={index}
               style={[
                 styles.liquidWave,
                 {
-                  top: -110 - index * 38,
-                  opacity: 0.42 - index * 0.09,
+                  top: -180 - index * 54,
+                  opacity: 1,
                   transform: [
                     { translateY: liquidTravel },
-                    { rotate: `${index % 2 ? -3 : 3}deg` },
-                    { scaleX: index === 1 ? 1.08 : 1 },
+                    { rotate: "0deg" },
+                    { scaleX: 1 },
                   ],
                 },
               ]}
             >
-              <BlurView intensity={18 + index * 5} tint="default" style={styles.liquidRefraction} />
-              <Animated.View style={[styles.liquidHighlight, { opacity: liquidPulse }]} />
+              {hasNativeMaskedView ? (
+                <MaskedView
+                  style={styles.liquidMask}
+                  maskElement={(
+                    <LinearGradient
+                      colors={["transparent", "rgba(0,0,0,0.2)", "black", "black", "rgba(0,0,0,0.2)", "transparent"]}
+                      locations={[0, 0.2, 0.4, 0.6, 0.8, 1]}
+                      style={styles.liquidMask}
+                    />
+                  )}
+                >
+                  <LiquidWaveContent
+                    backdropUri={backdropUri}
+                    height={height}
+                    index={index}
+                    inverseLiquidTravel={inverseLiquidTravel}
+                    width={width}
+                  />
+                </MaskedView>
+              ) : (
+                <View style={styles.liquidMask}>
+                  <LiquidWaveContent
+                    backdropUri={backdropUri}
+                    height={height}
+                    index={index}
+                    inverseLiquidTravel={inverseLiquidTravel}
+                    width={width}
+                  />
+                </View>
+              )}
             </Animated.View>
           ))}
         </Animated.View>
@@ -209,7 +296,7 @@ export default function CompositionScanOverlay({ scan, layout }) {
         accessibilityHint="Mostra sugestões visuais de composição por cinco segundos"
         accessibilityState={{ disabled: !scan.canScan || scan.busy, busy: scan.busy }}
         disabled={!scan.canScan || scan.busy}
-        onPress={scan.start}
+        onPress={startScan}
         style={[styles.button, !scan.canScan && styles.disabled]}
       >
         {scan.busy ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.label}>Scan</Text>}

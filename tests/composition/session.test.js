@@ -35,7 +35,7 @@ function setup(overrides = {}, generate = () => ({ gizmos: [{ type: "alignment",
 }
 const preview = { width: 300, height: 400 };
 
-test("single scan: capture, analyze, enter, five seconds visible, exit, idle", async () => {
+test("single scan: capture, analyze, enter, remain readable, exit, idle", async () => {
   const s = setup(); await s.controller.start(preview);
   assert.equal(s.current().state, "capturing");
   await s.controller.captured("token", s.current().scanId);
@@ -121,7 +121,8 @@ test("20 scans finish with no timers or retained results", async () => {
   const s = setup();
   for (let i = 0; i < 20; i++) {
     await s.controller.start(preview); await s.controller.captured("token", s.current().scanId);
-    s.advance(5350); assert.equal(s.current().result, null); assert.equal(s.pending.size, 0);
+    s.advance(150 + SCAN_RESULT_DURATION + 200);
+    assert.equal(s.current().result, null); assert.equal(s.pending.size, 0);
   }
   assert.equal(s.analyses(), 20);
 });
