@@ -91,8 +91,8 @@
       ],
       "expo-web-browser",
       "./plugins/withIosDeploymentTarget",
-      "./plugins/withUiSceneManifest",
-      "./plugins/withLockedCameraCapture"
+      "./plugins/withLockedCameraCapture",
+      "./plugins/withUiSceneManifest"
     ],
     "experiments": {
       "typedRoutes": true,
