@@ -138,7 +138,12 @@ final class CompositionScanSession {
         people.upperBodyOnly = false
         let faces = VNDetectFaceLandmarksRequest()
         let saliency = VNGenerateAttentionBasedSaliencyImageRequest()
-        let work: [VNRequest] = [horizon, people, faces, saliency]
+        let rectangles = VNDetectRectanglesRequest()
+        rectangles.maximumObservations = 6
+        rectangles.minimumConfidence = 0.7
+        rectangles.minimumSize = 0.12
+        rectangles.quadratureTolerance = 18
+        let work: [VNRequest] = [horizon, people, faces, saliency, rectangles]
         self.lock.lock()
         self.requests = work
         let wasCancelled = self.cancelled
@@ -181,7 +186,8 @@ final class CompositionScanSession {
               if let yaw = face.yaw { value["yaw"] = yaw.doubleValue }
               return value
             },
-            "subjects": (saliency.results?.first?.salientObjects ?? []).map { subject($0) }
+            "subjects": (saliency.results?.first?.salientObjects ?? []).map { subject($0) },
+            "rectangles": (rectangles.results ?? []).map { subject($0) }
           ])
         } catch {
           promise.reject("ERR_SCAN_ANALYSIS", "Local composition analysis failed: \(error.localizedDescription)")

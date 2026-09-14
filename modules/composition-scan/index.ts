@@ -13,6 +13,7 @@ export type CompositionAnalysis = {
   people: SceneSubject[];
   faces: SceneSubject[];
   subjects: SceneSubject[];
+  rectangles: SceneSubject[];
 };
 export type CompositionGizmo =
   | { id: string; type: "alignment"; angle: number; referenceAngle: number; label: string }

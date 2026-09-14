@@ -40,8 +40,8 @@ test("invalid dimensions fail instead of returning NaN", () => {
 });
 test("real scene produces only curated alignment and target", () => {
   const { gizmos } = generateCompositionResult(portraitScene, preview);
-  assert.deepEqual(gizmos.map((g) => g.type), ["alignment", "target"]);
-  assert.deepEqual(gizmos[1].point, { x: 2 / 3, y: 1 / 3 });
+  assert.deepEqual(gizmos.map((g) => g.type), ["target", "alignment"]);
+  assert.deepEqual(gizmos[0].point, { x: 2 / 3, y: 1 / 3 });
   assert.equal("confidence" in gizmos[0], false);
 });
 test("empty and weak observations never create placeholder suggestions", () => {
@@ -57,7 +57,7 @@ test("center subject ties prefer upper left", () => {
   const scene = { ...emptyScene, people: [{ confidence: 1, rect: { x: 0.4, y: 0.4, width: 0.2, height: 0.2 } }] };
   assert.deepEqual(generateCompositionResult(scene, preview).gizmos[0].point, { x: 1 / 3, y: 1 / 3 });
 });
-test("largest visible person wins and only associated face supplies anchor", () => {
+test("a group is framed as a whole instead of targeting one member", () => {
   const scene = { ...emptyScene, people: [
     { confidence: 1, rect: { x: 0.05, y: 0.3, width: 0.15, height: 0.6 } },
     { confidence: 1, rect: { x: 0.5, y: 0.1, width: 0.45, height: 0.85 } },
@@ -65,7 +65,7 @@ test("largest visible person wins and only associated face supplies anchor", () 
     { confidence: 1, rect: { x: 0.04, y: 0.25, width: 0.2, height: 0.2 } },
     { confidence: 1, rect: { x: 0.75, y: 0.15, width: 0.1, height: 0.1 } },
   ] };
-  assert.deepEqual(generateCompositionResult(scene, preview).gizmos[0].point, { x: 2 / 3, y: 1 / 3 });
+  assert.equal(generateCompositionResult(scene, preview).gizmos.some((g) => g.type === "target"), false);
 });
 test("double capture suggestions use the entire visible preview", () => {
   assert.deepEqual(generateCompositionResult(portraitScene, { ...preview, doubleCaptureMode: true }), generateCompositionResult(portraitScene, preview));
@@ -87,7 +87,7 @@ test("person close to an edge gets a safety-margin warning", () => {
 });
 
 test("turned face gets look-space guidance in its direction", () => {
-  const scene = { ...emptyScene, faces: [{ confidence: 1, yaw: 0.3, rect: { x: 0.4, y: 0.2, width: 0.15, height: 0.15 } }] };
+  const scene = { ...emptyScene, faces: [{ confidence: 1, yaw: 0.3, rect: { x: 0.72, y: 0.2, width: 0.15, height: 0.15 } }] };
   const look = generateCompositionResult(scene, preview).gizmos.find((g) => g.type === "look-space");
   assert.equal(look.direction, "right");
 });
@@ -107,4 +107,22 @@ test("large generic subject gets distance guidance", () => {
 test("near-centered balanced subject gets symmetry guidance", () => {
   const scene = { ...emptyScene, subjects: [{ confidence: 1, rect: { x: 0.4, y: 0.3, width: 0.3, height: 0.35 } }] };
   assert.ok(generateCompositionResult(scene, preview).gizmos.some((g) => g.type === "center"));
+});
+
+test("look-space guidance suppresses a contradictory placement target", () => {
+  const scene = { ...emptyScene, faces: [{ confidence: 1, yaw: -0.35, rect: { x: 0.05, y: 0.2, width: 0.14, height: 0.14 } }] };
+  const gizmos = generateCompositionResult(scene, preview).gizmos;
+  assert.ok(gizmos.some((g) => g.type === "look-space"));
+  assert.equal(gizmos.some((g) => g.type === "target"), false);
+});
+
+test("structural rectangle makes centered subject prefer symmetry over thirds", () => {
+  const scene = {
+    ...emptyScene,
+    subjects: [{ confidence: 0.9, rect: { x: 0.32, y: 0.3, width: 0.2, height: 0.3 } }],
+    rectangles: [{ confidence: 0.95, rect: { x: 0.2, y: 0.15, width: 0.6, height: 0.7 } }],
+  };
+  const gizmos = generateCompositionResult(scene, preview).gizmos;
+  assert.ok(gizmos.some((g) => g.type === "center"));
+  assert.equal(gizmos.some((g) => g.type === "target"), false);
 });
