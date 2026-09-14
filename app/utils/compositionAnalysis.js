@@ -15,7 +15,7 @@ export function generateCompositionResult(analysis, preview) {
     if (Math.abs(tilt) >= 2 * Math.PI / 180) {
       gizmos.push({
         id: "alignment", type: "alignment", angle: transform.angle(tilt),
-        referenceAngle: transform.angle(0),
+        referenceAngle: transform.angle(0), label: "Nivele a câmera",
       });
     }
   }
@@ -28,9 +28,52 @@ export function generateCompositionResult(analysis, preview) {
     .sort((a, b) => area(b.rect) - area(a.rect) || a.rect.y - b.rect.y || a.rect.x - b.rect.x);
   const people = visibleSubjects(analysis.people);
   const faces = visibleSubjects(analysis.faces);
+  const subjects = visibleSubjects(analysis.subjects);
   const person = people[0];
   const face = person ? faces.find((f) => contains(person.rect, center(f.rect))) : faces[0];
-  const subject = face ?? person;
+  const personRect = person?.rect ?? face?.rect;
+  const nearEdge = (rect, inset = 0.025) => rect.x <= inset || rect.y <= inset ||
+    rect.x + rect.width >= 1 - inset || rect.y + rect.height >= 1 - inset;
+  if (personRect && nearEdge(personRect)) {
+    gizmos.unshift({ id: "person-margin", type: "margin", rect: personRect, label: "Afaste da borda" });
+  }
+
+  if (face && Number.isFinite(face.yaw) && Math.abs(face.yaw) >= 0.12) {
+    const lookingRight = face.yaw > 0;
+    gizmos.unshift({
+      id: "look-space", type: "look-space",
+      point: { x: lookingRight ? 2 / 3 : 1 / 3, y: center(face.rect).y },
+      direction: lookingRight ? "right" : "left",
+      label: "Dê espaço ao olhar",
+    });
+  }
+
+  const genericSubject = subjects[0];
+  if (!personRect && genericSubject && nearEdge(genericSubject.rect, 0.03)) {
+    gizmos.unshift({ id: "subject-margin", type: "margin", rect: genericSubject.rect, label: "Afaste da borda" });
+  }
+
+  const scaleSubject = person ?? genericSubject;
+  if (scaleSubject) {
+    const subjectArea = area(scaleSubject.rect);
+    if (subjectArea < 0.035) {
+      gizmos.push({ id: "scale-in", type: "scale", rect: scaleSubject.rect, direction: "in", label: "Aproxime" });
+    } else if (subjectArea > 0.62) {
+      gizmos.push({ id: "scale-out", type: "scale", rect: scaleSubject.rect, direction: "out", label: "Afaste" });
+    }
+  }
+
+  if (!personRect && genericSubject) {
+    const subjectCenter = center(genericSubject.rect);
+    const centeredDistance = Math.abs(subjectCenter.x - 0.5);
+    const subjectArea = area(genericSubject.rect);
+    const aspect = genericSubject.rect.width / genericSubject.rect.height;
+    if (centeredDistance >= 0.04 && centeredDistance <= 0.18 && subjectArea >= 0.1 && aspect >= 0.65 && aspect <= 1.55) {
+      gizmos.push({ id: "center", type: "center", point: { x: 0.5, y: subjectCenter.y }, label: "Centralize para simetria" });
+    }
+  }
+
+  const subject = face ?? person ?? genericSubject;
   if (subject) {
     const origin = center(subject.rect);
     const candidates = [
@@ -41,7 +84,12 @@ export function generateCompositionResult(analysis, preview) {
     // Strict improvement preserves the top/left tie break despite float noise.
     const target = candidates.reduce((best, p) => distance(p) < distance(best) - 1e-8 ? p : best);
     if (distance(target) >= Math.hypot(preview.width, preview.height) * 0.05) {
-      gizmos.push({ id: "subject", type: "target", point: target });
+      const generic = !face && !person;
+      gizmos.push({
+        id: generic ? "generic-subject" : "subject",
+        type: "target", point: target,
+        label: generic ? "Mova o assunto aqui" : "Mova a pessoa aqui",
+      });
     }
   }
   return { gizmos: gizmos.slice(0, MAX_COMPOSITION_GIZMOS) };

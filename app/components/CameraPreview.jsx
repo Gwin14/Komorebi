@@ -54,7 +54,7 @@ export default function CameraPreview({
   const transitionFinishTimeout = useRef(null);
   const transitionStartedAt = useRef(0);
   const frameProcessorActive =
-    histogramVisible || smileDetectionEnabled || compositionScan?.busy;
+    histogramVisible || smileDetectionEnabled || Boolean(compositionScan?.capturePlugin);
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);

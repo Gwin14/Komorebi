@@ -80,3 +80,31 @@ test("landscape scene maps upright observations and level reference back to port
   const levelScene = { ...scene, horizon: { angle: 0, confidence: 1 }, people: [], faces: [] };
   assert.deepEqual(generateCompositionResult(levelScene, preview), { gizmos: [] });
 });
+
+test("person close to an edge gets a safety-margin warning", () => {
+  const scene = { ...emptyScene, people: [{ confidence: 1, rect: { x: 0, y: 0.2, width: 0.25, height: 0.7 } }] };
+  assert.equal(generateCompositionResult(scene, preview).gizmos[0].type, "margin");
+});
+
+test("turned face gets look-space guidance in its direction", () => {
+  const scene = { ...emptyScene, faces: [{ confidence: 1, yaw: 0.3, rect: { x: 0.4, y: 0.2, width: 0.15, height: 0.15 } }] };
+  const look = generateCompositionResult(scene, preview).gizmos.find((g) => g.type === "look-space");
+  assert.equal(look.direction, "right");
+});
+
+test("generic salient subject gets target and scale guidance", () => {
+  const scene = { ...emptyScene, subjects: [{ confidence: 1, rect: { x: 0.46, y: 0.46, width: 0.08, height: 0.08 } }] };
+  const gizmos = generateCompositionResult(scene, preview).gizmos;
+  assert.ok(gizmos.some((g) => g.type === "target" && g.label === "Mova o assunto aqui"));
+  assert.ok(gizmos.some((g) => g.type === "scale" && g.label === "Aproxime"));
+});
+
+test("large generic subject gets distance guidance", () => {
+  const scene = { ...emptyScene, subjects: [{ confidence: 1, rect: { x: 0.08, y: 0.08, width: 0.84, height: 0.84 } }] };
+  assert.ok(generateCompositionResult(scene, preview).gizmos.some((g) => g.type === "scale" && g.label === "Afaste"));
+});
+
+test("near-centered balanced subject gets symmetry guidance", () => {
+  const scene = { ...emptyScene, subjects: [{ confidence: 1, rect: { x: 0.4, y: 0.3, width: 0.3, height: 0.35 } }] };
+  assert.ok(generateCompositionResult(scene, preview).gizmos.some((g) => g.type === "center"));
+});

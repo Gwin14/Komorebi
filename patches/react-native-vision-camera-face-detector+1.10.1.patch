@@ -159,7 +159,7 @@ index 44ce80c..24991e3 100644
        !!skiaActions
      ) return skiaFrameProcessor
  
-+    if (!faceDetectionEnabled && !histogramEnabled && !compositionScanId) return undefined
++    if (!faceDetectionEnabled && !histogramEnabled && !compositionScanId && !compositionCapturePlugin) return undefined
      return cameraFrameProcessor
    } )()
  

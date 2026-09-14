@@ -14,7 +14,7 @@ export default function useCompositionScan({ enabled, configurationKey, preview 
   const [foreground, setForeground] = useState(AppState.currentState === "active");
   const [snapshot, setSnapshot] = useState({ state: "idle", result: null, scanId: null, phase: null });
   const controllerRef = useRef(null);
-  const [available, setAvailable] = useState(false);
+  const [available, setAvailable] = useState(isCompositionScanAvailable);
   const supported = isCompositionScanSupported();
   const canScan = available && enabled && isFocused && foreground && preview.width > 0 && preview.height > 0;
 

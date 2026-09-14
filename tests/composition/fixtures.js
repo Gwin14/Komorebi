@@ -4,6 +4,7 @@ export const portraitScene = {
   horizon: { angle: 0.1, confidence: 0.95 },
   people: [{ confidence: 0.9, rect: { x: 0.65, y: 0.2, width: 0.25, height: 0.7 } }],
   faces: [{ confidence: 0.9, rect: { x: 0.71, y: 0.23, width: 0.1, height: 0.12 } }],
+  subjects: [],
 };
 export const emptyScene = {
   geometry: portraitScene.geometry, horizon: null, people: [], faces: [],

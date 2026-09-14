@@ -6,16 +6,21 @@ import type { FrameProcessorPlugin } from "react-native-vision-camera";
 export type ScanState = "idle" | "capturing" | "analyzing" | "showing-results";
 export type NormalizedPoint = { x: number; y: number };
 export type NormalizedRect = NormalizedPoint & { width: number; height: number };
-export type SceneSubject = { rect: NormalizedRect; confidence: number };
+export type SceneSubject = { rect: NormalizedRect; confidence: number; yaw?: number };
 export type CompositionAnalysis = {
   geometry: { width: number; height: number; mirrored: boolean; rotation: 0 | 90 | 180 | 270 };
   horizon: { angle: number; confidence: number } | null;
   people: SceneSubject[];
   faces: SceneSubject[];
+  subjects: SceneSubject[];
 };
 export type CompositionGizmo =
-  | { id: string; type: "alignment"; angle: number; referenceAngle: number }
-  | { id: string; type: "target"; point: NormalizedPoint };
+  | { id: string; type: "alignment"; angle: number; referenceAngle: number; label: string }
+  | { id: string; type: "target"; point: NormalizedPoint; label: string }
+  | { id: string; type: "look-space"; point: NormalizedPoint; direction: "left" | "right"; label: string }
+  | { id: string; type: "margin"; rect: NormalizedRect; label: string }
+  | { id: string; type: "center"; point: NormalizedPoint; label: string }
+  | { id: string; type: "scale"; rect: NormalizedRect; direction: "in" | "out"; label: string };
 export type ScanResult = { gizmos: CompositionGizmo[] };
 export interface CompositionModel {
   analyze(imageToken: string, scanId: string): Promise<CompositionAnalysis>;
