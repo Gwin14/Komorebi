@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   histogramVisible: false,
   shutterSound: false,
   location: true,
+  saveAsJpeg: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
   customLuts: [],
@@ -39,6 +40,7 @@ export const SettingsProvider = ({ children }) => {
     DEFAULT_SETTINGS.shutterSound,
   );
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
+  const [saveAsJpeg, setSaveAsJpeg] = useState(DEFAULT_SETTINGS.saveAsJpeg);
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
@@ -64,6 +66,7 @@ export const SettingsProvider = ({ children }) => {
         setHistogramVisible(savedSettings.histogramVisible);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
+        setSaveAsJpeg(savedSettings.saveAsJpeg);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
@@ -175,6 +178,16 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [location, loading]);
 
+  // No iPhone, HEIF e o formato padrao; JPEG fica como opcao de compatibilidade.
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.SAVE_AS_JPEG,
+        saveAsJpeg.toString(),
+      );
+    }
+  }, [saveAsJpeg, loading]);
+
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
     if (!loading) {
@@ -236,6 +249,8 @@ export const SettingsProvider = ({ children }) => {
     setShutterSound,
     location,
     setLocation,
+    saveAsJpeg,
+    setSaveAsJpeg,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     firstTime,

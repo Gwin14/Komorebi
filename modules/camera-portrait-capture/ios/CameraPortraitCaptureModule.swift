@@ -108,10 +108,14 @@ public class CameraPortraitCaptureModule: Module {
       }
 
       let flashMode = options["flashMode"] as? String ?? "off"
+      let outputFormat = options["outputFormat"] as? String ?? "heif"
       guard let view = await PortraitCameraView.activeView(for: deviceId) else {
         throw PortraitCaptureError.captureSessionNotReady
       }
-      return try await view.capturePortraitPhoto(flashMode: flashMode)
+      return try await view.capturePortraitPhoto(
+        flashMode: flashMode,
+        outputFormat: outputFormat
+      )
     }
 
     AsyncFunction("saveProcessedPortraitPhoto") { (options: [String: Any]) async throws -> [String: Any] in
@@ -125,7 +129,8 @@ public class CameraPortraitCaptureModule: Module {
       let originalPhotoURL = try (options["originalPhotoUri"] as? String).flatMap { try Self.fileURL(from: $0) }
       let prepared = Self.copyPortraitAuxiliaryData(
         from: originalPhotoURL,
-        toProcessedPhotoAt: processedPhotoURL
+        toProcessedPhotoAt: processedPhotoURL,
+        outputFormat: options["outputFormat"] as? String ?? "heif"
       )
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
       let localIdentifier = try await Self.savePhotoToLibrary(
@@ -138,6 +143,23 @@ public class CameraPortraitCaptureModule: Module {
         "savedToLibrary": true,
         "auxiliaryDataPreserved": prepared.auxiliaryDataPreserved
       ]
+    }
+
+    AsyncFunction("convertPhotoFormat") { (options: [String: Any]) async throws -> [String: Any] in
+      guard let photoUri = options["photoUri"] as? String else {
+        throw PortraitCaptureError.captureFailed
+      }
+
+      let photoURL = try Self.fileURL(from: photoUri)
+      let metadataSourceURL = try (options["metadataSourceUri"] as? String).flatMap {
+        try Self.fileURL(from: $0)
+      }
+      let convertedURL = try Self.convertImage(
+        at: photoURL,
+        metadataSourceURL: metadataSourceURL,
+        outputFormat: options["outputFormat"] as? String ?? "heif"
+      )
+      return ["photoUri": convertedURL.absoluteString]
     }
   }
 
@@ -250,7 +272,8 @@ public class CameraPortraitCaptureModule: Module {
 
   static func copyPortraitAuxiliaryData(
     from sourceURL: URL?,
-    toProcessedPhotoAt processedURL: URL
+    toProcessedPhotoAt processedURL: URL,
+    outputFormat: String
   ) -> (url: URL, auxiliaryDataPreserved: Bool) {
     guard
       let sourceURL,
@@ -262,8 +285,9 @@ public class CameraPortraitCaptureModule: Module {
       return (processedURL, false)
     }
 
+    let isJpeg = outputFormat == "jpeg"
     let destinationURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("komorebi-portrait-processed-\(UUID().uuidString).heic")
+      .appendingPathComponent("komorebi-portrait-processed-\(UUID().uuidString).\(isJpeg ? "jpg" : "heic")")
     let properties = Self.mergedImageProperties(
       metadataSource: originalSource,
       processedSource: processedSource
@@ -271,7 +295,7 @@ public class CameraPortraitCaptureModule: Module {
 
     guard let destination = CGImageDestinationCreateWithURL(
       destinationURL as CFURL,
-      UTType.heic.identifier as CFString,
+      (isJpeg ? UTType.jpeg : UTType.heic).identifier as CFString,
       1,
       nil
     ) else {
@@ -307,6 +331,50 @@ public class CameraPortraitCaptureModule: Module {
     }
 
     return (destinationURL, auxiliaryDataPreserved)
+  }
+
+  static func convertImage(
+    at sourceURL: URL,
+    metadataSourceURL: URL?,
+    outputFormat: String
+  ) throws -> URL {
+    guard
+      let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+    else {
+      throw PortraitCaptureError.captureFailed
+    }
+
+    let isJpeg = outputFormat == "jpeg"
+    let destinationURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("komorebi-\(UUID().uuidString).\(isJpeg ? "jpg" : "heic")")
+    guard let destination = CGImageDestinationCreateWithURL(
+      destinationURL as CFURL,
+      (isJpeg ? UTType.jpeg : UTType.heic).identifier as CFString,
+      1,
+      nil
+    ) else {
+      throw PortraitCaptureError.captureFailed
+    }
+
+    let metadataSource = metadataSourceURL.flatMap {
+      CGImageSourceCreateWithURL($0 as CFURL, nil)
+    }
+    var properties: [String: Any]
+    if let metadataSource {
+      properties = Self.mergedImageProperties(
+        metadataSource: metadataSource,
+        processedSource: source
+      ) as NSDictionary as? [String: Any] ?? [:]
+    } else {
+      properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
+    }
+    properties[kCGImageDestinationLossyCompressionQuality as String] = 0.92
+    CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+    guard CGImageDestinationFinalize(destination) else {
+      throw PortraitCaptureError.captureFailed
+    }
+    return destinationURL
   }
 
   static func mergedImageProperties(
@@ -467,9 +535,12 @@ public final class PortraitCameraView: ExpoView {
     return view
   }
 
-  func capturePortraitPhoto(flashMode: String) async throws -> [String: Any] {
+  func capturePortraitPhoto(flashMode: String, outputFormat: String) async throws -> [String: Any] {
     print("[PortraitNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
-    let captureResult = try await controller.capture(flashMode: flashMode)
+    let captureResult = try await controller.capture(
+      flashMode: flashMode,
+      outputFormat: outputFormat
+    )
     print("[PortraitNative] capture finished photoURL=\(captureResult.photoURL.absoluteString) depth=\(captureResult.support.supportsDepthData) matte=\(captureResult.support.supportsPortraitEffectsMatte)")
 
     return [
@@ -807,7 +878,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
     return bins.map { Double($0) / Double(peak) }
   }
 
-  func capture(flashMode: String) async throws -> CaptureResult {
+  func capture(flashMode: String, outputFormat: String) async throws -> CaptureResult {
     try await withCheckedThrowingContinuation { continuation in
       sessionQueue.async { [weak self] in
         guard
@@ -823,7 +894,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
           return
         }
 
-        let usesHevc = self.output.availablePhotoCodecTypes.contains(.hevc)
+        let usesHevc = outputFormat != "jpeg" && self.output.availablePhotoCodecTypes.contains(.hevc)
         let photoURL = FileManager.default.temporaryDirectory
           .appendingPathComponent("komorebi-portrait-\(UUID().uuidString).\(usesHevc ? "heic" : "jpg")")
         let codec = usesHevc ? AVVideoCodecType.hevc : AVVideoCodecType.jpeg

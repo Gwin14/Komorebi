@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Text, View } from "react-native";
+import { Alert, Animated, Platform, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -46,6 +46,7 @@ export default function App() {
     levelVisible,
     histogramVisible,
     location,
+    saveAsJpeg,
     firstTime,
     loading,
     saveOriginalWithoutEffects,
@@ -272,6 +273,8 @@ export default function App() {
       livePhotoDeviceId: activeLens?.device?.id,
       portraitModeEnabled: portraitCapture.enabled,
       portraitDeviceId: activeLens?.device?.id,
+      outputFormat:
+        Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
     });
   }, [
     activeLens,
@@ -296,6 +299,7 @@ export default function App() {
     livePhoto.enabled,
     portraitCapture.enabled,
     rawCapture.rawMode,
+    saveAsJpeg,
     saveOriginalWithoutEffects,
     selectedGrainId,
     selectedHalationId,

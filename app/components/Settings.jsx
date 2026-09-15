@@ -2,7 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "@react-native-documents/picker";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
@@ -38,6 +45,8 @@ export default function Settings() {
     setShutterSound,
     location,
     setLocation,
+    saveAsJpeg,
+    setSaveAsJpeg,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     customLuts,
@@ -214,6 +223,14 @@ export default function Settings() {
             value={location}
             onValueChange={setLocation}
           />
+
+          {Platform.OS === "ios" && (
+            <CustomToggle
+              label="Salvar fotos em JPEG"
+              value={saveAsJpeg}
+              onValueChange={setSaveAsJpeg}
+            />
+          )}
         </View>
 
         <View style={styles.divider} />

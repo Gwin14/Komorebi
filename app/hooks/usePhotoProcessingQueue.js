@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
-import { saveProcessedPortraitPhoto } from "../../modules/camera-portrait-capture";
+import {
+  convertPhotoFormat,
+  saveProcessedPortraitPhoto,
+} from "../../modules/camera-portrait-capture";
 import {
   applyExifDataToImage,
   copyExifFromImage,
@@ -44,6 +47,7 @@ export default function usePhotoProcessingQueue(
         portraitEffectsMatteEmbedded = false,
         derivativeSourceUri,
         rawDerivativeAspectRatio,
+        outputFormat = "jpeg",
       } = item;
 
       try {
@@ -61,6 +65,18 @@ export default function usePhotoProcessingQueue(
         const komorebiMetadata = exifData?.komorebiMetadata;
         const saveMetadataForAsset = (assetId) =>
           saveKomorebiAssetMetadata(assetId, komorebiMetadata);
+        const prepareRegularPhoto = async (uri, metadataSourceUri = originalUri) => {
+          try {
+            return await convertPhotoFormat({
+              photoUri: uri,
+              metadataSourceUri,
+              outputFormat,
+            });
+          } catch (error) {
+            console.warn("Falha ao converter formato da foto:", error);
+            return uri;
+          }
+        };
 
         if (captureMode === "raw") {
           const rawAsset = await saveToAlbum(project,originalUri || processedUri);
@@ -84,7 +100,11 @@ export default function usePhotoProcessingQueue(
             derivativeSourceUri,
             derivedUri,
           );
-          const derivedAsset = await saveToAlbum(project,derivedWithExif);
+          const preparedDerivative = await prepareRegularPhoto(
+            derivedWithExif,
+            derivativeSourceUri,
+          );
+          const derivedAsset = await saveToAlbum(project, preparedDerivative);
           await saveMetadataForAsset(derivedAsset?.id);
         } else if (livePhotoMovieUri) {
           const result = await saveLivePhotoToLibrary({
@@ -92,6 +112,7 @@ export default function usePhotoProcessingQueue(
             movieUri: livePhotoMovieUri,
             originalPhotoUri: originalUri,
             albumTitle: "Komorebi",
+            outputFormat,
           });
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);
           mainAssetSaved = true;
@@ -106,7 +127,8 @@ export default function usePhotoProcessingQueue(
               uriToSave,
               inverseUri,
             );
-            const inverseAsset = await saveToAlbum(project,inverseWithExif);
+            const preparedInverse = await prepareRegularPhoto(inverseWithExif);
+            const inverseAsset = await saveToAlbum(project, preparedInverse);
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (
@@ -117,6 +139,7 @@ export default function usePhotoProcessingQueue(
             processedPhotoUri: uriToSave,
             originalPhotoUri: originalUri,
             albumTitle: "Komorebi",
+            outputFormat,
           });
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);
           mainAssetSaved = true;
@@ -131,11 +154,13 @@ export default function usePhotoProcessingQueue(
               uriToSave,
               inverseUri,
             );
-            const inverseAsset = await saveToAlbum(project,inverseWithExif);
+            const preparedInverse = await prepareRegularPhoto(inverseWithExif);
+            const inverseAsset = await saveToAlbum(project, preparedInverse);
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (doubleCaptureMode) {
-          const asset = await saveToAlbum(project,uriToSave);
+          const preparedUri = await prepareRegularPhoto(uriToSave);
+          const asset = await saveToAlbum(project, preparedUri);
           await saveMetadataForAsset(asset?.id);
           mainAssetSaved = true;
 
@@ -148,16 +173,22 @@ export default function usePhotoProcessingQueue(
             uriToSave,
             inverseUri,
           );
-          const inverseAsset = await saveToAlbum(project,inverseUriWithExif);
+          const preparedInverse = await prepareRegularPhoto(inverseUriWithExif);
+          const inverseAsset = await saveToAlbum(project, preparedInverse);
           await saveMetadataForAsset(inverseAsset?.id);
         } else {
-          const asset = await saveToAlbum(project,uriToSave);
+          const preparedUri = await prepareRegularPhoto(uriToSave);
+          const asset = await saveToAlbum(project, preparedUri);
           await saveMetadataForAsset(asset?.id);
           mainAssetSaved = true;
         }
 
         if (saveOriginalWithoutEffects && originalUri) {
-          await saveToAlbum(project,originalUri);
+          const preparedOriginal = await prepareRegularPhoto(
+            originalUri,
+            originalUri,
+          );
+          await saveToAlbum(project, preparedOriginal);
         }
       } catch (error) {
         console.error("Erro ao salvar imagem processada:", error);

@@ -36,7 +36,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Phot
 index 12f5c07..f359ed0 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-@@ -39,7 +39,32 @@ extension CameraSession {
+@@ -39,7 +39,36 @@ extension CameraSession {
        VisionLogger.log(level: .info, message: "Capturing photo...")
 
        // Create photo settings
@@ -65,12 +65,16 @@ index 12f5c07..f359ed0 100644
 +          ]
 +        }
 +      } else {
-+        photoSettings = AVCapturePhotoSettings()
++        let requestedCodec: AVVideoCodecType = options.photoCodec == "hevc" ? .hevc : .jpeg
++        let codec = photoOutput.availablePhotoCodecTypes.contains(requestedCodec)
++          ? requestedCodec
++          : .jpeg
++        photoSettings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
 +      }
 
        // set photo resolution
        if #available(iOS 16.0, *) {
-@@ -50,8 +75,24 @@ extension CameraSession {
+@@ -50,8 +79,24 @@ extension CameraSession {
 
        // depth data
        photoSettings.isDepthDataDeliveryEnabled = photoOutput.isDepthDataDeliveryEnabled
@@ -95,7 +99,7 @@ index 12f5c07..f359ed0 100644
        }
 
        // quality prioritization
-@@ -84,11 +125,52 @@ extension CameraSession {
+@@ -84,11 +129,52 @@ extension CameraSession {
                                                        enableShutterSound: options.enableShutterSound,
                                                        metadataProvider: self.metadataProvider,
                                                        path: options.path,
@@ -426,7 +430,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOpt
 index c569e88..6f3e211 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
-@@ -11,9 +11,13 @@ import Foundation
+@@ -11,9 +11,14 @@ import Foundation
  struct TakePhotoOptions {
    var flash: Flash = .off
    var path: URL
@@ -435,12 +439,13 @@ index c569e88..6f3e211 100644
    var enableAutoDistortionCorrection = false
    var enableShutterSound = true
 +  var rawMode = "off"
++  var photoCodec = "jpeg"
 +  var livePhoto = false
 +  var livePhotoMoviePath: URL?
 
    init(fromJSValue dictionary: NSDictionary) throws {
      // Flash
-@@ -32,11 +36,26 @@ struct TakePhotoOptions {
+@@ -32,11 +37,29 @@ struct TakePhotoOptions {
      if let enable = dictionary["enableShutterSound"] as? Bool {
        enableShutterSound = enable
      }
@@ -448,12 +453,15 @@ index c569e88..6f3e211 100644
 +    if let mode = dictionary["rawMode"] as? String {
 +      rawMode = mode
 +    }
++    if let codec = dictionary["photoCodec"] as? String {
++      photoCodec = codec
++    }
 +    // Live Photo capture
 +    if let enable = dictionary["livePhoto"] as? Bool {
 +      livePhoto = enable
 +    }
      // Custom Path
-+    let fileExtension = rawMode == "off" ? "jpg" : "dng"
++    let fileExtension = rawMode == "off" ? (photoCodec == "hevc" ? "heic" : "jpg") : "dng"
      if let customPath = dictionary["path"] as? String {
 -      path = try FileUtils.getFilePath(customDirectory: customPath, fileExtension: "jpg")
 +      path = try FileUtils.getFilePath(customDirectory: customPath, fileExtension: fileExtension)
@@ -490,10 +498,17 @@ diff --git a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoF
 index 2e4c2f2..5f39c85 100644
 --- a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
 +++ b/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
-@@ -37,6 +37,13 @@ export interface TakePhotoOptions {
+@@ -37,6 +37,20 @@ export interface TakePhotoOptions {
       * @default true
       */
      enableShutterSound?: boolean;
++    /**
++     * The processed photo codec used on iOS.
++     *
++     * @platform iOS
++     * @default 'jpeg'
++     */
++    photoCodec?: 'jpeg' | 'hevc';
 +    /**
 +     * Whether to capture a Live Photo paired video alongside this photo.
 +     *
@@ -504,7 +519,7 @@ index 2e4c2f2..5f39c85 100644
  }
  /**
   * Represents a Photo taken by the Camera written to the local filesystem.
-@@ -56,6 +63,8 @@ export interface PhotoFile extends TemporaryFile {
+@@ -56,6 +70,8 @@ export interface PhotoFile extends TemporaryFile {
       * Whether this photo is in RAW format or not.
       */
      isRawPhoto: boolean;
@@ -513,7 +528,7 @@ index 2e4c2f2..5f39c85 100644
      /**
       * Display orientation of the photo, relative to the Camera's sensor orientation.
       *
-@@ -67,6 +76,12 @@ export interface PhotoFile extends TemporaryFile {
+@@ -67,6 +83,12 @@ export interface PhotoFile extends TemporaryFile {
       */
      isMirrored: boolean;
      thumbnail?: Record<string, unknown>;
@@ -530,10 +545,17 @@ diff --git a/node_modules/react-native-vision-camera/src/types/PhotoFile.ts b/no
 index 85098d6..04872ba 100644
 --- a/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
 +++ b/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
-@@ -38,6 +38,13 @@ export interface TakePhotoOptions {
+@@ -38,6 +38,20 @@ export interface TakePhotoOptions {
     * @default true
     */
    enableShutterSound?: boolean
++  /**
++   * The processed photo codec used on iOS.
++   *
++   * @platform iOS
++   * @default 'jpeg'
++   */
++  photoCodec?: 'jpeg' | 'hevc'
 +  /**
 +   * Whether to capture a Live Photo paired video alongside this photo.
 +   *
@@ -544,7 +566,7 @@ index 85098d6..04872ba 100644
  }
 
  /**
-@@ -58,6 +65,12 @@ export interface PhotoFile extends TemporaryFile {
+@@ -58,6 +72,12 @@ export interface PhotoFile extends TemporaryFile {
     * Whether this photo is in RAW format or not.
     */
    isRawPhoto: boolean
@@ -557,7 +579,7 @@ index 85098d6..04872ba 100644
    /**
     * Display orientation of the photo, relative to the Camera's sensor orientation.
     *
-@@ -69,6 +82,12 @@ export interface PhotoFile extends TemporaryFile {
+@@ -69,6 +89,12 @@ export interface PhotoFile extends TemporaryFile {
     */
    isMirrored: boolean
    thumbnail?: Record<string, unknown>
