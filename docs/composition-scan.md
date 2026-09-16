@@ -22,7 +22,7 @@ O controlador testável está em `app/utils/compositionScanSession.js`, a integr
 
 O botão Scan fica no canto inferior direito do preview, com altura de 44 pontos e acessibilidade. Fica desabilitado durante captura/análise, inicialização da câmera, captura/processamento de fotos ou câmera fora de foco/background. Live Photo e Retrato não renderizam o botão.
 
-Resultados entram em 150 ms, permanecem visíveis por `SCAN_RESULT_DURATION = 5000` e saem em 200 ms. Um novo Scan durante os resultados remove os gizmos e reinicia a sessão. Resultado vazio retorna imediatamente a idle. Timeout total de captura/análise: 8 segundos. Falhas usam apenas feedback háptico e log em desenvolvimento.
+Resultados entram em 150 ms, permanecem visíveis por `SCAN_RESULT_DURATION = 7500` e saem em 200 ms. Um novo Scan durante os resultados remove a resposta anterior e reinicia a sessão. Quando não há correção relevante, o Scan confirma `Composição equilibrada`; quando todas as correções foram mostradas recentemente, responde `Sem novas sugestões`. Timeout total de captura/análise: 8 segundos. Falhas usam apenas feedback háptico e log em desenvolvimento.
 
 Mudanças de lente, RAW, modo manual, Live Photo/Retrato, proporção, moldura retrô, captura dupla, zoom e orientação cancelam o Scan. Navegação, background e desmontagem também cancelam. O handler compartilhado por disparo na tela, volume, botão físico e sorriso cancela o Scan antes de fotografar. Movimento físico dentro da mesma orientação não atualiza o resultado: não há tracking.
 
@@ -32,12 +32,14 @@ A API pública TypeScript separa `CompositionAnalysis` (cena e geometria) de `Sc
 
 O layout usado é a área interna real da câmera; safe areas, margens da moldura e borda da captura dupla não entram novamente na transformação. Na captura dupla, a sugestão se refere ao preview completo, não ao segundo recorte salvo.
 
-- Confiança mínima: 0,7.
-- Horizonte: inclinação relativa ao aparelho, sem tentar localizar a altura da linha. Abaixo de 2° não há sugestão. Dois segmentos no centro mostram alinhamento atual e referência; ao girar o aparelho, a referência acompanha a orientação.
-- Pessoa: maior área visível após crop. Preferir centro de rosto associado; se não houver pessoa, considerar o maior rosto visível. Sugerir interseção dos terços mais próxima em distância de pixels. Empates priorizam superior/esquerda. Omitir deslocamentos menores que 5% da diagonal.
-- Até dois gizmos nesta versão; limite geral de três. Sem evidência não há sugestão. Não há textos, scores, caixas de detecção, histórico ou gizmos gravados nas fotos.
+- Confiança mínima dos sujeitos: 0,7; confiança mínima do horizonte: 0,85.
+- Horizonte: inclinação relativa ao aparelho, sem tentar localizar a altura da linha. Para ser ocasional, a sugestão começa somente em 10° para paisagem/arquitetura e 15° para retrato/grupo, além de ter cooldown próprio de 90 segundos. Dois segmentos no centro mostram alinhamento atual e referência; ao girar o aparelho, a referência acompanha a orientação.
+- Pessoa/assunto: a posição fora dos terços não gera correção por si só. Corte, proximidade da borda e escala exigem limites confiáveis de pessoa, rosto ou grupo. Regiões genéricas de saliência nunca geram esses conselhos sozinhas; servem apenas como apoio quando também existe evidência estrutural de simetria.
+- Apenas o conselho de maior prioridade é exibido: borda/corte, espaço do olhar, escala, simetria e nível, nessa ordem.
+- As três últimas categorias aconselhadas têm cooldown de 30 segundos. Durante o cooldown, o Scan tenta outra correção válida e evita repetir a mesma orientação indefinidamente. O histórico é limpo quando a configuração da câmera muda.
+- Scores, caixas de detecção, histórico e gizmos não são gravados nas fotos.
 
-Limitações: não localiza a altura do horizonte; não detecta sujeito genérico, animais, olhar, áreas de interesse ou leading lines. Regras de composição são heurísticas, não um julgamento estético. Um resultado estático pode ficar desatualizado se a câmera se mover.
+Limitações: não localiza a altura do horizonte, não compreende intenção artística e não detecta animais ou leading lines. A saliência do Vision permite tratar alguns assuntos genéricos, e o yaw do rosto fornece apenas uma aproximação da direção do olhar. As regras continuam sendo heurísticas, não um julgamento estético. Um resultado estático pode ficar desatualizado se a câmera se mover.
 
 ## Verificações reproduzíveis
 
@@ -65,7 +67,7 @@ npx patch-package react-native-vision-camera-face-detector --include 'src/Camera
 
 ## Resultado da validação — 11/09/2026
 
-- 34 testes de regras, coordenadas e controlador passaram. Incluem espelhamento, rotação, crop, empates, confiança, resultado vazio, timeout, duplo acionamento, nova sessão, cancelamento e retorno atrasado.
+- A suíte atual tem 42 testes de regras, coordenadas e controlador. Inclui espelhamento, rotação, crop, prioridades, confiança, estados informativos, cooldown, timeout, duplo acionamento, nova sessão, cancelamento e retorno atrasado.
 - O teste de 20 sessões valida limpeza de timers/resultados do controlador com modelo simulado. Não representa medição de memória nativa ou performance em iPhone.
 - Autolinking Apple reconheceu `CompositionScan`; `pod install --no-repo-update` concluiu.
 - Exportação final de bundles iOS e Android concluiu. Isso verifica a resolução dos módulos e geração dos bundles, não o comportamento da câmera em runtime.

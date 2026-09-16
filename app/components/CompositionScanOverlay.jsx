@@ -116,9 +116,19 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
   });
   const inverseLiquidTravel = Animated.multiply(liquidTravel, -1);
   const startScan = useCallback(async () => {
+    console.log("[CompositionScan] JS overlay-press", {
+      canScan: scan.canScan,
+      busy: scan.busy,
+    });
     if (!scan.canScan || scan.busy) return;
+    const backdropStartedAt = Date.now();
     try {
+      console.log("[CompositionScan] JS backdrop-capture-start");
       const uri = await captureBackdrop?.();
+      console.log("[CompositionScan] JS backdrop-capture-result", {
+        elapsedMs: Date.now() - backdropStartedAt,
+        hasUri: Boolean(uri),
+      });
       if (uri) {
         setBackdropUri(uri);
         await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -126,6 +136,7 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
     } catch (error) {
       if (__DEV__) console.warn("[CompositionScan] Unable to capture glass backdrop", error);
     }
+    console.log("[CompositionScan] JS scan-start-dispatch");
     scan.start();
   }, [captureBackdrop, scan]);
   const drawLabel = (gizmo) => {
@@ -282,18 +293,37 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
         </Animated.View>
       )}
       {scan.result && (
-        <Animated.View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.overlay, { opacity }]}>
-          <Svg width={width} height={height}>
-            {scan.result.gizmos.map((g) => draw(g, true))}
-            {scan.result.gizmos.map((g) => draw(g, false))}
-            {scan.result.gizmos.map(drawLabel)}
-          </Svg>
+        <Animated.View pointerEvents="none" style={[styles.overlay, { opacity }]}>
+          {scan.result.kind === "advice" && scan.result.gizmos.length > 0 ? (
+            <Svg
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              width={width}
+              height={height}
+            >
+              {scan.result.gizmos.map((g) => draw(g, true))}
+              {scan.result.gizmos.map((g) => draw(g, false))}
+              {scan.result.gizmos.map(drawLabel)}
+            </Svg>
+          ) : (
+            <View
+              accessible
+              accessibilityLabel={scan.result.message}
+              accessibilityLiveRegion="polite"
+              accessibilityRole="text"
+              style={styles.statusContainer}
+            >
+              <View style={styles.statusPill}>
+                <Text style={styles.statusText}>{scan.result.message}</Text>
+              </View>
+            </View>
+          )}
         </Animated.View>
       )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Analisar composição"
-        accessibilityHint="Mostra sugestões visuais de composição por cinco segundos"
+        accessibilityHint="Mostra uma análise de composição por cerca de oito segundos"
         accessibilityState={{ disabled: !scan.canScan || scan.busy, busy: scan.busy }}
         disabled={!scan.canScan || scan.busy}
         onPress={startScan}

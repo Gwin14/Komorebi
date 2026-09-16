@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCompositionScanSession, SCAN_RESULT_DURATION } from "../../app/utils/compositionScanSession.js";
+import { createCompositionScanSession, SCAN_RESULT_DURATION, SCAN_TIMEOUT } from "../../app/utils/compositionScanSession.js";
 
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
-function setup(overrides = {}, generate = () => ({ gizmos: [{ type: "alignment", angle: 0.1 }] })) {
+function setup(overrides = {}, generate = () => ({
+  kind: "advice", message: "Nivele a câmera", gizmos: [{ type: "alignment", angle: 0.1 }],
+})) {
   let now = 0, id = 0;
   const pending = new Map(), states = [], cancelled = [], errors = [];
   let analyses = 0;
@@ -87,14 +89,14 @@ test("cancel while arm pending releases a late native reservation", async () => 
   assert.equal(s.current().state, "idle"); assert.equal(s.cancelled.length, 2);
 });
 test("capture timeout clears resources and reports one failure", async () => {
-  const s = setup(); await s.controller.start(preview); s.advance(8000);
+  const s = setup(); await s.controller.start(preview); s.advance(SCAN_TIMEOUT);
   assert.equal(s.current().state, "idle"); assert.equal(s.errors.length, 1);
   assert.equal(s.pending.size, 0);
 });
 test("analysis timeout discards its eventual successful result", async () => {
   const result = deferred(); const s = setup({ analyze: () => result.promise });
   await s.controller.start(preview); const work = s.controller.captured("token", s.current().scanId);
-  s.advance(8000); result.resolve({}); await work;
+  s.advance(SCAN_TIMEOUT); result.resolve({}); await work;
   assert.equal(s.current().state, "idle"); assert.equal(s.errors.length, 1);
 });
 test("analysis errors and missing image return to idle", async () => {
@@ -128,14 +130,16 @@ test("20 scans finish with no timers or retained results", async () => {
 });
 
 
-test("empty analysis dismisses immediately without a result timer", async () => {
-  const s = setup({}, () => ({ gizmos: [] }));
+test("balanced analysis remains visible through the normal result lifecycle", async () => {
+  const s = setup({}, () => ({ kind: "balanced", message: "Composição equilibrada", gizmos: [] }));
   await s.controller.start(preview);
   await s.controller.captured("token", s.current().scanId);
-  assert.equal(s.current().state, "idle");
-  assert.equal(s.current().result, null);
-  assert.equal(s.pending.size, 0);
+  assert.equal(s.current().state, "showing-results");
+  assert.equal(s.current().result.kind, "balanced");
+  assert.equal(s.pending.size, 1);
   assert.equal(s.errors.length, 0);
+  s.advance(150 + SCAN_RESULT_DURATION + 200);
+  assert.equal(s.current().state, "idle");
 });
 
 test("a late old result cannot overwrite a newer session", async () => {

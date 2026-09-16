@@ -7,6 +7,7 @@
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "setup:minicpm-ios": "bash ./scripts/setup-minicpm-ios.sh",
     "web": "expo start --web",
     "postinstall": "patch-package",
     "lint": "expo lint"

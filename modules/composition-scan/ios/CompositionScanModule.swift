@@ -8,6 +8,34 @@ import ImageIO
 @_silgen_name("CompositionScanEnsurePluginLinked")
 private func ensureCompositionScanPluginLinked()
 
+func compositionScanLog(_ message: @autoclosure () -> String) {
+  print("[CompositionScan] Native \(message())")
+}
+
+private struct CompositionModelStatusRecord: Record {
+  @Field var state = "not-downloaded"
+  @Field var modelName = ""
+  @Field var isReady = false
+  @Field var isCompatible = false
+  @Field var runtimeAvailable = false
+  @Field var storageBytes: Int64 = 0
+  @Field var progress: Double?
+  @Field var error: String?
+
+  init() {}
+
+  init(_ value: [String: Any]) {
+    state = value["state"] as? String ?? "not-downloaded"
+    modelName = value["modelName"] as? String ?? ""
+    isReady = value["isReady"] as? Bool ?? false
+    isCompatible = value["isCompatible"] as? Bool ?? false
+    runtimeAvailable = value["runtimeAvailable"] as? Bool ?? false
+    storageBytes = (value["storageBytes"] as? NSNumber)?.int64Value ?? 0
+    progress = (value["progress"] as? NSNumber)?.doubleValue
+    error = value["error"] as? String
+  }
+}
+
 // The lock protects ownership; Vision and image work never execute under it.
 // One slot is shared by Expo calls and the frame processor runtime.
 final class CompositionScanSession {
@@ -27,15 +55,23 @@ final class CompositionScanSession {
   func arm(_ id: String) -> Bool {
     lock.lock()
     defer { lock.unlock() }
-    guard scanId == nil else { return false }
+    guard scanId == nil else {
+      compositionScanLog("arm rejected id=\(id) active=\(scanId ?? "unknown")")
+      return false
+    }
     scanId = id
     cancelled = false
+    compositionScanLog("armed id=\(id)")
     return true
   }
 
   func cancel(_ id: String) {
     lock.lock()
-    guard scanId == id else { lock.unlock(); return }
+    guard scanId == id else {
+      lock.unlock()
+      compositionScanLog("cancel ignored id=\(id)")
+      return
+    }
     cancelled = true
     image = nil
     token = nil
@@ -43,6 +79,7 @@ final class CompositionScanSession {
     let pending = requests
     if !copying && !analyzing { resetLocked() }
     lock.unlock()
+    compositionScanLog("cancelled id=\(id) pendingRequests=\(pending.count)")
     pending.forEach { $0.cancel() }
   }
 
@@ -103,6 +140,7 @@ final class CompositionScanSession {
     defer { lock.unlock() }
     copying = false
     guard scanId == id, !cancelled, let reduced else {
+      compositionScanLog("frame capture failed id=\(id) reduced=\(reduced != nil) cancelled=\(cancelled)")
       resetLocked()
       return nil
     }
@@ -110,6 +148,7 @@ final class CompositionScanSession {
     token = imageToken
     image = reduced
     imageRotation = rotation
+    compositionScanLog("frame captured id=\(id) token=\(imageToken.prefix(8)) size=\(reduced.width)x\(reduced.height) rotation=\(rotation)")
     return imageToken
   }
 
@@ -117,6 +156,7 @@ final class CompositionScanSession {
     lock.lock()
     guard scanId == id, token == imageToken, !cancelled, !analyzing, let input = image else {
       lock.unlock()
+      compositionScanLog("analyze rejected id=\(id) token=\(imageToken.prefix(8))")
       promise.reject("ERR_SCAN_IMAGE", "Scan image is no longer available")
       return
     }
@@ -125,9 +165,11 @@ final class CompositionScanSession {
     image = nil
     token = nil
     lock.unlock()
+    compositionScanLog("analysis started id=\(id) size=\(input.width)x\(input.height)")
 
     queue.async {
       autoreleasepool {
+        let analysisStartedAt = CFAbsoluteTimeGetCurrent()
         defer {
           self.lock.lock()
           self.resetLocked()
@@ -154,10 +196,25 @@ final class CompositionScanSession {
         }
         do {
           try VNImageRequestHandler(cgImage: input, orientation: .up).perform(work)
+          let visionElapsed = Int((CFAbsoluteTimeGetCurrent() - analysisStartedAt) * 1_000)
+          compositionScanLog(
+            "Vision completed id=\(id) elapsedMs=\(visionElapsed) people=\(people.results?.count ?? 0) faces=\(faces.results?.count ?? 0) subjects=\(saliency.results?.first?.salientObjects?.count ?? 0) rectangles=\(rectangles.results?.count ?? 0) horizon=\(horizon.results?.first != nil)"
+          )
           self.lock.lock()
           let wasCancelled = self.cancelled
           self.lock.unlock()
           guard !wasCancelled else {
+            promise.reject("ERR_SCAN_CANCELLED", "Scan cancelled")
+            return
+          }
+          // The semantic model is optional. Apple Vision always remains the
+          // geometry source and the complete fallback when the model is not
+          // installed, unsupported, or fails to answer.
+          let judgement = MiniCPMCompositionService.shared.analyze(input)
+          self.lock.lock()
+          let cancelledAfterModel = self.cancelled
+          self.lock.unlock()
+          guard !cancelledAfterModel else {
             promise.reject("ERR_SCAN_CANCELLED", "Scan cancelled")
             return
           }
@@ -176,20 +233,44 @@ final class CompositionScanSession {
           } else {
             detectedHorizon = NSNull()
           }
-          promise.resolve([
-            "geometry": ["width": input.width, "height": input.height,
-                         "rotation": rotation, "mirrored": false],
+          let geometryValue: [String: Any] = [
+            "width": input.width,
+            "height": input.height,
+            "rotation": rotation,
+            "mirrored": false
+          ]
+          let peopleValue: [[String: Any]] = (people.results ?? []).map { observation in
+            subject(observation)
+          }
+          let facesValue: [[String: Any]] = (faces.results ?? []).map { face in
+            var value = subject(face)
+            if let yaw = face.yaw {
+              value["yaw"] = yaw.doubleValue
+            }
+            return value
+          }
+          let subjectsValue: [[String: Any]] =
+            (saliency.results?.first?.salientObjects ?? []).map { observation in
+              subject(observation)
+            }
+          let rectanglesValue: [[String: Any]] = (rectangles.results ?? []).map { observation in
+            subject(observation)
+          }
+          let judgementValue: Any = judgement ?? NSNull()
+          let response: [String: Any] = [
+            "geometry": geometryValue,
             "horizon": detectedHorizon,
-            "people": (people.results ?? []).map { subject($0) },
-            "faces": (faces.results ?? []).map { face in
-              var value = subject(face)
-              if let yaw = face.yaw { value["yaw"] = yaw.doubleValue }
-              return value
-            },
-            "subjects": (saliency.results?.first?.salientObjects ?? []).map { subject($0) },
-            "rectangles": (rectangles.results ?? []).map { subject($0) }
-          ])
+            "people": peopleValue,
+            "faces": facesValue,
+            "subjects": subjectsValue,
+            "rectangles": rectanglesValue,
+            "judgement": judgementValue
+          ]
+          let totalElapsed = Int((CFAbsoluteTimeGetCurrent() - analysisStartedAt) * 1_000)
+          compositionScanLog("analysis resolved id=\(id) elapsedMs=\(totalElapsed) modelJudgement=\(judgement != nil)")
+          promise.resolve(response)
         } catch {
+          compositionScanLog("analysis failed id=\(id) error=\(error.localizedDescription)")
           promise.reject("ERR_SCAN_ANALYSIS", "Local composition analysis failed: \(error.localizedDescription)")
         }
       }
@@ -209,8 +290,19 @@ public class CompositionScanPlugin: FrameProcessorPlugin {
 public class CompositionScanModule: Module {
   public func definition() -> ModuleDefinition {
     Name("CompositionScan")
-    OnCreate { ensureCompositionScanPluginLinked() }
-    OnDestroy { CompositionScanSession.shared.cancelCurrent() }
+    Events("onCompositionModelStatus")
+    OnCreate { [weak self] in
+      ensureCompositionScanPluginLinked()
+      compositionScanLog("module created status=\(MiniCPMCompositionService.shared.status()["state"] as? String ?? "unknown")")
+      MiniCPMCompositionService.shared.onStatus = { [weak self] status in
+        compositionScanLog("status event state=\(status["state"] as? String ?? "unknown") progress=\(status["progress"] ?? "none") error=\(status["error"] ?? "none")")
+        self?.sendEvent("onCompositionModelStatus", status)
+      }
+    }
+    OnDestroy {
+      CompositionScanSession.shared.cancelCurrent()
+      MiniCPMCompositionService.shared.onStatus = nil
+    }
     AsyncFunction("arm") { (id: String) -> Bool in
       CompositionScanSession.shared.arm(id)
     }
@@ -219,6 +311,20 @@ public class CompositionScanModule: Module {
     }
     AsyncFunction("cancel") { (id: String) in
       CompositionScanSession.shared.cancel(id)
+    }
+    AsyncFunction("getCompositionModelStatus") { () -> CompositionModelStatusRecord in
+      let status = MiniCPMCompositionService.shared.status()
+      compositionScanLog("status requested state=\(status["state"] as? String ?? "unknown")")
+      return CompositionModelStatusRecord(status)
+    }
+    AsyncFunction("downloadCompositionModel") { () throws -> Bool in
+      try MiniCPMCompositionService.shared.startDownload()
+    }
+    AsyncFunction("cancelCompositionModelDownload") {
+      MiniCPMCompositionService.shared.cancelDownload()
+    }
+    AsyncFunction("deleteCompositionModel") { () throws in
+      try MiniCPMCompositionService.shared.removeModel()
     }
   }
 }

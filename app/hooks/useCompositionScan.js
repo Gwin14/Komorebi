@@ -6,7 +6,7 @@ import {
   analyze, armCompositionScan, cancel, getCompositionCapturePlugin,
   isCompositionScanAvailable, isCompositionScanSupported,
 } from "../../modules/composition-scan";
-import { generateCompositionResult } from "../utils/compositionAnalysis";
+import { createCompositionAdvisor } from "../utils/compositionAnalysis";
 import { createCompositionScanSession } from "../utils/compositionScanSession";
 
 export default function useCompositionScan({ enabled, configurationKey, preview }) {
@@ -14,28 +14,41 @@ export default function useCompositionScan({ enabled, configurationKey, preview 
   const [foreground, setForeground] = useState(AppState.currentState === "active");
   const [snapshot, setSnapshot] = useState({ state: "idle", result: null, scanId: null, phase: null });
   const controllerRef = useRef(null);
+  const advisorRef = useRef(null);
   const [available, setAvailable] = useState(isCompositionScanAvailable);
   const supported = isCompositionScanSupported();
   const canScan = available && enabled && isFocused && foreground && preview.width > 0 && preview.height > 0;
+  const log = useCallback((event, details = {}) => {
+    console.log(`[CompositionScan] JS ${event}`, details);
+  }, []);
 
   useEffect(() => {
     if (!supported) return;
-    setAvailable(isCompositionScanAvailable());
-  }, [configurationKey, enabled, supported]);
+    const nextAvailable = isCompositionScanAvailable();
+    log("availability", { supported, available: nextAvailable, enabled, configurationKey });
+    setAvailable(nextAvailable);
+  }, [configurationKey, enabled, log, supported]);
 
   useEffect(() => {
+    const advisor = createCompositionAdvisor();
+    advisorRef.current = advisor;
     const controller = createCompositionScanSession({
       model: { arm: armCompositionScan, analyze, cancel },
-      generate: generateCompositionResult,
+      generate: (analysis, scanPreview) => advisor.generate(analysis, scanPreview),
       onChange: setSnapshot,
       onError: (error) => {
         if (__DEV__) console.warn("[CompositionScan]", error.message);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       },
+      log,
     });
     controllerRef.current = controller;
-    return () => { controller.dispose(); controllerRef.current = null; };
-  }, []);
+    return () => {
+      controller.dispose();
+      controllerRef.current = null;
+      advisorRef.current = null;
+    };
+  }, [log]);
 
   const cancelScan = useCallback(() => controllerRef.current?.cancel(), []);
   useEffect(() => {
@@ -47,11 +60,13 @@ export default function useCompositionScan({ enabled, configurationKey, preview 
   }, [cancelScan]);
   useEffect(() => {
     cancelScan();
+    advisorRef.current?.reset();
   }, [configurationKey, canScan, cancelScan, preview.width, preview.height, preview.mirrored]);
 
   const start = useCallback(() => {
+    log("button-start", { canScan, appState: AppState.currentState, preview });
     if (canScan && AppState.currentState === "active") void controllerRef.current?.start({ ...preview });
-  }, [canScan, preview]);
+  }, [canScan, log, preview]);
   const onCaptured = useCallback((token, id) => {
     void controllerRef.current?.captured(token, id);
   }, []);

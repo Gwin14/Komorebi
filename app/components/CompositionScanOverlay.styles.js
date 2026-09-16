@@ -2,6 +2,22 @@ import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject },
+  statusContainer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statusPill: {
+    minHeight: 34,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(20,15,2,0.84)",
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,170,0,0.9)",
+  },
+  statusText: { color: "#FFD36A", fontSize: 12, fontWeight: "600" },
   liquidLayer: {
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",
