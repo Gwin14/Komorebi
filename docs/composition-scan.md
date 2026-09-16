@@ -2,6 +2,34 @@
 
 Primeira versão: análise local sob demanda no iOS, no preview VisionCamera de foto normal, manual e RAW/ProRAW. Não está disponível nos previews nativos de Live Photo/Retrato nem no Android. Requer novo development build; uma atualização JavaScript não instala o módulo nativo.
 
+## Preparação do MiniCPM-V em um Mac novo
+
+O repositório não versiona o `llama.xcframework` gerado. Depois de clonar:
+
+```sh
+npm install
+brew install cmake
+npm run setup:minicpm-ios
+npx pod-install ios
+```
+
+O setup fixa uma revisão conhecida do `MiniCPM-V-Apps`, compila o runtime para iPhone e simulador, instala o resultado em `modules/composition-scan/ios/Frameworks/llama.xcframework` e valida:
+
+- `Info.plist` e as duas variantes do XCFramework;
+- binários Mach-O não vazios;
+- headers `llama.h`, `mtmd.h` e `mtmd-helper.h`;
+- símbolos `llama_model_load_from_file` e `mtmd_init_from_file`.
+
+O primeiro processo pode demorar vários minutos. Se o artefato instalado passar na validação, o comando seguinte apenas informa que está pronto e encerra sem recompilar. Para uma reconstrução intencional:
+
+```sh
+npm run setup:minicpm-ios -- --force
+```
+
+Depois do `pod install`, abra `ios/Komorebi.xcworkspace`, gere um novo binário e instale-o. O estado esperado nas configurações muda de `runtime-missing` para `not-downloaded`. No aparelho, use **Configurações → Inteligência do Scan → Baixar modelo** para baixar aproximadamente 1,6 GB de pesos GGUF. Quando terminar, o estado deve ser `ready`.
+
+Máquinas de CI e Macs usados para Archive também precisam preparar o runtime antes do build. CMake e o código-fonte baixado são ferramentas de compilação; não são instalados no telefone do usuário. O app distribuído incorpora o runtime e baixa apenas os pesos sob solicitação.
+
 ## Fluxo e integração
 
 `Scan → arm(scanId) → próximo frame → imageToken → analyze → observações → gizmos → limpar`

@@ -27,6 +27,7 @@ O app é local-first: fotos, preferências e LUTs personalizados ficam no dispos
 - Galeria integrada com leitura de EXIF, badges do Komorebi, mapa e exclusão de fotos.
 - Gerador de EXIF Frame via WebView.
 - Configuração da TopBar, incluindo ordem, limite de controles e posição invertida.
+- Scan de composição híbrido no iOS, combinando Apple Vision com MiniCPM-V local opcional.
 
 ## Status do projeto
 
@@ -40,6 +41,7 @@ Algumas funcionalidades dependem de hardware real e permissões do sistema. Para
 - npm.
 - Expo CLI/EAS conforme sua rotina de desenvolvimento.
 - Xcode para iOS e Android Studio para Android, quando for rodar builds nativos.
+- CMake 3.28 ou superior para preparar o runtime MiniCPM-V no iOS.
 - Dispositivo físico para testar câmera, RAW/ProRAW, Live Photo, retrato, haptics, galeria, GPS, botão de volume e Camera Control.
 
 Configuração nativa atual:
@@ -62,6 +64,25 @@ npm run ios
 npm run android
 npm run web
 ```
+
+### Primeiro setup do Scan inteligente no iOS
+
+O runtime MiniCPM-V é compilado localmente e não fica versionado no Git. Em cada Mac novo, depois de clonar o repositório, execute:
+
+```bash
+npm install
+brew install cmake
+npm run setup:minicpm-ios
+npx pod-install ios
+```
+
+O primeiro `setup:minicpm-ios` pode demorar vários minutos e gera `modules/composition-scan/ios/Frameworks/llama.xcframework`. O script valida as variantes de iPhone e simulador, os headers e os símbolos de inferência. Se o framework já estiver válido, novas execuções terminam rapidamente sem recompilar. Use `npm run setup:minicpm-ios -- --force` somente quando precisar reconstruí-lo deliberadamente.
+
+Depois, abra `ios/Komorebi.xcworkspace` no Xcode e instale um novo binário no aparelho. Uma atualização JavaScript não incorpora o runtime nativo.
+
+No primeiro uso, abra **Configurações → Inteligência do Scan → Baixar modelo**. Os pesos do MiniCPM-V ocupam cerca de 1,6 GB, são baixados separadamente em cada aparelho e permanecem locais. A imagem analisada não é enviada para um servidor.
+
+Em CI ou em outro computador usado para gerar Archive, execute os mesmos passos antes do build. O XCFramework gerado tem aproximadamente 349 MB e está no `.gitignore`. Detalhes e diagnóstico estão em [`docs/composition-scan.md`](docs/composition-scan.md).
 
 Para lint:
 
@@ -96,6 +117,7 @@ Komorebi/
 │   └── sounds/              # Som de obturador
 ├── modules/
 │   ├── camera-control-button/
+│   ├── composition-scan/
 │   ├── camera-live-photo/
 │   ├── camera-manual-controls/
 │   ├── camera-portrait-capture/
@@ -118,6 +140,7 @@ O projeto inclui módulos Expo locais em `modules/`:
 - `camera-live-photo`: captura e salvamento de Live Photos.
 - `camera-portrait-capture`: captura de retrato com dados de profundidade/matte quando disponíveis.
 - `camera-control-button`: listener para o Camera Control de iPhones compatíveis.
+- `composition-scan`: captura um frame reduzido e combina Apple Vision com análise semântica MiniCPM-V local.
 
 Cada módulo mantém a API pública em `index.ts` e a implementação iOS em `ios/`.
 
@@ -179,6 +202,7 @@ npm run ios      # executa no iOS
 npm run android  # executa no Android
 npm run web      # executa o alvo web
 npm run lint     # roda o Expo ESLint
+npm run setup:minicpm-ios # prepara/valida o runtime local do Scan no iOS
 ```
 
 ## Validação recomendada
