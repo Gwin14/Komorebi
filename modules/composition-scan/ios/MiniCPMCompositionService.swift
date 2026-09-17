@@ -263,10 +263,10 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
   private static let prompt = """
   Você é um diretor de fotografia criterioso. Analise a composição desta foto como ela está, respeitando escolhas intencionais. Não aplique regra dos terços automaticamente e não peça para nivelar sem inclinação evidente. Escolha somente uma mudança que produza melhora clara; se nada for realmente necessário, escolha keep.
 
-  Responda apenas JSON válido, sem markdown:
-  {"action":"keep|reframe|closer|farther|look_space|center_symmetry|level|reduce_empty_space|simplify_background|change_viewpoint","confidence":0.0,"message":"máximo 55 caracteres em português"}
+  Responda apenas um JSON curto e válido, sem markdown e sem campos adicionais:
+  {"action":"keep|reframe|closer|farther|look_space|center_symmetry|level|reduce_empty_space|simplify_background|change_viewpoint"}
 
-  Use level raramente. Use reframe apenas se o assunto principal estiver cortado ou perigosamente colado à borda. Considere relações entre pessoas, direção do olhar, espaço vazio, fundo, intenção e equilíbrio visual. confidence deve medir a certeza de que a mudança melhora a foto, não a certeza de que você reconheceu a cena.
+  Use level raramente. Use reframe apenas se o assunto principal estiver cortado ou perigosamente colado à borda. Considere relações entre pessoas, direção do olhar, espaço vazio, fundo, intenção e equilíbrio visual.
   """
 
   private static func parseJudgement(_ raw: String) -> [String: Any]? {
@@ -274,13 +274,18 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
     let json = String(raw[start...end])
     guard let data = json.data(using: .utf8),
           let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-          let action = value["action"] as? String,
-          let confidence = (value["confidence"] as? NSNumber)?.doubleValue,
-          let message = value["message"] as? String else { return nil }
+          let action = value["action"] as? String else { return nil }
     let allowed: Set<String> = ["keep", "reframe", "closer", "farther", "look_space",
                                 "center_symmetry", "level", "reduce_empty_space",
                                 "simplify_background", "change_viewpoint"]
     guard allowed.contains(action) else { return nil }
+    // MiniCPM-V 4.6 reliably emits the requested action but often closes the
+    // object before optional explanatory fields. Treat its categorical vote
+    // as moderately confident; geometric safety rules remain authoritative.
+    let suppliedConfidence = (value["confidence"] as? NSNumber)?.doubleValue
+    let defaultConfidence = action == "keep" ? 1.0 : (action == "level" ? 0.9 : 0.82)
+    let confidence = suppliedConfidence ?? defaultConfidence
+    let message = value["message"] as? String ?? ""
     return [
       "source": "minicpm-v-4.6",
       "action": action,

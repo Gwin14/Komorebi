@@ -170,6 +170,14 @@ function candidateForJudgement(judgement, candidates) {
     candidate.category === definition.category &&
     (!definition.direction || candidate.gizmo.direction === definition.direction));
 
+  // MiniCPM can over-select `reframe` even when the subject is safely inside
+  // the image. A reframe suggestion is only actionable when Vision also found
+  // concrete crop/edge evidence, which additionally gives the overlay a useful
+  // target instead of displaying a generic text-only instruction.
+  if (judgement.action === "reframe" && !geometric) {
+    return { kind: "balanced" };
+  }
+
   // Level is deliberately stricter than every other model suggestion. It
   // needs both a strong semantic vote and Vision's high-confidence horizon.
   if (judgement.action === "level" &&

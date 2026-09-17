@@ -241,6 +241,27 @@ test("MiniCPM can return semantic advice without an invented rectangle", () => {
   });
 });
 
+test("MiniCPM reframe requires concrete Vision edge evidence", () => {
+  const judgement = {
+    source: "minicpm-v-4.6", action: "reframe", confidence: 0.92,
+    message: "Reenquadre o assunto principal",
+  };
+  assert.deepEqual(generateCompositionResult({ ...emptyScene, judgement }, preview), {
+    kind: "balanced", message: "Composição equilibrada", gizmos: [],
+  });
+
+  const nearEdge = {
+    ...emptyScene,
+    people: [{ confidence: 0.95, rect: { x: 0.01, y: 0.24, width: 0.32, height: 0.48 } }],
+    judgement,
+  };
+  const result = generateCompositionResult(nearEdge, preview);
+  assert.equal(result.kind, "advice");
+  assert.equal(result.message, judgement.message);
+  assert.equal(result.gizmos.length, 1);
+  assert.equal(result.gizmos[0].type, "margin");
+});
+
 test("MiniCPM level still requires strong confidence and a Vision horizon", () => {
   const judgement = {
     source: "minicpm-v-4.6", action: "level", confidence: 0.95, message: "Nivele a câmera",
