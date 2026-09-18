@@ -32,11 +32,12 @@ Máquinas de CI e Macs usados para Archive também precisam preparar o runtime a
 
 ## Fluxo e integração
 
-`Scan → arm(scanId) → próximo frame → imageToken → analyze → observações → gizmos → limpar`
+`Scan → arm(scanId) → próximo frame → imageToken → analyze(contexto) → moldura/tracking → alinhar → zoom → limpar`
 
 - `modules/composition-scan` é um módulo Expo local, descoberto automaticamente pelo autolinking em `modules/`. O pod depende de ExpoModulesCore, VisionCamera e frameworks da Apple. Não há modelo baixado, dependência npm adicional, permissão nova, upload ou escrita de imagens.
-- `CompositionScanPlugin` aceita um único frame por sessão. Desfaz espelhamento físico do buffer, converte a orientação do sensor, orienta a imagem para a posição do aparelho e renderiza uma cópia com lado maior de até 640 pixels. Não retém o `Frame` depois do callback e não envia pixels ao JavaScript.
-- A cópia reduzida fica em um slot nativo, acessível somente pelo token opaco e `scanId` correspondentes. `analyze` consome o slot e executa horizonte, pessoas e rostos em uma fila serial Vision. Confianças e retângulos não chegam ao renderer.
+- `CompositionScanPlugin` aceita um único frame de análise por sessão. Desfaz espelhamento físico do buffer, converte a orientação do sensor, orienta a imagem para a posição do aparelho e renderiza uma cópia com lado maior de até 640 pixels. Durante análise/resultados também aceita frames de tracking a até 10 Hz, reduzidos para 480 pixels; nunca retém o `Frame` da VisionCamera nem envia pixels ao JavaScript.
+- A cópia reduzida fica em um slot nativo, acessível somente pelo token opaco e `scanId` correspondentes. `analyze` consome o slot, recebe os três motivos recentes e a proporção atual, e executa horizonte, pessoas, rostos, saliência e retângulos em uma fila serial Vision. O MiniCPM retorna um motivo nominal e pode propor uma região retangular normalizada.
+- O centro e a escala da moldura recebem a transformação homográfica do `VNTrackHomographicImageRegistrationRequest`. O JavaScript reconstrói um retângulo alinhado ao preview após cada transformação, preservando a proporção selecionada mesmo sob perspectiva. Perda terminal encerra a guia para não deixar uma moldura desancorada.
 - O lock nativo impede nova reserva enquanto uma cópia/análise cancelada ainda está encerrando. `cancel` invalida o token, chama `VNRequest.cancel()` e libera buffers quando o trabalhador termina. Destruição do módulo também cancela a sessão.
 - O patch `react-native-vision-camera-face-detector+1.10.1.patch` adiciona `faceDetectionEnabled`, `compositionScanId`, `compositionScanRotation`, `compositionCapturePlugin` e `compositionCaptureCallback`. A solicitação é consumida no worklet antes de retornar ao JS, evitando capturas duplicadas.
 - O detector de sorriso só processa quando habilitado. Durante captura/análise do Scan fica pausado; callbacks atrasados de sorriso são ignorados. O histograma mantém sua configuração independente. Sem sorriso, histograma ou captura pendente, o wrapper passa `frameProcessor={undefined}`.
@@ -48,11 +49,11 @@ O controlador testável está em `app/utils/compositionScanSession.js`, a integr
 
 `idle → capturing → analyzing → showing-results → idle`.
 
-O botão Scan fica no canto inferior direito do preview, com altura de 44 pontos e acessibilidade. Fica desabilitado durante captura/análise, inicialização da câmera, captura/processamento de fotos ou câmera fora de foco/background. Live Photo e Retrato não renderizam o botão.
+O botão Scan fica no canto inferior direito do preview, com altura de 44 pontos e acessibilidade. Fica oculto nas câmeras frontais e desabilitado durante captura/análise, inicialização da câmera, captura/processamento de fotos ou câmera fora de foco/background. Live Photo e Retrato não renderizam o botão.
 
-Resultados entram em 150 ms, permanecem visíveis por `SCAN_RESULT_DURATION = 7500` e saem em 200 ms. Um novo Scan durante os resultados remove a resposta anterior e reinicia a sessão. Quando não há correção relevante, o Scan confirma `Composição equilibrada`; quando todas as correções foram mostradas recentemente, responde `Sem novas sugestões`. Timeout total de captura/análise: 8 segundos. Falhas usam apenas feedback háptico e log em desenvolvimento.
+Resultados entram em 150 ms e permanecem ativos até o alinhamento ou cancelamento. O centro da moldura precisa ficar dentro de 4% do menor lado do preview por três atualizações consecutivas. Nesse momento há um impacto háptico médio e o zoom necessário para preencher o preview é animado por 250 ms, limitado pelas capacidades da lente. A guia permanece mais 1,5 segundo e sai em 200 ms. O timeout de captura/análise continua em 120 segundos para acomodar o carregamento frio do modelo.
 
-Mudanças de lente, RAW, modo manual, Live Photo/Retrato, proporção, moldura retrô, captura dupla, zoom e orientação cancelam o Scan. Navegação, background e desmontagem também cancelam. O handler compartilhado por disparo na tela, volume, botão físico e sorriso cancela o Scan antes de fotografar. Movimento físico dentro da mesma orientação não atualiza o resultado: não há tracking.
+Mudanças de lente, RAW, modo manual, Live Photo/Retrato, proporção, moldura retrô, captura dupla, orientação e zoom manual cancelam o Scan. O zoom automático não passa pela chave de cancelamento. Navegação, background, desmontagem e todos os meios de disparo também cancelam.
 
 ## Regras e coordenadas
 
@@ -60,19 +61,18 @@ A API pública TypeScript separa `CompositionAnalysis` (cena e geometria) de `Sc
 
 O layout usado é a área interna real da câmera; safe areas, margens da moldura e borda da captura dupla não entram novamente na transformação. Na captura dupla, a sugestão se refere ao preview completo, não ao segundo recorte salvo.
 
-- Confiança mínima dos sujeitos: 0,7; confiança mínima do horizonte: 0,85.
-- Horizonte: inclinação relativa ao aparelho, sem tentar localizar a altura da linha. Para ser ocasional, a sugestão começa somente em 10° para paisagem/arquitetura e 15° para retrato/grupo, além de ter cooldown próprio de 90 segundos. Dois segmentos no centro mostram alinhamento atual e referência; ao girar o aparelho, a referência acompanha a orientação.
-- Pessoa/assunto: a posição fora dos terços não gera correção por si só. Corte, proximidade da borda e escala exigem limites confiáveis de pessoa, rosto ou grupo. Regiões genéricas de saliência nunca geram esses conselhos sozinhas; servem apenas como apoio quando também existe evidência estrutural de simetria.
-- Apenas o conselho de maior prioridade é exibido: borda/corte, espaço do olhar, escala, simetria e nível, nessa ordem.
-- As três últimas categorias aconselhadas têm cooldown de 30 segundos. Durante o cooldown, o Scan tenta outra correção válida e evita repetir a mesma orientação indefinidamente. O histórico é limpo quando a configuração da câmera muda.
+- Confiança mínima dos sujeitos: 0,7.
+- `framing` usa `centerX`, `centerY`, `width` e `height` entre 0 e 1000. O app valida a região, rejeita coordenadas copiadas do prompt e impõe a proporção do preview. Pessoa, grupo, rosto e regiões compactas de saliência do Vision têm prioridade sobre uma região genérica do modelo; depois vêm arquitetura e, por fim, uma moldura central com 80% do quadro.
+- Toda análise bem-sucedida produz exatamente uma moldura ancorada. Em coordenadas normalizadas do preview, largura e altura são iguais; em pixels isso reproduz `4:3` ou `9:16` na orientação atual.
+- A mensagem é uma única expressão nominal de até 48 caracteres. O MiniCPM escolhe assunto e motivo em categorias controladas, convertidas pelo app para português; isso evita JSON malformado, mistura de idiomas e repetição de `Destacar o assunto`. Respostas de builds anteriores ainda recebem interpretação semântica e fallback pela geometria da cena. As três últimas razões são enviadas ao prompt para incentivar variedade, mas nunca impedem a criação da moldura.
 - Scores, caixas de detecção, histórico e gizmos não são gravados nas fotos.
 
-Limitações: não localiza a altura do horizonte, não compreende intenção artística e não detecta animais ou leading lines. A saliência do Vision permite tratar alguns assuntos genéricos, e o yaw do rosto fornece apenas uma aproximação da direção do olhar. As regras continuam sendo heurísticas, não um julgamento estético. Um resultado estático pode ficar desatualizado se a câmera se mover.
+Limitações: o modelo define a posição inicial da moldura e o Vision apenas a estabiliza; tracking não corrige uma sugestão semanticamente ruim. Movimento forte, pouca textura, parallax ou mudança de lente podem encerrar a ancoragem.
 
 ## Verificações reproduzíveis
 
 ```sh
-node --experimental-default-type=module --test tests/composition/*.test.js
+node --test tests/composition/*.test.js
 npm run lint
 npx tsc --noEmit --pretty false
 npx expo export --platform android --output-dir /tmp/komorebi-scan-android
@@ -93,26 +93,27 @@ Não editar somente `node_modules`: alterações do wrapper devem ficar no patch
 npx patch-package react-native-vision-camera-face-detector --include 'src/Camera.tsx'
 ```
 
-## Resultado da validação — 11/09/2026
+## Resultado da validação — 18/09/2026
 
-- A suíte atual tem 42 testes de regras, coordenadas e controlador. Inclui espelhamento, rotação, crop, prioridades, confiança, estados informativos, cooldown, timeout, duplo acionamento, nova sessão, cancelamento e retorno atrasado.
-- O teste de 20 sessões valida limpeza de timers/resultados do controlador com modelo simulado. Não representa medição de memória nativa ou performance em iPhone.
+- A suíte atual tem 37 testes de regras, coordenadas e controlador. A cobertura específica inclui rejeição do retângulo copiado do prompt, saliência com confiança própria, categorias de assunto, interpretação de respostas antigas em inglês, variedade por geometria, fallback do modelo/Vision, proporções `4:3` e `9:16`, rotação, espelhamento, crop, tracking por translação/perspectiva, tolerância de alinhamento, três amostras consecutivas, zoom limitado, timeout, nova sessão e cancelamento.
+- O teste de 20 sessões valida a limpeza de timers/resultados do controlador com modelo simulado e a conclusão explícita do zoom. Não representa medição de memória nativa ou performance em iPhone.
 - Autolinking Apple reconheceu `CompositionScan`; `pod install --no-repo-update` concluiu.
 - Exportação final de bundles iOS e Android concluiu. Isso verifica a resolução dos módulos e geração dos bundles, não o comportamento da câmera em runtime.
 - O patch do detector passou por aplicação reversa e reaplicação em uma cópia temporária, sem fuzz, reproduzindo exatamente o fonte instalado.
 - `npm run lint`: passou, sem erros e com três avisos preexistentes em BottomControls, CustoToggle e TopBar. `npx tsc --noEmit`: passou.
-- O `xcodebuild` Debug sem assinatura chegou à compilação do módulo e apontou um argumento extra em `Promise.reject`. A chamada foi corrigida conforme a API instalada do ExpoModulesCore. O build não foi repetido, a pedido do usuário; a compilação nativa final permanece pendente.
+- A análise sintática dos fontes Swift com `swiftc -parse` passou. A compilação nativa final permanece pendente para o build no aparelho.
 - iPhone físico offline; validação no aparelho adiada por escolha do usuário. Nenhuma medição de latência, FPS, memória, temperatura ou consumo foi realizada no hardware.
 
 ## Roteiro pendente em iPhone
 
-1. Foto normal, manual e RAW/ProRAW: fazer Scan com paisagem inclinada e com pessoa; confirmar ausência de disparo, flash e salvamento durante Scan.
-2. Frontal/traseira, portrait/landscape dos dois lados, 3:4/9:16, retrô e captura dupla: usar cena assimétrica para conferir posição e espelhamento dos gizmos.
-3. Novo Scan durante exibição, toques repetidos durante processamento, disparo por todos os meios, troca de lente/zoom/modo e navegação/background: nenhum resultado antigo deve reaparecer.
-4. Cena sem pessoas/horizonte confiável e baixa luz: nenhum gizmo inventado; spinner sempre termina até timeout. Testar também sorriso/histograma individualmente e em conjunto.
-5. Em Instruments (Time Profiler e Allocations), comparar preview ocioso com sorriso/histograma desligados antes/depois; não deve haver chamadas Vision do Scan em repouso.
-6. Fazer 20 scans, aguardando auto-dismiss entre eles. Registrar aparelho/iOS, latências de captura e análise, fluidez observada, memória antes/depois e estado térmico. Memória não deve crescer de forma sustentada; não deve haver inferência concorrente.
-7. Fotografar durante e depois de resultados e verificar os arquivos salvos: sem gizmos e sem regressão de LUTs, EXIF, controles manuais, RAW, sorriso e histograma.
+1. Foto normal, manual e RAW/ProRAW: fazer Scan com paisagem e com pessoa; confirmar uma única moldura retangular, ausência de disparo, flash e salvamento durante Scan.
+2. Traseira ampla, ultra-angular e teleobjetiva, portrait/landscape, `4:3`/`9:16`, retrô e captura dupla: confirmar proporção/orientação fixa e ancoragem durante translação, escala e perspectiva. Na frontal, confirmar ausência total do botão e do tracking.
+3. Alinhar a moldura ao centro, sair e reentrar na tolerância e então manter três atualizações: confirmar um único háptico médio, zoom animado e limitado, permanência por 1,5 segundo e fade. Não deve haver disparo automático.
+4. Novo Scan durante exibição, toques repetidos durante processamento, disparo por todos os meios, troca de lente/zoom manual/modo/proporção/orientação e navegação/background: nenhum resultado antigo nem zoom pendente deve reaparecer.
+5. Cena sem pessoas, grupo, rosto, assunto saliente e retorno inválido/ausente do modelo: toda análise bem-sucedida deve produzir uma moldura e uma razão nominal de uma linha; o último fallback ocupa 80% do preview.
+6. Em Instruments (Time Profiler e Allocations), comparar preview ocioso com sorriso/histograma desligados antes/depois; não deve haver chamadas Vision do Scan em repouso.
+7. Fazer 20 scans, alinhando e concluindo cada guia. Registrar aparelho/iOS, latências de captura e análise, fluidez observada, memória antes/depois e estado térmico. Memória não deve crescer de forma sustentada; não deve haver inferência concorrente.
+8. Fotografar durante e depois de resultados e verificar os arquivos salvos: sem moldura e sem regressão de LUTs, EXIF, controles manuais, RAW, sorriso e histograma.
 
 ## Falha de linker após a integração
 

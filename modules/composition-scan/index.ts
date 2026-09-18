@@ -7,13 +7,17 @@ export type ScanState = "idle" | "capturing" | "analyzing" | "showing-results";
 export type NormalizedPoint = { x: number; y: number };
 export type NormalizedRect = NormalizedPoint & { width: number; height: number };
 export type SceneSubject = { rect: NormalizedRect; confidence: number; yaw?: number };
+export type CompositionFrame = { centerX: number; centerY: number; width: number; height: number };
+export type CompositionVisualHint = "framing" | "reframe" | "closer" | "farther" |
+  "look_space" | "center_symmetry" | "level";
 export type CompositionJudgement = {
   source: "minicpm-v-4.6";
-  action: "keep" | "reframe" | "closer" | "farther" | "look_space" |
-    "center_symmetry" | "level" | "reduce_empty_space" |
-    "simplify_background" | "change_viewpoint";
-  confidence: number;
+  verdict: "keep" | "advice";
   message: string;
+  topic: string;
+  subject?: string | null;
+  visualHint?: CompositionVisualHint | null;
+  frame?: CompositionFrame | null;
 };
 export type CompositionAnalysis = {
   geometry: { width: number; height: number; mirrored: boolean; rotation: 0 | 90 | 180 | 270 };
@@ -24,22 +28,33 @@ export type CompositionAnalysis = {
   rectangles: SceneSubject[];
   judgement?: CompositionJudgement | null;
 };
-export type CompositionGizmo =
-  | { id: string; type: "alignment"; angle: number; referenceAngle: number; label: string }
-  | { id: string; type: "target"; point: NormalizedPoint; label: string }
-  | { id: string; type: "look-space"; point: NormalizedPoint; direction: "left" | "right"; label: string }
-  | { id: string; type: "margin"; rect: NormalizedRect; label: string }
-  | { id: string; type: "center"; point: NormalizedPoint; label: string }
-  | { id: string; type: "scale"; rect: NormalizedRect; direction: "in" | "out"; label: string };
+export type CompositionGizmo = {
+  id: string;
+  type: "framing";
+  rect: NormalizedRect;
+  label: string;
+  anchor: "scene";
+};
 export type ScanResult = {
   kind: "advice" | "balanced" | "no-new-advice";
   message: string;
   gizmos: CompositionGizmo[];
 };
 export interface CompositionModel {
-  analyze(imageToken: string, scanId: string): Promise<CompositionAnalysis>;
+  analyze(imageToken: string, scanId: string, context?: CompositionAnalysisContext): Promise<CompositionAnalysis>;
   cancel(scanId: string): Promise<void>;
 }
+
+export type CompositionAnalysisContext = {
+  recentAdvice: Array<{ topic: string; message: string }>;
+  frameAspectRatio?: number;
+};
+export type CompositionTrackingUpdate = {
+  scanId: string;
+  matrix: number[];
+  confidence: number;
+  lost: boolean;
+};
 
 type NativeScan = CompositionModel & {
   arm(scanId: string): Promise<boolean>;
@@ -48,6 +63,7 @@ type NativeScan = CompositionModel & {
   cancelCompositionModelDownload(): Promise<void>;
   deleteCompositionModel(): Promise<void>;
   addListener(eventName: "onCompositionModelStatus", listener: (status: CompositionModelStatus) => void): { remove(): void };
+  addListener(eventName: "onCompositionTrackingUpdate", listener: (update: CompositionTrackingUpdate) => void): { remove(): void };
 };
 export type CompositionModelStatus = {
   state: "runtime-missing" | "unsupported" | "not-downloaded" | "downloading" | "ready" | "error";
@@ -82,9 +98,9 @@ export function isCompositionScanSupported() {
 export async function armCompositionScan(scanId: string) {
   return nativeModule?.arm(scanId) ?? false;
 }
-export async function analyze(imageToken: string, scanId: string): Promise<CompositionAnalysis> {
+export async function analyze(imageToken: string, scanId: string, context: CompositionAnalysisContext = { recentAdvice: [] }): Promise<CompositionAnalysis> {
   if (!nativeModule) throw new Error("Composition Scan unavailable");
-  return nativeModule.analyze(imageToken, scanId);
+  return nativeModule.analyze(imageToken, scanId, context);
 }
 export async function cancel(scanId: string): Promise<void> {
   await nativeModule?.cancel(scanId);
@@ -105,4 +121,7 @@ export async function deleteCompositionModel(): Promise<void> {
 }
 export function addCompositionModelStatusListener(listener: (status: CompositionModelStatus) => void) {
   return nativeModule?.addListener("onCompositionModelStatus", listener) ?? { remove() {} };
+}
+export function addCompositionTrackingListener(listener: (update: CompositionTrackingUpdate) => void) {
+  return nativeModule?.addListener("onCompositionTrackingUpdate", listener) ?? { remove() {} };
 }

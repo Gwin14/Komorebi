@@ -5,11 +5,15 @@ export default StyleSheet.create({
   statusContainer: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
+    paddingTop: 16,
+    paddingHorizontal: 16,
   },
   statusPill: {
     minHeight: 34,
+    maxWidth: "100%",
     paddingHorizontal: 16,
+    paddingVertical: 9,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(20,15,2,0.84)",
@@ -17,7 +21,7 @@ export default StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,170,0,0.9)",
   },
-  statusText: { color: "#FFD36A", fontSize: 12, fontWeight: "600" },
+  statusText: { color: "#FFD36A", fontSize: 12, fontWeight: "600", lineHeight: 16, textAlign: "center" },
   liquidLayer: {
     ...StyleSheet.absoluteFillObject,
     overflow: "hidden",

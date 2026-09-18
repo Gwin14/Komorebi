@@ -3,7 +3,7 @@ import MaskedView from "@react-native-masked-view/masked-view";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Pressable, Text, UIManager, View } from "react-native";
-import Svg, { Circle, G, Line, Rect, Text as SvgText } from "react-native-svg";
+import Svg, { Circle, Line, Rect } from "react-native-svg";
 import { SCAN_ENTER_DURATION, SCAN_EXIT_DURATION } from "../utils/compositionScanSession";
 import styles from "./CompositionScanOverlay.styles";
 
@@ -139,102 +139,31 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
     console.log("[CompositionScan] JS scan-start-dispatch");
     scan.start();
   }, [captureBackdrop, scan]);
-  const drawLabel = (gizmo) => {
-    const label = gizmo.label;
-    const labelWidth = Math.min(132, Math.max(62, label.length * 5.7 + 16));
-    const rect = gizmo.rect;
-    const point = gizmo.point;
-    const x = point ? point.x * width : rect ? (rect.x + rect.width / 2) * width : width / 2;
-    const anchorY = point
-      ? point.y * height + 19
-      : rect
-        ? (rect.y + rect.height) * height + 14
-        : height / 2 + 22;
-    const y = Math.min(height - 15, Math.max(15, anchorY));
-    const left = Math.min(width - labelWidth - 6, Math.max(6, x - labelWidth / 2));
-    return (
-      <G key={`${gizmo.id}-label`}>
-        <Rect
-          x={left} y={y - 10} width={labelWidth} height={19} rx={9.5}
-          fill="rgba(20,15,2,0.82)" stroke="rgba(255,170,0,0.9)" strokeWidth={0.7}
-        />
-        <SvgText
-          x={left + labelWidth / 2}
-          y={y + 3.5}
-          fill="#FFD36A"
-          fontSize={9.5}
-          fontWeight="500"
-          textAnchor="middle"
-        >
-          {label}
-        </SvgText>
-      </G>
-    );
-  };
   const draw = (gizmo, shadow) => {
     const stroke = shadow ? "rgba(0,0,0,0.72)" : "#FFAA00";
-    const strokeWidth = shadow ? 3.5 : 1.25;
-    if (gizmo.type === "alignment") {
-      const half = Math.min(width * 0.24, 85);
-      const dx = Math.cos(gizmo.angle) * half;
-      const dy = Math.sin(gizmo.angle) * half;
-      const referenceX = Math.cos(gizmo.referenceAngle ?? 0) * half;
-      const referenceY = Math.sin(gizmo.referenceAngle ?? 0) * half;
-      return (
-        <G key={`${gizmo.id}-${shadow}`} stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round">
-          <Line x1={width / 2 - referenceX} y1={height / 2 - referenceY} x2={width / 2 + referenceX} y2={height / 2 + referenceY} strokeDasharray="4 6" />
-          <Line x1={width / 2 - dx} y1={height / 2 - dy} x2={width / 2 + dx} y2={height / 2 + dy} />
-        </G>
-      );
-    }
-    if (gizmo.type === "target") {
-      const x = gizmo.point.x * width;
-      const y = gizmo.point.y * height;
-      return (
-        <G key={`${gizmo.id}-${shadow}`} stroke={stroke} strokeWidth={strokeWidth} fill="none">
-          <Circle cx={x} cy={y} r={11} />
-          <Circle cx={x} cy={y} r={2} />
-        </G>
-      );
-    }
-    if (gizmo.type === "look-space") {
-      const x = gizmo.point.x * width;
-      const y = gizmo.point.y * height;
-      const direction = gizmo.direction === "left" ? -1 : 1;
-      return (
-        <G key={`${gizmo.id}-${shadow}`} stroke={stroke} strokeWidth={strokeWidth} fill="none" strokeLinecap="round">
-          <Line x1={x - 24} y1={y} x2={x + 24} y2={y} />
-          <Line x1={x + 24 * direction} y1={y} x2={x + 17 * direction} y2={y - 5} />
-          <Line x1={x + 24 * direction} y1={y} x2={x + 17 * direction} y2={y + 5} />
-        </G>
-      );
-    }
-    if (gizmo.type === "margin" || gizmo.type === "scale") {
-      const x = gizmo.rect.x * width;
-      const y = gizmo.rect.y * height;
-      const rectWidth = gizmo.rect.width * width;
-      const rectHeight = gizmo.rect.height * height;
+    if (gizmo.type === "framing") {
       return (
         <Rect
           key={`${gizmo.id}-${shadow}`}
-          x={x} y={y} width={rectWidth} height={rectHeight} rx={6}
-          fill="none" stroke={stroke} strokeWidth={strokeWidth}
-          strokeDasharray={gizmo.type === "margin" ? "5 4" : "3 5"}
+          x={gizmo.rect.x * width}
+          y={gizmo.rect.y * height}
+          width={gizmo.rect.width * width}
+          height={gizmo.rect.height * height}
+          rx={4}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={shadow ? 5 : 1.8}
         />
-      );
-    }
-    if (gizmo.type === "center") {
-      const x = gizmo.point.x * width;
-      const y = gizmo.point.y * height;
-      return (
-        <G key={`${gizmo.id}-${shadow}`} stroke={stroke} strokeWidth={strokeWidth} fill="none" strokeLinecap="round">
-          <Line x1={x} y1={Math.max(10, y - 58)} x2={x} y2={Math.min(height - 10, y + 58)} strokeDasharray="4 5" />
-          <Circle cx={x} cy={y} r={8} />
-        </G>
       );
     }
     return null;
   };
+  const framing = scan.result?.gizmos.find((gizmo) => gizmo.type === "framing");
+  const cameraCenter = { x: width / 2, y: height / 2 };
+  const framingCenter = framing ? {
+    x: (framing.rect.x + framing.rect.width / 2) * width,
+    y: (framing.rect.y + framing.rect.height / 2) * height,
+  } : null;
   return (
     <>
       {liquidVisible && (
@@ -294,36 +223,78 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
       )}
       {scan.result && (
         <Animated.View pointerEvents="none" style={[styles.overlay, { opacity }]}>
-          {scan.result.kind === "advice" && scan.result.gizmos.length > 0 ? (
+          {scan.result.gizmos.length > 0 && (
             <Svg
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
               width={width}
               height={height}
             >
+              {framingCenter && (
+                <>
+                  <Line
+                    x1={cameraCenter.x}
+                    y1={cameraCenter.y}
+                    x2={framingCenter.x}
+                    y2={framingCenter.y}
+                    stroke="rgba(0,0,0,0.55)"
+                    strokeWidth={3}
+                    strokeDasharray="4 6"
+                  />
+                  <Line
+                    x1={cameraCenter.x}
+                    y1={cameraCenter.y}
+                    x2={framingCenter.x}
+                    y2={framingCenter.y}
+                    stroke="rgba(255,255,255,0.58)"
+                    strokeWidth={1}
+                    strokeDasharray="4 6"
+                  />
+                </>
+              )}
               {scan.result.gizmos.map((g) => draw(g, true))}
               {scan.result.gizmos.map((g) => draw(g, false))}
-              {scan.result.gizmos.map(drawLabel)}
+              {framingCenter && (
+                <>
+                  <Circle
+                    cx={cameraCenter.x}
+                    cy={cameraCenter.y}
+                    r={5}
+                    fill="rgba(0,0,0,0.48)"
+                    stroke="rgba(255,255,255,0.92)"
+                    strokeWidth={1.5}
+                  />
+                  <Circle
+                    cx={framingCenter.x}
+                    cy={framingCenter.y}
+                    r={5}
+                    fill="rgba(255,170,0,0.9)"
+                    stroke="rgba(0,0,0,0.72)"
+                    strokeWidth={1.5}
+                  />
+                </>
+              )}
             </Svg>
-          ) : (
-            <View
-              accessible
-              accessibilityLabel={scan.result.message}
-              accessibilityLiveRegion="polite"
-              accessibilityRole="text"
-              style={styles.statusContainer}
-            >
-              <View style={styles.statusPill}>
-                <Text style={styles.statusText}>{scan.result.message}</Text>
-              </View>
-            </View>
           )}
+          <View
+            accessible
+            accessibilityLabel={scan.result.message}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="text"
+            style={styles.statusContainer}
+          >
+            <View style={styles.statusPill}>
+              <Text ellipsizeMode="tail" numberOfLines={1} style={styles.statusText}>
+                {scan.result.message}
+              </Text>
+            </View>
+          </View>
         </Animated.View>
       )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Analisar composição"
-        accessibilityHint="Mostra uma análise de composição por cerca de oito segundos"
+        accessibilityHint="Mostra um enquadramento sugerido até o alinhamento"
         accessibilityState={{ disabled: !scan.canScan || scan.busy, busy: scan.busy }}
         disabled={!scan.canScan || scan.busy}
         onPress={startScan}

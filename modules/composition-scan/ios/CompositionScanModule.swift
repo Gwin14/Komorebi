@@ -4,12 +4,44 @@ import VisionCamera
 import CoreImage
 import AVFoundation
 import ImageIO
+import simd
 
 @_silgen_name("CompositionScanEnsurePluginLinked")
 private func ensureCompositionScanPluginLinked()
 
 func compositionScanLog(_ message: @autoclosure () -> String) {
   print("[CompositionScan] Native \(message())")
+}
+
+private let compositionImageContext = CIContext(options: [.cacheIntermediates: false])
+
+private func compositionImage(from frame: Frame, rotation: Int, maxDimension: CGFloat) -> CGImage? {
+  guard let buffer = CMSampleBufferGetImageBuffer(frame.buffer) else { return nil }
+  var source = CIImage(cvPixelBuffer: buffer)
+  if frame.isMirrored { source = source.oriented(.upMirrored) }
+  let orientation: CGImagePropertyOrientation
+  switch frame.orientation {
+  case .right: orientation = .left
+  case .left: orientation = .right
+  case .down: orientation = .down
+  default: orientation = .up
+  }
+  source = source.oriented(orientation)
+  switch rotation {
+  case 90: source = source.oriented(.left)
+  case 180: source = source.oriented(.down)
+  case 270: source = source.oriented(.right)
+  default: break
+  }
+  let scale = min(1, maxDimension / max(source.extent.width, source.extent.height))
+  source = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+  return compositionImageContext.createCGImage(source, from: source.extent.integral)
+}
+
+private func resizedCompositionImage(_ image: CGImage, maxDimension: CGFloat) -> CGImage? {
+  let scale = min(1, maxDimension / max(CGFloat(image.width), CGFloat(image.height)))
+  let source = CIImage(cgImage: image).transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+  return compositionImageContext.createCGImage(source, from: source.extent.integral)
 }
 
 private struct CompositionModelStatusRecord: Record {
@@ -36,13 +68,205 @@ private struct CompositionModelStatusRecord: Record {
   }
 }
 
+private struct CompositionRecentAdviceRecord: Record {
+  @Field var topic = ""
+  @Field var message = ""
+}
+
+private struct CompositionAnalysisContextRecord: Record {
+  @Field var recentAdvice: [CompositionRecentAdviceRecord] = []
+  @Field var frameAspectRatio: Double = 0.75
+}
+
+final class CompositionScanTracker {
+  static let shared = CompositionScanTracker()
+
+  var onUpdate: (([String: Any]) -> Void)?
+
+  private let lock = NSLock()
+  private let queue = DispatchQueue(label: "komorebi.composition-tracking", qos: .userInitiated)
+  private var scanId: String?
+  private var reference: CGImage?
+  private var latest: CGImage?
+  private var active = false
+  private var busy = false
+  private var lost = false
+  private var failures = 0
+  private var handler = VNSequenceRequestHandler()
+  private var request = VNTrackHomographicImageRegistrationRequest()
+  private var cumulative = matrix_identity_float3x3
+
+  func begin(_ id: String, reference: CGImage) {
+    lock.lock()
+    scanId = id
+    self.reference = reference
+    latest = nil
+    active = false
+    busy = false
+    lost = false
+    failures = 0
+    lock.unlock()
+    queue.async {
+      self.lock.lock()
+      guard self.scanId == id else { self.lock.unlock(); return }
+      self.handler = VNSequenceRequestHandler()
+      self.request = VNTrackHomographicImageRegistrationRequest()
+      self.cumulative = matrix_identity_float3x3
+      self.lock.unlock()
+    }
+    compositionScanLog("tracking prepared id=\(id) size=\(reference.width)x\(reference.height)")
+  }
+
+  func offer(_ frame: Frame, id: String, rotation: Int) {
+    lock.lock()
+    let accepts = scanId == id && !lost
+    lock.unlock()
+    guard accepts, let image = compositionImage(from: frame, rotation: rotation, maxDimension: 480) else { return }
+    lock.lock()
+    guard scanId == id, !lost else { lock.unlock(); return }
+    latest = image
+    let shouldDrain = active && !busy
+    if shouldDrain { busy = true }
+    lock.unlock()
+    if shouldDrain { queue.async { self.drain(id) } }
+  }
+
+  func activate(_ id: String) {
+    lock.lock()
+    guard scanId == id, let reference, !lost else { lock.unlock(); return }
+    active = true
+    guard !busy else { lock.unlock(); return }
+    busy = true
+    lock.unlock()
+    queue.async {
+      do {
+        try self.handler.perform([self.request], on: reference, orientation: .up)
+        self.emit(id: id, matrix: matrix_identity_float3x3, confidence: 1, lost: false,
+                  width: reference.width, height: reference.height)
+        self.drain(id)
+      } catch {
+        self.recordFailure(id, error: error)
+        self.finishDrain(id)
+      }
+    }
+  }
+
+  func cancel(_ id: String) {
+    lock.lock()
+    guard scanId == id else { lock.unlock(); return }
+    scanId = nil
+    reference = nil
+    latest = nil
+    active = false
+    lost = false
+    failures = 0
+    lock.unlock()
+    compositionScanLog("tracking cancelled id=\(id)")
+  }
+
+  func cancelCurrent() {
+    lock.lock()
+    let id = scanId
+    lock.unlock()
+    if let id { cancel(id) }
+  }
+
+  private func drain(_ id: String) {
+    lock.lock()
+    guard scanId == id, active, !lost, let image = latest else {
+      if scanId == id { busy = false }
+      lock.unlock()
+      return
+    }
+    latest = nil
+    lock.unlock()
+
+    do {
+      try handler.perform([request], on: image, orientation: .up)
+      guard let observation = request.results?.first as? VNImageHomographicAlignmentObservation,
+            observation.confidence >= 0.5 else {
+        recordFailure(id, error: nil)
+        finishDrain(id)
+        return
+      }
+      let step = simd_inverse(observation.warpTransform)
+      guard matrixIsFinite(step) else {
+        recordFailure(id, error: nil)
+        finishDrain(id)
+        return
+      }
+      lock.lock()
+      guard scanId == id, !lost else { lock.unlock(); return }
+      cumulative = simd_mul(step, cumulative)
+      let current = cumulative
+      failures = 0
+      let referenceSize = reference.map { ($0.width, $0.height) }
+      lock.unlock()
+      if let referenceSize {
+        emit(id: id, matrix: current, confidence: Double(observation.confidence), lost: false,
+             width: referenceSize.0, height: referenceSize.1)
+      }
+      queue.async { self.drain(id) }
+    } catch {
+      recordFailure(id, error: error)
+      finishDrain(id)
+    }
+  }
+
+  private func finishDrain(_ id: String) {
+    lock.lock()
+    guard scanId == id else { lock.unlock(); return }
+    let continueDraining = scanId == id && active && !lost && latest != nil
+    if !continueDraining { busy = false }
+    lock.unlock()
+    if continueDraining { queue.async { self.drain(id) } }
+  }
+
+  private func recordFailure(_ id: String, error: Error?) {
+    lock.lock()
+    guard scanId == id else { lock.unlock(); return }
+    failures += 1
+    let terminal = failures >= 2
+    if terminal { lost = true; latest = nil; active = false }
+    lock.unlock()
+    compositionScanLog("tracking failure id=\(id) terminal=\(terminal) error=\(error?.localizedDescription ?? "low-confidence")")
+    if terminal {
+      DispatchQueue.main.async { [weak self] in
+        self?.onUpdate?(["scanId": id, "matrix": [], "confidence": 0, "lost": true])
+      }
+    }
+  }
+
+  private func matrixIsFinite(_ matrix: simd_float3x3) -> Bool {
+    (0..<3).allSatisfy { column in
+      (0..<3).allSatisfy { row in matrix[column][row].isFinite }
+    }
+  }
+
+  private func emit(id: String, matrix: simd_float3x3, confidence: Double, lost: Bool,
+                    width: Int, height: Int) {
+    guard width > 0, height > 0 else { return }
+    let sourceScale = simd_float3x3(diagonal: SIMD3(Float(width), Float(height), 1))
+    let destinationScale = simd_float3x3(diagonal: SIMD3(1 / Float(width), 1 / Float(height), 1))
+    let normalized = simd_mul(destinationScale, simd_mul(matrix, sourceScale))
+    guard matrixIsFinite(normalized) else { return }
+    let values: [Double] = [
+      Double(normalized[0][0]), Double(normalized[1][0]), Double(normalized[2][0]),
+      Double(normalized[0][1]), Double(normalized[1][1]), Double(normalized[2][1]),
+      Double(normalized[0][2]), Double(normalized[1][2]), Double(normalized[2][2]),
+    ]
+    DispatchQueue.main.async { [weak self] in
+      self?.onUpdate?(["scanId": id, "matrix": values, "confidence": confidence, "lost": lost])
+    }
+  }
+}
+
 // The lock protects ownership; Vision and image work never execute under it.
 // One slot is shared by Expo calls and the frame processor runtime.
 final class CompositionScanSession {
   static let shared = CompositionScanSession()
   private let lock = NSLock()
   private let queue = DispatchQueue(label: "komorebi.composition-scan", qos: .userInitiated)
-  private let context = CIContext(options: [.cacheIntermediates: false])
   private var scanId: String?
   private var token: String?
   private var image: CGImage?
@@ -66,6 +290,7 @@ final class CompositionScanSession {
   }
 
   func cancel(_ id: String) {
+    CompositionScanTracker.shared.cancel(id)
     lock.lock()
     guard scanId == id else {
       lock.unlock()
@@ -110,30 +335,7 @@ final class CompositionScanSession {
     lock.unlock()
 
     let reduced: CGImage? = autoreleasepool {
-      guard let buffer = CMSampleBufferGetImageBuffer(frame.buffer) else { return nil }
-      var source = CIImage(cvPixelBuffer: buffer)
-      // Undo physical buffer mirroring, then invert the sensor connection's
-      // rotation to portrait (the app's interface is locked to portrait).
-      if frame.isMirrored { source = source.oriented(.upMirrored) }
-      let orientation: CGImagePropertyOrientation
-      switch frame.orientation {
-      case .right: orientation = .left
-      case .left: orientation = .right
-      case .down: orientation = .down
-      default: orientation = .up
-      }
-      source = source.oriented(orientation)
-      // Analyze upright relative to the device, retaining the inverse transform
-      // for the portrait UI. Faces must not reach Vision sideways.
-      switch rotation {
-      case 90: source = source.oriented(.left)
-      case 180: source = source.oriented(.down)
-      case 270: source = source.oriented(.right)
-      default: break
-      }
-      let scale = min(1, 640 / max(source.extent.width, source.extent.height))
-      source = source.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-      return context.createCGImage(source, from: source.extent.integral)
+      compositionImage(from: frame, rotation: rotation, maxDimension: 640)
     }
 
     lock.lock()
@@ -148,11 +350,15 @@ final class CompositionScanSession {
     token = imageToken
     image = reduced
     imageRotation = rotation
+    if let trackingReference = resizedCompositionImage(reduced, maxDimension: 480) {
+      CompositionScanTracker.shared.begin(id, reference: trackingReference)
+    }
     compositionScanLog("frame captured id=\(id) token=\(imageToken.prefix(8)) size=\(reduced.width)x\(reduced.height) rotation=\(rotation)")
     return imageToken
   }
 
-  func analyze(_ imageToken: String, id: String, promise: Promise) {
+  func analyze(_ imageToken: String, id: String, recentAdvice: [[String: String]],
+               frameAspectRatio: Double, promise: Promise) {
     lock.lock()
     guard scanId == id, token == imageToken, !cancelled, !analyzing, let input = image else {
       lock.unlock()
@@ -210,7 +416,11 @@ final class CompositionScanSession {
           // The semantic model is optional. Apple Vision always remains the
           // geometry source and the complete fallback when the model is not
           // installed, unsupported, or fails to answer.
-          let judgement = MiniCPMCompositionService.shared.analyze(input)
+          let judgement = MiniCPMCompositionService.shared.analyze(
+            input,
+            recentAdvice: recentAdvice,
+            frameAspectRatio: frameAspectRatio
+          )
           self.lock.lock()
           let cancelledAfterModel = self.cancelled
           self.lock.unlock()
@@ -266,6 +476,7 @@ final class CompositionScanSession {
             "rectangles": rectanglesValue,
             "judgement": judgementValue
           ]
+          CompositionScanTracker.shared.activate(id)
           let totalElapsed = Int((CFAbsoluteTimeGetCurrent() - analysisStartedAt) * 1_000)
           compositionScanLog("analysis resolved id=\(id) elapsedMs=\(totalElapsed) modelJudgement=\(judgement != nil)")
           promise.resolve(response)
@@ -283,6 +494,10 @@ public class CompositionScanPlugin: FrameProcessorPlugin {
   public override func callback(_ frame: Frame, withArguments arguments: [AnyHashable: Any]?) -> Any {
     guard let id = arguments?["scanId"] as? String else { return "" }
     let rotation = arguments?["rotation"] as? Int ?? 0
+    if arguments?["tracking"] as? Bool == true {
+      CompositionScanTracker.shared.offer(frame, id: id, rotation: rotation)
+      return ""
+    }
     return CompositionScanSession.shared.capture(frame, id: id, rotation: rotation) ?? ""
   }
 }
@@ -290,7 +505,7 @@ public class CompositionScanPlugin: FrameProcessorPlugin {
 public class CompositionScanModule: Module {
   public func definition() -> ModuleDefinition {
     Name("CompositionScan")
-    Events("onCompositionModelStatus")
+    Events("onCompositionModelStatus", "onCompositionTrackingUpdate")
     OnCreate { [weak self] in
       ensureCompositionScanPluginLinked()
       compositionScanLog("module created status=\(MiniCPMCompositionService.shared.status()["state"] as? String ?? "unknown")")
@@ -298,16 +513,28 @@ public class CompositionScanModule: Module {
         compositionScanLog("status event state=\(status["state"] as? String ?? "unknown") progress=\(status["progress"] ?? "none") error=\(status["error"] ?? "none")")
         self?.sendEvent("onCompositionModelStatus", status)
       }
+      CompositionScanTracker.shared.onUpdate = { [weak self] update in
+        self?.sendEvent("onCompositionTrackingUpdate", update)
+      }
     }
     OnDestroy {
       CompositionScanSession.shared.cancelCurrent()
+      CompositionScanTracker.shared.cancelCurrent()
       MiniCPMCompositionService.shared.onStatus = nil
+      CompositionScanTracker.shared.onUpdate = nil
     }
     AsyncFunction("arm") { (id: String) -> Bool in
       CompositionScanSession.shared.arm(id)
     }
-    AsyncFunction("analyze") { (token: String, id: String, promise: Promise) in
-      CompositionScanSession.shared.analyze(token, id: id, promise: promise)
+    AsyncFunction("analyze") { (token: String, id: String, context: CompositionAnalysisContextRecord, promise: Promise) in
+      let recentAdvice = context.recentAdvice.map { ["topic": $0.topic, "message": $0.message] }
+      CompositionScanSession.shared.analyze(
+        token,
+        id: id,
+        recentAdvice: recentAdvice,
+        frameAspectRatio: context.frameAspectRatio,
+        promise: promise
+      )
     }
     AsyncFunction("cancel") { (id: String) in
       CompositionScanSession.shared.cancel(id)

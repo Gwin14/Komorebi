@@ -1,4 +1,4 @@
-export const SCAN_RESULT_DURATION = 7500;
+export const SCAN_POST_ZOOM_DURATION = 1500;
 // Cold-loading a 1.3B local vision model can take tens of seconds. The
 // timeout prevents a wedged native inference without penalizing normal cold starts.
 export const SCAN_TIMEOUT = 120000;
@@ -11,6 +11,7 @@ let sequence = 0;
 export function createCompositionScanSession({
   model,
   generate,
+  getAnalysisContext = () => ({ recentAdvice: [] }),
   onChange,
   onError,
   timers = globalThis,
@@ -38,7 +39,7 @@ export function createCompositionScanSession({
       log("cancel", { scanId: old.id, previousState: state });
       void release(old.id);
     }
-    emit({ state: "idle", scanId: null, result: null, phase: null });
+    emit({ state: "idle", scanId: null, trackingScanId: null, result: null, phase: null });
   };
   const fail = (session, error) => {
     if (active !== session || disposed) return;
@@ -49,13 +50,25 @@ export function createCompositionScanSession({
   return {
     cancel,
     dispose() { disposed = true; cancel(); },
+    completeZoom() {
+      const session = active;
+      if (!session || state !== "showing-results" || session.zoomCompleted || disposed) return false;
+      session.zoomCompleted = true;
+      clearTimer();
+      timer = timers.setTimeout(() => {
+        if (active !== session) return;
+        emit({ state: "showing-results", scanId: null, trackingScanId: session.id, result: session.result, phase: "leaving" });
+        timer = timers.setTimeout(cancel, SCAN_EXIT_DURATION);
+      }, SCAN_POST_ZOOM_DURATION);
+      return true;
+    },
     async start(preview) {
       if (disposed || state === "capturing" || state === "analyzing") return false;
       cancel();
       const session = { id: `scan-${Date.now()}-${++sequence}`, preview };
       log("start", { scanId: session.id, preview });
       active = session;
-      emit({ state: "capturing", scanId: null, result: null, phase: null });
+      emit({ state: "capturing", scanId: null, trackingScanId: null, result: null, phase: null });
       timer = timers.setTimeout(() => fail(session, new Error("Scan timed out")), SCAN_TIMEOUT);
       try {
         const armed = await model.arm(session.id);
@@ -65,7 +78,7 @@ export function createCompositionScanSession({
           return false;
         }
         if (!armed) throw new Error("Scan worker unavailable or still stopping");
-        emit({ state: "capturing", scanId: session.id, result: null, phase: null });
+        emit({ state: "capturing", scanId: session.id, trackingScanId: null, result: null, phase: null });
         return true;
       } catch (error) {
         fail(session, error);
@@ -86,10 +99,10 @@ export function createCompositionScanSession({
         return;
       }
       if (!imageToken) { fail(session, new Error("Unable to capture scan frame")); return; }
-      emit({ state: "analyzing", scanId: null, result: null, phase: null });
+      emit({ state: "analyzing", scanId: null, trackingScanId: scanId, result: null, phase: null });
       try {
         const analysisStartedAt = Date.now();
-        const analysis = await model.analyze(imageToken, scanId);
+        const analysis = await model.analyze(imageToken, scanId, getAnalysisContext());
         log("analysis-result", {
           scanId,
           elapsedMs: Date.now() - analysisStartedAt,
@@ -102,17 +115,14 @@ export function createCompositionScanSession({
         });
         if (active !== session || disposed) return;
         const result = generate(analysis, session.preview);
+        session.result = result;
         log("advice-result", { scanId, result });
         clearTimer();
-        emit({ state: "showing-results", scanId: null, result, phase: "entering" });
+        emit({ state: "showing-results", scanId: null, trackingScanId: scanId, result, phase: "entering" });
         timer = timers.setTimeout(() => {
           if (active !== session) return;
-          emit({ state: "showing-results", scanId: null, result, phase: "visible" });
-          timer = timers.setTimeout(() => {
-            if (active !== session) return;
-            emit({ state: "showing-results", scanId: null, result, phase: "leaving" });
-            timer = timers.setTimeout(cancel, SCAN_EXIT_DURATION);
-          }, SCAN_RESULT_DURATION);
+          emit({ state: "showing-results", scanId: null, trackingScanId: scanId, result, phase: "visible" });
+          timer = null;
         }, SCAN_ENTER_DURATION);
       } catch (error) { fail(session, error); }
     },

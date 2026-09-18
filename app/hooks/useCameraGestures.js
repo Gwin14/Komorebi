@@ -8,6 +8,7 @@ export default function useCameraGestures({
   minZoom,
   setZoom,
   zoomSV,
+  onZoomStart,
   showLuts,
   hideLuts,
 }) {
@@ -15,6 +16,7 @@ export default function useCameraGestures({
     const pinchGesture = Gesture.Pinch()
       .onBegin(() => {
         lastZoom.value = zoomSV.value;
+        if (onZoomStart) runOnJS(onZoomStart)();
       })
       .onUpdate((event) => {
         // Zoom multiplicativo: o fator é proporcional ao zoom atual, então a
@@ -54,5 +56,5 @@ export default function useCameraGestures({
       });
 
     return Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
-  }, [lastZoom, maxZoom, minZoom, setZoom, zoomSV, showLuts, hideLuts]);
+  }, [lastZoom, maxZoom, minZoom, onZoomStart, setZoom, zoomSV, showLuts, hideLuts]);
 }

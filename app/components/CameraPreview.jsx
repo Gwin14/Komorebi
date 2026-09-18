@@ -54,7 +54,8 @@ export default function CameraPreview({
   const transitionFinishTimeout = useRef(null);
   const transitionStartedAt = useRef(0);
   const frameProcessorActive =
-    histogramVisible || smileDetectionEnabled || Boolean(compositionScan?.capturePlugin);
+    histogramVisible || smileDetectionEnabled ||
+    Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId);
   const captureCompositionBackdrop = useCallback(async () => {
     const snapshot = await cameraRef.current?.takeSnapshot?.({ quality: 70 });
     if (!snapshot?.path) return null;
@@ -297,7 +298,8 @@ export default function CameraPreview({
     faceDetectionCallback: handleFacesDetection,
     faceDetectionOptions,
     faceDetectionEnabled: smileDetectionEnabled && !compositionScan?.busy,
-    compositionScanId: compositionScan?.scanId,
+    compositionScanId: compositionScan?.captureScanId,
+    compositionTrackingId: compositionScan?.trackingScanId,
     compositionScanRotation: compositionScan?.captureRotation,
     compositionCapturePlugin: compositionScan?.capturePlugin,
     compositionCaptureCallback: compositionScan?.onCaptured,
@@ -429,7 +431,7 @@ export default function CameraPreview({
           ]}
         />
       )}
-      {compositionScan?.supported && (
+      {compositionScan?.supported && device.position === "back" && (
         <View pointerEvents="box-none" style={[
           StyleSheet.absoluteFill,
           doubleCaptureMode && { top: 3, left: 3, right: 3, bottom: 3 },
