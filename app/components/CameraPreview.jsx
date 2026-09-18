@@ -56,11 +56,6 @@ export default function CameraPreview({
   const frameProcessorActive =
     histogramVisible || smileDetectionEnabled ||
     Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId);
-  const captureCompositionBackdrop = useCallback(async () => {
-    const snapshot = await cameraRef.current?.takeSnapshot?.({ quality: 70 });
-    if (!snapshot?.path) return null;
-    return snapshot.path.startsWith("file://") ? snapshot.path : `file://${snapshot.path}`;
-  }, [cameraRef]);
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);
@@ -446,7 +441,6 @@ export default function CameraPreview({
           <CompositionScanOverlay
             scan={compositionScan}
             layout={previewLayout}
-            captureBackdrop={captureCompositionBackdrop}
           />
         </View>
       )}

@@ -1,101 +1,37 @@
-import { LiquidGlassView } from "@uginy/react-native-liquid-glass";
-import MaskedView from "@react-native-masked-view/masked-view";
+import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, Pressable, Text, UIManager, View } from "react-native";
+import { useCallback, useEffect, useRef } from "react";
+import { ActivityIndicator, Animated, Easing, Pressable, Text, View } from "react-native";
 import Svg, { Circle, Line, Rect } from "react-native-svg";
 import { SCAN_ENTER_DURATION, SCAN_EXIT_DURATION } from "../utils/compositionScanSession";
 import styles from "./CompositionScanOverlay.styles";
 
-const hasNativeMaskedView = Boolean(UIManager.getViewManagerConfig?.("RNCMaskedView"));
-
-function LiquidWaveContent({ backdropUri, height, index, inverseLiquidTravel, width }) {
-  return (
-    <View style={styles.liquidMask}>
-      {backdropUri && (
-        <Animated.Image
-          source={{ uri: backdropUri }}
-          resizeMode="cover"
-          style={[
-            styles.liquidBackdrop,
-            {
-              width,
-              height,
-              left: width * 0.1,
-              top: 180 + index * 54,
-              transform: [{ translateY: inverseLiquidTravel }],
-            },
-          ]}
-        />
-      )}
-      <LiquidGlassView
-        blurRadius={0}
-        refractionStrength={0.82 - index * 0.09}
-        ior={1.48}
-        magnification={1.32 - index * 0.035}
-        glassOpacity={0}
-        chromaticAberration={0}
-        edgeGlowIntensity={0}
-        glareIntensity={0}
-        borderIntensity={0}
-        edgeWidth={0}
-        liquidPower={3.4}
-        cornerRadius={0}
-        shadowOpacity={0}
-        style={[styles.liquidRefraction, { width: width * 1.2 }]}
-      />
-    </View>
-  );
-}
-
-export default function CompositionScanOverlay({ scan, layout, captureBackdrop }) {
+export default function CompositionScanOverlay({ scan, layout }) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const liquidProgress = useRef(new Animated.Value(0)).current;
-  const [liquidVisible, setLiquidVisible] = useState(false);
-  const [backdropUri, setBackdropUri] = useState(null);
-  const liquidStartedAt = useRef(0);
-  const liquidHideTimer = useRef(null);
+  const scanProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (liquidHideTimer.current) clearTimeout(liquidHideTimer.current);
     if (scan.busy) {
-      liquidStartedAt.current = Date.now();
-      liquidProgress.setValue(0);
-      setLiquidVisible(true);
-      return;
-    }
-    if (!liquidStartedAt.current) return;
-    const remaining = Math.max(0, 1750 - (Date.now() - liquidStartedAt.current));
-    liquidHideTimer.current = setTimeout(() => {
-      setLiquidVisible(false);
-      liquidStartedAt.current = 0;
-      liquidHideTimer.current = null;
-    }, remaining);
-    return () => {
-      if (liquidHideTimer.current) clearTimeout(liquidHideTimer.current);
-    };
-  }, [liquidProgress, scan.busy]);
-
-  useEffect(() => {
-    if (!liquidVisible) {
-      liquidProgress.stopAnimation();
-      liquidProgress.setValue(0);
+      scanProgress.setValue(0);
+    } else {
+      scanProgress.stopAnimation();
+      scanProgress.setValue(0);
       return;
     }
     const animation = Animated.loop(
-      Animated.timing(liquidProgress, {
+      Animated.timing(scanProgress, {
         toValue: 1,
-        duration: 1750,
+        duration: 1650,
         easing: Easing.inOut(Easing.sin),
         useNativeDriver: true,
       }),
     );
     animation.start();
     return () => animation.stop();
-  }, [liquidProgress, liquidVisible]);
+  }, [scan.busy, scanProgress]);
   useEffect(() => {
     opacity.stopAnimation();
-    if (!scan.result || liquidVisible) { opacity.setValue(0); return; }
+    if (!scan.result || scan.busy) { opacity.setValue(0); return; }
     const animation = Animated.timing(opacity, {
       toValue: scan.phase === "leaving" ? 0 : 1,
       duration: scan.phase === "leaving" ? SCAN_EXIT_DURATION : SCAN_ENTER_DURATION,
@@ -103,42 +39,22 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
     });
     animation.start();
     return () => animation.stop();
-  }, [liquidVisible, opacity, scan.result, scan.phase]);
+  }, [opacity, scan.busy, scan.result, scan.phase]);
 
   const { width, height } = layout;
-  const liquidTravel = liquidProgress.interpolate({
+  const scanTravel = scanProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0, height + 230],
+    outputRange: [0, Math.max(0, height - 76)],
   });
-  const liquidPulse = liquidProgress.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.9, 1, 0.9],
-  });
-  const inverseLiquidTravel = Animated.multiply(liquidTravel, -1);
-  const startScan = useCallback(async () => {
+  const startScan = useCallback(() => {
     console.log("[CompositionScan] JS overlay-press", {
       canScan: scan.canScan,
       busy: scan.busy,
     });
     if (!scan.canScan || scan.busy) return;
-    const backdropStartedAt = Date.now();
-    try {
-      console.log("[CompositionScan] JS backdrop-capture-start");
-      const uri = await captureBackdrop?.();
-      console.log("[CompositionScan] JS backdrop-capture-result", {
-        elapsedMs: Date.now() - backdropStartedAt,
-        hasUri: Boolean(uri),
-      });
-      if (uri) {
-        setBackdropUri(uri);
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-      }
-    } catch (error) {
-      if (__DEV__) console.warn("[CompositionScan] Unable to capture glass backdrop", error);
-    }
     console.log("[CompositionScan] JS scan-start-dispatch");
     scan.start();
-  }, [captureBackdrop, scan]);
+  }, [scan]);
   const draw = (gizmo, shadow) => {
     const stroke = shadow ? "rgba(0,0,0,0.72)" : "#FFAA00";
     if (gizmo.type === "framing") {
@@ -164,61 +80,21 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
     x: (framing.rect.x + framing.rect.width / 2) * width,
     y: (framing.rect.y + framing.rect.height / 2) * height,
   } : null;
+  if (!scan.enabled) return null;
+
   return (
     <>
-      {liquidVisible && (
+      {scan.busy && (
         <Animated.View
           pointerEvents="none"
-          style={[styles.liquidLayer, { opacity: liquidPulse }]}
+          style={[styles.scanBeam, { transform: [{ translateY: scanTravel }] }]}
         >
-          {[0].map((index) => (
-            <Animated.View
-              key={index}
-              style={[
-                styles.liquidWave,
-                {
-                  top: -180 - index * 54,
-                  opacity: 1,
-                  transform: [
-                    { translateY: liquidTravel },
-                    { rotate: "0deg" },
-                    { scaleX: 1 },
-                  ],
-                },
-              ]}
-            >
-              {hasNativeMaskedView ? (
-                <MaskedView
-                  style={styles.liquidMask}
-                  maskElement={(
-                    <LinearGradient
-                      colors={["transparent", "rgba(0,0,0,0.2)", "black", "black", "rgba(0,0,0,0.2)", "transparent"]}
-                      locations={[0, 0.2, 0.4, 0.6, 0.8, 1]}
-                      style={styles.liquidMask}
-                    />
-                  )}
-                >
-                  <LiquidWaveContent
-                    backdropUri={backdropUri}
-                    height={height}
-                    index={index}
-                    inverseLiquidTravel={inverseLiquidTravel}
-                    width={width}
-                  />
-                </MaskedView>
-              ) : (
-                <View style={styles.liquidMask}>
-                  <LiquidWaveContent
-                    backdropUri={backdropUri}
-                    height={height}
-                    index={index}
-                    inverseLiquidTravel={inverseLiquidTravel}
-                    width={width}
-                  />
-                </View>
-              )}
-            </Animated.View>
-          ))}
+          <LinearGradient
+            colors={["transparent", "rgba(255,170,0,0.04)", "rgba(255,170,0,0.28)"]}
+            locations={[0, 0.52, 1]}
+            style={styles.scanGlow}
+          />
+          <View style={styles.scanLine} />
         </Animated.View>
       )}
       {scan.result && (
@@ -293,14 +169,32 @@ export default function CompositionScanOverlay({ scan, layout, captureBackdrop }
       )}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Analisar composição"
         accessibilityHint="Mostra um enquadramento sugerido até o alinhamento"
-        accessibilityState={{ disabled: !scan.canScan || scan.busy, busy: scan.busy }}
-        disabled={!scan.canScan || scan.busy}
+        accessibilityLabel={scan.preparing ? "Preparando scanner" : "Analisar composição"}
+        accessibilityState={{ disabled: !scan.canScan || scan.busy, busy: scan.busy || scan.preparing }}
+        disabled={!scan.canScan || scan.busy || scan.preparing}
         onPress={startScan}
-        style={[styles.button, !scan.canScan && styles.disabled]}
+        style={({ pressed }) => [
+          styles.button,
+          (!scan.canScan || scan.preparing) && styles.disabled,
+          pressed && styles.buttonPressed,
+        ]}
       >
-        {scan.busy ? <ActivityIndicator size="small" color="white" /> : <Text style={styles.label}>Scan</Text>}
+        {scan.busy || scan.preparing ? (
+          <>
+            <ActivityIndicator size="small" color="#ffaa00" />
+            <Text style={styles.preparingLabel}>
+              {scan.preparing ? "Preparando scanner" : "Analisando"}
+            </Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.buttonIcon}>
+              <Ionicons color="#171000" name="scan-outline" size={17} />
+            </View>
+            <Text style={styles.label}>SCAN</Text>
+          </>
+        )}
       </Pressable>
     </>
   );

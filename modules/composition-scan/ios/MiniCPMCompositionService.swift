@@ -307,6 +307,23 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
     }
   }
 
+  func prepare() throws -> Bool {
+    let runtimeAvailable = KMCompositionModel.isRuntimeAvailable()
+    guard isReady, isCompatible, runtimeAvailable else {
+      compositionScanLog("model warmup skipped ready=\(isReady) compatible=\(isCompatible) runtime=\(runtimeAvailable)")
+      return false
+    }
+    guard engine == nil else {
+      compositionScanLog("model warmup already complete")
+      return false
+    }
+    let startedAt = CFAbsoluteTimeGetCurrent()
+    compositionScanLog("model warmup started")
+    engine = try KMCompositionModel(modelPath: modelURL.path, mmprojPath: mmprojURL.path)
+    compositionScanLog("model warmup completed elapsedMs=\(Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))")
+    return true
+  }
+
   private static func prompt(recentAdvice _: [[String: String]], frameAspectRatio: Double,
                              subjectPoint: [String: Double]?) -> String {
     let selection = selectionInstruction(subjectPoint)

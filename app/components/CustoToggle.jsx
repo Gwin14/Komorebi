@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import styles from "./CustoToggle.styles";
 
-export default function CustomToggle({ label, value, onValueChange }) {
+export default function CustomToggle({ badge, label, value, onValueChange }) {
   // Animação para mover a "bolinha" do toggle
   const moveAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -14,7 +14,7 @@ export default function CustomToggle({ label, value, onValueChange }) {
       friction: 8,
       tension: 50,
     }).start();
-  }, [value]);
+  }, [moveAnim, value]);
 
   const toggleHandler = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -28,9 +28,19 @@ export default function CustomToggle({ label, value, onValueChange }) {
 
   return (
     <View style={styles.wrapper}>
-      {label && <Text style={styles.label}>{label}</Text>}
+      {label && (
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>{label}</Text>
+          {badge && <Text style={styles.badge}>{badge}</Text>}
+        </View>
+      )}
 
-      <Pressable onPress={toggleHandler}>
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: value }}
+        onPress={toggleHandler}
+      >
         <View style={[styles.track, value && styles.trackActive]}>
           <Animated.View
             style={[

@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS = {
   gridVisible: false,
   levelVisible: false,
   histogramVisible: false,
+  compositionScanEnabled: true,
   shutterSound: false,
   location: true,
   saveAsJpeg: false,
@@ -34,6 +35,9 @@ export const SettingsProvider = ({ children }) => {
   );
   const [histogramVisible, setHistogramVisible] = useState(
     DEFAULT_SETTINGS.histogramVisible,
+  );
+  const [compositionScanEnabled, setCompositionScanEnabled] = useState(
+    DEFAULT_SETTINGS.compositionScanEnabled,
   );
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(
@@ -64,6 +68,7 @@ export const SettingsProvider = ({ children }) => {
         setGridVisible(savedSettings.gridVisible);
         setLevelVisible(savedSettings.levelVisible);
         setHistogramVisible(savedSettings.histogramVisible);
+        setCompositionScanEnabled(savedSettings.compositionScanEnabled);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveAsJpeg(savedSettings.saveAsJpeg);
@@ -140,6 +145,16 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [histogramVisible, loading]);
+
+  // Salvar disponibilidade do Scan de composição.
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.COMPOSITION_SCAN_ENABLED,
+        compositionScanEnabled.toString(),
+      );
+    }
+  }, [compositionScanEnabled, loading]);
 
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
@@ -244,6 +259,8 @@ export const SettingsProvider = ({ children }) => {
     setLevelVisible,
     histogramVisible,
     setHistogramVisible,
+    compositionScanEnabled,
+    setCompositionScanEnabled,
     loading,
     shutterSound,
     setShutterSound,

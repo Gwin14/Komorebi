@@ -45,6 +45,7 @@ export default function App() {
     gridVisible,
     levelVisible,
     histogramVisible,
+    compositionScanEnabled,
     location,
     saveAsJpeg,
     firstTime,
@@ -162,8 +163,9 @@ export default function App() {
   useEffect(() => () => cancelAutoZoomAnimation(), [cancelAutoZoomAnimation]);
 
   const compositionScan = useCompositionScan({
+    featureEnabled: !loading && compositionScanEnabled,
     enabled:
-      facing === "back" && !firstTime && !nativeCaptureMode && cameraReady &&
+      compositionScanEnabled && facing === "back" && !firstTime && !nativeCaptureMode && cameraReady &&
       cameraPermission === "granted" && !isProcessing && processingQueue.length === 0,
     configurationKey: `${activeLens?.device?.id}:${nativeCaptureMode}:${rawCapture.rawMode}:${manual.manualMode}:${verticalMode}:${doubleCaptureMode}:${retroStyle}:${scanOrientation}`,
     preview: {

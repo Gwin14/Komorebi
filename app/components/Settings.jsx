@@ -44,6 +44,8 @@ export default function Settings() {
     setLevelVisible,
     histogramVisible,
     setHistogramVisible,
+    compositionScanEnabled,
+    setCompositionScanEnabled,
     loading,
     shutterSound,
     setShutterSound,
@@ -237,6 +239,15 @@ export default function Settings() {
             onValueChange={setHistogramVisible}
           />
 
+          {Platform.OS === "ios" && (
+            <CustomToggle
+              badge="beta"
+              label="Scanner de composição"
+              value={compositionScanEnabled}
+              onValueChange={setCompositionScanEnabled}
+            />
+          )}
+
           <CustomToggle
             label="Som do Obturador"
             value={shutterSound}
@@ -274,7 +285,7 @@ export default function Settings() {
 
         <View style={styles.divider} />
 
-        {Platform.OS === "ios" && (
+        {Platform.OS === "ios" && compositionScanEnabled && (
           <View style={styles.modelSection}>
             <View style={styles.modelHeader}>
               <View style={styles.modelTitleBlock}>

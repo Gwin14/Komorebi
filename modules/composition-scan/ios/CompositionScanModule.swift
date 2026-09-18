@@ -44,6 +44,27 @@ private func resizedCompositionImage(_ image: CGImage, maxDimension: CGFloat) ->
   return compositionImageContext.createCGImage(source, from: source.extent.integral)
 }
 
+private func warmUpCompositionVision() {
+  let extent = CGRect(x: 0, y: 0, width: 64, height: 64)
+  let source = CIImage(color: CIColor(red: 0.18, green: 0.18, blue: 0.18, alpha: 1)).cropped(to: extent)
+  guard let image = compositionImageContext.createCGImage(source, from: extent) else { return }
+  let requests: [VNRequest] = [
+    VNDetectHorizonRequest(),
+    VNDetectHumanRectanglesRequest(),
+    VNDetectFaceLandmarksRequest(),
+    VNGenerateAttentionBasedSaliencyImageRequest(),
+    VNDetectRectanglesRequest(),
+  ]
+  do {
+    try VNImageRequestHandler(cgImage: image, orientation: .up).perform(requests)
+    compositionScanLog("Vision warmup completed")
+  } catch {
+    // A imagem sintética pode não produzir observações; o carregamento do
+    // framework ainda acontece e o scanner real continua sendo o fallback.
+    compositionScanLog("Vision warmup completed with no observations error=\(error.localizedDescription)")
+  }
+}
+
 private struct CompositionModelStatusRecord: Record {
   @Field var state = "not-downloaded"
   @Field var modelName = ""
@@ -307,6 +328,18 @@ final class CompositionScanSession {
   private var cancelled = false
   private var requests: [VNRequest] = []
 
+  func prepare(_ promise: Promise) {
+    queue.async {
+      do {
+        warmUpCompositionVision()
+        promise.resolve(try MiniCPMCompositionService.shared.prepare())
+      } catch {
+        compositionScanLog("model warmup failed error=\(error.localizedDescription)")
+        promise.reject("ERR_SCAN_PREPARE", "Não foi possível preparar o scanner: \(error.localizedDescription)")
+      }
+    }
+  }
+
   func arm(_ id: String) -> Bool {
     lock.lock()
     defer { lock.unlock() }
@@ -566,6 +599,9 @@ public class CompositionScanModule: Module {
     }
     AsyncFunction("arm") { (id: String) -> Bool in
       CompositionScanSession.shared.arm(id)
+    }
+    AsyncFunction("prepare") { (promise: Promise) in
+      CompositionScanSession.shared.prepare(promise)
     }
     AsyncFunction("analyze") { (token: String, id: String, context: CompositionAnalysisContextRecord, promise: Promise) in
       let recentAdvice = context.recentAdvice.map { ["topic": $0.topic, "message": $0.message] }

@@ -4,7 +4,7 @@ import { AppState } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import {
   addCompositionTrackingListener, analyze, armCompositionScan, cancel, getCompositionCapturePlugin,
-  isCompositionScanAvailable, isCompositionScanSupported,
+  isCompositionScanAvailable, isCompositionScanSupported, prepareCompositionScan,
 } from "../../modules/composition-scan";
 import { createCompositionAdvisor } from "../utils/compositionAnalysis";
 import {
@@ -15,7 +15,16 @@ import {
 } from "../utils/compositionCoordinates";
 import { createCompositionScanSession } from "../utils/compositionScanSession";
 
+let preparationPromise = null;
+let scannerPrepared = false;
+
+function prepareScannerOnce() {
+  if (!preparationPromise) preparationPromise = prepareCompositionScan();
+  return preparationPromise;
+}
+
 export default function useCompositionScan({
+  featureEnabled,
   enabled,
   configurationKey,
   preview,
@@ -42,8 +51,10 @@ export default function useCompositionScan({
   const onCancelAutoZoomRef = useRef(onCancelAutoZoom);
   const subjectPointRef = useRef(null);
   const [available, setAvailable] = useState(isCompositionScanAvailable);
+  const [preparationState, setPreparationState] = useState("idle");
   const supported = isCompositionScanSupported();
-  const canScan = available && enabled && isFocused && foreground && preview.width > 0 && preview.height > 0;
+  const preparing = featureEnabled && preparationState !== "ready";
+  const canScan = available && enabled && !preparing && isFocused && foreground && preview.width > 0 && preview.height > 0;
   const log = useCallback((event, details = {}) => {
     console.log(`[CompositionScan] JS ${event}`, details);
   }, []);
@@ -59,6 +70,34 @@ export default function useCompositionScan({
     log("availability", { supported, available: nextAvailable, enabled, configurationKey });
     setAvailable(nextAvailable);
   }, [configurationKey, enabled, log, supported]);
+
+  useEffect(() => {
+    if (!featureEnabled || !supported) return;
+    if (scannerPrepared) {
+      setPreparationState("ready");
+      return;
+    }
+    let active = true;
+    setPreparationState("preparing");
+    log("warmup-start");
+    void prepareScannerOnce()
+      .then((loadedModel) => {
+        if (!active) return;
+        scannerPrepared = true;
+        log("warmup-complete", { loadedModel });
+        setPreparationState("ready");
+      })
+      .catch((error) => {
+        if (!active) return;
+        // Vision continua disponível mesmo se o modelo semântico opcional falhar.
+        if (__DEV__) console.warn("[CompositionScan] Warmup failed", error);
+        scannerPrepared = true;
+        setPreparationState("ready");
+      });
+    return () => {
+      active = false;
+    };
+  }, [featureEnabled, log, supported]);
 
   useEffect(() => {
     const advisor = createCompositionAdvisor();
@@ -192,7 +231,8 @@ export default function useCompositionScan({
   }, [log, preview, snapshot.state, snapshot.trackingScanId, trackedResult, tracking]);
 
   return {
-    ...snapshot, result: trackedResult, supported, available, canScan, start, cancel: cancelScan,
+    ...snapshot, result: trackedResult, supported, available, enabled: featureEnabled,
+    preparing, canScan, start, cancel: cancelScan,
     onCaptured, selectSubject,
     captureScanId: snapshot.scanId,
     captureRotation: preview.rotation,

@@ -62,6 +62,7 @@ export type CompositionTrackingUpdate = {
 
 type NativeScan = CompositionModel & {
   arm(scanId: string): Promise<boolean>;
+  prepare(): Promise<boolean>;
   getCompositionModelStatus(): Promise<CompositionModelStatus>;
   downloadCompositionModel(): Promise<boolean>;
   cancelCompositionModelDownload(): Promise<void>;
@@ -101,6 +102,9 @@ export function isCompositionScanSupported() {
 }
 export async function armCompositionScan(scanId: string) {
   return nativeModule?.arm(scanId) ?? false;
+}
+export async function prepareCompositionScan() {
+  return nativeModule?.prepare() ?? false;
 }
 export async function analyze(imageToken: string, scanId: string, context: CompositionAnalysisContext = { recentAdvice: [] }): Promise<CompositionAnalysis> {
   if (!nativeModule) throw new Error("Composition Scan unavailable");
