@@ -1,0 +1,13 @@
+diff --git a/node_modules/@uginy/react-native-liquid-glass/ios/LiquidGlassView.swift b/node_modules/@uginy/react-native-liquid-glass/ios/LiquidGlassView.swift
+index 8398241..62c45e4 100644
+--- a/node_modules/@uginy/react-native-liquid-glass/ios/LiquidGlassView.swift
++++ b/node_modules/@uginy/react-native-liquid-glass/ios/LiquidGlassView.swift
+@@ -469,7 +469,7 @@ public class LiquidGlassView: ExpoView {
+ 
+         enc.setRenderPipelineState(pipeline)
+         enc.setVertexBuffer(quad, offset: 0, index: 0)
+-        enc.setFragmentBytes(&u, length: MemoryLayout<LGUniforms>.size, index: 0)
++        enc.setFragmentBytes(&u, length: MemoryLayout<LGUniforms>.stride, index: 0)
+         enc.setFragmentTexture(tex, index: 0)
+         enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+         enc.endEncoding()

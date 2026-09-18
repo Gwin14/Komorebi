@@ -93,10 +93,14 @@ public class CameraLivePhotoModule: Module {
       }
 
       let flashMode = options["flashMode"] as? String ?? "off"
+      let outputFormat = options["outputFormat"] as? String ?? "heif"
       guard let view = await LivePhotoCameraView.activeView(for: deviceId) else {
         throw LivePhotoError.captureSessionNotReady
       }
-      return try await view.captureLivePhoto(flashMode: flashMode)
+      return try await view.captureLivePhoto(
+        flashMode: flashMode,
+        outputFormat: outputFormat
+      )
     }
 
     AsyncFunction("saveLivePhotoToLibrary") { (options: [String: Any]) async throws -> [String: Any] in
@@ -114,7 +118,8 @@ public class CameraLivePhotoModule: Module {
       let originalPhotoURL = try (options["originalPhotoUri"] as? String).flatMap { try Self.fileURL(from: $0) }
       let preparedPhotoURL = Self.copyImageMetadata(
         from: originalPhotoURL,
-        toProcessedPhotoAt: photoURL
+        toProcessedPhotoAt: photoURL,
+        outputFormat: options["outputFormat"] as? String ?? "heif"
       ) ?? photoURL
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
       let localIdentifier = try await Self.saveLivePhotoToLibrary(
@@ -178,26 +183,30 @@ public class CameraLivePhotoModule: Module {
     return URL(fileURLWithPath: uri)
   }
 
-  static func copyImageMetadata(from sourceURL: URL?, toProcessedPhotoAt processedURL: URL) -> URL? {
+  static func copyImageMetadata(
+    from sourceURL: URL?,
+    toProcessedPhotoAt processedURL: URL,
+    outputFormat: String
+  ) -> URL? {
     guard
-      let sourceURL,
-      sourceURL != processedURL,
       let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
-      let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
-      let metadataSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil)
+      let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil)
     else {
       return nil
     }
 
+    let isJpeg = outputFormat == "jpeg"
     let destinationURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent("komorebi-live-processed-\(UUID().uuidString).jpg")
-    let properties = Self.mergedImageProperties(
-      metadataSource: metadataSource,
-      processedSource: processedSource
-    )
+      .appendingPathComponent("komorebi-live-processed-\(UUID().uuidString).\(isJpeg ? "jpg" : "heic")")
+    let metadataSource = sourceURL.flatMap {
+      CGImageSourceCreateWithURL($0 as CFURL, nil)
+    }
+    let properties = metadataSource.map {
+      Self.mergedImageProperties(metadataSource: $0, processedSource: processedSource)
+    } ?? CGImageSourceCopyPropertiesAtIndex(processedSource, 0, nil)
     guard let destination = CGImageDestinationCreateWithURL(
       destinationURL as CFURL,
-      UTType.jpeg.identifier as CFString,
+      (isJpeg ? UTType.jpeg : UTType.heic).identifier as CFString,
       1,
       nil
     ) else {
@@ -368,9 +377,12 @@ public final class LivePhotoCameraView: ExpoView {
     return view
   }
 
-  func captureLivePhoto(flashMode: String) async throws -> [String: Any] {
+  func captureLivePhoto(flashMode: String, outputFormat: String) async throws -> [String: Any] {
     print("[LivePhotoNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
-    let captureResult = try await controller.capture(flashMode: flashMode)
+    let captureResult = try await controller.capture(
+      flashMode: flashMode,
+      outputFormat: outputFormat
+    )
     print("[LivePhotoNative] capture finished photoURL=\(captureResult.photoURL.absoluteString) movieURL=\(captureResult.movieURL.absoluteString)")
 
     return [
@@ -683,7 +695,7 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
     return bins.map { Double($0) / Double(peak) }
   }
 
-  func capture(flashMode: String) async throws -> CaptureResult {
+  func capture(flashMode: String, outputFormat: String) async throws -> CaptureResult {
     try await withCheckedThrowingContinuation { continuation in
       sessionQueue.async { [weak self] in
         guard let self, self.isSessionReady, self.session.isRunning else {
@@ -692,12 +704,14 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
           return
         }
 
+        let usesHevc = outputFormat != "jpeg" && self.output.availablePhotoCodecTypes.contains(.hevc)
         let photoURL = FileManager.default.temporaryDirectory
-          .appendingPathComponent("komorebi-live-\(UUID().uuidString).jpg")
+          .appendingPathComponent("komorebi-live-\(UUID().uuidString).\(usesHevc ? "heic" : "jpg")")
         let movieURL = FileManager.default.temporaryDirectory
           .appendingPathComponent("komorebi-live-\(UUID().uuidString).mov")
 
-        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
+        let codec = usesHevc ? AVVideoCodecType.hevc : AVVideoCodecType.jpeg
+        let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
         settings.isHighResolutionPhotoEnabled = self.output.isHighResolutionCaptureEnabled
         let avFlashMode = CameraLivePhotoModule.toAVFlashMode(flashMode)
         if self.output.supportedFlashModes.contains(avFlashMode) {

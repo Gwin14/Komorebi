@@ -220,6 +220,7 @@ export const takePicture = async ({
   livePhotoDeviceId = null,
   portraitModeEnabled = false,
   portraitDeviceId = null,
+  outputFormat = "jpeg",
 }) => {
   const normalizedRawMode = toVisionCameraRawMode(rawMode);
   const rawModeEnabled = normalizedRawMode !== "off";
@@ -255,6 +256,7 @@ export const takePicture = async ({
       const livePhoto = await captureLivePhoto({
         deviceId: livePhotoDeviceId,
         flashMode: flash === "on" ? "on" : "off",
+        outputFormat,
       });
       console.log("[CameraUtils] live photo capture result", {
         photoUri: livePhoto.photoUri,
@@ -281,6 +283,7 @@ export const takePicture = async ({
           aspectRatio,
           captureMode: "live",
           extraData: {
+            outputFormat,
             livePhotoMovieUri: livePhoto.movieUri,
             localIdentifier: livePhoto.localIdentifier,
             nativeSavedToLibrary: livePhoto.savedToLibrary,
@@ -298,6 +301,7 @@ export const takePicture = async ({
       const portraitPhoto = await capturePortraitPhoto({
         deviceId: portraitDeviceId,
         flashMode: flash === "on" ? "on" : "off",
+        outputFormat,
       });
       console.log("[CameraUtils] portrait capture result", {
         photoUri: portraitPhoto.photoUri,
@@ -326,6 +330,7 @@ export const takePicture = async ({
           aspectRatio,
           captureMode: "portrait",
           extraData: {
+            outputFormat,
             localIdentifier: portraitPhoto.localIdentifier,
             nativeSavedToLibrary: portraitPhoto.savedToLibrary,
             depthDataEmbedded: portraitPhoto.depthDataEmbedded,
@@ -348,6 +353,7 @@ export const takePicture = async ({
       flash: flash === "on" ? "on" : "off",
       rawMode: normalizedRawMode,
       photoQualityBalance: hasManualExposure ? "speed" : "quality",
+      photoCodec: outputFormat === "heif" ? "hevc" : "jpeg",
     });
 
     // Normaliza a URI logo na origem — resolve FileSystem, ImageManipulator e MediaLibrary no Android
@@ -432,6 +438,7 @@ export const takePicture = async ({
         aspectRatio,
         captureMode: "standard",
         manualSettings,
+        extraData: { outputFormat },
       }),
     );
   } catch (error) {

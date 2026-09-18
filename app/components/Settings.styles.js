@@ -34,6 +34,76 @@ export default StyleSheet.create({
   topBarSection: {
     width: "98%",
   },
+  modelSection: {
+    width: "90%",
+    backgroundColor: "rgba(255, 255, 255, 0.035)",
+    borderColor: "rgba(255, 170, 0, 0.22)",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+  },
+  modelHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  modelTitleBlock: {
+    flex: 1,
+  },
+  modelName: {
+    color: "#aaa",
+    fontSize: 12,
+    marginTop: 3,
+  },
+  modelStatus: {
+    color: "#ffaa00",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 12,
+  },
+  modelError: {
+    color: "#ff8585",
+    fontSize: 12,
+    marginTop: 8,
+  },
+  modelActions: {
+    flexDirection: "row",
+    marginTop: 14,
+  },
+  modelPrimaryButton: {
+    backgroundColor: "#ffaa00",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  modelPrimaryText: {
+    color: "#160f00",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  modelSecondaryButton: {
+    borderColor: "#666",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  modelSecondaryText: {
+    color: "#ddd",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: "#333",
+    borderRadius: 2,
+    marginTop: 9,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#ffaa00",
+  },
   lutSection: {
     width: "90%",
   },
@@ -73,6 +143,14 @@ export default StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
+  },
+  sectionSubtitle: {
+    color: "#9a9a9a",
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 14,
   },
   draggableList: {
     width: "100%",

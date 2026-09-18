@@ -1,8 +1,18 @@
 diff --git a/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx b/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
-index 44ce80c..6c4c404 100644
+index 44ce80c..24991e3 100644
 --- a/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
 +++ b/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
-@@ -44,10 +44,15 @@ type CallbackType = (
+@@ -23,7 +23,8 @@ import type {
+   CameraProps,
+   DrawableFrame,
+   Frame,
+-  FrameInternal
++  FrameInternal,
++  FrameProcessorPlugin
+ } from 'react-native-vision-camera'
+ import type {
+   Face,
+@@ -44,10 +45,21 @@ type CallbackType = (
    frame: Frame
  ) => void | Promise<void>
  
@@ -15,27 +25,44 @@ index 44ce80c..6c4c404 100644
    faceDetectionOptions?: FrameFaceDetectionOptions
    faceDetectionCallback: CallbackType
 +  histogramCallback?: HistogramCallbackType
++  faceDetectionEnabled?: boolean
++  compositionScanId?: string | null
++  compositionTrackingId?: string | null
++  compositionScanRotation?: number
++  compositionCapturePlugin?: FrameProcessorPlugin
++  compositionCaptureCallback?: (token: string, scanId: string) => void
    skiaActions?: (
      faces: Face[],
      frame: DrawableFrame
-@@ -101,6 +106,7 @@ export function Camera( {
+@@ -101,6 +112,13 @@ export function Camera( {
    ref,
    faceDetectionOptions,
    faceDetectionCallback,
 +  histogramCallback,
++  faceDetectionEnabled = true,
++  compositionScanId,
++  compositionTrackingId,
++  compositionScanRotation = 0,
++  compositionCapturePlugin,
++  compositionCaptureCallback,
    skiaActions,
    ...props
  }: ComponentType ) {
-@@ -109,6 +115,8 @@ export function Camera( {
+@@ -109,6 +127,13 @@ export function Camera( {
     */
    const isAsyncContextBusy = useSharedValue( false )
    const faces = useSharedValue<string>( '[]' )
 +  const lastHistogramUpdate = useSharedValue( 0 )
 +  const histogramEnabled = Boolean( histogramCallback )
++  const capturedScanId = useSharedValue( '' )
++  const lastCompositionTrackingUpdate = useSharedValue( 0 )
++  const runCaptureOnJs = React.useMemo( () => Worklets.createRunOnJS(
++    compositionCaptureCallback ?? ( () => {} )
++  ), [ compositionCaptureCallback ] )
    const {
      detectFaces,
      stopListeners
-@@ -139,6 +146,10 @@ export function Camera( {
+@@ -139,6 +163,10 @@ export function Camera( {
      faceDetectionCallback
    ] )
  
@@ -46,7 +73,7 @@ index 44ce80c..6c4c404 100644
    /**
     * Async context that will handle face detection
     */
-@@ -147,6 +158,49 @@ export function Camera( {
+@@ -147,6 +175,50 @@ export function Camera( {
    ) => {
      'worklet'
      try {
@@ -93,16 +120,66 @@ index 44ce80c..6c4c404 100644
 +        runHistogramOnJs( bins )
 +      }
 +
++      if (!faceDetectionEnabled) return
        faces.value = JSON.stringify(
          detectFaces( frame )
        )
-@@ -170,6 +224,9 @@ export function Camera( {
+@@ -170,6 +242,10 @@ export function Camera( {
      }
    }, [
      detectFaces,
++    faceDetectionEnabled,
 +    histogramEnabled,
 +    lastHistogramUpdate,
 +    runHistogramOnJs,
      runOnJs
    ] )
+ 
+@@ -210,8 +286,37 @@ export function Camera( {
+    */
+   const cameraFrameProcessor = useFrameProcessor( ( frame ) => {
+     'worklet'
+-    runAsync( frame )
+-  }, [ runOnAsyncContext ] )
++    // Consume the request before crossing runtimes. Never retain a Frame in JS.
++    if (compositionScanId && compositionCapturePlugin && capturedScanId.value !== compositionScanId) {
++      capturedScanId.value = compositionScanId
++      let token = ''
++      try {
++        token = compositionCapturePlugin.call(frame, { scanId: compositionScanId, rotation: compositionScanRotation }) as string
++      } catch {
++        // An empty token settles the session through the same error path.
++      }
++      runCaptureOnJs(token, compositionScanId)
++    }
++    const trackingNow = performance.now()
++    if (
++      compositionTrackingId && compositionCapturePlugin &&
++      trackingNow - lastCompositionTrackingUpdate.value >= 100
++    ) {
++      lastCompositionTrackingUpdate.value = trackingNow
++      try {
++        compositionCapturePlugin.call(frame, {
++          scanId: compositionTrackingId,
++          rotation: compositionScanRotation,
++          tracking: true
++        })
++      } catch {
++        // Native tracking is best effort and reports terminal loss itself.
++      }
++    }
++    if (faceDetectionEnabled || histogramEnabled) runAsync( frame )
++  }, [ runOnAsyncContext, compositionScanId, compositionTrackingId, compositionScanRotation, compositionCapturePlugin, capturedScanId,
++       lastCompositionTrackingUpdate,
++       runCaptureOnJs, faceDetectionEnabled, histogramEnabled ] )
+ 
+   /**
+    * Camera frame processor
+@@ -224,6 +329,7 @@ export function Camera( {
+       !!skiaActions
+     ) return skiaFrameProcessor
+ 
++    if (!faceDetectionEnabled && !histogramEnabled && !compositionScanId && !compositionTrackingId) return undefined
+     return cameraFrameProcessor
+   } )()
  

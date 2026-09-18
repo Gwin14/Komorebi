@@ -9,6 +9,7 @@ export type LivePhotoCapabilities = {
 export type LivePhotoCaptureOptions = {
   deviceId: string;
   flashMode?: "off" | "on" | "auto";
+  outputFormat?: "heif" | "jpeg";
 };
 
 export type LivePhotoCameraViewProps = ViewProps & {
@@ -38,6 +39,7 @@ export type SaveLivePhotoOptions = {
   movieUri: string;
   originalPhotoUri?: string | null;
   albumTitle?: string;
+  outputFormat?: "heif" | "jpeg";
 };
 
 export type SaveLivePhotoResult = {
@@ -91,6 +93,7 @@ export async function captureLivePhoto(
   const result = await nativeModule.captureLivePhoto({
     deviceId: options.deviceId,
     flashMode: options.flashMode ?? "off",
+    outputFormat: options.outputFormat ?? "heif",
   });
 
   return {
@@ -113,6 +116,7 @@ export async function saveLivePhotoToLibrary(
     movieUri: options.movieUri,
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",
+    outputFormat: options.outputFormat ?? "heif",
   });
 
   return {

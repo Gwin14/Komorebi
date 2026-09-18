@@ -15,13 +15,13 @@ export default function ComingSoon() {
     { id: "6", title: "TopBar configurável e controles invertidos" },
     { id: "7", title: "LUTs Ameixa e Banana" },
     { id: "8", title: "Badges do Komorebi na galeria" },
+    { id: "12", title: "Fotos em HEIF ou JPEG no iPhone" },
   ];
 
   const comingSoon = [
     { id: "9", title: "Timer para fotos" },
     { id: "10", title: "Grid customizável" },
     { id: "11", title: "Configuração do feedback háptil" },
-    { id: "12", title: "Escolha de formato de arquivo" },
     { id: "13", title: "Opção para desativar álbum automático" },
     { id: "14", title: "Melhorias no painel de clima" },
     { id: "15", title: "Ajustes finos no fluxo de EXIF Frame" },

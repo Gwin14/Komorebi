@@ -421,9 +421,14 @@ private final class LockedCameraController: NSObject, ObservableObject {
     guard isReady else { return }
     sessionQueue.async { [weak self] in
       guard let self else { return }
-      let settings = AVCapturePhotoSettings()
+      let usesHevc = self.photoOutput.availablePhotoCodecTypes.contains(.hevc)
+      let codec = usesHevc ? AVVideoCodecType.hevc : AVVideoCodecType.jpeg
+      let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
       settings.flashMode = .off
-      let delegate = PhotoCaptureDelegate(outputDirectory: directory) { [weak self] delegate, result in
+      let delegate = PhotoCaptureDelegate(
+        outputDirectory: directory,
+        fileExtension: usesHevc ? "heic" : "jpg"
+      ) { [weak self] delegate, result in
         DispatchQueue.main.async {
           self?.inFlightDelegates.removeAll { $0 === delegate }
           switch result {
@@ -484,13 +489,16 @@ private final class LockedCameraController: NSObject, ObservableObject {
 
 private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
   private let outputDirectory: URL
+  private let fileExtension: String
   private let completion: (PhotoCaptureDelegate, Result<URL, Error>) -> Void
 
   init(
     outputDirectory: URL,
+    fileExtension: String,
     completion: @escaping (PhotoCaptureDelegate, Result<URL, Error>) -> Void
   ) {
     self.outputDirectory = outputDirectory
+    self.fileExtension = fileExtension
     self.completion = completion
   }
 
@@ -514,7 +522,7 @@ private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegat
         at: outputDirectory,
         withIntermediateDirectories: true
       )
-      let url = outputDirectory.appendingPathComponent("komorebi-\\\\(UUID().uuidString).jpg")
+      let url = outputDirectory.appendingPathComponent("komorebi-\\(UUID().uuidString).\\(fileExtension)")
       try data.write(to: url, options: .atomic)
       completion(self, .success(url))
     } catch {

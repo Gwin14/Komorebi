@@ -6,8 +6,10 @@ export const SETTINGS_STORAGE_KEYS = {
   GRID_VISIBLE: "@settings/gridVisible",
   LEVEL_VISIBLE: "@settings/levelVisible",
   HISTOGRAM_VISIBLE: "@settings/histogramVisible",
+  COMPOSITION_SCAN_ENABLED: "@settings/compositionScanEnabled",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
+  SAVE_AS_JPEG: "@settings/saveAsJpeg",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
   CUSTOM_LUTS: "@settings/customLuts",
@@ -40,8 +42,10 @@ export async function loadStoredSettings(defaults) {
     savedGridVisible,
     savedLevelVisible,
     savedHistogramVisible,
+    savedCompositionScanEnabled,
     savedShutterSound,
     savedLocation,
+    savedSaveAsJpeg,
     savedSaveOriginalWithLUT,
     savedFirstTime,
     savedCustomLuts,
@@ -54,8 +58,10 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.GRID_VISIBLE),
     AsyncStorage.getItem(keys.LEVEL_VISIBLE),
     AsyncStorage.getItem(keys.HISTOGRAM_VISIBLE),
+    AsyncStorage.getItem(keys.COMPOSITION_SCAN_ENABLED),
     AsyncStorage.getItem(keys.SHUTTER_SOUND),
     AsyncStorage.getItem(keys.LOCATION),
+    AsyncStorage.getItem(keys.SAVE_AS_JPEG),
     AsyncStorage.getItem(keys.SAVE_ORIGINAL_WITH_LUT),
     AsyncStorage.getItem(keys.FIRSTTIME),
     AsyncStorage.getItem(keys.CUSTOM_LUTS),
@@ -73,8 +79,13 @@ export async function loadStoredSettings(defaults) {
       savedHistogramVisible,
       defaults.histogramVisible,
     ),
+    compositionScanEnabled: parseBoolean(
+      savedCompositionScanEnabled,
+      defaults.compositionScanEnabled,
+    ),
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
+    saveAsJpeg: parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg),
     saveOriginalWithoutEffects: parseBoolean(
       savedSaveOriginalWithLUT,
       defaults.saveOriginalWithoutEffects,
@@ -91,5 +102,6 @@ export async function loadStoredSettings(defaults) {
 }
 
 export function saveStoredSetting(key, value) {
+  if (value == null) return AsyncStorage.removeItem(key);
   return AsyncStorage.setItem(key, value);
 }

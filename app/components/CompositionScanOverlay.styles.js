@@ -1,0 +1,62 @@
+import { StyleSheet } from "react-native";
+
+export default StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject },
+  statusContainer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingTop: 16,
+    paddingHorizontal: 16,
+  },
+  statusPill: {
+    minHeight: 34,
+    maxWidth: "100%",
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(20,15,2,0.84)",
+    borderRadius: 17,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,170,0,0.9)",
+  },
+  statusText: { color: "#FFD36A", fontSize: 12, fontWeight: "600", lineHeight: 16, textAlign: "center" },
+  scanBeam: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 76,
+  },
+  scanGlow: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  scanLine: {
+    position: "absolute", left: 12, right: 12, bottom: 0, height: 2,
+    borderRadius: 1,
+    backgroundColor: "#ffb31a",
+    shadowColor: "#ffaa00", shadowOpacity: 0.95, shadowRadius: 7,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  button: {
+    position: "absolute", right: 12, bottom: 12,
+    zIndex: 10, elevation: 10,
+    minWidth: 88, height: 46, paddingHorizontal: 8,
+    flexDirection: "row", gap: 8,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(14,12,7,0.88)", borderRadius: 23,
+    borderWidth: 1, borderColor: "rgba(255,170,0,0.55)",
+    shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  buttonPressed: { transform: [{ scale: 0.96 }], backgroundColor: "rgba(35,25,5,0.92)" },
+  buttonIcon: {
+    width: 30, height: 30, borderRadius: 15,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#ffaa00",
+  },
+  disabled: { opacity: 0.45 },
+  label: { color: "#ffe4a8", fontSize: 11, fontWeight: "800", letterSpacing: 1.1 },
+  preparingLabel: { color: "#f2dba8", fontSize: 11, fontWeight: "600" },
+});
