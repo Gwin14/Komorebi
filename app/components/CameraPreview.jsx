@@ -68,6 +68,14 @@ export default function CameraPreview({
 
   const focusOnPoint = useCallback(
     (x, y) => {
+      const { width, height } = previewLayout;
+      if (width > 0 && height > 0) {
+        compositionScan?.selectSubject?.({
+          x: Math.max(0, Math.min(1, x / width)),
+          y: Math.max(0, Math.min(1, y / height)),
+        });
+      }
+
       if (!device?.supportsFocus) return;
 
       setFocusPoint({ x, y });
@@ -80,7 +88,6 @@ export default function CameraPreview({
         useNativeDriver: true,
       }).start();
 
-      const { width, height } = previewLayout;
       if (onFocusAtPoint && width > 0 && height > 0) {
         // AVCaptureDevice point-of-interest coordinates are rotated relative
         // to the portrait preview layer coordinates used by the tap gesture.
@@ -95,7 +102,7 @@ export default function CameraPreview({
 
       cameraRef.current?.focus({ x, y }).catch(() => {});
     },
-    [device, cameraRef, focusAnim, onFocusAtPoint, previewLayout],
+    [compositionScan, device, cameraRef, focusAnim, onFocusAtPoint, previewLayout],
   );
 
   const focusGesture = useMemo(

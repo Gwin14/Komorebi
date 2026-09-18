@@ -215,7 +215,8 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
   }
 
   func analyze(_ image: CGImage, recentAdvice: [[String: String]] = [],
-               frameAspectRatio: Double = 0.75) -> [String: Any]? {
+               frameAspectRatio: Double = 0.75,
+               subjectPoint: [String: Double]? = nil) -> [String: Any]? {
     let runtimeAvailable = KMCompositionModel.isRuntimeAvailable()
     guard isReady, isCompatible, runtimeAvailable else {
       compositionScanLog("model skipped ready=\(isReady) compatible=\(isCompatible) runtime=\(runtimeAvailable)")
@@ -241,26 +242,30 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
       }
       let raw = try engine?.analyzeImage(
         atPath: temporary.path,
-        prompt: Self.prompt(recentAdvice: recentAdvice, frameAspectRatio: frameAspectRatio)
+        prompt: Self.prompt(
+          recentAdvice: recentAdvice,
+          frameAspectRatio: frameAspectRatio,
+          subjectPoint: subjectPoint
+        )
       )
       let compactRaw = raw?
         .replacingOccurrences(of: "\n", with: " ")
         .replacingOccurrences(of: "\r", with: " ")
         .prefix(500) ?? "nil"
       compositionScanLog("model raw response elapsedMs=\(Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000)) value=\(compactRaw)")
-      var judgement = raw.flatMap(Self.parseCategorizedJudgement) ?? raw.flatMap(Self.parseJudgement)
+      var judgement = raw.flatMap(Self.parseCategorizedJudgement)
       if judgement == nil {
-        compositionScanLog("model structured response unusable; retrying with plain advice")
+        compositionScanLog("model crop response unusable; retrying with a strict crop request")
         let recoveryRaw = try engine?.analyzeImage(
           atPath: temporary.path,
-          prompt: Self.recoveryPrompt(recentAdvice: recentAdvice)
+          prompt: Self.recoveryPrompt(subjectPoint: subjectPoint)
         )
         let compactRecovery = recoveryRaw?
           .replacingOccurrences(of: "\n", with: " ")
           .replacingOccurrences(of: "\r", with: " ")
           .prefix(500) ?? "nil"
         compositionScanLog("model recovery response value=\(compactRecovery)")
-        judgement = recoveryRaw.flatMap(Self.parseControlledJudgement)
+        judgement = recoveryRaw.flatMap(Self.parseCategorizedJudgement)
       }
       if var value = judgement,
          value["verdict"] as? String == "advice",
@@ -271,7 +276,9 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
           prompt: Self.framingPrompt(
             subject: value["subject"] as? String,
             advice: message,
-            frameAspectRatio: frameAspectRatio
+            cropIntent: value["cropIntent"] as? String,
+            frameAspectRatio: frameAspectRatio,
+            subjectPoint: subjectPoint
           )
         )
         let compactFraming = framingRaw?
@@ -300,17 +307,17 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
     }
   }
 
-  private static func prompt(recentAdvice: [[String: String]], frameAspectRatio: Double) -> String {
-    let recentTopics = recentAdvice.suffix(3).compactMap { $0["topic"] }.filter { !$0.isEmpty }
-    let recentData = try? JSONSerialization.data(withJSONObject: recentTopics)
-    let recentJSON = recentData.flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+  private static func prompt(recentAdvice _: [[String: String]], frameAspectRatio: Double,
+                             subjectPoint: [String: Double]?) -> String {
+    let selection = selectionInstruction(subjectPoint)
     return """
-    Classify the visible photo composition. Do not describe it and do not use JSON.
-    Recent topics to avoid when another useful choice exists: \(recentJSON)
+    Act as an intelligent camera crop selector. Identify one concrete visible subject worth isolating from the wider scene. Do not critique lighting, lines, background, balance, depth, symmetry, horizon, or color. Do not describe the image and do not use JSON.
+    \(selection)
 
-    Return exactly: subject=SUBJECT;topic=TOPIC
-    SUBJECT must be one of: person, group, plant, building, vehicle, animal, food, object, landscape, interior, scene
-    TOPIC must be one of: subject, empty_space, background, light, lines, depth, symmetry, horizon, color, balance
+    Return exactly: subject=SUBJECT;crop=CROP
+    SUBJECT must be one of: person, group, plant, tree, flower, car, motorcycle, bicycle, vehicle, animal, food, building, chimney, tower, sign, furniture, object, landscape, interior, scene
+    CROP must be one of: tight, medium, wide
+    Use tight to isolate a self-contained object with little context, medium when some surroundings help recognize it, and wide only when the subject depends on its environment. The app will apply the final \(String(format: "%.4f", frameAspectRatio)):1 aspect ratio.
     """
   }
 
@@ -318,222 +325,63 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
     let normalized = raw.lowercased()
     let subject = capturedStrings(
       in: normalized,
-      pattern: #"subject\s*[:=]\s*[\"']?(person|group|plant|building|vehicle|animal|food|object|landscape|interior|scene)\b"#
+      pattern: #"subject\s*[:=]\s*[\"']?(person|group|plant|tree|flower|car|motorcycle|bicycle|vehicle|animal|food|building|chimney|tower|sign|furniture|object|landscape|interior|scene)\b"#
     ).first
-    let topic = capturedStrings(
+    let crop = capturedStrings(
       in: normalized,
-      pattern: #"topic\s*[:=]\s*[\"']?(subject|empty_space|background|light|lines|depth|symmetry|horizon|color|balance)\b"#
+      pattern: #"crop\s*[:=]\s*[\"']?(tight|medium|wide)\b"#
     ).first
-    guard let subject, let topic else { return nil }
+    guard let subject, let crop else { return nil }
     let subjectLabels: [String: String] = [
       "person": "a pessoa", "group": "o grupo", "plant": "as plantas",
-      "building": "o prédio", "vehicle": "o veículo", "animal": "o animal",
+      "tree": "a árvore", "flower": "a flor", "car": "o carro",
+      "motorcycle": "a moto", "bicycle": "a bicicleta", "vehicle": "o veículo",
+      "animal": "o animal", "building": "o prédio", "chimney": "a chaminé",
+      "tower": "a torre", "sign": "a placa", "furniture": "o móvel",
       "food": "a comida", "object": "o objeto", "landscape": "a paisagem",
       "interior": "o ambiente", "scene": "a cena",
     ]
-    let topicMessages: [String: String] = [
-      "subject": "Destacar \(subjectLabels[subject] ?? "o assunto")",
-      "empty_space": "Reduzir espaço vazio",
-      "background": "Simplificar o fundo",
-      "light": "Equilibrar a luz",
-      "lines": "Valorizar as linhas",
-      "depth": "Criar profundidade",
-      "symmetry": "Reforçar a simetria",
-      "horizon": "Equilibrar o horizonte",
-      "color": "Valorizar as cores",
-      "balance": "Preservar o equilíbrio",
-    ]
+    let label = subjectLabels[subject] ?? "o assunto"
     return [
       "source": "minicpm-v-4.6",
-      "verdict": topic == "balance" ? "keep" : "advice",
-      "subject": subjectLabels[subject] ?? subject,
-      "message": topicMessages[topic] ?? "Preservar o equilíbrio",
-      "topic": topic,
+      "verdict": "advice",
+      "subject": label,
+      "message": "Enquadrar \(label)",
+      "topic": "subject",
+      "cropIntent": crop,
       "visualHint": NSNull(),
     ]
   }
 
-  private static func recoveryPrompt(recentAdvice: [[String: String]]) -> String {
-    let recent = recentAdvice.suffix(3).compactMap { $0["topic"] }.filter { !$0.isEmpty }
-      .joined(separator: ",")
+  private static func recoveryPrompt(subjectPoint: [String: Double]?) -> String {
     return """
-    Look at the photo and choose the single most useful visible composition adjustment. Recent themes to avoid: \(recent).
-    Reply with exactly one identifier:
-    keep, move_left, move_right, move_up, move_down, closer, farther, center_subject, simplify_background, lower_angle, higher_angle, look_space, level, frame_subject, reduce_glare, soften_light, add_foreground, separate_subject, avoid_overlap, use_symmetry
+    Choose one concrete object to crop from this photo. \(selectionInstruction(subjectPoint))
+    Return only subject=SUBJECT;crop=CROP using these values:
+    SUBJECT: person, group, plant, tree, flower, car, motorcycle, bicycle, vehicle, animal, food, building, chimney, tower, sign, furniture, object, landscape, interior, scene
+    CROP: tight, medium, wide
     """
   }
 
-  private static func parseControlledJudgement(_ raw: String) -> [String: Any]? {
-    let token = capturedStrings(
-      in: raw.lowercased(),
-      pattern: #"\b(keep|move_left|move_right|move_up|move_down|closer|farther|center_subject|simplify_background|lower_angle|higher_angle|look_space|level|frame_subject|reduce_glare|soften_light|add_foreground|separate_subject|avoid_overlap|use_symmetry)\b"#
-    ).first
-    if token == "keep" { return keepJudgement() }
-    let definitions: [String: (message: String, topic: String, hint: String?)] = [
-      "move_left": ("Melhorar a perspectiva", "perspectiva", nil),
-      "move_right": ("Melhorar a perspectiva", "perspectiva", nil),
-      "move_up": ("Organizar os planos", "perspectiva", nil),
-      "move_down": ("Organizar os planos", "perspectiva", nil),
-      "closer": ("Destacar o assunto", "escala", "closer"),
-      "farther": ("Dar espaço ao assunto", "escala", "farther"),
-      "center_subject": ("Reforçar a simetria", "simetria", "center_symmetry"),
-      "simplify_background": ("Simplificar o fundo", "fundo", nil),
-      "lower_angle": ("Melhorar a perspectiva", "perspectiva", nil),
-      "higher_angle": ("Melhorar a perspectiva", "perspectiva", nil),
-      "look_space": ("Dar espaço ao olhar", "olhar", "look_space"),
-      "level": ("Equilibrar o horizonte", "nível", "level"),
-      "frame_subject": ("Destacar o assunto", "enquadramento", nil),
-      "reduce_glare": ("Reduzir o reflexo", "luz", nil),
-      "soften_light": ("Suavizar a luz", "luz", nil),
-      "add_foreground": ("Criar profundidade", "profundidade", nil),
-      "separate_subject": ("Separar assunto e fundo", "fundo", nil),
-      "avoid_overlap": ("Separar os elementos", "relações", nil),
-      "use_symmetry": ("Reforçar a simetria", "simetria", "center_symmetry"),
-    ]
-    guard let token, let definition = definitions[token] else { return nil }
-    return [
-      "source": "minicpm-v-4.6",
-      "verdict": "advice",
-      "message": definition.message,
-      "topic": definition.topic,
-      "visualHint": definition.hint as Any? ?? NSNull(),
-    ]
-  }
-
-  private static func framingPrompt(subject: String?, advice: String,
-                                    frameAspectRatio: Double) -> String {
+  private static func framingPrompt(subject: String?, advice: String, cropIntent: String?,
+                                    frameAspectRatio: Double,
+                                    subjectPoint: [String: Double]?) -> String {
     let target = subject?.isEmpty == false ? subject! : advice
+    let selection = selectionInstruction(subjectPoint)
+    let crop = cropIntent ?? "medium"
     return """
-    Localize na foto somente este alvo: "\(target)".
-    Responda com quatro números inteiros separados por vírgulas, nesta ordem: centro horizontal, centro vertical, largura e altura. Use coordenadas de 0 a 1000, mantenha toda a região dentro da imagem e não repita estas instruções. A proporção final será corrigida pelo aplicativo para \(String(format: "%.4f", frameAspectRatio)):1.
+    Localize somente os limites visíveis do objeto "\(target)". Devolva a caixa do objeto, não uma composição pronta, não a cena inteira e não inclua espaço vazio ao redor. A intenção de recorte é \(crop); o aplicativo adicionará a margem fotográfica e corrigirá a proporção final para \(String(format: "%.4f", frameAspectRatio)):1.
+    \(selection)
+    Responda somente com quatro números inteiros separados por vírgulas, nesta ordem: centro horizontal, centro vertical, largura e altura. Use coordenadas de 0 a 1000 e mantenha a caixa dentro da imagem.
     """
   }
 
-  private static func parseJudgement(_ raw: String) -> [String: Any]? {
-    let objects = jsonObjects(in: raw)
-    var messageCandidates: [String] = []
-    var explicitVerdict: String?
-    var topic: String?
-    var subject: String?
-    var hint: String?
-    var frameValue: [String: Any]?
-
-    for value in objects {
-      explicitVerdict = (value["verdict"] as? String) ?? explicitVerdict
-      topic = (value["topic"] as? String) ?? (value["topico"] as? String) ?? topic
-      subject = (value["subject"] as? String) ?? (value["assunto"] as? String) ?? subject
-      hint = (value["hint"] as? String) ?? (value["visualHint"] as? String) ?? hint
-      frameValue = (value["frame"] as? [String: Any]) ?? frameValue
-      if frameValue == nil, let frame = value["frame"] as? [NSNumber], frame.count == 3 {
-        frameValue = ["cx": frame[0], "cy": frame[1], "width": frame[2], "height": frame[2]]
-      }
-      for key in ["message", "recommendation", "dica", "advice"] {
-        if let candidate = value[key] as? String { messageCandidates.append(candidate) }
-      }
-      if frameValue == nil,
-         value["cx"] != nil || value["centerX"] != nil {
-        frameValue = value
-      }
+  private static func selectionInstruction(_ point: [String: Double]?) -> String {
+    guard let x = point?["x"], let y = point?["y"], x.isFinite, y.isFinite else {
+      return "No subject was selected. Prefer a distinct object that can be isolated over the whole building, interior, landscape, or scene."
     }
-    messageCandidates.append(contentsOf: capturedStrings(
-      in: raw,
-      pattern: #"\"(?:message|recommendation|dica|advice)\"\s*:\s*\"([^\"]*)\""#
-    ))
-    var cleanedCandidates = messageCandidates.map { sanitizeMessage(cleanText($0)) }
-    // Only inspect arbitrary values when no named message was usable. This
-    // recovers malformed output such as {"verdict":"keep|advice":"..."}
-    // without letting topic/hint overwrite a valid message.
-    if !cleanedCandidates.contains(where: isUsefulMessage) {
-      cleanedCandidates.append(contentsOf: capturedStrings(
-        in: raw,
-        pattern: #":\s*\"([^\"]{8,160})\""#
-      ).map { sanitizeMessage(cleanText($0)) })
-    }
-    let keepWords: Set<String> = ["keep", "manter", "mantenha", "ok"]
-    if cleanedCandidates.contains(where: { keepWords.contains($0.lowercased()) }) &&
-       !cleanedCandidates.contains(where: isUsefulMessage) {
-      return keepJudgement()
-    }
-    guard let message = cleanedCandidates.last(where: isUsefulMessage) else {
-      return explicitVerdict?.lowercased() == "keep" ? keepJudgement() : nil
-    }
-    guard isNaturalAdvice(message) else { return nil }
-    let topicValue = cleanText(topic ?? message)
-    let allowedHints: Set<String> = ["framing", "reframe", "closer", "farther",
-                                     "look_space", "center_symmetry", "level"]
-    let normalizedHint = hint?.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-    let acceptedHint = frameValue != nil ? "framing" :
-      (normalizedHint.flatMap { allowedHints.contains($0) ? $0 : nil } ?? inferredHint(from: message))
-    var result: [String: Any] = [
-      "source": "minicpm-v-4.6",
-      "verdict": "advice",
-      "message": String(message.prefix(48)),
-      "topic": String(topicValue.prefix(48)),
-      "visualHint": acceptedHint as Any? ?? NSNull(),
-    ]
-    if let subject = sanitizedSubject(subject) { result["subject"] = subject }
-    if acceptedHint == "framing", let frame = frameValue,
-       let centerX = ((frame["cx"] ?? frame["centerX"]) as? NSNumber)?.doubleValue,
-       let centerY = ((frame["cy"] ?? frame["centerY"]) as? NSNumber)?.doubleValue,
-       let width = ((frame["width"] ?? frame["size"]) as? NSNumber)?.doubleValue,
-       let height = ((frame["height"] ?? frame["size"]) as? NSNumber)?.doubleValue,
-       let frame = validatedFrame(centerX: centerX, centerY: centerY,
-                                  width: width, height: height) {
-      result["frame"] = frame
-    }
-    return result
-  }
-
-  private static func keepJudgement() -> [String: Any] {
-    ["source": "minicpm-v-4.6", "verdict": "keep", "message": "", "topic": "",
-     "visualHint": NSNull()]
-  }
-
-  private static func parsePlainJudgement(_ raw: String) -> [String: Any]? {
-    var message = sanitizeMessage(cleanText(raw))
-      .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`*-• "))
-    if let period = message.firstIndex(of: "."), message.distance(from: message.startIndex, to: period) >= 8 {
-      message = String(message[...period])
-    }
-    let lower = message.lowercased()
-    if ["ok", "ok.", "keep", "manter"].contains(lower) { return keepJudgement() }
-    guard !message.contains("{"), !message.contains("}"),
-          isUsefulMessage(message), isNaturalAdvice(message) else { return nil }
-    return [
-      "source": "minicpm-v-4.6",
-      "verdict": "advice",
-      "message": String(message.prefix(48)),
-      "topic": String(message.prefix(48)),
-      "visualHint": inferredHint(from: message) as Any? ?? NSNull(),
-    ]
-  }
-
-  private static func cleanText(_ value: String) -> String {
-    value.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-  }
-
-  private static func sanitizeMessage(_ value: String) -> String {
-    value.replacingOccurrences(
-      of: #"[\s\.,;]+(?:hint|visual\s*hint|topic|t[oó]pico|size|width|height|frame|cx|cy)\s*[:=].*$"#,
-      with: "",
-      options: [.regularExpression, .caseInsensitive]
-    ).trimmingCharacters(in: .whitespacesAndNewlines)
-  }
-
-  private static func isNaturalAdvice(_ value: String) -> Bool {
-    let normalized = value.folding(options: .diacriticInsensitive, locale: Locale(identifier: "pt_BR"))
-      .lowercased()
-    let rejectedTerms = [
-      " clarity", "lighting", "adjustment", "background", " focus", " view", "ensure",
-      " clear", " visible", " frame", "technical", "metadado", "metadados",
-      "elemento tecnico", "detalhes tecnicos",
-      "melhor visibilidade", "enquadrar a vista", "vista da camera",
-      "aproveite a posicao", "ajuste a posicao", "garantir a",
-    ]
-    guard !rejectedTerms.contains(where: normalized.contains), value.count <= 64 else { return false }
-    let sentenceEnds = value.filter { ".!?".contains($0) }.count
-    return sentenceEnds <= 1
+    let normalizedX = min(1, max(0, x))
+    let normalizedY = min(1, max(0, y))
+    return "The user selected the main subject at x=\(Int(normalizedX * 1000)), y=\(Int(normalizedY * 1000)), measured from the image's top-left. Identify that exact visible object. Its bounding box must contain this point; never replace it with another subject or the whole scene."
   }
 
   private static func parseFrame(_ raw: String) -> [String: Any]? {
@@ -569,46 +417,12 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
   private static func validatedFrame(centerX: Double, centerY: Double,
                                      width: Double, height: Double) -> [String: Any]? {
     guard centerX.isFinite, centerY.isFinite, width.isFinite, height.isFinite,
-          width >= 120, width <= 900, height >= 120, height <= 900,
+          width >= 40, width <= 900, height >= 40, height <= 900,
           centerX - width / 2 >= 0, centerX + width / 2 <= 1000,
           centerY - height / 2 >= 0, centerY + height / 2 <= 1000,
           !(abs(centerX - 500) <= 2 && abs(centerY - 450) <= 2 &&
             abs(width - 600) <= 2 && abs(height - 760) <= 2) else { return nil }
     return ["centerX": centerX, "centerY": centerY, "width": width, "height": height]
-  }
-
-  private static func sanitizedSubject(_ value: String?) -> String? {
-    guard let value else { return nil }
-    let clean = cleanText(value)
-    let words = clean.split(separator: " ")
-    let normalized = clean.folding(options: .diacriticInsensitive, locale: Locale(identifier: "pt_BR"))
-      .lowercased()
-    let rejected: Set<String> = ["", "cena", "assunto", "elemento", "ambiente", "principal",
-                                 "nome concreto", "objeto"]
-    guard clean.count >= 3, clean.count <= 24, words.count <= 3,
-          !rejected.contains(normalized) else { return nil }
-    return clean
-  }
-
-  private static func isUsefulMessage(_ value: String) -> Bool {
-    let lower = value.lowercased()
-    let reserved: Set<String> = [
-      "", "null", "none", "keep", "advice", "keep|advice", "dica livre",
-      "tópico curto", "framing|reframe|closer|farther|look_space|center_symmetry|level|null",
-      "<ação específica sobre um elemento visível>", "<tema curto>",
-    ]
-    return value.count >= 4 && !reserved.contains(lower)
-  }
-
-  private static func inferredHint(from message: String) -> String? {
-    let lower = message.lowercased()
-    if lower.contains("cortad") || lower.contains("borda") { return "reframe" }
-    if lower.contains("closer") || lower.contains("aproxime") || lower.contains("chegue mais perto") { return "closer" }
-    if lower.contains("farther") || lower.contains("afaste") || lower.contains("dê mais espaço") { return "farther" }
-    if lower.contains("nível") || lower.contains("nivele") || lower.contains("horizonte") { return "level" }
-    if lower.contains("direção do olhar") || lower.contains("espaço ao olhar") { return "look_space" }
-    if lower.contains("simetr") || lower.contains("centralize") { return "center_symmetry" }
-    return nil
   }
 
   private static func capturedStrings(in raw: String, pattern: String) -> [String] {

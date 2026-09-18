@@ -72,13 +72,15 @@ test("model rectangle is preferred and corrected to the preview aspect", () => {
     judgement: {
       source: "minicpm-v-4.6",
       verdict: "advice",
-      topic: "espaço vazio",
-      message: "Reduzir espaço vazio",
+      subject: "o carro",
+      topic: "subject",
+      cropIntent: "medium",
+      message: "Enquadrar o carro",
       visualHint: "framing",
       frame: { centerX: 650, centerY: 450, width: 400, height: 600 },
     },
   }, preview);
-  assert.equal(result.message, "Reduzir espaço vazio");
+  assert.equal(result.message, "Enquadrar o carro");
   assert.equal(result.gizmos[0].rect.width, result.gizmos[0].rect.height);
   assert.ok(result.gizmos[0].rect.x > 0.3);
 });
@@ -94,7 +96,7 @@ test("invalid model rectangle falls back to the detected subject", () => {
       frame: { centerX: 50, centerY: 50, width: 600, height: 600 },
     },
   }, preview);
-  assert.equal(result.message, "Destacar a pessoa");
+  assert.equal(result.message, "Enquadrar a pessoa");
   assert.equal(result.gizmos[0].rect.width, result.gizmos[0].rect.height);
   assert.ok(result.gizmos[0].rect.x >= 0);
 });
@@ -127,10 +129,10 @@ test("a concrete model label names the salient subject", () => {
       message: "Preservar o equilíbrio",
     },
   }, preview);
-  assert.equal(result.message, "Destacar as plantas");
+  assert.equal(result.message, "Enquadrar as plantas");
 });
 
-test("current-build English semantics produce a specific nominal reason", () => {
+test("legacy composition advice is never presented as the crop purpose", () => {
   const result = generateCompositionResult({
     ...emptyScene,
     subjects: [{ confidence: 0.5, rect: { x: 0.08, y: 0.05, width: 0.15, height: 0.2 } }],
@@ -142,10 +144,10 @@ test("current-build English semantics produce a specific nominal reason", () => 
       frame: { centerX: 200, centerY: 150, width: 150, height: 200 },
     },
   }, preview);
-  assert.equal(result.message, "Destacar o objeto");
+  assert.equal(result.message, "Enquadrar o assunto");
 });
 
-test("scene geometry avoids generic subject copy when semantics are unusable", () => {
+test("scene geometry no longer generates lines or background advice", () => {
   const result = generateCompositionResult({
     ...emptyScene,
     subjects: [{ confidence: 0.5, rect: { x: 0.04, y: 0.08, width: 0.82, height: 0.82 } }],
@@ -155,26 +157,93 @@ test("scene geometry avoids generic subject copy when semantics are unusable", (
     ],
     judgement: { source: "minicpm-v-4.6", verdict: "keep", topic: "", message: "" },
   }, preview);
-  assert.equal(result.message, "Valorizar as linhas");
+  assert.equal(result.message, "Enquadrar o assunto");
 });
 
-test("empty analysis uses the conservative centered fallback", () => {
+test("tap selection chooses the detected subject that contains the point", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    subjects: [
+      { confidence: 0.7, rect: { x: 0.08, y: 0.2, width: 0.28, height: 0.3 } },
+      { confidence: 0.7, rect: { x: 0.62, y: 0.45, width: 0.2, height: 0.22 } },
+    ],
+    judgement: {
+      source: "minicpm-v-4.6", verdict: "advice", subject: "as plantas",
+      topic: "subject", message: "Destacar as plantas",
+    },
+  }, preview, { subjectPoint: { x: 0.7, y: 0.55 } });
+  const selected = result.gizmos[0].rect;
+  assert.ok(selected.x > 0.5);
+  assert.equal(result.message, "Enquadrar as plantas");
+});
+
+test("tap selection rejects an unrelated model frame and stays around the selected point", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    judgement: {
+      source: "minicpm-v-4.6", verdict: "advice", topic: "subject",
+      message: "Destacar o objeto",
+      frame: { centerX: 150, centerY: 150, width: 200, height: 200 },
+    },
+  }, preview, { subjectPoint: { x: 0.78, y: 0.72 } });
+  const selected = result.gizmos[0].rect;
+  close(selected.width, 0.4);
+  close(selected.x + selected.width / 2, 0.78);
+  close(selected.y + selected.height / 2, 0.72);
+});
+
+test("empty analysis uses a centered crop fallback", () => {
   const result = generateCompositionResult(emptyScene, preview);
-  assert.deepEqual(result.gizmos[0].rect, { x: 0.1, y: 0.1, width: 0.8, height: 0.8 });
-  assert.equal(result.message, "Preservar o equilíbrio");
+  assert.deepEqual(result.gizmos[0].rect, { x: 0.14, y: 0.14, width: 0.72, height: 0.72 });
+  assert.equal(result.message, "Recortar a cena");
 });
 
-test("advisor keeps only three recent nominal reasons", () => {
+test("advisor keeps only three recent crop subjects", () => {
   const advisor = createCompositionAdvisor();
-  for (const topic of ["luz", "fundo", "cor", "perspectiva"]) {
+  for (const subject of ["a pessoa", "o carro", "a moto", "a chaminé"]) {
     advisor.generate({
       ...emptyScene,
-      judgement: { source: "minicpm-v-4.6", verdict: "advice", topic, message: topic },
+      judgement: { source: "minicpm-v-4.6", verdict: "advice", subject, topic: "subject", message: `Enquadrar ${subject}` },
     }, preview);
   }
-  assert.deepEqual(advisor.context().recentAdvice.map((item) => item.topic), ["fundo", "cor", "perspectiva"]);
+  assert.deepEqual(advisor.context().recentAdvice.map((item) => item.topic), ["o carro", "a moto", "a chaminé"]);
   advisor.reset();
   assert.deepEqual(advisor.context().recentAdvice, []);
+});
+
+test("a selected motorcycle rejects an oversized model crop", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    judgement: {
+      source: "minicpm-v-4.6", verdict: "advice", subject: "a moto",
+      topic: "subject", cropIntent: "tight", message: "Valorizar as linhas",
+      frame: { centerX: 500, centerY: 500, width: 880, height: 880 },
+    },
+  }, preview, { subjectPoint: { x: 0.25, y: 0.55 } });
+  assert.equal(result.message, "Enquadrar a moto");
+  close(result.gizmos[0].rect.width, 0.4);
+  close(result.gizmos[0].rect.x + result.gizmos[0].rect.width / 2, 0.25);
+});
+
+test("crop intent controls how much context surrounds the same object", () => {
+  const widths = ["tight", "medium", "wide"].map((cropIntent) =>
+    generateCompositionResult({
+      ...emptyScene,
+      judgement: {
+        source: "minicpm-v-4.6", verdict: "advice", subject: "a chaminé",
+        topic: "subject", cropIntent, message: "Simplificar o fundo",
+        frame: { centerX: 500, centerY: 500, width: 300, height: 300 },
+      },
+    }, preview).gizmos[0].rect.width);
+  assert.ok(widths[0] < widths[1]);
+  assert.ok(widths[1] < widths[2]);
+  assert.equal(
+    generateCompositionResult({
+      ...emptyScene,
+      judgement: { source: "minicpm-v-4.6", verdict: "advice", subject: "a chaminé", topic: "subject" },
+    }, preview).message,
+    "Enquadrar a chaminé",
+  );
 });
 
 test("tracking converts Vision's bottom-left vertical axis while preserving a rectangle", () => {

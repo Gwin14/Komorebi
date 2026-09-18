@@ -83,6 +83,27 @@ test("analysis receives recent advice and exposes tracking separately from captu
   assert.deepEqual(receivedContext, { recentAdvice: [{ topic: "luz", message: "Suavize a luz" }] });
   controller.dispose();
 });
+test("subject selection is frozen when the scan starts", async () => {
+  let selected = { x: 0.2, y: 0.3 };
+  let receivedContext;
+  const states = [];
+  const controller = createCompositionScanSession({
+    model: {
+      arm: async () => true,
+      analyze: async (_token, _id, context) => { receivedContext = context; return {}; },
+      cancel: async () => {},
+    },
+    getAnalysisContext: () => ({ recentAdvice: [], subjectPoint: selected }),
+    generate: () => ({ kind: "balanced", message: "Teste", gizmos: [] }),
+    onChange: (state) => states.push(state),
+    timers: { setTimeout: () => 1, clearTimeout: () => {} },
+  });
+  await controller.start(preview);
+  selected = { x: 0.8, y: 0.9 };
+  await controller.captured("token", states.at(-1).scanId);
+  assert.deepEqual(receivedContext.subjectPoint, { x: 0.2, y: 0.3 });
+  controller.dispose();
+});
 test("double tap before arm settles starts only one scan", async () => {
   const arm = deferred(); const s = setup({ arm: () => arm.promise });
   const first = s.controller.start(preview);

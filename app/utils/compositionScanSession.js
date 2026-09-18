@@ -65,7 +65,11 @@ export function createCompositionScanSession({
     async start(preview) {
       if (disposed || state === "capturing" || state === "analyzing") return false;
       cancel();
-      const session = { id: `scan-${Date.now()}-${++sequence}`, preview };
+      const session = {
+        id: `scan-${Date.now()}-${++sequence}`,
+        preview,
+        analysisContext: getAnalysisContext(),
+      };
       log("start", { scanId: session.id, preview });
       active = session;
       emit({ state: "capturing", scanId: null, trackingScanId: null, result: null, phase: null });
@@ -102,7 +106,7 @@ export function createCompositionScanSession({
       emit({ state: "analyzing", scanId: null, trackingScanId: scanId, result: null, phase: null });
       try {
         const analysisStartedAt = Date.now();
-        const analysis = await model.analyze(imageToken, scanId, getAnalysisContext());
+        const analysis = await model.analyze(imageToken, scanId, session.analysisContext);
         log("analysis-result", {
           scanId,
           elapsedMs: Date.now() - analysisStartedAt,
@@ -114,7 +118,7 @@ export function createCompositionScanSession({
           judgement: analysis?.judgement ?? null,
         });
         if (active !== session || disposed) return;
-        const result = generate(analysis, session.preview);
+        const result = generate(analysis, session.preview, session.analysisContext);
         session.result = result;
         log("advice-result", { scanId, result });
         clearTimer();

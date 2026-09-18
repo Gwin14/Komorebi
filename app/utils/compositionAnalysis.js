@@ -8,6 +8,12 @@ export const LEVEL_ADVICE_COOLDOWN = 90000;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const area = (rect) => rect.width * rect.height;
 const center = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+const contains = (rect, point) => point && point.x >= rect.x && point.x <= rect.x + rect.width &&
+  point.y >= rect.y && point.y <= rect.y + rect.height;
+const centerDistance = (rect, point) => {
+  const rectCenter = center(rect);
+  return Math.hypot(rectCenter.x - point.x, rectCenter.y - point.y);
+};
 
 function visibleSubjects(items, transform, minConfidence = COMPOSITION_MIN_CONFIDENCE) {
   return (items ?? [])
@@ -28,13 +34,31 @@ function unionRects(items) {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
-function sceneSubject(analysis, transform) {
+function sceneSubject(analysis, transform, preferredPoint) {
   const people = visibleSubjects(analysis.people, transform);
   const faces = visibleSubjects(analysis.faces, transform);
   // Attention saliency confidence is not calibrated like object detection.
   // A lower threshold keeps useful compact regions without weakening people/face checks.
   const subjects = visibleSubjects(analysis.subjects, transform, 0.3);
   const rectangles = visibleSubjects(analysis.rectangles, transform);
+  if (preferredPoint) {
+    for (const [kind, items] of [
+      ["face", faces], ["person", people], ["subject", subjects], ["architecture", rectangles],
+    ]) {
+      const hit = items.filter((item) => contains(item.rect, preferredPoint))
+        .sort((a, b) => area(a.rect) - area(b.rect))[0];
+      if (hit) return { kind, rect: hit.rect, selected: true };
+    }
+    const nearest = [
+      ...faces.map((item) => ({ kind: "face", ...item })),
+      ...people.map((item) => ({ kind: "person", ...item })),
+      ...subjects.map((item) => ({ kind: "subject", ...item })),
+      ...rectangles.map((item) => ({ kind: "architecture", ...item })),
+    ].sort((a, b) => centerDistance(a.rect, preferredPoint) - centerDistance(b.rect, preferredPoint))[0];
+    if (nearest && centerDistance(nearest.rect, preferredPoint) <= 0.22) {
+      return { kind: nearest.kind, rect: nearest.rect, selected: true };
+    }
+  }
   if (people.length > 1) return { kind: "group", rect: unionRects(people) };
   if (people[0]) return { kind: "person", rect: people[0].rect };
   if (faces.length > 1) return { kind: "group", rect: unionRects(faces) };
@@ -44,66 +68,34 @@ function sceneSubject(analysis, transform) {
   return null;
 }
 
-function fixedAspectRect(bounds, padding = 1) {
+function fixedAspectRect(bounds, padding = 1, { minSize = 0.22, maxSize = 0.74 } = {}) {
   const subjectCenter = center(bounds);
-  const size = clamp(Math.max(bounds.width, bounds.height) * padding, 0.24, 0.9);
+  const size = clamp(Math.max(bounds.width, bounds.height) * padding, minSize, maxSize);
   const centerX = clamp(subjectCenter.x, size / 2, 1 - size / 2);
   const centerY = clamp(subjectCenter.y, size / 2, 1 - size / 2);
   return { x: centerX - size / 2, y: centerY - size / 2, width: size, height: size };
 }
 
-function modelBounds(frame, transform) {
+function modelBounds(frame, transform, preferredPoint) {
   const centerX = Number(frame?.centerX);
   const centerY = Number(frame?.centerY);
   const width = Number(frame?.width ?? frame?.size);
   const height = Number(frame?.height ?? frame?.size);
   if (![centerX, centerY, width, height].every(Number.isFinite) ||
-      width < 120 || width > 900 || height < 120 || height > 900 ||
+      width < 40 || width > 900 || height < 40 || height > 900 ||
       centerX - width / 2 < 0 || centerX + width / 2 > 1000 ||
       centerY - height / 2 < 0 || centerY + height / 2 > 1000) return null;
   // Older prompts contained this exact sample. MiniCPM sometimes echoed it
   // verbatim for unrelated scenes, creating the same large frame every time.
   if (Math.abs(centerX - 500) <= 2 && Math.abs(centerY - 450) <= 2 &&
       Math.abs(width - 600) <= 2 && Math.abs(height - 760) <= 2) return null;
-  return transform.rect({
+  const rect = transform.rect({
     x: (centerX - width / 2) / 1000,
     y: (centerY - height / 2) / 1000,
     width: width / 1000,
     height: height / 1000,
   });
-}
-
-const TOPIC_MESSAGES = {
-  luz: "Equilibrar a luz",
-  fundo: "Simplificar o fundo",
-  enquadramento: "Destacar o assunto",
-  escala: "Valorizar o assunto",
-  perspectiva: "Melhorar a perspectiva",
-  olhar: "Dar espaço ao olhar",
-  simetria: "Reforçar a simetria",
-  "nível": "Equilibrar o horizonte",
-  cor: "Valorizar as cores",
-  "espaço vazio": "Reduzir espaço vazio",
-  "relações": "Separar os elementos",
-  profundidade: "Criar profundidade",
-  retrato: "Destacar a pessoa",
-};
-
-const SEMANTIC_TOPIC_MESSAGES = [
-  [/(planta|plantas|veget|flower)/u, "Destacar as plantas"],
-  [/(pessoa|people|person|retrato|rosto)/u, "Destacar a pessoa"],
-  [/(crate|caixa|objeto|object)/u, "Destacar o objeto"],
-  [/(trabalho|workspace|industrial|interior)/u, "Organizar o espaço"],
-  [/(linha|forma|arquitet|building|pr[eé]dio)/u, "Valorizar as linhas"],
-  [/(luz|light|sombra|shadow|contraste)/u, "Equilibrar a luz"],
-  [/(profund|depth|perspect)/u, "Criar profundidade"],
-  [/(fundo|background)/u, "Simplificar o fundo"],
-];
-
-function normalizeTopic(value) {
-  return typeof value === "string"
-    ? value.replace(/\s+/g, " ").trim().toLocaleLowerCase("pt-BR").slice(0, 48)
-    : "";
+  return preferredPoint && !contains(rect, preferredPoint) ? null : rect;
 }
 
 function concreteSubjectLabel(value) {
@@ -116,74 +108,68 @@ function concreteSubjectLabel(value) {
     : "";
 }
 
-function sceneFallbackMessage(analysis, subject) {
-  const rectangles = (analysis.rectangles ?? []).filter((item) => item.confidence >= COMPOSITION_MIN_CONFIDENCE);
-  if (rectangles.length >= 2) return "Valorizar as linhas";
-  if (analysis.horizon?.confidence >= 0.85 && Math.abs(analysis.horizon.angle) >= 0.04) {
-    return "Equilibrar o horizonte";
-  }
-  if (rectangles.length === 1) return "Organizar as formas";
-  if (subject) return "Destacar o assunto";
-  return "Preservar o equilíbrio";
+function cropSettings(value) {
+  if (value === "tight") return { padding: 1.08, minSize: 0.2, maxSize: 0.48 };
+  if (value === "wide") return { padding: 1.45, minSize: 0.3, maxSize: 0.76 };
+  return { padding: 1.22, minSize: 0.24, maxSize: 0.62 };
 }
 
-function messageFor(analysis, subject, subjectDriven = false) {
-  const judgement = analysis.judgement;
-  const subjectLabel = concreteSubjectLabel(judgement?.subject);
-  if (subjectDriven) {
-    if (subject?.kind === "group") return "Enquadrar o grupo";
-    if (subject?.kind === "person") return "Destacar a pessoa";
-    if (subject?.kind === "face") return "Destacar o rosto";
-    if (subjectLabel && subject?.kind === "subject") return `Destacar ${subjectLabel}`.slice(0, 48);
-  }
-  const topic = normalizeTopic(judgement?.topic);
-  const normalizedTopic = topic.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const proposed = typeof judgement?.message === "string"
-    ? judgement.message.replace(/\s+/g, " ").trim()
-    : "";
-  const nominal = /^(destacar|reduzir|preservar|equilibrar|simplificar|valorizar|melhorar|dar|refor[cç]ar|criar|separar|enquadrar|organizar|suavizar)\b/iu;
-  const rejected = /\b(clarity|lighting|background|technical|metadados?|frame|hint|topic)\b/iu;
-  if (proposed.length >= 4 && proposed.length <= 48 && nominal.test(proposed) && !rejected.test(proposed)) {
-    return proposed;
-  }
-  const matchingTopic = Object.keys(TOPIC_MESSAGES).find((key) =>
-    new RegExp(`(^|\\s)${key.normalize("NFD").replace(/[\u0300-\u036f]/g, "")}($|\\s)`, "u")
-      .test(normalizedTopic));
-  if (matchingTopic) return TOPIC_MESSAGES[matchingTopic];
-  const semanticText = `${normalizedTopic} ${proposed.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()}`;
-  const semanticMatch = SEMANTIC_TOPIC_MESSAGES.find(([pattern]) => pattern.test(semanticText));
-  if (semanticMatch) return semanticMatch[1];
+function messageFor(analysis, subject, hasSelection) {
+  const subjectLabel = concreteSubjectLabel(analysis.judgement?.subject);
+  if (subjectLabel) return `Enquadrar ${subjectLabel}`.slice(0, 48);
   if (subject?.kind === "group") return "Enquadrar o grupo";
-  if (subject?.kind === "person") return "Destacar a pessoa";
-  if (subject?.kind === "face") return "Destacar o rosto";
-  if (subject?.kind === "architecture") return "Valorizar a arquitetura";
-  return sceneFallbackMessage(analysis, subject);
+  if (subject?.kind === "person") return "Enquadrar a pessoa";
+  if (subject?.kind === "face") return "Enquadrar o rosto";
+  if (subject?.kind === "architecture") return "Enquadrar a estrutura";
+  if (subject) return "Enquadrar o assunto";
+  if (hasSelection) return "Enquadrar a seleção";
+  return "Recortar a cena";
 }
 
-function buildResult(analysis, preview) {
+function buildResult(analysis, preview, context = {}) {
   const transform = createCompositionTransform(analysis.geometry, preview);
-  const subject = sceneSubject(analysis, transform);
-  const suggested = modelBounds(analysis.judgement?.frame, transform);
+  const selectedPoint = context.subjectPoint;
+  const subject = sceneSubject(analysis, transform, selectedPoint);
+  const suggested = modelBounds(analysis.judgement?.frame, transform, selectedPoint);
+  const crop = cropSettings(analysis.judgement?.cropIntent);
   const compactVisionSubject = subject && (
     ["person", "group", "face"].includes(subject.kind) ||
     (subject.kind === "subject" && area(subject.rect) <= 0.45)
   );
-  const padding = subject?.kind === "face" ? 2.2 : subject?.kind === "subject" ? 1.18 : 1.3;
-  const rect = compactVisionSubject
-    ? fixedAspectRect(subject.rect, padding)
-    : suggested
-      ? fixedAspectRect(suggested)
-      : subject
-        ? fixedAspectRect(subject.rect, padding)
-        : { x: 0.1, y: 0.1, width: 0.8, height: 0.8 };
-  const message = messageFor(analysis, subject, Boolean(compactVisionSubject));
+  const selectedVisionSubject = Boolean(subject?.selected) && (
+    ["person", "group", "face"].includes(subject.kind) || area(subject.rect) <= 0.55
+  );
+  const subjectPadding = subject?.kind === "face"
+    ? Math.max(1.6, crop.padding)
+    : crop.padding;
+  const pointFallback = selectedPoint
+    ? fixedAspectRect({
+      x: selectedPoint.x - 0.2,
+      y: selectedPoint.y - 0.2,
+      width: 0.4,
+      height: 0.4,
+    }, 1, { minSize: 0.4, maxSize: 0.4 })
+    : null;
+  const selectedModelFrame = suggested && Math.max(suggested.width, suggested.height) <= crop.maxSize
+    ? fixedAspectRect(suggested, crop.padding, crop)
+    : null;
+  const rect = selectedVisionSubject
+    ? fixedAspectRect(subject.rect, subjectPadding, crop)
+    : selectedPoint
+      ? selectedModelFrame ?? pointFallback
+      : compactVisionSubject
+        ? fixedAspectRect(subject.rect, subjectPadding, crop)
+        : suggested
+          ? fixedAspectRect(suggested, crop.padding, crop)
+          : subject
+            ? fixedAspectRect(subject.rect, subjectPadding, crop)
+            : { x: 0.14, y: 0.14, width: 0.72, height: 0.72 };
+  const message = messageFor(analysis, subject, Boolean(selectedPoint));
   const subjectTopic = concreteSubjectLabel(analysis.judgement?.subject) || subject?.kind;
   return {
-    kind: analysis.judgement?.verdict === "advice" ? "advice" : "balanced",
+    kind: "advice",
     message,
-    topic: compactVisionSubject
-      ? subjectTopic || "assunto"
-      : normalizeTopic(analysis.judgement?.topic) || subject?.kind || "equilíbrio",
+    topic: subjectTopic || (selectedPoint ? "seleção" : "cena"),
     gizmos: [{
       id: "composition-frame",
       type: "framing",
@@ -194,8 +180,8 @@ function buildResult(analysis, preview) {
   };
 }
 
-export function generateCompositionCandidates(analysis, preview) {
-  const result = buildResult(analysis, preview);
+export function generateCompositionCandidates(analysis, preview, context) {
+  const result = buildResult(analysis, preview, context);
   return [{
     category: "framing",
     topic: result.topic,
@@ -212,14 +198,14 @@ export function createCompositionAdvisor() {
     context() {
       return { recentAdvice: history.map(({ topic, message }) => ({ topic, message })) };
     },
-    generate(analysis, preview) {
-      const result = buildResult(analysis, preview);
+    generate(analysis, preview, context) {
+      const result = buildResult(analysis, preview, context);
       history = [...history, { topic: result.topic, message: result.message }].slice(-ADVICE_HISTORY_LIMIT);
       return result;
     },
   };
 }
 
-export function generateCompositionResult(analysis, preview) {
-  return createCompositionAdvisor().generate(analysis, preview);
+export function generateCompositionResult(analysis, preview, context) {
+  return createCompositionAdvisor().generate(analysis, preview, context);
 }

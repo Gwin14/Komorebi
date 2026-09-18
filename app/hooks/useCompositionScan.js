@@ -40,6 +40,7 @@ export default function useCompositionScan({
   const zoomLimitsRef = useRef({ minZoom, maxZoom });
   const onAutoZoomRef = useRef(onAutoZoom);
   const onCancelAutoZoomRef = useRef(onCancelAutoZoom);
+  const subjectPointRef = useRef(null);
   const [available, setAvailable] = useState(isCompositionScanAvailable);
   const supported = isCompositionScanSupported();
   const canScan = available && enabled && isFocused && foreground && preview.width > 0 && preview.height > 0;
@@ -66,13 +67,16 @@ export default function useCompositionScan({
       model: { arm: armCompositionScan, analyze, cancel },
       getAnalysisContext: () => ({
         ...advisor.context(),
+        subjectPoint: subjectPointRef.current,
+        previewWidth: preview.width,
+        previewHeight: preview.height,
         frameAspectRatio: preview.width > 0 && preview.height > 0
           ? preview.width / preview.height
           : 0.75,
       }),
-      generate: (analysis, scanPreview) => {
+      generate: (analysis, scanPreview, context) => {
         analysisGeometryRef.current = analysis.geometry;
-        return advisor.generate(analysis, scanPreview);
+        return advisor.generate(analysis, scanPreview, context);
       },
       onChange: setSnapshot,
       onError: (error) => {
@@ -120,11 +124,17 @@ export default function useCompositionScan({
     cancelScan();
     advisorRef.current?.reset();
     analysisGeometryRef.current = null;
+    subjectPointRef.current = null;
     setTracking(null);
   }, [configurationKey, canScan, cancelScan, preview.width, preview.height, preview.mirrored]);
 
   const start = useCallback(() => {
-    log("button-start", { canScan, appState: AppState.currentState, preview });
+    log("button-start", {
+      canScan,
+      appState: AppState.currentState,
+      preview,
+      subjectPoint: subjectPointRef.current,
+    });
     if (canScan && AppState.currentState === "active") {
       onCancelAutoZoomRef.current?.();
       void controllerRef.current?.start({ ...preview });
@@ -133,6 +143,14 @@ export default function useCompositionScan({
   const onCaptured = useCallback((token, id) => {
     void controllerRef.current?.captured(token, id);
   }, []);
+  const selectSubject = useCallback((point) => {
+    const valid = point && Number.isFinite(point.x) && Number.isFinite(point.y);
+    subjectPointRef.current = valid ? {
+      x: Math.max(0, Math.min(1, point.x)),
+      y: Math.max(0, Math.min(1, point.y)),
+    } : null;
+    log("subject-selected", { subjectPoint: subjectPointRef.current });
+  }, [log]);
   const trackedResult = useMemo(() => {
     return applyCompositionTracking(snapshot.result, analysisGeometryRef.current, preview, tracking);
   }, [preview, snapshot.result, tracking]);
@@ -174,7 +192,8 @@ export default function useCompositionScan({
   }, [log, preview, snapshot.state, snapshot.trackingScanId, trackedResult, tracking]);
 
   return {
-    ...snapshot, result: trackedResult, supported, available, canScan, start, cancel: cancelScan, onCaptured,
+    ...snapshot, result: trackedResult, supported, available, canScan, start, cancel: cancelScan,
+    onCaptured, selectSubject,
     captureScanId: snapshot.scanId,
     captureRotation: preview.rotation,
     capturePlugin: available ? getCompositionCapturePlugin() : undefined,

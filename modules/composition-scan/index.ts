@@ -16,6 +16,7 @@ export type CompositionJudgement = {
   message: string;
   topic: string;
   subject?: string | null;
+  cropIntent?: "tight" | "medium" | "wide" | null;
   visualHint?: CompositionVisualHint | null;
   frame?: CompositionFrame | null;
 };
@@ -48,6 +49,9 @@ export interface CompositionModel {
 export type CompositionAnalysisContext = {
   recentAdvice: Array<{ topic: string; message: string }>;
   frameAspectRatio?: number;
+  subjectPoint?: NormalizedPoint | null;
+  previewWidth?: number;
+  previewHeight?: number;
 };
 export type CompositionTrackingUpdate = {
   scanId: string;

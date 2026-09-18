@@ -73,9 +73,40 @@ private struct CompositionRecentAdviceRecord: Record {
   @Field var message = ""
 }
 
+private struct CompositionSubjectPointRecord: Record {
+  @Field var x = 0.5
+  @Field var y = 0.5
+}
+
 private struct CompositionAnalysisContextRecord: Record {
   @Field var recentAdvice: [CompositionRecentAdviceRecord] = []
   @Field var frameAspectRatio: Double = 0.75
+  @Field var subjectPoint: CompositionSubjectPointRecord?
+  @Field var previewWidth: Double = 0
+  @Field var previewHeight: Double = 0
+}
+
+private func compositionAnalysisPoint(_ point: [String: Double]?, imageWidth: Int,
+                                      imageHeight: Int, rotation: Int,
+                                      previewWidth: Double, previewHeight: Double) -> [String: Double]? {
+  guard var x = point?["x"], var y = point?["y"],
+        x.isFinite, y.isFinite, previewWidth > 0, previewHeight > 0,
+        imageWidth > 0, imageHeight > 0 else { return nil }
+  let rotated = rotation == 90 || rotation == 270
+  let displayWidth = rotated ? Double(imageHeight) : Double(imageWidth)
+  let displayHeight = rotated ? Double(imageWidth) : Double(imageHeight)
+  let scale = max(previewWidth / displayWidth, previewHeight / displayHeight)
+  let offsetX = (previewWidth - displayWidth * scale) / 2
+  let offsetY = (previewHeight - displayHeight * scale) / 2
+  x = (min(1, max(0, x)) * previewWidth - offsetX) / (displayWidth * scale)
+  y = (min(1, max(0, y)) * previewHeight - offsetY) / (displayHeight * scale)
+  switch rotation {
+  case 90: (x, y) = (y, 1 - x)
+  case 180: (x, y) = (1 - x, 1 - y)
+  case 270: (x, y) = (1 - y, x)
+  default: break
+  }
+  return ["x": min(1, max(0, x)), "y": min(1, max(0, y))]
 }
 
 final class CompositionScanTracker {
@@ -358,7 +389,8 @@ final class CompositionScanSession {
   }
 
   func analyze(_ imageToken: String, id: String, recentAdvice: [[String: String]],
-               frameAspectRatio: Double, promise: Promise) {
+               frameAspectRatio: Double, subjectPoint: [String: Double]?,
+               previewWidth: Double, previewHeight: Double, promise: Promise) {
     lock.lock()
     guard scanId == id, token == imageToken, !cancelled, !analyzing, let input = image else {
       lock.unlock()
@@ -368,6 +400,14 @@ final class CompositionScanSession {
     }
     analyzing = true
     let rotation = imageRotation
+    let analysisSubjectPoint = compositionAnalysisPoint(
+      subjectPoint,
+      imageWidth: input.width,
+      imageHeight: input.height,
+      rotation: rotation,
+      previewWidth: previewWidth,
+      previewHeight: previewHeight
+    )
     image = nil
     token = nil
     lock.unlock()
@@ -419,7 +459,8 @@ final class CompositionScanSession {
           let judgement = MiniCPMCompositionService.shared.analyze(
             input,
             recentAdvice: recentAdvice,
-            frameAspectRatio: frameAspectRatio
+            frameAspectRatio: frameAspectRatio,
+            subjectPoint: analysisSubjectPoint
           )
           self.lock.lock()
           let cancelledAfterModel = self.cancelled
@@ -528,11 +569,15 @@ public class CompositionScanModule: Module {
     }
     AsyncFunction("analyze") { (token: String, id: String, context: CompositionAnalysisContextRecord, promise: Promise) in
       let recentAdvice = context.recentAdvice.map { ["topic": $0.topic, "message": $0.message] }
+      let subjectPoint = context.subjectPoint.map { ["x": $0.x, "y": $0.y] }
       CompositionScanSession.shared.analyze(
         token,
         id: id,
         recentAdvice: recentAdvice,
         frameAspectRatio: context.frameAspectRatio,
+        subjectPoint: subjectPoint,
+        previewWidth: context.previewWidth,
+        previewHeight: context.previewHeight,
         promise: promise
       )
     }
