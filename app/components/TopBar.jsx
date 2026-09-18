@@ -197,10 +197,14 @@ export default function TopBar({
                   backgroundStyle={{ backgroundColor: "transparent" }}
                   popoverStyle={{ backgroundColor: "transparent" }}
                   from={
-                    <TouchableOpacity onPress={control.onPress}>
+                    <TouchableOpacity
+                      style={styles.controlButton}
+                      onPress={control.onPress}
+                      activeOpacity={0.72}
+                    >
                       <Ionicons
                         name={control.icon}
-                        size={32}
+                        size={26}
                         color={control.active ? "#ffaa00" : "white"}
                       />
                     </TouchableOpacity>
@@ -215,7 +219,13 @@ export default function TopBar({
 
         if (controlId === "projects") {
           return (
-            <View key={controlId}>
+            <View
+              key={controlId}
+              style={[
+                styles.controlButton,
+                control.active && styles.controlButtonActive,
+              ]}
+            >
               <Animated.View style={animatedStyle}>
                 <ProjectSelector
                   projects={projects}
@@ -227,7 +237,7 @@ export default function TopBar({
                   compact
                   bare
                   triggerActive={Boolean(activeProjectId)}
-                  triggerIconSize={32}
+                  triggerIconSize={26}
                 />
               </Animated.View>
             </View>
@@ -237,6 +247,10 @@ export default function TopBar({
         return (
           <TouchableOpacity
             key={controlId}
+            style={[
+              styles.controlButton,
+              control.active && styles.controlButtonActive,
+            ]}
             onPress={() => {
               if (disabled) {
                 Alert.alert(
@@ -248,6 +262,7 @@ export default function TopBar({
               }
               control.onPress?.();
             }}
+            activeOpacity={0.72}
             accessibilityState={{ disabled }}
           >
             <Animated.View
@@ -255,7 +270,7 @@ export default function TopBar({
             >
               {controlId === "rawCapture" ? (
                 <View style={styles.rawControl}>
-                  <Ionicons name={control.icon} size={28} color={iconColor} />
+                  <Ionicons name={control.icon} size={26} color={iconColor} />
                   <Text
                     style={[
                       styles.rawLabel,
@@ -268,7 +283,7 @@ export default function TopBar({
               ) : control.symbol ? (
                 <SymbolView
                   name={control.symbol}
-                  size={32}
+                  size={26}
                   type="monochrome"
                   tintColor={iconColor}
                   resizeMode="scaleAspectFit"
@@ -276,7 +291,7 @@ export default function TopBar({
                   fallback={
                     <Ionicons
                       name={control.icon}
-                      size={32}
+                      size={26}
                       style={styles.button}
                       color={iconColor}
                     />
@@ -285,7 +300,7 @@ export default function TopBar({
               ) : (
                 <Ionicons
                   name={control.icon}
-                  size={32}
+                  size={26}
                   style={styles.button}
                   color={iconColor}
                 />

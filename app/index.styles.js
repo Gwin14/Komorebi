@@ -25,16 +25,11 @@ export default StyleSheet.create({
     overflow: "hidden",
   },
   topBarBelow: {
-    width: "90%",
-    borderWidth: 4,
-    borderColor: "#191919af",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-
+    width: "96%",
+    paddingHorizontal: 2,
+    paddingVertical: 4,
     margin: "auto",
-    borderRadius: 10,
-    overflow: "hidden",
-    backgroundColor: "#000",
+    borderRadius: 14,
   },
 
   permissionContainer: {

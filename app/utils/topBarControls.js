@@ -107,11 +107,5 @@ export function normalizeTopBarControls(savedControls) {
     parsed.push("settings");
   }
 
-  // Garante que o controle de projetos apareça mesmo em settings antigos
-  // (migração). O usuário ainda pode removê-lo nas configurações.
-  if (!parsed.includes("projects")) {
-    parsed.push("projects");
-  }
-
   return parsed.slice(0, TOP_BAR_MAX_CONTROLS);
 }
