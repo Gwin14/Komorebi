@@ -70,12 +70,9 @@ const GRAIN_DOTS = [
 
 const GRAIN_DOT_COUNTS = {
   none: 0,
-  fine: 8,
-  soft: 13,
-  film: 18,
-  rough: 20,
-  sixteen: 22,
-  push: GRAIN_DOTS.length,
+  soft: 10,
+  medium: 18,
+  strong: GRAIN_DOTS.length,
 };
 
 const HALATION_PREVIEWS = {

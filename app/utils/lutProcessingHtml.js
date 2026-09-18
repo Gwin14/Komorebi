@@ -212,6 +212,147 @@ const HALATION_PROCESSOR_SCRIPT = `
     }
 `;
 
+const GRAIN_PROCESSOR_SCRIPT = `
+    function applyGrain(ctx, canvas, gc) {
+      const grainImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = grainImage.data;
+      const width = canvas.width;
+      const height = canvas.height;
+      const resolutionScale = Math.max(width, height) / 3000;
+
+      // A different deterministic stream is used for every processed frame.
+      // Xorshift is considerably cheaper than four Box-Muller calls per pixel.
+      let seed = (
+        Date.now() ^
+        Math.imul(width, 73856093) ^
+        Math.imul(height, 19349663) ^
+        Math.floor(Math.random() * 0xffffffff)
+      ) >>> 0;
+      if (seed === 0) seed = 0x6d2b79f5;
+      const patternSeed = seed;
+      const random = () => {
+        seed ^= seed << 13;
+        seed ^= seed >>> 17;
+        seed ^= seed << 5;
+        return (seed >>> 0) / 4294967296;
+      };
+      const triangularNoise = () =>
+        (random() + random() - 1) * 2.449489743;
+      const smoothstep = (edge0, edge1, value) => {
+        const position = Math.max(
+          0,
+          Math.min(1, (value - edge0) / Math.max(0.0001, edge1 - edge0)),
+        );
+        return position * position * (3 - 2 * position);
+      };
+
+      const hash2d = (x, y, offset) => {
+        let hash =
+          Math.imul(x + offset, 374761393) ^
+          Math.imul(y - offset, 668265263) ^
+          patternSeed;
+        hash = Math.imul(hash ^ (hash >>> 13), 1274126177);
+        return (((hash ^ (hash >>> 16)) >>> 0) / 4294967295) * 2 - 1;
+      };
+      const clumpSize = Math.max(8, gc.clumpSize * resolutionScale);
+      const clumpAt = (x, y) => {
+        const gridX = x / clumpSize;
+        const gridY = y / clumpSize;
+        const x0 = Math.floor(gridX);
+        const y0 = Math.floor(gridY);
+        const fx = smoothstep(0, 1, gridX - x0);
+        const fy = smoothstep(0, 1, gridY - y0);
+        const top =
+          hash2d(x0, y0, 17) * (1 - fx) +
+          hash2d(x0 + 1, y0, 17) * fx;
+        const bottom =
+          hash2d(x0, y0 + 1, 17) * (1 - fx) +
+          hash2d(x0 + 1, y0 + 1, 17) * fx;
+        return top * (1 - fy) + bottom * fy;
+      };
+
+      // A small two-dimensional correlation turns isolated digital pixels
+      // into organic dye-cloud clusters without smearing image detail.
+      const previousLuma = new Float32Array(width);
+      const previousChromaA = new Float32Array(width);
+      const previousChromaB = new Float32Array(width);
+      const correlation = Math.max(0, Math.min(0.45, gc.correlation));
+      const neighbourWeight = correlation * 0.5;
+      const rawWeight = 1 - correlation;
+      const correlationGain = 1 / Math.sqrt(
+        rawWeight * rawWeight + 2 * neighbourWeight * neighbourWeight,
+      );
+
+      for (let y = 0; y < height; y++) {
+        let leftLuma = 0;
+        let leftChromaA = 0;
+        let leftChromaB = 0;
+
+        for (let x = 0; x < width; x++) {
+          const dataIndex = (y * width + x) * 4;
+          const red = data[dataIndex];
+          const green = data[dataIndex + 1];
+          const blue = data[dataIndex + 2];
+          const tone = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255;
+
+          const aboveLuma = previousLuma[x];
+          const aboveChromaA = previousChromaA[x];
+          const aboveChromaB = previousChromaB[x];
+          const lumaNoise = (
+            triangularNoise() * rawWeight +
+            (leftLuma + aboveLuma) * neighbourWeight
+          ) * correlationGain;
+          const chromaA = (
+            triangularNoise() * rawWeight +
+            (leftChromaA + aboveChromaA) * neighbourWeight
+          ) * correlationGain;
+          const chromaB = (
+            triangularNoise() * rawWeight +
+            (leftChromaB + aboveChromaB) * neighbourWeight
+          ) * correlationGain;
+
+          previousLuma[x] = lumaNoise;
+          previousChromaA[x] = chromaA;
+          previousChromaB[x] = chromaB;
+          leftLuma = lumaNoise;
+          leftChromaA = chromaA;
+          leftChromaB = chromaB;
+
+          // Protect deep blacks from colored crawling and roll grain gently
+          // out of clipped highlights, while retaining texture in midtones.
+          const toeProtection = smoothstep(0.025, 0.14, tone);
+          const highlightProtection =
+            1 - smoothstep(0.64, 1, tone) * gc.highlightReduction;
+          const shadowResponse =
+            1 + (1 - smoothstep(0.16, 0.58, tone)) * gc.shadowBoost;
+          const tonalWeight =
+            toeProtection * highlightProtection * shadowResponse;
+          const clump = 1 + clumpAt(x, y) * gc.clumpAmount;
+          const monochrome =
+            lumaNoise * gc.lumaStrength * tonalWeight * clump;
+          const colorStrength = gc.chromaStrength * tonalWeight;
+          const colorA = chromaA * colorStrength;
+          const colorB = chromaB * colorStrength;
+
+          data[dataIndex] = Math.min(
+            255,
+            Math.max(0, red + monochrome + colorA),
+          );
+          data[dataIndex + 1] = Math.min(
+            255,
+            Math.max(0, green + monochrome - colorA * 0.45 + colorB * 0.2),
+          );
+          data[dataIndex + 2] = Math.min(
+            255,
+            Math.max(0, blue + monochrome + colorB),
+          );
+        }
+      }
+
+      ctx.putImageData(grainImage, 0, 0);
+    }
+`;
+
 export const generateProcessingHTML = (
   base64Image,
   cube,
@@ -254,6 +395,8 @@ export const generateProcessingHTML = (
     const clamp = (val, min = 0, max = 1) => Math.max(min, Math.min(max, val));
 
     ${HALATION_PROCESSOR_SCRIPT}
+
+    ${GRAIN_PROCESSOR_SCRIPT}
     
     const tetrahedralInterpolate = (r, g, b, size, lut) => {
       const rScaled = r * (size - 1);
@@ -403,64 +546,7 @@ export const generateProcessingHTML = (
 
       // --- GRAIN ---
       if (${JSON.stringify(grainConfig ? true : false)}) {
-        const gc = ${JSON.stringify(grainConfig)};
-
-        // Box-Muller gaussiana
-        function gaussian(std) {
-          let u, v;
-          do { u = Math.random(); } while (u === 0);
-          do { v = Math.random(); } while (v === 0);
-          return std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-        }
-
-        // Perlin noise
-        const _p = Array.from({length:256},(_,i)=>i);
-        for(let i=255;i>0;i--){const j=Math.floor(Math.random()*(i+1));[_p[i],_p[j]]=[_p[j],_p[i]];}
-        const PERM=[..._p,..._p];
-        const fade=t=>t*t*t*(t*(t*6-15)+10);
-        const lerp=(a,b,t)=>a+t*(b-a);
-        const grad2=(h,x,y)=>((h&1)?-x:x)+((h&2)?-y:y);
-        function perlin(x,y){
-          const X=Math.floor(x)&255,Y=Math.floor(y)&255;
-          x-=Math.floor(x);y-=Math.floor(y);
-          const u=fade(x),v=fade(y);
-          const a=PERM[X]+Y,b=PERM[X+1]+Y;
-          return lerp(lerp(grad2(PERM[a],x,y),grad2(PERM[b],x-1,y),u),lerp(grad2(PERM[a+1],x,y-1),grad2(PERM[b+1],x-1,y-1),u),v);
-        }
-        function fbm(x,y,oct){
-          let v=0,a=0.5,f=1,mx=0;
-          for(let i=0;i<oct;i++){v+=perlin(x*f,y*f)*a;mx+=a;a*=0.5;f*=2.1;}
-          return v/mx;
-        }
-
-        const grainData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const gd = grainData.data;
-        const gw = canvas.width, gh = canvas.height;
-
-        // Pré-calcular campo Perlin
-        const clump = new Float32Array(gw * gh);
-        for(let y=0;y<gh;y++)
-          for(let x=0;x<gw;x++)
-            clump[y*gw+x] = fbm(x*gc.clumpFreq, y*gc.clumpFreq, gc.octaves);
-
-        for(let y=0;y<gh;y++){
-          for(let x=0;x<gw;x++){
-            const i=(y*gw+x)*4;
-            const r=gd[i],g=gd[i+1],b=gd[i+2];
-            const luma=0.2126*r+0.7152*g+0.0722*b;
-            const t=luma/255;
-            const lf=1+Math.pow(1-t,1.6)*gc.shadowBoost-Math.pow(t,2.2)*gc.highlightReduction;
-            const cl=1+clump[y*gw+x]*gc.clumpAmp;
-            const lumaG=gaussian(gc.lumaStd*lf*cl);
-            const cr=gaussian(gc.rStd*lf);
-            const cg=gaussian(gc.gStd*lf);
-            const cb=gaussian(gc.bStd*lf);
-            gd[i]  =Math.min(255,Math.max(0,r+lumaG+cr));
-            gd[i+1]=Math.min(255,Math.max(0,g+lumaG+cg));
-            gd[i+2]=Math.min(255,Math.max(0,b+lumaG+cb));
-          }
-        }
-        ctx.putImageData(grainData, 0, 0);
+        applyGrain(ctx, canvas, ${JSON.stringify(grainConfig)});
       }
       // --- FIM GRAIN ---
       
@@ -511,6 +597,8 @@ export const generateRuntimeHTML = () => `
     const clamp = (val, min = 0, max = 1) => Math.max(min, Math.min(max, val));
 
     ${HALATION_PROCESSOR_SCRIPT}
+
+    ${GRAIN_PROCESSOR_SCRIPT}
 
     const tetrahedralInterpolate = (r, g, b, size, lut) => {
       const rScaled = r * (size - 1);
@@ -578,51 +666,7 @@ export const generateRuntimeHTML = () => `
         }
 
         if (grainConfig) {
-          const gc = grainConfig;
-          function gaussian(std) {
-            let u, v;
-            do { u = Math.random(); } while (u === 0);
-            do { v = Math.random(); } while (v === 0);
-            return std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-          }
-          const _p = Array.from({length:256},(_,i)=>i);
-          for(let i=255;i>0;i--){const j=Math.floor(Math.random()*(i+1));[_p[i],_p[j]]=[_p[j],_p[i]];}
-          const PERM=[..._p,..._p];
-          const fade=t=>t*t*t*(t*(t*6-15)+10);
-          const lerp=(a,b,t)=>a+t*(b-a);
-          const grad2=(h,x,y)=>((h&1)?-x:x)+((h&2)?-y:y);
-          function perlin(x,y){
-            const X=Math.floor(x)&255,Y=Math.floor(y)&255;
-            x-=Math.floor(x);y-=Math.floor(y);
-            const u=fade(x),v=fade(y);
-            const a=PERM[X]+Y,b=PERM[X+1]+Y;
-            return lerp(lerp(grad2(PERM[a],x,y),grad2(PERM[b],x-1,y),u),lerp(grad2(PERM[a+1],x,y-1),grad2(PERM[b+1],x-1,y-1),u),v);
-          }
-          function fbm(x,y,oct){
-            let v=0,a=0.5,f=1,mx=0;
-            for(let i=0;i<oct;i++){v+=perlin(x*f,y*f)*a;mx+=a;a*=0.5;f*=2.1;}
-            return v/mx;
-          }
-          const grainData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const gd = grainData.data;
-          const gw = canvas.width, gh = canvas.height;
-          const clump = new Float32Array(gw * gh);
-          for(let y=0;y<gh;y++) for(let x=0;x<gw;x++) clump[y*gw+x]=fbm(x*gc.clumpFreq,y*gc.clumpFreq,gc.octaves);
-          for(let y=0;y<gh;y++){
-            for(let x=0;x<gw;x++){
-              const i=(y*gw+x)*4;
-              const r=gd[i],g=gd[i+1],b=gd[i+2];
-              const luma=0.2126*r+0.7152*g+0.0722*b;
-              const t=luma/255;
-              const lf=1+Math.pow(1-t,1.6)*gc.shadowBoost-Math.pow(t,2.2)*gc.highlightReduction;
-              const cl=1+clump[y*gw+x]*gc.clumpAmp;
-              const lumaG=gaussian(gc.lumaStd*lf*cl);
-              gd[i]  =Math.min(255,Math.max(0,r+lumaG+gaussian(gc.rStd*lf)));
-              gd[i+1]=Math.min(255,Math.max(0,g+lumaG+gaussian(gc.gStd*lf)));
-              gd[i+2]=Math.min(255,Math.max(0,b+lumaG+gaussian(gc.bStd*lf)));
-            }
-          }
-          ctx.putImageData(grainData, 0, 0);
+          applyGrain(ctx, canvas, grainConfig);
         }
 
         canvas.toBlob((blob) => {
