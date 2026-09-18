@@ -25,6 +25,5 @@ export default StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 6,
     elevation: 5,
-    transform: [{ translateX: -35 }, { translateY: 0 }],
   },
 });
