@@ -1,3 +1,217 @@
+const HALATION_PROCESSOR_SCRIPT = `
+    function applyHalation(ctx, canvas, hc) {
+      const maskScale = 0.4;
+      const maskWidth = Math.max(1, Math.round(canvas.width * maskScale));
+      const maskHeight = Math.max(1, Math.round(canvas.height * maskScale));
+      const pixelCount = maskWidth * maskHeight;
+
+      const analysisCanvas = document.createElement('canvas');
+      analysisCanvas.width = maskWidth;
+      analysisCanvas.height = maskHeight;
+      const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true });
+      analysisCtx.imageSmoothingEnabled = true;
+      analysisCtx.imageSmoothingQuality = 'high';
+      analysisCtx.drawImage(canvas, 0, 0, maskWidth, maskHeight);
+      const sourceData = analysisCtx.getImageData(0, 0, maskWidth, maskHeight).data;
+
+      const signalMap = new Float32Array(pixelCount);
+      const darknessMap = new Float32Array(pixelCount);
+      const histogram = new Uint32Array(256);
+      const integralWidth = maskWidth + 1;
+      const lumaIntegral = new Float32Array(integralWidth * (maskHeight + 1));
+
+      for (let y = 0; y < maskHeight; y++) {
+        let rowSum = 0;
+        for (let x = 0; x < maskWidth; x++) {
+          const pixelIndex = y * maskWidth + x;
+          const sourceIndex = pixelIndex * 4;
+          const r = sourceData[sourceIndex] / 255;
+          const g = sourceData[sourceIndex + 1] / 255;
+          const b = sourceData[sourceIndex + 2] / 255;
+          const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          const signal = luma * 0.72 + Math.max(r, g, b) * 0.28;
+
+          signalMap[pixelIndex] = signal;
+          darknessMap[pixelIndex] = Math.pow(Math.max(0, 1 - luma), 0.68);
+          histogram[Math.min(255, Math.round(signal * 255))] += 1;
+
+          rowSum += luma;
+          const integralIndex = (y + 1) * integralWidth + x + 1;
+          lumaIntegral[integralIndex] =
+            lumaIntegral[integralIndex - integralWidth] + rowSum;
+        }
+      }
+
+      // Adapt to underexposed scenes while local contrast keeps ordinary
+      // midtones from becoming false light sources.
+      const percentileTarget = pixelCount * 0.98;
+      let accumulated = 0;
+      let highPercentile = 1;
+      for (let bucket = 0; bucket < histogram.length; bucket++) {
+        accumulated += histogram[bucket];
+        if (accumulated >= percentileTarget) {
+          highPercentile = bucket / 255;
+          break;
+        }
+      }
+
+      const configuredFloor = Math.max(0, hc.threshold - hc.softness);
+      const highlightFloor = Math.min(configuredFloor, highPercentile * 0.82);
+      const contrastRadius = Math.max(2, Math.round(hc.contrastRadius * maskScale));
+      const highlightMask = new Float32Array(pixelCount);
+
+      for (let y = 0; y < maskHeight; y++) {
+        for (let x = 0; x < maskWidth; x++) {
+          const pixelIndex = y * maskWidth + x;
+          const signal = signalMap[pixelIndex];
+          const highlightPosition = Math.max(
+            0,
+            Math.min(1, (signal - highlightFloor) / Math.max(0.001, hc.softness)),
+          );
+          const highlightStrength =
+            highlightPosition * highlightPosition * (3 - 2 * highlightPosition);
+
+          const x0 = Math.max(0, x - contrastRadius);
+          const y0 = Math.max(0, y - contrastRadius);
+          const x1 = Math.min(maskWidth - 1, x + contrastRadius);
+          const y1 = Math.min(maskHeight - 1, y + contrastRadius);
+          const area = (x1 - x0 + 1) * (y1 - y0 + 1);
+          const localLuma = (
+            lumaIntegral[(y1 + 1) * integralWidth + x1 + 1] -
+            lumaIntegral[y0 * integralWidth + x1 + 1] -
+            lumaIntegral[(y1 + 1) * integralWidth + x0] +
+            lumaIntegral[y0 * integralWidth + x0]
+          ) / area;
+          const localContrast = Math.max(0, signal - localLuma);
+          const contrastPosition = Math.max(
+            0,
+            Math.min(
+              1,
+              (localContrast - hc.minContrast) /
+                Math.max(0.001, hc.contrastSoftness),
+            ),
+          );
+          const contrastStrength =
+            contrastPosition * contrastPosition * (3 - 2 * contrastPosition);
+
+          highlightMask[pixelIndex] = highlightStrength * contrastStrength;
+        }
+      }
+
+      const boxBlur = (source, radius) => {
+        const horizontal = new Float32Array(pixelCount);
+        const output = new Float32Array(pixelCount);
+
+        for (let y = 0; y < maskHeight; y++) {
+          const rowOffset = y * maskWidth;
+          let sum = 0;
+          for (let x = 0; x <= Math.min(radius, maskWidth - 1); x++) {
+            sum += source[rowOffset + x];
+          }
+          for (let x = 0; x < maskWidth; x++) {
+            const left = Math.max(0, x - radius);
+            const right = Math.min(maskWidth - 1, x + radius);
+            horizontal[rowOffset + x] = sum / (right - left + 1);
+            const removeX = x - radius;
+            const addX = x + radius + 1;
+            if (removeX >= 0) sum -= source[rowOffset + removeX];
+            if (addX < maskWidth) sum += source[rowOffset + addX];
+          }
+        }
+
+        for (let x = 0; x < maskWidth; x++) {
+          let sum = 0;
+          for (let y = 0; y <= Math.min(radius, maskHeight - 1); y++) {
+            sum += horizontal[y * maskWidth + x];
+          }
+          for (let y = 0; y < maskHeight; y++) {
+            const top = Math.max(0, y - radius);
+            const bottom = Math.min(maskHeight - 1, y + radius);
+            output[y * maskWidth + x] = sum / (bottom - top + 1);
+            const removeY = y - radius;
+            const addY = y + radius + 1;
+            if (removeY >= 0) sum -= horizontal[removeY * maskWidth + x];
+            if (addY < maskHeight) sum += horizontal[addY * maskWidth + x];
+          }
+        }
+
+        return output;
+      };
+
+      const softBlur = (source, fullRadius) => {
+        const passRadius = Math.max(1, Math.round(fullRadius * maskScale * 0.5));
+        const firstPass = boxBlur(source, passRadius);
+        return boxBlur(firstPass, passRadius);
+      };
+
+      // The custom blur is deterministic in WKWebView; relying on Canvas
+      // filter here caused some iOS versions to export an empty halo layer.
+      const fringeBlur = softBlur(highlightMask, hc.fringeRadius);
+      const diffusionBlur = softBlur(highlightMask, hc.diffusionRadius);
+      const layerCanvas = document.createElement('canvas');
+      layerCanvas.width = maskWidth;
+      layerCanvas.height = maskHeight;
+      const layerCtx = layerCanvas.getContext('2d');
+      const layerImage = layerCtx.createImageData(maskWidth, maskHeight);
+      const layerData = layerImage.data;
+      let peakOpacity = 0;
+
+      for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++) {
+        const sourceMask = highlightMask[pixelIndex];
+        const darkness = darknessMap[pixelIndex];
+        const fringe =
+          Math.max(0, fringeBlur[pixelIndex] - sourceMask * 0.72) *
+          darkness * hc.fringeIntensity;
+        const diffusion =
+          Math.max(0, diffusionBlur[pixelIndex] - sourceMask * 0.9) *
+          darkness * hc.diffusionIntensity;
+        peakOpacity = Math.max(peakOpacity, fringe + diffusion);
+      }
+
+      // Keep a valid edge perceptible across differently exposed captures.
+      // This only raises an already detected highlight/contrast boundary.
+      const opacityGain =
+        peakOpacity > 0.001
+          ? Math.max(1, hc.targetPeakOpacity / peakOpacity)
+          : 1;
+
+      for (let pixelIndex = 0; pixelIndex < pixelCount; pixelIndex++) {
+        const sourceMask = highlightMask[pixelIndex];
+        const darkness = darknessMap[pixelIndex];
+
+        // Subtract the source highlight so light is dispersed mostly into the
+        // darker side of the edge instead of tinting the highlight itself.
+        const fringe =
+          Math.max(0, fringeBlur[pixelIndex] - sourceMask * 0.72) *
+          darkness * hc.fringeIntensity;
+        const diffusion =
+          Math.max(0, diffusionBlur[pixelIndex] - sourceMask * 0.9) *
+          darkness * hc.diffusionIntensity;
+        const opacity = Math.min(1, (fringe + diffusion) * opacityGain);
+        const dataIndex = pixelIndex * 4;
+
+        if (opacity > 0.001) {
+          layerData[dataIndex] = 255;
+          layerData[dataIndex + 1] = Math.round(
+            (78 * fringe + 151 * diffusion) / (fringe + diffusion),
+          );
+          layerData[dataIndex + 2] = Math.round(
+            (30 * fringe + 74 * diffusion) / (fringe + diffusion),
+          );
+          layerData[dataIndex + 3] = Math.round(255 * opacity);
+        }
+      }
+
+      layerCtx.putImageData(layerImage, 0, 0);
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(layerCanvas, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+    }
+`;
+
 export const generateProcessingHTML = (
   base64Image,
   cube,
@@ -38,6 +252,8 @@ export const generateProcessingHTML = (
     };
     
     const clamp = (val, min = 0, max = 1) => Math.max(min, Math.min(max, val));
+
+    ${HALATION_PROCESSOR_SCRIPT}
     
     const tetrahedralInterpolate = (r, g, b, size, lut) => {
       const rScaled = r * (size - 1);
@@ -181,44 +397,7 @@ export const generateProcessingHTML = (
 
       // --- HALATION ---
       if (${JSON.stringify(halationConfig ? true : false)}) {
-        const hc = ${JSON.stringify(halationConfig)};
-        const maskScale = 0.5;
-        const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = Math.max(1, Math.round(canvas.width * maskScale));
-        maskCanvas.height = Math.max(1, Math.round(canvas.height * maskScale));
-        const maskCtx = maskCanvas.getContext('2d');
-        const maskImage = maskCtx.createImageData(maskCanvas.width, maskCanvas.height);
-        const maskData = maskImage.data;
-        const sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
-        for (let y = 0; y < maskCanvas.height; y++) {
-          for (let x = 0; x < maskCanvas.width; x++) {
-            const sourceX = Math.min(canvas.width - 1, Math.round(x / maskScale));
-            const sourceY = Math.min(canvas.height - 1, Math.round(y / maskScale));
-            const sourceIndex = (sourceY * canvas.width + sourceX) * 4;
-            const luma = (
-              0.2126 * sourceData[sourceIndex] +
-              0.7152 * sourceData[sourceIndex + 1] +
-              0.0722 * sourceData[sourceIndex + 2]
-            ) / 255;
-            const edge0 = Math.max(0, hc.threshold - hc.softness);
-            const normalized = Math.max(0, Math.min(1, (luma - edge0) / Math.max(0.001, hc.softness)));
-            const highlightMask = normalized * normalized * (3 - 2 * normalized);
-            const maskIndex = (y * maskCanvas.width + x) * 4;
-            maskData[maskIndex] = Math.round(255 * hc.red);
-            maskData[maskIndex + 1] = Math.round(255 * hc.green);
-            maskData[maskIndex + 2] = Math.round(255 * hc.blue);
-            maskData[maskIndex + 3] = Math.round(255 * highlightMask);
-          }
-        }
-
-        maskCtx.putImageData(maskImage, 0, 0);
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        ctx.globalAlpha = hc.intensity;
-        ctx.filter = 'blur(' + hc.radius + 'px)';
-        ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
-        ctx.restore();
+        applyHalation(ctx, canvas, ${JSON.stringify(halationConfig)});
       }
       // --- FIM HALATION ---
 
@@ -331,6 +510,8 @@ export const generateRuntimeHTML = () => `
 
     const clamp = (val, min = 0, max = 1) => Math.max(min, Math.min(max, val));
 
+    ${HALATION_PROCESSOR_SCRIPT}
+
     const tetrahedralInterpolate = (r, g, b, size, lut) => {
       const rScaled = r * (size - 1);
       const gScaled = g * (size - 1);
@@ -393,40 +574,7 @@ export const generateRuntimeHTML = () => `
         }
 
         if (halationConfig) {
-          const hc = halationConfig;
-          const maskScale = 0.5;
-          const maskCanvas = document.createElement('canvas');
-          maskCanvas.width = Math.max(1, Math.round(canvas.width * maskScale));
-          maskCanvas.height = Math.max(1, Math.round(canvas.height * maskScale));
-          const maskCtx = maskCanvas.getContext('2d');
-          const maskImage = maskCtx.createImageData(maskCanvas.width, maskCanvas.height);
-          const maskData = maskImage.data;
-          const sourceData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
-          for (let y = 0; y < maskCanvas.height; y++) {
-            for (let x = 0; x < maskCanvas.width; x++) {
-              const sourceX = Math.min(canvas.width - 1, Math.round(x / maskScale));
-              const sourceY = Math.min(canvas.height - 1, Math.round(y / maskScale));
-              const sourceIndex = (sourceY * canvas.width + sourceX) * 4;
-              const luma = (0.2126 * sourceData[sourceIndex] + 0.7152 * sourceData[sourceIndex + 1] + 0.0722 * sourceData[sourceIndex + 2]) / 255;
-              const edge0 = Math.max(0, hc.threshold - hc.softness);
-              const normalized = Math.max(0, Math.min(1, (luma - edge0) / Math.max(0.001, hc.softness)));
-              const highlightMask = normalized * normalized * (3 - 2 * normalized);
-              const maskIndex = (y * maskCanvas.width + x) * 4;
-              maskData[maskIndex] = Math.round(255 * hc.red);
-              maskData[maskIndex + 1] = Math.round(255 * hc.green);
-              maskData[maskIndex + 2] = Math.round(255 * hc.blue);
-              maskData[maskIndex + 3] = Math.round(255 * highlightMask);
-            }
-          }
-
-          maskCtx.putImageData(maskImage, 0, 0);
-          ctx.save();
-          ctx.globalCompositeOperation = 'screen';
-          ctx.globalAlpha = hc.intensity;
-          ctx.filter = 'blur(' + hc.radius + 'px)';
-          ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
-          ctx.restore();
+          applyHalation(ctx, canvas, halationConfig);
         }
 
         if (grainConfig) {

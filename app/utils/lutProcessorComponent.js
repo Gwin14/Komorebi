@@ -3,7 +3,6 @@ import * as piexif from "piexifjs";
 import React, {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -11,13 +10,15 @@ import { WebView } from "react-native-webview";
 import { saveProcessedImage } from "./exifImageWriter";
 import { generateRuntimeHTML } from "./lutProcessingHtml";
 
+// Module-level generation is refreshed together with this dependency during
+// Fast Refresh, while remaining stable across normal component renders.
+const STATIC_PROCESSING_HTML = generateRuntimeHTML();
+
 export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const webViewRef = useRef(null);
   const [ready, setReady] = useState(false);
   const pendingRef = useRef(null);
   const originalExifRef = useRef(null);
-
-  const staticHtml = useMemo(() => generateRuntimeHTML(), []);
 
   const sendToWebView = useCallback(
     async (data) => {
@@ -98,7 +99,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   return (
     <WebView
       ref={webViewRef}
-      source={{ html: staticHtml }}
+      source={{ html: STATIC_PROCESSING_HTML }}
       onMessage={handleMessage}
       onLoadEnd={() => setReady(true)}
       style={{ width: 0, height: 0, position: "absolute", opacity: 0 }}

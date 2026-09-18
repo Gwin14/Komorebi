@@ -80,12 +80,9 @@ const GRAIN_DOT_COUNTS = {
 
 const HALATION_PREVIEWS = {
   none: ["#f2f2ed", "#8d8d88", "#3b3b3b"],
-  soft: ["#fffdf3", "#e9b29a", "#7d352b"],
-  medium: ["#fffdf3", "#f47b5d", "#ad2817"],
-  film: ["#ffffff", "#ff4b2b", "#e01608"],
-  amber: ["#ffffff", "#ff9a52", "#b9290d"],
-  neon: ["#ffffff", "#ff3c24", "#a60000"],
-  aura: ["#fff8df", "#ff7250", "#8f130a"],
+  soft: ["#fffdf5", "#eab49a", "#63352f"],
+  medium: ["#fffbee", "#ef8d66", "#8d2d24"],
+  strong: ["#fff8e8", "#f26f45", "#ad2117"],
 };
 
 export default function LUTSelector({
