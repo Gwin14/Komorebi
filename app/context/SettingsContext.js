@@ -14,8 +14,10 @@ const DEFAULT_SETTINGS = {
   gridVisible: false,
   levelVisible: false,
   histogramVisible: false,
+  compositionScanEnabled: true,
   shutterSound: false,
   location: true,
+  saveAsJpeg: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
   customLuts: [],
@@ -34,11 +36,15 @@ export const SettingsProvider = ({ children }) => {
   const [histogramVisible, setHistogramVisible] = useState(
     DEFAULT_SETTINGS.histogramVisible,
   );
+  const [compositionScanEnabled, setCompositionScanEnabled] = useState(
+    DEFAULT_SETTINGS.compositionScanEnabled,
+  );
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(
     DEFAULT_SETTINGS.shutterSound,
   );
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
+  const [saveAsJpeg, setSaveAsJpeg] = useState(DEFAULT_SETTINGS.saveAsJpeg);
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
@@ -62,8 +68,10 @@ export const SettingsProvider = ({ children }) => {
         setGridVisible(savedSettings.gridVisible);
         setLevelVisible(savedSettings.levelVisible);
         setHistogramVisible(savedSettings.histogramVisible);
+        setCompositionScanEnabled(savedSettings.compositionScanEnabled);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
+        setSaveAsJpeg(savedSettings.saveAsJpeg);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
@@ -138,6 +146,16 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [histogramVisible, loading]);
 
+  // Salvar disponibilidade do Scan de composição.
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.COMPOSITION_SCAN_ENABLED,
+        compositionScanEnabled.toString(),
+      );
+    }
+  }, [compositionScanEnabled, loading]);
+
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
     if (!loading) {
@@ -174,6 +192,16 @@ export const SettingsProvider = ({ children }) => {
       saveStoredSetting(SETTINGS_STORAGE_KEYS.LOCATION, location.toString());
     }
   }, [location, loading]);
+
+  // No iPhone, HEIF e o formato padrao; JPEG fica como opcao de compatibilidade.
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.SAVE_AS_JPEG,
+        saveAsJpeg.toString(),
+      );
+    }
+  }, [saveAsJpeg, loading]);
 
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
@@ -231,11 +259,15 @@ export const SettingsProvider = ({ children }) => {
     setLevelVisible,
     histogramVisible,
     setHistogramVisible,
+    compositionScanEnabled,
+    setCompositionScanEnabled,
     loading,
     shutterSound,
     setShutterSound,
     location,
     setLocation,
+    saveAsJpeg,
+    setSaveAsJpeg,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     firstTime,

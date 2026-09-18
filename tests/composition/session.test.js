@@ -1,9 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCompositionScanSession, SCAN_RESULT_DURATION } from "../../app/utils/compositionScanSession.js";
+import {
+  createCompositionScanSession,
+  SCAN_POST_ZOOM_DURATION,
+  SCAN_TIMEOUT,
+} from "../../app/utils/compositionScanSession.js";
 
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
-function setup(overrides = {}, generate = () => ({ gizmos: [{ type: "alignment", angle: 0.1 }] })) {
+function setup(overrides = {}, generate = () => ({
+  kind: "advice", message: "Destacar o assunto", gizmos: [{
+    id: "frame", type: "framing", anchor: "scene",
+    rect: { x: 0.2, y: 0.2, width: 0.5, height: 0.5 },
+  }],
+})) {
   let now = 0, id = 0;
   const pending = new Map(), states = [], cancelled = [], errors = [];
   let analyses = 0;
@@ -35,15 +44,65 @@ function setup(overrides = {}, generate = () => ({ gizmos: [{ type: "alignment",
 }
 const preview = { width: 300, height: 400 };
 
-test("single scan: capture, analyze, enter, remain readable, exit, idle", async () => {
+test("single scan waits for alignment, then remains visible after zoom and exits", async () => {
   const s = setup(); await s.controller.start(preview);
   assert.equal(s.current().state, "capturing");
   await s.controller.captured("token", s.current().scanId);
   assert.equal(s.analyses(), 1); assert.equal(s.current().phase, "entering");
   s.advance(150); assert.equal(s.current().phase, "visible");
-  s.advance(SCAN_RESULT_DURATION - 1); assert.equal(s.current().phase, "visible");
+  s.advance(60000); assert.equal(s.current().phase, "visible");
+  assert.equal(s.controller.completeZoom(), true);
+  assert.equal(s.controller.completeZoom(), false);
+  s.advance(SCAN_POST_ZOOM_DURATION - 1); assert.equal(s.current().phase, "visible");
   s.advance(1); assert.equal(s.current().phase, "leaving");
   s.advance(200); assert.equal(s.current().state, "idle"); assert.equal(s.pending.size, 0);
+});
+test("analysis receives recent advice and exposes tracking separately from capture", async () => {
+  let receivedContext;
+  const s = setup({
+    analyze: async (_token, _id, context) => { receivedContext = context; return {}; },
+  });
+  const controller = createCompositionScanSession({
+    model: {
+      arm: async () => true,
+      analyze: async (_token, _id, context) => { receivedContext = context; return {}; },
+      cancel: async () => {},
+    },
+    getAnalysisContext: () => ({ recentAdvice: [{ topic: "luz", message: "Suavize a luz" }] }),
+    generate: () => ({ kind: "balanced", message: "Composição equilibrada", gizmos: [] }),
+    onChange: (state) => s.states.push(state),
+    timers: { setTimeout: () => 1, clearTimeout: () => {} },
+  });
+  await controller.start(preview);
+  const captureId = s.states.at(-1).scanId;
+  assert.ok(captureId);
+  assert.equal(s.states.at(-1).trackingScanId, null);
+  await controller.captured("token", captureId);
+  assert.equal(s.states.at(-1).scanId, null);
+  assert.equal(s.states.at(-1).trackingScanId, captureId);
+  assert.deepEqual(receivedContext, { recentAdvice: [{ topic: "luz", message: "Suavize a luz" }] });
+  controller.dispose();
+});
+test("subject selection is frozen when the scan starts", async () => {
+  let selected = { x: 0.2, y: 0.3 };
+  let receivedContext;
+  const states = [];
+  const controller = createCompositionScanSession({
+    model: {
+      arm: async () => true,
+      analyze: async (_token, _id, context) => { receivedContext = context; return {}; },
+      cancel: async () => {},
+    },
+    getAnalysisContext: () => ({ recentAdvice: [], subjectPoint: selected }),
+    generate: () => ({ kind: "balanced", message: "Teste", gizmos: [] }),
+    onChange: (state) => states.push(state),
+    timers: { setTimeout: () => 1, clearTimeout: () => {} },
+  });
+  await controller.start(preview);
+  selected = { x: 0.8, y: 0.9 };
+  await controller.captured("token", states.at(-1).scanId);
+  assert.deepEqual(receivedContext.subjectPoint, { x: 0.2, y: 0.3 });
+  controller.dispose();
 });
 test("double tap before arm settles starts only one scan", async () => {
   const arm = deferred(); const s = setup({ arm: () => arm.promise });
@@ -62,7 +121,7 @@ test("duplicate frame and tap during analysis do not cancel or duplicate work", 
   result.resolve({}); await work;
   assert.equal(s.current().state, "showing-results");
 });
-test("rescan removes old gizmos and cancels old dismissal timer", async () => {
+test("rescan removes the old anchored guide", async () => {
   const s = setup(); await s.controller.start(preview);
   const old = s.current().scanId; await s.controller.captured("one", old);
   s.advance(500); await s.controller.start(preview);
@@ -87,14 +146,14 @@ test("cancel while arm pending releases a late native reservation", async () => 
   assert.equal(s.current().state, "idle"); assert.equal(s.cancelled.length, 2);
 });
 test("capture timeout clears resources and reports one failure", async () => {
-  const s = setup(); await s.controller.start(preview); s.advance(8000);
+  const s = setup(); await s.controller.start(preview); s.advance(SCAN_TIMEOUT);
   assert.equal(s.current().state, "idle"); assert.equal(s.errors.length, 1);
   assert.equal(s.pending.size, 0);
 });
 test("analysis timeout discards its eventual successful result", async () => {
   const result = deferred(); const s = setup({ analyze: () => result.promise });
   await s.controller.start(preview); const work = s.controller.captured("token", s.current().scanId);
-  s.advance(8000); result.resolve({}); await work;
+  s.advance(SCAN_TIMEOUT); result.resolve({}); await work;
   assert.equal(s.current().state, "idle"); assert.equal(s.errors.length, 1);
 });
 test("analysis errors and missing image return to idle", async () => {
@@ -121,21 +180,32 @@ test("20 scans finish with no timers or retained results", async () => {
   const s = setup();
   for (let i = 0; i < 20; i++) {
     await s.controller.start(preview); await s.controller.captured("token", s.current().scanId);
-    s.advance(150 + SCAN_RESULT_DURATION + 200);
+    s.advance(150);
+    assert.equal(s.controller.completeZoom(), true);
+    s.advance(SCAN_POST_ZOOM_DURATION + 200);
     assert.equal(s.current().result, null); assert.equal(s.pending.size, 0);
   }
   assert.equal(s.analyses(), 20);
 });
 
 
-test("empty analysis dismisses immediately without a result timer", async () => {
-  const s = setup({}, () => ({ gizmos: [] }));
+test("balanced fallback remains visible until zoom completion", async () => {
+  const s = setup({}, () => ({
+    kind: "balanced", message: "Preservar o equilíbrio", gizmos: [{
+      id: "frame", type: "framing", anchor: "scene",
+      rect: { x: 0.1, y: 0.1, width: 0.8, height: 0.8 },
+    }],
+  }));
   await s.controller.start(preview);
   await s.controller.captured("token", s.current().scanId);
-  assert.equal(s.current().state, "idle");
-  assert.equal(s.current().result, null);
-  assert.equal(s.pending.size, 0);
+  assert.equal(s.current().state, "showing-results");
+  assert.equal(s.current().result.kind, "balanced");
+  assert.equal(s.pending.size, 1);
   assert.equal(s.errors.length, 0);
+  s.advance(150);
+  s.controller.completeZoom();
+  s.advance(SCAN_POST_ZOOM_DURATION + 200);
+  assert.equal(s.current().state, "idle");
 });
 
 test("a late old result cannot overwrite a newer session", async () => {

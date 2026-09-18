@@ -1,128 +1,306 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCompositionTransform } from "../../app/utils/compositionCoordinates.js";
-import { generateCompositionResult } from "../../app/utils/compositionAnalysis.js";
-import { portraitScene, emptyScene } from "./fixtures.js";
-const close = (a, b) => assert.ok(Math.abs(a - b) < 1e-8, `${a} != ${b}`);
-const preview = { width: 300, height: 400, mirrored: false };
+import {
+  advanceAlignmentGate,
+  applyCompositionTracking,
+  calculateFramingZoom,
+  createCompositionTransform,
+  getFramingAlignment,
+  transformCompositionGizmo,
+} from "../../app/utils/compositionCoordinates.js";
+import {
+  createCompositionAdvisor,
+  generateCompositionResult,
+} from "../../app/utils/compositionAnalysis.js";
+import { emptyScene, portraitScene } from "./fixtures.js";
 
-test("portrait back camera preserves asymmetric coordinates", () => {
-  const p = createCompositionTransform(portraitScene.geometry, preview).point({ x: 0.2, y: 0.7 });
-  close(p.x, 0.2); close(p.y, 0.7);
+const close = (a, b, tolerance = 1e-8) =>
+  assert.ok(Math.abs(a - b) < tolerance, `${a} != ${b}`);
+const preview = { width: 300, height: 400, mirrored: false };
+const frame = (rect, message = "Destacar o assunto") => ({
+  kind: "advice",
+  message,
+  gizmos: [{ id: "frame", type: "framing", anchor: "scene", label: message, rect }],
 });
-test("front preview mirrors once, including line inclination", () => {
-  const t = createCompositionTransform(portraitScene.geometry, { ...preview, mirrored: true });
-  close(t.point({ x: 0.2, y: 0.7 }).x, 0.8);
-  close(t.angle(0.1), -0.1);
-  const alreadyMirrored = createCompositionTransform({ ...portraitScene.geometry, mirrored: true }, { ...preview, mirrored: true });
-  close(alreadyMirrored.point({ x: 0.2, y: 0.7 }).x, 0.2);
+
+test("coordinate transforms preserve, mirror and rotate points", () => {
+  const portrait = createCompositionTransform(portraitScene.geometry, preview);
+  assert.deepEqual(portrait.point({ x: 0.2, y: 0.7 }), { x: 0.2, y: 0.7 });
+  const mirrored = createCompositionTransform(portraitScene.geometry, { ...preview, mirrored: true });
+  close(mirrored.point({ x: 0.2, y: 0.7 }).x, 0.8);
+  for (const [rotation, expected] of [
+    [90, { x: 0.3, y: 0.2 }],
+    [180, { x: 0.8, y: 0.3 }],
+    [270, { x: 0.7, y: 0.8 }],
+  ]) {
+    const transformed = createCompositionTransform(
+      { width: 100, height: 100, rotation },
+      { width: 100, height: 100 },
+    ).point({ x: 0.2, y: 0.7 });
+    close(transformed.x, expected.x);
+    close(transformed.y, expected.y);
+  }
 });
-for (const [rotation, x, y] of [[90, 0.3, 0.2], [180, 0.8, 0.3], [270, 0.7, 0.8]]) {
-  test(`rotation ${rotation} transforms asymmetric coordinates`, () => {
-    const geometry = { width: 100, height: 100, rotation };
-    const p = createCompositionTransform(geometry, { width: 100, height: 100 }).point({ x: 0.2, y: 0.7 });
-    close(p.x, x); close(p.y, y);
-  });
-}
-test("cover crops sides for 9:16 and clips subjects outside preview", () => {
-  const t = createCompositionTransform(portraitScene.geometry, { width: 225, height: 400 });
-  close(t.point({ x: 0.125, y: 0 }).x, 0);
-  close(t.point({ x: 0.875, y: 1 }).x, 1);
-  assert.equal(t.rect({ x: 0, y: 0.2, width: 0.1, height: 0.3 }).width, 0);
-});
-test("retro/safe-area offsets do not change preview-local coordinates", () => {
-  const t = createCompositionTransform(portraitScene.geometry, { width: 270, height: 360, x: 15, y: 50 });
-  const p = t.point({ x: 0.2, y: 0.7 });
-  close(p.x, 0.2); close(p.y, 0.7);
-});
-test("invalid dimensions fail instead of returning NaN", () => {
+
+test("cover crop and invalid dimensions remain guarded", () => {
+  const transform = createCompositionTransform(portraitScene.geometry, { width: 225, height: 400 });
+  close(transform.point({ x: 0.125, y: 0 }).x, 0);
+  close(transform.point({ x: 0.875, y: 1 }).x, 1);
   assert.throws(() => createCompositionTransform(portraitScene.geometry, { width: 0, height: 0 }));
 });
-test("real scene produces only curated alignment and target", () => {
-  const { gizmos } = generateCompositionResult(portraitScene, preview);
-  assert.deepEqual(gizmos.map((g) => g.type), ["target", "alignment"]);
-  assert.deepEqual(gizmos[0].point, { x: 2 / 3, y: 1 / 3 });
-  assert.equal("confidence" in gizmos[0], false);
-});
-test("empty and weak observations never create placeholder suggestions", () => {
-  assert.deepEqual(generateCompositionResult(emptyScene, preview), { gizmos: [] });
-  const weak = { ...portraitScene, horizon: { angle: 1, confidence: 0.6 }, people: portraitScene.people.map((p) => ({ ...p, confidence: 0.6 })), faces: [] };
-  assert.deepEqual(generateCompositionResult(weak, preview), { gizmos: [] });
-});
-test("small tilt and a subject already at a third are omitted", () => {
-  const scene = { ...emptyScene, horizon: { angle: Math.PI / 180, confidence: 1 }, faces: [{ confidence: 1, rect: { x: 1 / 3 - 0.05, y: 1 / 3 - 0.05, width: 0.1, height: 0.1 } }] };
-  assert.deepEqual(generateCompositionResult(scene, preview), { gizmos: [] });
-});
-test("center subject ties prefer upper left", () => {
-  const scene = { ...emptyScene, people: [{ confidence: 1, rect: { x: 0.4, y: 0.4, width: 0.2, height: 0.2 } }] };
-  assert.deepEqual(generateCompositionResult(scene, preview).gizmos[0].point, { x: 1 / 3, y: 1 / 3 });
-});
-test("a group is framed as a whole instead of targeting one member", () => {
-  const scene = { ...emptyScene, people: [
-    { confidence: 1, rect: { x: 0.05, y: 0.3, width: 0.15, height: 0.6 } },
-    { confidence: 1, rect: { x: 0.5, y: 0.1, width: 0.45, height: 0.85 } },
-  ], faces: [
-    { confidence: 1, rect: { x: 0.04, y: 0.25, width: 0.2, height: 0.2 } },
-    { confidence: 1, rect: { x: 0.75, y: 0.15, width: 0.1, height: 0.1 } },
-  ] };
-  assert.equal(generateCompositionResult(scene, preview).gizmos.some((g) => g.type === "target"), false);
-});
-test("double capture suggestions use the entire visible preview", () => {
-  assert.deepEqual(generateCompositionResult(portraitScene, { ...preview, doubleCaptureMode: true }), generateCompositionResult(portraitScene, preview));
+
+test("every successful analysis returns exactly one fixed-aspect frame", () => {
+  for (const targetPreview of [preview, { width: 225, height: 400, mirrored: false }]) {
+    for (const scene of [emptyScene, portraitScene]) {
+      const result = generateCompositionResult(scene, targetPreview);
+      assert.equal(result.gizmos.length, 1);
+      assert.equal(result.gizmos[0].type, "framing");
+      close(result.gizmos[0].rect.width, result.gizmos[0].rect.height);
+      close(
+        result.gizmos[0].rect.width * targetPreview.width /
+          (result.gizmos[0].rect.height * targetPreview.height),
+        targetPreview.width / targetPreview.height,
+      );
+      assert.ok(result.message.length > 0 && result.message.length <= 48);
+    }
+  }
 });
 
-test("landscape scene maps upright observations and level reference back to portrait UI", () => {
-  const scene = { ...portraitScene, geometry: { width: 640, height: 480, rotation: 90, mirrored: false } };
-  const { gizmos } = generateCompositionResult(scene, preview);
-  const alignment = gizmos.find((g) => g.type === "alignment");
-  close(alignment.referenceAngle, Math.PI / 2);
-  close(alignment.angle, Math.PI / 2 + 0.1);
-  const levelScene = { ...scene, horizon: { angle: 0, confidence: 1 }, people: [], faces: [] };
-  assert.deepEqual(generateCompositionResult(levelScene, preview), { gizmos: [] });
-});
-
-test("person close to an edge gets a safety-margin warning", () => {
-  const scene = { ...emptyScene, people: [{ confidence: 1, rect: { x: 0, y: 0.2, width: 0.25, height: 0.7 } }] };
-  assert.equal(generateCompositionResult(scene, preview).gizmos[0].type, "margin");
-});
-
-test("turned face gets look-space guidance in its direction", () => {
-  const scene = { ...emptyScene, faces: [{ confidence: 1, yaw: 0.3, rect: { x: 0.72, y: 0.2, width: 0.15, height: 0.15 } }] };
-  const look = generateCompositionResult(scene, preview).gizmos.find((g) => g.type === "look-space");
-  assert.equal(look.direction, "right");
-});
-
-test("generic salient subject gets target and scale guidance", () => {
-  const scene = { ...emptyScene, subjects: [{ confidence: 1, rect: { x: 0.46, y: 0.46, width: 0.08, height: 0.08 } }] };
-  const gizmos = generateCompositionResult(scene, preview).gizmos;
-  assert.ok(gizmos.some((g) => g.type === "target" && g.label === "Mova o assunto aqui"));
-  assert.ok(gizmos.some((g) => g.type === "scale" && g.label === "Aproxime"));
-});
-
-test("large generic subject gets distance guidance", () => {
-  const scene = { ...emptyScene, subjects: [{ confidence: 1, rect: { x: 0.08, y: 0.08, width: 0.84, height: 0.84 } }] };
-  assert.ok(generateCompositionResult(scene, preview).gizmos.some((g) => g.type === "scale" && g.label === "Afaste"));
-});
-
-test("near-centered balanced subject gets symmetry guidance", () => {
-  const scene = { ...emptyScene, subjects: [{ confidence: 1, rect: { x: 0.4, y: 0.3, width: 0.3, height: 0.35 } }] };
-  assert.ok(generateCompositionResult(scene, preview).gizmos.some((g) => g.type === "center"));
-});
-
-test("look-space guidance suppresses a contradictory placement target", () => {
-  const scene = { ...emptyScene, faces: [{ confidence: 1, yaw: -0.35, rect: { x: 0.05, y: 0.2, width: 0.14, height: 0.14 } }] };
-  const gizmos = generateCompositionResult(scene, preview).gizmos;
-  assert.ok(gizmos.some((g) => g.type === "look-space"));
-  assert.equal(gizmos.some((g) => g.type === "target"), false);
-});
-
-test("structural rectangle makes centered subject prefer symmetry over thirds", () => {
-  const scene = {
+test("model rectangle is preferred and corrected to the preview aspect", () => {
+  const result = generateCompositionResult({
     ...emptyScene,
-    subjects: [{ confidence: 0.9, rect: { x: 0.32, y: 0.3, width: 0.2, height: 0.3 } }],
-    rectangles: [{ confidence: 0.95, rect: { x: 0.2, y: 0.15, width: 0.6, height: 0.7 } }],
-  };
-  const gizmos = generateCompositionResult(scene, preview).gizmos;
-  assert.ok(gizmos.some((g) => g.type === "center"));
-  assert.equal(gizmos.some((g) => g.type === "target"), false);
+    judgement: {
+      source: "minicpm-v-4.6",
+      verdict: "advice",
+      subject: "o carro",
+      topic: "subject",
+      cropIntent: "medium",
+      message: "Enquadrar o carro",
+      visualHint: "framing",
+      frame: { centerX: 650, centerY: 450, width: 400, height: 600 },
+    },
+  }, preview);
+  assert.equal(result.message, "Enquadrar o carro");
+  assert.equal(result.gizmos[0].rect.width, result.gizmos[0].rect.height);
+  assert.ok(result.gizmos[0].rect.x > 0.3);
+});
+
+test("invalid model rectangle falls back to the detected subject", () => {
+  const result = generateCompositionResult({
+    ...portraitScene,
+    judgement: {
+      source: "minicpm-v-4.6",
+      verdict: "advice",
+      topic: "retrato",
+      message: "Destacar a pessoa",
+      frame: { centerX: 50, centerY: 50, width: 600, height: 600 },
+    },
+  }, preview);
+  assert.equal(result.message, "Enquadrar a pessoa");
+  assert.equal(result.gizmos[0].rect.width, result.gizmos[0].rect.height);
+  assert.ok(result.gizmos[0].rect.x >= 0);
+});
+
+test("echoed sample frame is rejected in favor of low-confidence Vision saliency", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    subjects: [{ confidence: 0.45, rect: { x: 0.12, y: 0.52, width: 0.24, height: 0.2 } }],
+    judgement: {
+      source: "minicpm-v-4.6",
+      verdict: "advice",
+      topic: "ambiente",
+      message: "Preservar o equilíbrio",
+      frame: { centerX: 500, centerY: 450, width: 600, height: 760 },
+    },
+  }, preview);
+  assert.ok(result.gizmos[0].rect.width < 0.4);
+  assert.ok(result.gizmos[0].rect.x < 0.2);
+});
+
+test("a concrete model label names the salient subject", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    subjects: [{ confidence: 0.5, rect: { x: 0.3, y: 0.45, width: 0.3, height: 0.22 } }],
+    judgement: {
+      source: "minicpm-v-4.6",
+      verdict: "advice",
+      subject: "as plantas",
+      topic: "assunto",
+      message: "Preservar o equilíbrio",
+    },
+  }, preview);
+  assert.equal(result.message, "Enquadrar as plantas");
+});
+
+test("legacy composition advice is never presented as the crop purpose", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    subjects: [{ confidence: 0.5, rect: { x: 0.08, y: 0.05, width: 0.15, height: 0.2 } }],
+    judgement: {
+      source: "minicpm-v-4.6",
+      verdict: "advice",
+      topic: "focus on the crate",
+      message: "focus on the crate",
+      frame: { centerX: 200, centerY: 150, width: 150, height: 200 },
+    },
+  }, preview);
+  assert.equal(result.message, "Enquadrar o assunto");
+});
+
+test("scene geometry no longer generates lines or background advice", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    subjects: [{ confidence: 0.5, rect: { x: 0.04, y: 0.08, width: 0.82, height: 0.82 } }],
+    rectangles: [
+      { confidence: 0.9, rect: { x: 0.1, y: 0.1, width: 0.3, height: 0.4 } },
+      { confidence: 0.85, rect: { x: 0.55, y: 0.15, width: 0.25, height: 0.5 } },
+    ],
+    judgement: { source: "minicpm-v-4.6", verdict: "keep", topic: "", message: "" },
+  }, preview);
+  assert.equal(result.message, "Enquadrar o assunto");
+});
+
+test("tap selection chooses the detected subject that contains the point", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    subjects: [
+      { confidence: 0.7, rect: { x: 0.08, y: 0.2, width: 0.28, height: 0.3 } },
+      { confidence: 0.7, rect: { x: 0.62, y: 0.45, width: 0.2, height: 0.22 } },
+    ],
+    judgement: {
+      source: "minicpm-v-4.6", verdict: "advice", subject: "as plantas",
+      topic: "subject", message: "Destacar as plantas",
+    },
+  }, preview, { subjectPoint: { x: 0.7, y: 0.55 } });
+  const selected = result.gizmos[0].rect;
+  assert.ok(selected.x > 0.5);
+  assert.equal(result.message, "Enquadrar as plantas");
+});
+
+test("tap selection rejects an unrelated model frame and stays around the selected point", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    judgement: {
+      source: "minicpm-v-4.6", verdict: "advice", topic: "subject",
+      message: "Destacar o objeto",
+      frame: { centerX: 150, centerY: 150, width: 200, height: 200 },
+    },
+  }, preview, { subjectPoint: { x: 0.78, y: 0.72 } });
+  const selected = result.gizmos[0].rect;
+  close(selected.width, 0.4);
+  close(selected.x + selected.width / 2, 0.78);
+  close(selected.y + selected.height / 2, 0.72);
+});
+
+test("empty analysis uses a centered crop fallback", () => {
+  const result = generateCompositionResult(emptyScene, preview);
+  assert.deepEqual(result.gizmos[0].rect, { x: 0.14, y: 0.14, width: 0.72, height: 0.72 });
+  assert.equal(result.message, "Recortar a cena");
+});
+
+test("advisor keeps only three recent crop subjects", () => {
+  const advisor = createCompositionAdvisor();
+  for (const subject of ["a pessoa", "o carro", "a moto", "a chaminé"]) {
+    advisor.generate({
+      ...emptyScene,
+      judgement: { source: "minicpm-v-4.6", verdict: "advice", subject, topic: "subject", message: `Enquadrar ${subject}` },
+    }, preview);
+  }
+  assert.deepEqual(advisor.context().recentAdvice.map((item) => item.topic), ["o carro", "a moto", "a chaminé"]);
+  advisor.reset();
+  assert.deepEqual(advisor.context().recentAdvice, []);
+});
+
+test("a selected motorcycle rejects an oversized model crop", () => {
+  const result = generateCompositionResult({
+    ...emptyScene,
+    judgement: {
+      source: "minicpm-v-4.6", verdict: "advice", subject: "a moto",
+      topic: "subject", cropIntent: "tight", message: "Valorizar as linhas",
+      frame: { centerX: 500, centerY: 500, width: 880, height: 880 },
+    },
+  }, preview, { subjectPoint: { x: 0.25, y: 0.55 } });
+  assert.equal(result.message, "Enquadrar a moto");
+  close(result.gizmos[0].rect.width, 0.4);
+  close(result.gizmos[0].rect.x + result.gizmos[0].rect.width / 2, 0.25);
+});
+
+test("crop intent controls how much context surrounds the same object", () => {
+  const widths = ["tight", "medium", "wide"].map((cropIntent) =>
+    generateCompositionResult({
+      ...emptyScene,
+      judgement: {
+        source: "minicpm-v-4.6", verdict: "advice", subject: "a chaminé",
+        topic: "subject", cropIntent, message: "Simplificar o fundo",
+        frame: { centerX: 500, centerY: 500, width: 300, height: 300 },
+      },
+    }, preview).gizmos[0].rect.width);
+  assert.ok(widths[0] < widths[1]);
+  assert.ok(widths[1] < widths[2]);
+  assert.equal(
+    generateCompositionResult({
+      ...emptyScene,
+      judgement: { source: "minicpm-v-4.6", verdict: "advice", subject: "a chaminé", topic: "subject" },
+    }, preview).message,
+    "Enquadrar a chaminé",
+  );
+});
+
+test("tracking converts Vision's bottom-left vertical axis while preserving a rectangle", () => {
+  const geometry = { width: 300, height: 400, rotation: 0, mirrored: false };
+  const original = frame({ x: 0.2, y: 0.25, width: 0.4, height: 0.4 });
+  const tracked = applyCompositionTracking(original, geometry, preview, {
+    lost: false,
+    matrix: [1, 0, 0.1, 0, 1, 0.05, 0, 0, 1],
+  });
+  close(tracked.gizmos[0].rect.x, 0.3);
+  close(tracked.gizmos[0].rect.y, 0.2);
+  close(tracked.gizmos[0].rect.width, tracked.gizmos[0].rect.height);
+});
+
+test("perspective tracking uses scale but never produces a trapezoid", () => {
+  const geometry = { width: 300, height: 400, rotation: 0, mirrored: false };
+  const gizmo = frame({ x: 0.2, y: 0.2, width: 0.45, height: 0.45 }).gizmos[0];
+  const tracked = transformCompositionGizmo(
+    gizmo,
+    geometry,
+    preview,
+    [1, 0, 0, 0, 1, 0, 0.16, 0.08, 1],
+  );
+  assert.ok(Number.isFinite(tracked.rect.x));
+  close(tracked.rect.width, tracked.rect.height);
+});
+
+test("tracking loss removes the guide instead of leaving a stale frame", () => {
+  assert.equal(applyCompositionTracking(
+    frame({ x: 0.2, y: 0.2, width: 0.5, height: 0.5 }),
+    emptyScene.geometry,
+    preview,
+    { lost: true, matrix: [] },
+  ), null);
+});
+
+test("alignment uses four percent of the smaller preview side", () => {
+  const aligned = getFramingAlignment(frame({ x: 0.31, y: 0.31, width: 0.4, height: 0.4 }), preview);
+  assert.equal(aligned.aligned, true);
+  close(aligned.tolerance, 12);
+  const outside = getFramingAlignment(frame({ x: 0.36, y: 0.3, width: 0.4, height: 0.4 }), preview);
+  assert.equal(outside.aligned, false);
+});
+
+test("alignment requires three consecutive updates and resets on drift", () => {
+  let count = 0;
+  for (const aligned of [true, true, false, true, true, true]) {
+    const next = advanceAlignmentGate(count, aligned);
+    count = next.count;
+    if (aligned && count < 3) assert.equal(next.triggered, false);
+  }
+  assert.equal(advanceAlignmentGate(2, true).triggered, true);
+  assert.deepEqual(advanceAlignmentGate(2, false), { count: 0, triggered: false });
+});
+
+test("zoom fills the frame and respects hardware limits", () => {
+  close(calculateFramingZoom({ width: 0.5, height: 0.5 }, 1, 1, 5), 2);
+  close(calculateFramingZoom({ width: 0.2, height: 0.2 }, 2, 1, 5), 5);
+  close(calculateFramingZoom({ width: 0.8, height: 0.8 }, 0.5, 1, 5), 1);
 });

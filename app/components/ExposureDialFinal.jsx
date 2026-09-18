@@ -15,6 +15,7 @@ const CONTAINER_WIDTH = screenWidth * 0.9;
 export default function ExposureDialFinal({
   value,
   onChange,
+  onInteractionStart,
   onRelease,
   zoomSV,
   minZoom,
@@ -39,6 +40,7 @@ export default function ExposureDialFinal({
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        onInteractionStart?.();
         startOffset.current = accumulatedOffset.current;
       },
       onPanResponderMove: (_, gesture) => {

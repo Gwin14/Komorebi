@@ -2,10 +2,20 @@ import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "@react-native-documents/picker";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
+import useCompositionModel from "../hooks/useCompositionModel";
 import {
   addCustomLUT,
   parseCubeFile,
@@ -23,6 +33,7 @@ import styles from "./Settings.styles";
 
 export default function Settings() {
   const router = useRouter();
+  const compositionModel = useCompositionModel();
 
   const {
     retroStyle,
@@ -33,11 +44,15 @@ export default function Settings() {
     setLevelVisible,
     histogramVisible,
     setHistogramVisible,
+    compositionScanEnabled,
+    setCompositionScanEnabled,
     loading,
     shutterSound,
     setShutterSound,
     location,
     setLocation,
+    saveAsJpeg,
+    setSaveAsJpeg,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     customLuts,
@@ -154,6 +169,41 @@ export default function Settings() {
   const unselectedControls = TOP_BAR_CONTROLS.filter(
     (control) => !topBarControls.includes(control.id),
   );
+  const modelStatus = compositionModel.status;
+  const modelProgress = Math.round((modelStatus.progress ?? 0) * 100);
+  const modelStateLabel = {
+    ready: "Instalado e pronto",
+    downloading: `Baixando ${modelProgress}%`,
+    "not-downloaded": "Opcional · cerca de 1,6 GB",
+    unsupported: "Aparelho sem memória suficiente",
+    "runtime-missing": "Runtime não incluído neste build",
+    error: "Download ou carregamento falhou",
+  }[modelStatus.state];
+
+  const handleModelDownload = async () => {
+    try {
+      await compositionModel.download();
+    } catch (error) {
+      Alert.alert("Inteligência do Scan", error?.message ?? "Não foi possível iniciar o download.");
+    }
+  };
+
+  const confirmModelRemoval = () => {
+    Alert.alert(
+      "Remover modelo local?",
+      "O Scan continuará funcionando com a análise básica do aparelho.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Remover",
+          style: "destructive",
+          onPress: () => void compositionModel.remove().catch((error) => {
+            Alert.alert("Inteligência do Scan", error?.message ?? "Não foi possível remover o modelo.");
+          }),
+        },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -189,6 +239,15 @@ export default function Settings() {
             onValueChange={setHistogramVisible}
           />
 
+          {Platform.OS === "ios" && (
+            <CustomToggle
+              badge="beta"
+              label="Scanner de composição"
+              value={compositionScanEnabled}
+              onValueChange={setCompositionScanEnabled}
+            />
+          )}
+
           <CustomToggle
             label="Som do Obturador"
             value={shutterSound}
@@ -214,7 +273,61 @@ export default function Settings() {
             value={location}
             onValueChange={setLocation}
           />
+
+          {Platform.OS === "ios" && (
+            <CustomToggle
+              label="Salvar fotos em JPEG"
+              value={saveAsJpeg}
+              onValueChange={setSaveAsJpeg}
+            />
+          )}
         </View>
+
+        <View style={styles.divider} />
+
+        {Platform.OS === "ios" && compositionScanEnabled && (
+          <View style={styles.modelSection}>
+            <View style={styles.modelHeader}>
+              <View style={styles.modelTitleBlock}>
+                <Text style={styles.sectionTitle}>Inteligência do Scan</Text>
+                <Text style={styles.modelName}>{modelStatus.modelName}</Text>
+              </View>
+              {modelStatus.state === "downloading" && <ActivityIndicator color="#ffaa00" />}
+            </View>
+            <Text style={styles.sectionSubtitle}>
+              Analisa intenção, espaço vazio, fundo e relações na cena inteiramente no aparelho.
+              O primeiro Scan após abrir o app pode demorar mais.
+            </Text>
+            <Text style={styles.modelStatus}>{modelStateLabel}</Text>
+            {modelStatus.state === "downloading" && (
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${modelProgress}%` }]} />
+              </View>
+            )}
+            {modelStatus.error && <Text style={styles.modelError}>{modelStatus.error}</Text>}
+            <View style={styles.modelActions}>
+              {(modelStatus.state === "not-downloaded" || modelStatus.state === "error") && (
+                <TouchableOpacity
+                  disabled={compositionModel.pending}
+                  onPress={handleModelDownload}
+                  style={styles.modelPrimaryButton}
+                >
+                  <Text style={styles.modelPrimaryText}>Baixar modelo</Text>
+                </TouchableOpacity>
+              )}
+              {modelStatus.state === "downloading" && (
+                <TouchableOpacity onPress={compositionModel.cancelDownload} style={styles.modelSecondaryButton}>
+                  <Text style={styles.modelSecondaryText}>Cancelar</Text>
+                </TouchableOpacity>
+              )}
+              {modelStatus.state === "ready" && (
+                <TouchableOpacity onPress={confirmModelRemoval} style={styles.modelSecondaryButton}>
+                  <Text style={styles.modelSecondaryText}>Remover modelo</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
 
         <View style={styles.divider} />
 

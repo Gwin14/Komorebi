@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Text, View } from "react-native";
+import { Alert, Animated, Platform, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -45,7 +45,9 @@ export default function App() {
     gridVisible,
     levelVisible,
     histogramVisible,
+    compositionScanEnabled,
     location,
+    saveAsJpeg,
     firstTime,
     loading,
     saveOriginalWithoutEffects,
@@ -105,19 +107,9 @@ export default function App() {
 
   const controlsAnim = useControlsAnimation(activeControl);
   const { animateShutter, shutterAnim } = useShutterAnimation();
-  const composedGestures = useCameraGestures({
-    lastZoom,
-    maxZoom,
-    minZoom,
-    setZoom,
-    zoomSV,
-    showLuts: useCallback(() => setActiveControl("lut"), []),
-    hideLuts: useCallback(
-      () =>
-        setActiveControl((current) => (current === "lut" ? "none" : current)),
-      [],
-    ),
-  });
+  const zoomRef = useRef(zoom);
+  const autoZoomAnimationRef = useRef(null);
+  zoomRef.current = zoom;
 
   const activeProject = useMemo(
     () => (activeProjectId ? getProjectById(projects, activeProjectId) : null),
@@ -134,18 +126,78 @@ export default function App() {
     setIsProcessing,
   } = usePhotoProcessingQueue(hasMediaPermission, activeProject);
 
+  const cancelAutoZoomAnimation = useCallback(() => {
+    const animation = autoZoomAnimationRef.current;
+    if (!animation) return;
+    cancelAnimationFrame(animation.frameId);
+    autoZoomAnimationRef.current = null;
+    animation.resolve(false);
+  }, []);
+
+  const animateScanZoom = useCallback((targetZoom, duration = 250) => {
+    cancelAutoZoomAnimation();
+    const initialZoom = zoomRef.current;
+    const startedAt = Date.now();
+    return new Promise((resolve) => {
+      const animation = { frameId: null, resolve };
+      autoZoomAnimationRef.current = animation;
+      const step = () => {
+        if (autoZoomAnimationRef.current !== animation) return;
+        const progress = Math.min(1, (Date.now() - startedAt) / duration);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const nextZoom = initialZoom + (targetZoom - initialZoom) * eased;
+        zoomRef.current = nextZoom;
+        zoomSV.value = nextZoom;
+        setZoom(nextZoom);
+        if (progress < 1) {
+          animation.frameId = requestAnimationFrame(step);
+          return;
+        }
+        autoZoomAnimationRef.current = null;
+        resolve(true);
+      };
+      animation.frameId = requestAnimationFrame(step);
+    });
+  }, [cancelAutoZoomAnimation, zoomSV]);
+
+  useEffect(() => () => cancelAutoZoomAnimation(), [cancelAutoZoomAnimation]);
+
   const compositionScan = useCompositionScan({
+    featureEnabled: !loading && compositionScanEnabled,
     enabled:
-      !firstTime && !nativeCaptureMode && cameraReady &&
+      compositionScanEnabled && facing === "back" && !firstTime && !nativeCaptureMode && cameraReady &&
       cameraPermission === "granted" && !isProcessing && processingQueue.length === 0,
-    configurationKey: `${activeLens?.device?.id}:${nativeCaptureMode}:${rawCapture.rawMode}:${manual.manualMode}:${verticalMode}:${doubleCaptureMode}:${retroStyle}:${zoom}:${scanOrientation}`,
+    configurationKey: `${activeLens?.device?.id}:${nativeCaptureMode}:${rawCapture.rawMode}:${manual.manualMode}:${verticalMode}:${doubleCaptureMode}:${retroStyle}:${scanOrientation}`,
     preview: {
       ...scanPreviewLayout,
       mirrored: facing === "front",
       rotation: (scanOrientation + 360) % 360,
     },
+    zoom,
+    minZoom,
+    maxZoom,
+    onAutoZoom: animateScanZoom,
+    onCancelAutoZoom: cancelAutoZoomAnimation,
   });
   const cancelCompositionScan = compositionScan.cancel;
+  const handleManualZoomStart = useCallback(() => {
+    cancelAutoZoomAnimation();
+    cancelCompositionScan();
+  }, [cancelAutoZoomAnimation, cancelCompositionScan]);
+  const composedGestures = useCameraGestures({
+    lastZoom,
+    maxZoom,
+    minZoom,
+    setZoom,
+    zoomSV,
+    onZoomStart: handleManualZoomStart,
+    showLuts: useCallback(() => setActiveControl("lut"), []),
+    hideLuts: useCallback(
+      () =>
+        setActiveControl((current) => (current === "lut" ? "none" : current)),
+      [],
+    ),
+  });
 
   useEffect(() => {
     if (!hasMediaPermission) return;
@@ -184,27 +236,30 @@ export default function App() {
   // 🆕 Sincronizar zoom quando facing muda (troca câmera frontal/traseira)
   // A lente padrão da frontal é neutralZoom=1
   useEffect(() => {
+    cancelAutoZoomAnimation();
     setZoom(1);
     zoomSV.value = 1;
-  }, [facing, zoomSV]);
+  }, [cancelAutoZoomAnimation, facing, zoomSV]);
 
   const handleSelectLens = useCallback(
     (lensId) => {
       if (lensId === activeLensId) return;
+      cancelAutoZoomAnimation();
       setZoom(1);
       zoomSV.value = 1;
       setCameraReady(false);
       setActiveLensId(lensId);
     },
-    [activeLensId, setActiveLensId, zoomSV],
+    [activeLensId, cancelAutoZoomAnimation, setActiveLensId, zoomSV],
   );
 
   const handleToggleFacing = useCallback(() => {
+    cancelAutoZoomAnimation();
     setZoom(1);
     zoomSV.value = 1;
     setCameraReady(false);
     setFacing((current) => (current === "back" ? "front" : "back"));
-  }, [zoomSV]);
+  }, [cancelAutoZoomAnimation, zoomSV]);
 
   const toggleMode = useCallback((mode) => {
     setActiveControl((current) => (current === mode ? "none" : mode));
@@ -215,6 +270,7 @@ export default function App() {
   }, []);
 
   const handleTakePicture = useCallback(() => {
+    cancelAutoZoomAnimation();
     cancelCompositionScan();
     if (flash === "on" && !activeLens?.device?.hasFlash) {
       Alert.alert(
@@ -272,9 +328,12 @@ export default function App() {
       livePhotoDeviceId: activeLens?.device?.id,
       portraitModeEnabled: portraitCapture.enabled,
       portraitDeviceId: activeLens?.device?.id,
+      outputFormat:
+        Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
     });
   }, [
     activeLens,
+    cancelAutoZoomAnimation,
     cancelCompositionScan,
     animateShutter,
     availableLuts,
@@ -296,6 +355,7 @@ export default function App() {
     livePhoto.enabled,
     portraitCapture.enabled,
     rawCapture.rawMode,
+    saveAsJpeg,
     saveOriginalWithoutEffects,
     selectedGrainId,
     selectedHalationId,
@@ -541,6 +601,7 @@ export default function App() {
         onToggleFacing={handleToggleFacing}
         zoom={zoom}
         setZoom={setZoom}
+        onZoomStart={handleManualZoomStart}
         exposure={exposure}
         setExposure={setExposure}
         selectedLutId={selectedLutId}

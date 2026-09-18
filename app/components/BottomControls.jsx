@@ -25,6 +25,7 @@ export default function BottomControls({
   onToggleFacing,
   zoom,
   setZoom,
+  onZoomStart,
   exposure,
   setExposure,
   selectedLutId,
@@ -268,6 +269,7 @@ export default function BottomControls({
           <ExposureDialFinal
             value={zoom}
             onChange={(v) => setZoom(v)}
+            onInteractionStart={onZoomStart}
             onRelease={onSliderRelease}
             zoomSV={zoomSV}
             minZoom={minZoom}

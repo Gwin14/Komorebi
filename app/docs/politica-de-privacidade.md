@@ -23,7 +23,7 @@ O app pode criar, ler ou armazenar localmente:
 - **Álbum "Komorebi":** álbum criado na biblioteca de mídia para organizar as imagens capturadas.
 - **Metadados EXIF:** dados técnicos gravados ou preservados nas fotos, como data, orientação, lente, ISO, velocidade do obturador, balanço de branco, modo de captura, filtro usado e informações próprias do Komorebi.
 - **Localização GPS nas fotos:** latitude, longitude e altitude podem ser gravadas nos metadados EXIF quando a permissão de localização estiver concedida e a opção "Salvar Localização nas Fotos" estiver ativada.
-- **Preferências do app:** configurações como estilo retrô do viewfinder, grade, som do obturador, salvamento de localização, cópia original sem LUT, posição/ordem dos controles da TopBar e lista de LUTs personalizados.
+- **Preferências do app:** configurações como estilo retrô do viewfinder, grade, som do obturador, formato HEIF/JPEG no iPhone, salvamento de localização, cópia original sem LUT, posição/ordem dos controles da TopBar e lista de LUTs personalizados.
 - **LUTs personalizados:** arquivos `.cube` importados por você são lidos e salvos localmente para uso nos filtros.
 
 Esses dados permanecem no dispositivo, exceto nos casos descritos na seção "Serviços de terceiros".

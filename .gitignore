@@ -43,3 +43,6 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Generated locally from the pinned llama.cpp runtime. Do not commit binaries.
+/modules/composition-scan/ios/Frameworks/llama.xcframework/

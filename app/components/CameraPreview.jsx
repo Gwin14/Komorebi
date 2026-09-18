@@ -54,12 +54,8 @@ export default function CameraPreview({
   const transitionFinishTimeout = useRef(null);
   const transitionStartedAt = useRef(0);
   const frameProcessorActive =
-    histogramVisible || smileDetectionEnabled || Boolean(compositionScan?.capturePlugin);
-  const captureCompositionBackdrop = useCallback(async () => {
-    const snapshot = await cameraRef.current?.takeSnapshot?.({ quality: 70 });
-    if (!snapshot?.path) return null;
-    return snapshot.path.startsWith("file://") ? snapshot.path : `file://${snapshot.path}`;
-  }, [cameraRef]);
+    histogramVisible || smileDetectionEnabled ||
+    Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId);
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);
@@ -67,6 +63,14 @@ export default function CameraPreview({
 
   const focusOnPoint = useCallback(
     (x, y) => {
+      const { width, height } = previewLayout;
+      if (width > 0 && height > 0) {
+        compositionScan?.selectSubject?.({
+          x: Math.max(0, Math.min(1, x / width)),
+          y: Math.max(0, Math.min(1, y / height)),
+        });
+      }
+
       if (!device?.supportsFocus) return;
 
       setFocusPoint({ x, y });
@@ -79,7 +83,6 @@ export default function CameraPreview({
         useNativeDriver: true,
       }).start();
 
-      const { width, height } = previewLayout;
       if (onFocusAtPoint && width > 0 && height > 0) {
         // AVCaptureDevice point-of-interest coordinates are rotated relative
         // to the portrait preview layer coordinates used by the tap gesture.
@@ -94,7 +97,7 @@ export default function CameraPreview({
 
       cameraRef.current?.focus({ x, y }).catch(() => {});
     },
-    [device, cameraRef, focusAnim, onFocusAtPoint, previewLayout],
+    [compositionScan, device, cameraRef, focusAnim, onFocusAtPoint, previewLayout],
   );
 
   const focusGesture = useMemo(
@@ -297,7 +300,8 @@ export default function CameraPreview({
     faceDetectionCallback: handleFacesDetection,
     faceDetectionOptions,
     faceDetectionEnabled: smileDetectionEnabled && !compositionScan?.busy,
-    compositionScanId: compositionScan?.scanId,
+    compositionScanId: compositionScan?.captureScanId,
+    compositionTrackingId: compositionScan?.trackingScanId,
     compositionScanRotation: compositionScan?.captureRotation,
     compositionCapturePlugin: compositionScan?.capturePlugin,
     compositionCaptureCallback: compositionScan?.onCaptured,
@@ -429,7 +433,7 @@ export default function CameraPreview({
           ]}
         />
       )}
-      {compositionScan?.supported && (
+      {compositionScan?.supported && device.position === "back" && (
         <View pointerEvents="box-none" style={[
           StyleSheet.absoluteFill,
           doubleCaptureMode && { top: 3, left: 3, right: 3, bottom: 3 },
@@ -437,7 +441,6 @@ export default function CameraPreview({
           <CompositionScanOverlay
             scan={compositionScan}
             layout={previewLayout}
-            captureBackdrop={captureCompositionBackdrop}
           />
         </View>
       )}

@@ -11,6 +11,7 @@ export type PortraitCaptureCapabilities = {
 export type PortraitCaptureOptions = {
   deviceId: string;
   flashMode?: "off" | "on" | "auto";
+  outputFormat?: "heif" | "jpeg";
 };
 
 export type PortraitCameraViewProps = ViewProps & {
@@ -40,6 +41,13 @@ export type SaveProcessedPortraitPhotoOptions = {
   processedPhotoUri: string;
   originalPhotoUri?: string | null;
   albumTitle?: string;
+  outputFormat?: "heif" | "jpeg";
+};
+
+export type ConvertPhotoFormatOptions = {
+  photoUri: string;
+  metadataSourceUri?: string | null;
+  outputFormat: "heif" | "jpeg";
 };
 
 export type SaveProcessedPortraitPhotoResult = {
@@ -102,6 +110,7 @@ export async function capturePortraitPhoto(
   const result = await nativeModule.capturePortraitPhoto({
     deviceId: options.deviceId,
     flashMode: options.flashMode ?? "off",
+    outputFormat: options.outputFormat ?? "heif",
   });
 
   return {
@@ -124,6 +133,7 @@ export async function saveProcessedPortraitPhoto(
     processedPhotoUri: options.processedPhotoUri,
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",
+    outputFormat: options.outputFormat ?? "heif",
   });
 
   return {
@@ -131,4 +141,17 @@ export async function saveProcessedPortraitPhoto(
     savedToLibrary: Boolean(result.savedToLibrary),
     auxiliaryDataPreserved: Boolean(result.auxiliaryDataPreserved),
   };
+}
+
+export async function convertPhotoFormat(
+  options: ConvertPhotoFormatOptions,
+): Promise<string> {
+  if (!nativeModule) return options.photoUri;
+
+  const result = await nativeModule.convertPhotoFormat({
+    photoUri: options.photoUri,
+    metadataSourceUri: options.metadataSourceUri ?? null,
+    outputFormat: options.outputFormat,
+  });
+  return result.photoUri ?? options.photoUri;
 }
