@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { LivePhotoCameraView } from "../../modules/camera-live-photo";
 import { PortraitCameraView } from "../../modules/camera-portrait-capture";
+import { ImageStackingCameraView } from "../../modules/camera-image-stacking";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
 import styles from "./CameraPreview.styles";
@@ -21,11 +22,16 @@ export default function NativeCapturePreview({
   doubleCaptureMode,
   smileDetectionEnabled,
   onSmileDetected,
+  onStackingProgress,
 }) {
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
   const previousHistogramBins = useRef(null);
   const NativeCameraView =
-    mode === "live" ? LivePhotoCameraView : PortraitCameraView;
+    mode === "live"
+      ? LivePhotoCameraView
+      : mode === "stacking"
+        ? ImageStackingCameraView
+        : PortraitCameraView;
   const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
 
   useEffect(() => {
@@ -111,6 +117,9 @@ export default function NativeCapturePreview({
         histogramEnabled={histogramVisible}
         onHistogramUpdated={
           histogramVisible ? handleHistogramUpdated : undefined
+        }
+        onStackingProgress={
+          mode === "stacking" ? onStackingProgress : undefined
         }
       />
 

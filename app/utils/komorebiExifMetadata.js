@@ -8,7 +8,7 @@ import { AVAILABLE_LUTS } from "./lutCatalog";
 
 const KOMOREBI_USER_COMMENT_PREFIX = "KOMOREBI_JSON_BASE64:";
 const KOMOREBI_ASSET_METADATA_PREFIX = "@komorebi/assetMetadata/";
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const base64Chars =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -162,6 +162,7 @@ export const buildKomorebiExifMetadata = ({
   doubleCaptureMode = false,
   captureMode = "standard",
   manualSettings = null,
+  stackingMetadata = null,
 } = {}) => {
   const lutId = selectedLut?.id || selectedLutId;
   const hasFilter = lutId && lutId !== "none";
@@ -199,6 +200,17 @@ export const buildKomorebiExifMetadata = ({
     aspectRatioLabel: formatAspectRatio(aspectRatio),
     doubleCaptureMode: Boolean(doubleCaptureMode),
     captureMode,
+    stacking: stackingMetadata
+      ? compactObject({
+          engineVersion: 1,
+          strategyId: stackingMetadata.strategyId,
+          capturedFrames: stackingMetadata.capturedFrames,
+          acceptedFrames: stackingMetadata.acceptedFrames,
+          rejectedFrames: stackingMetadata.rejectedFrames,
+          durationSeconds: stackingMetadata.durationSeconds,
+          degraded: stackingMetadata.degraded,
+        })
+      : undefined,
     manual: Object.keys(manual).length ? manual : undefined,
   });
 };

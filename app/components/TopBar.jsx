@@ -36,11 +36,15 @@ export default function TopBar({
   portraitCaptureAvailable,
   portraitModeEnabled,
   togglePortraitModeEnabled,
+  imageStackingAvailable,
+  imageStackingStrategyId,
+  toggleImageStackingControl,
   unavailableReasons = {},
   projects = [],
   activeProjectId,
   onChangeProject,
   onCreateProject,
+  controlsDisabled = false,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -165,6 +169,12 @@ export default function TopBar({
       onPress: togglePortraitModeEnabled,
       active: portraitModeEnabled,
     },
+    stacking: {
+      icon: imageStackingStrategyId ? "layers" : "layers-outline",
+      onPress: toggleImageStackingControl,
+      active:
+        activeControl === "stacking" || Boolean(imageStackingStrategyId),
+    },
     projects: {
       icon: activeProjectId ? "folder" : "folder-outline",
       onPress: () => {},
@@ -175,13 +185,17 @@ export default function TopBar({
   return (
     <View style={styles.buttonsContainer}>
       {topBarControls.map((controlId) => {
+        if (controlId === "stacking" && !imageStackingAvailable) return null;
         if (controlId === "manual" && !manualControlsAvailable) return null;
         const control = controlOptions[controlId];
         if (!control) return null;
 
         const disabled =
+          controlsDisabled ||
           (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
+          (controlId === "manual" && Boolean(unavailableReasons.manual)) ||
           (controlId === "rawCapture" && !rawCaptureAvailable) ||
+          (controlId === "stacking" && !imageStackingAvailable) ||
           (controlId === "livePhoto" && !livePhotoAvailable) ||
           (controlId === "portrait" && !portraitCaptureAvailable);
         const unavailableReason = unavailableReasons[controlId];
@@ -256,7 +270,9 @@ export default function TopBar({
                 Alert.alert(
                   "Recurso indisponível",
                   unavailableReason ||
-                    "Este recurso não é compatível com a lente atual.",
+                    (controlsDisabled
+                      ? "Os controles ficam bloqueados durante a captura."
+                      : "Este recurso não é compatível com a lente atual."),
                 );
                 return;
               }

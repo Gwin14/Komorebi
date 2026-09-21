@@ -66,6 +66,7 @@ export default function useRawCapture(device) {
       available,
       capabilities,
       rawMode,
+      setRawMode,
       rawModeEnabled: rawMode !== "off",
       toggleRawMode,
     }),

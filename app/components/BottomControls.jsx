@@ -15,6 +15,7 @@ import { getProjectAlbumName } from "../utils/projects";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
+import ImageStackingSelector from "./ImageStackingSelector";
 import Shutter from "./shutter";
 import styles, { BOTTOM_CONTROLS_MARGIN } from "./BottomControls.styles";
 
@@ -49,6 +50,10 @@ export default function BottomControls({
   onSelectLens,
   galleryRefreshKey,
   activeProject = null,
+  imageStackingStrategyId,
+  onSelectImageStackingStrategy,
+  imageStackingCapturing = false,
+  imageStackingBulbCapturing = false,
 }) {
   const router = useRouter();
   const { bottom: bottomInset } = useSafeAreaInsets();
@@ -150,6 +155,7 @@ export default function BottomControls({
   const showLensSelector =
     lenses &&
     lenses.length > 1 &&
+    !imageStackingCapturing &&
     (activeControl === "none" || activeControl === "manual");
 
   return (
@@ -242,12 +248,18 @@ export default function BottomControls({
         >
           <Shutter
             takePicture={handleShutterPress}
-            isProcessing={isProcessing}
+            isProcessing={
+              isProcessing && !imageStackingBulbCapturing
+            }
           />
         </View>
 
         <View style={styles.rightControls}>
-          <TouchableOpacity style={styles.flipButton} onPress={onToggleFacing}>
+          <TouchableOpacity
+            style={styles.flipButton}
+            onPress={onToggleFacing}
+            disabled={imageStackingCapturing}
+          >
             <Reanimated.View style={deviceOrientationStyle}>
               <Ionicons name="camera-reverse-outline" size={28} color="white" />
             </Reanimated.View>
@@ -294,6 +306,14 @@ export default function BottomControls({
               isProcessing={isProcessing}
             />
           </View>
+        )}
+
+        {activeControl === "stacking" && (
+          <ImageStackingSelector
+            value={imageStackingStrategyId}
+            onChange={onSelectImageStackingStrategy}
+            disabled={imageStackingCapturing}
+          />
         )}
       </Animated.View>
     </View>

@@ -71,7 +71,7 @@ export async function saveToAlbum(project, uri) {
   return asset;
 }
 
-const getLocationExif = async (locationEnabled) => {
+export const getLocationExif = async (locationEnabled) => {
   const additionalExif = {};
 
   try {
@@ -100,7 +100,7 @@ const getLocationExif = async (locationEnabled) => {
   return additionalExif;
 };
 
-const buildPhotoProcessingData = async ({
+export const buildPhotoProcessingData = async ({
   uri,
   selectedLutId,
   selectedLut,
@@ -115,6 +115,7 @@ const buildPhotoProcessingData = async ({
   aspectRatio,
   captureMode = "standard",
   manualSettings = null,
+  stackingMetadata = null,
   extraData = {},
 }) => {
   const captureAspectRatio = await resolveCaptureAspectRatio(uri, aspectRatio);
@@ -130,6 +131,7 @@ const buildPhotoProcessingData = async ({
     doubleCaptureMode,
     captureMode,
     manualSettings,
+    stackingMetadata,
   });
   const baseExifData = { ...exifData, komorebiMetadata };
   const noLutData = {
@@ -180,6 +182,7 @@ const buildPhotoProcessingData = async ({
       doubleCaptureMode,
       captureMode,
       manualSettings,
+      stackingMetadata,
     }),
   };
 
