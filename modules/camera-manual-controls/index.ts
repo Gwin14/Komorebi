@@ -88,9 +88,3 @@ export async function focusAtPoint(
 export async function setAutoFocus(deviceId: string): Promise<void> {
   await nativeModule?.setAutoFocus?.(deviceId);
 }
-
-// Diagnóstico temporário — ver comentário em CameraManualControlsModule.swift.
-export async function getDebugState(deviceId: string): Promise<any> {
-  if (!nativeModule) return null;
-  return nativeModule.getDebugState(deviceId);
-}

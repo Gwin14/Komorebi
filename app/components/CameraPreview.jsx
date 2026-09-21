@@ -33,6 +33,7 @@ export default function CameraPreview({
   doubleCaptureMode,
   isActive = true,
   manualPhotoMode = false,
+  manualExposureActive = false,
   rawPhotoMode = false,
   onFocusAtPoint,
   compositionScan,
@@ -352,7 +353,17 @@ export default function CameraPreview({
             }
             {...faceDetectionProps}
             enableLocation={location}
-            photoQualityBalance={rawPhotoMode ? "quality" : "balanced"}
+            // `photoQualityBalance` é uma configuração da AVCaptureSession,
+            // não uma opção de `takePhoto()`. Em exposição manual, `speed`
+            // evita a fusão de frames (Deep Fusion/Smart HDR) que pode
+            // substituir o ISO/obturador travado pela exposição automática.
+            photoQualityBalance={
+              manualExposureActive
+                ? "speed"
+                : rawPhotoMode
+                  ? "quality"
+                  : "balanced"
+            }
           />
         </Animated.View>
       </GestureDetector>

@@ -343,16 +343,9 @@ export const takePicture = async ({
     }
 
     const additionalExif = await getLocationExif(location);
-    // Com manual ativo, força "speed" (frame único, sem fusão Deep Fusion/
-    // Smart HDR): em modo "quality"/"balanced" o AVCapturePhotoOutput funde
-    // múltiplos frames em exposições diferentes, ignorando o ISO/obturador
-    // travado manualmente e estourando a foto final em relação ao viewfinder.
-    const hasManualExposure =
-      manualSettings?.iso != null || manualSettings?.shutterSeconds != null;
     const photo = await cameraRef.current.takePhoto({
       flash: flash === "on" ? "on" : "off",
       rawMode: normalizedRawMode,
-      photoQualityBalance: hasManualExposure ? "speed" : "quality",
       photoCodec: outputFormat === "heif" ? "hevc" : "jpeg",
     });
 
