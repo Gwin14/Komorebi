@@ -4,7 +4,7 @@ import {
   saveStoredSetting,
   SETTINGS_STORAGE_KEYS,
 } from "../utils/settingsStorage";
-import { DEFAULT_TOP_BAR_CONTROLS } from "../utils/topBarControls";
+import { getDefaultTopBarControls } from "../utils/topBarControls";
 import { reconcileProjectsWithAlbums } from "../utils/projects";
 
 const SettingsContext = createContext(null);
@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = {
   firstTime: true,
   customLuts: [],
   topBarBelow: false,
-  topBarControls: DEFAULT_TOP_BAR_CONTROLS,
+  topBarControls: getDefaultTopBarControls(),
   projects: [],
   activeProjectId: null,
 };
@@ -52,7 +52,7 @@ export const SettingsProvider = ({ children }) => {
   const [customLuts, setCustomLuts] = useState(DEFAULT_SETTINGS.customLuts);
   const [topBarBelow, setTopBarBelow] = useState(DEFAULT_SETTINGS.topBarBelow);
   const [topBarControls, setTopBarControls] = useState(
-    DEFAULT_SETTINGS.topBarControls,
+    () => [...DEFAULT_SETTINGS.topBarControls],
   );
   const [projects, setProjects] = useState(DEFAULT_SETTINGS.projects);
   const [activeProjectId, setActiveProjectId] = useState(

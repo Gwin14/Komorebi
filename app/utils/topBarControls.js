@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+
 export const TOP_BAR_CONTROLS = [
   //   {
   //     id: "aspectRatio",
@@ -79,23 +81,23 @@ export const TOP_BAR_CONTROLS = [
   },
 ];
 
-export const DEFAULT_TOP_BAR_CONTROLS = [
-  "vertical",
-  "weather",
-  "luts",
-  "manual",
-  "rawCapture",
-  "livePhoto",
-  "portrait",
-  "projects",
-  "settings",
-];
+export function getDefaultTopBarControls(platform = Platform.OS) {
+  return [
+    "luts",
+    ...(platform === "ios" ? ["livePhoto"] : []),
+    "vertical",
+    "manual",
+    "settings",
+  ];
+}
+
+export const DEFAULT_TOP_BAR_CONTROLS = getDefaultTopBarControls();
 
 export const TOP_BAR_MAX_CONTROLS = 8;
 
 export function normalizeTopBarControls(savedControls) {
   if (!Array.isArray(savedControls)) {
-    return DEFAULT_TOP_BAR_CONTROLS;
+    return [...DEFAULT_TOP_BAR_CONTROLS];
   }
 
   const validIds = TOP_BAR_CONTROLS.map((control) => control.id);
@@ -107,5 +109,12 @@ export function normalizeTopBarControls(savedControls) {
     parsed.push("settings");
   }
 
-  return parsed.slice(0, TOP_BAR_MAX_CONTROLS);
+  if (parsed.length <= TOP_BAR_MAX_CONTROLS) return parsed;
+
+  const settingsIndex = parsed.indexOf("settings");
+  if (settingsIndex < TOP_BAR_MAX_CONTROLS) {
+    return parsed.slice(0, TOP_BAR_MAX_CONTROLS);
+  }
+
+  return [...parsed.slice(0, TOP_BAR_MAX_CONTROLS - 1), "settings"];
 }
