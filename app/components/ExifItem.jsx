@@ -5,11 +5,15 @@ import styles from "./ExifItem.styles";
 export function ExifItem({ icon, label, value }) {
   return (
     <View style={styles.row}>
-      <Ionicons name={icon} size={18} color="#ffaa00" />
-      <Text style={styles.label}>{label}:</Text>
-      <Text style={styles.value} numberOfLines={1} ellipsizeMode="tail">
-        {value}
-      </Text>
+      <View style={styles.iconContainer}>
+        <Ionicons name={icon} size={16} color="#ffaa00" />
+      </View>
+      <View style={styles.copy}>
+        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.value} numberOfLines={1} ellipsizeMode="tail">
+          {value}
+        </Text>
+      </View>
     </View>
   );
 }
