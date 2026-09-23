@@ -24,6 +24,23 @@ export default StyleSheet.create({
     height: 0,
     overflow: "hidden",
   },
+  appleStylesPaused: {
+    position: "absolute",
+    top: 104,
+    alignSelf: "center",
+    maxWidth: "88%",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 12,
+    backgroundColor: "rgba(0, 0, 0, 0.72)",
+    zIndex: 1200,
+  },
+  appleStylesPausedText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   topBarBelow: {
     width: "96%",
     paddingHorizontal: 2,

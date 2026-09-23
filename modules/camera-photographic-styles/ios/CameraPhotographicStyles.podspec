@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.source_files = '**/*.{h,m,mm,swift}'
   s.vendored_frameworks = 'Frameworks/XDRemuxCore.xcframework'
-  s.frameworks = 'VideoToolbox', 'CoreMedia', 'CoreVideo'
+  s.frameworks = 'VideoToolbox', 'CoreMedia', 'CoreVideo', 'ImageIO', 'Photos', 'CoreLocation'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'SWIFT_COMPILATION_MODE' => 'wholemodule'

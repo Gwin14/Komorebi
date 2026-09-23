@@ -45,6 +45,7 @@ import {
   LUTProcessor,
 } from "./utils/lutProcessor";
 import { getProjectById } from "./utils/projects";
+import { getAppleStylesCompatibility } from "./utils/photographicStylesPolicy";
 
 export default function App() {
   const {
@@ -106,6 +107,22 @@ export default function App() {
   const livePhoto = useLivePhotoCapture(activeLens?.device);
   const portraitCapture = usePortraitCapture(activeLens?.device);
   const imageStacking = useImageStacking(activeLens?.device);
+  const appleStylesCompatibility = useMemo(
+    () =>
+      getAppleStylesCompatibility({
+        preferenceEnabled:
+          Platform.OS === "ios" && preserveApplePhotographicStyles,
+        livePhotoEnabled: livePhoto.enabled,
+        portraitModeEnabled: portraitCapture.enabled,
+        rawMode: rawCapture.rawMode,
+      }),
+    [
+      livePhoto.enabled,
+      portraitCapture.enabled,
+      preserveApplePhotographicStyles,
+      rawCapture.rawMode,
+    ],
+  );
   const nativeCaptureMode = imageStacking.enabled
     ? "stacking"
     : livePhoto.enabled
@@ -292,19 +309,6 @@ export default function App() {
   const handleTakePicture = useCallback(async () => {
     cancelAutoZoomAnimation();
     cancelCompositionScan();
-    if (
-      preserveApplePhotographicStyles &&
-      (imageStacking.enabled ||
-        livePhoto.enabled ||
-        portraitCapture.enabled ||
-        rawCapture.rawMode !== "off")
-    ) {
-      Alert.alert(
-        "Modo incompatível",
-        "A compatibilidade com Estilos Apple está disponível apenas para foto normal. Desative Live Photo, Retrato, RAW ou Image Stacking para continuar.",
-      );
-      return;
-    }
     if (imageStacking.enabled) {
       if (imageStacking.capturing) {
         if (imageStacking.strategyId === "bulb") {
@@ -344,6 +348,8 @@ export default function App() {
             aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
             captureMode: "stacking",
             stackingMetadata: result,
+            preserveApplePhotographicStyles:
+              appleStylesCompatibility.effective,
             extraData: {
               outputFormat:
                 Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
@@ -416,7 +422,7 @@ export default function App() {
           ? "heif"
           : "jpeg",
       preserveApplePhotographicStyles:
-        Platform.OS === "ios" && preserveApplePhotographicStyles,
+        appleStylesCompatibility.effective,
     });
   }, [
     activeLens,
@@ -444,6 +450,7 @@ export default function App() {
     rawCapture.rawMode,
     saveAsJpeg,
     preserveApplePhotographicStyles,
+    appleStylesCompatibility.effective,
     saveOriginalWithoutEffects,
     selectedGrainId,
     selectedHalationId,
@@ -731,6 +738,14 @@ export default function App() {
         progress={imageStacking.progress}
         onCancel={imageStacking.cancel}
       />
+
+      {appleStylesCompatibility.suspensionReason && (
+        <View style={styles.appleStylesPaused} pointerEvents="none">
+          <Text style={styles.appleStylesPausedText}>
+            Estilos Apple pausados: {appleStylesCompatibility.suspensionReason}
+          </Text>
+        </View>
+      )}
 
       {!firstTime &&
         cameraPermission !== null &&

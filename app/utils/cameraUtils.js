@@ -135,26 +135,6 @@ export const buildPhotoProcessingData = async ({
   });
   const baseExifData = { ...exifData, komorebiMetadata };
 
-  // O módulo nativo monta depois o grafo auxiliar exigido pelo Fotos. Crop,
-  // efeitos e regravação de EXIF ficam desativados para não invalidar o grafo.
-  if (preserveApplePhotographicStyles) {
-    return {
-      ...extraData,
-      preserveApplePhotographicStyles: true,
-      needsProcessing: false,
-      originalUri: uri,
-      imageUri: uri,
-      exifData: baseExifData,
-      doubleCaptureMode: false,
-      saveOriginalWithoutEffects: false,
-      aspectRatio: captureAspectRatio,
-      captureMode,
-      cube: null,
-      halationConfig: null,
-      grainConfig: null,
-    };
-  }
-
   const croppedUri = (await cropImageToAspect(uri, captureAspectRatio)) || uri;
   const noLutData = {
     ...extraData,
@@ -163,9 +143,10 @@ export const buildPhotoProcessingData = async ({
     imageUri: croppedUri,
     exifData: baseExifData,
     doubleCaptureMode,
-    saveOriginalWithoutEffects: false,
+    saveOriginalWithoutEffects,
     aspectRatio: captureAspectRatio,
     captureMode,
+    preserveApplePhotographicStyles,
     cube: null,
     halationConfig: null,
     grainConfig: null,
@@ -217,6 +198,7 @@ export const buildPhotoProcessingData = async ({
     originalUri: uri,
     aspectRatio: captureAspectRatio,
     captureMode,
+    preserveApplePhotographicStyles,
   };
 };
 

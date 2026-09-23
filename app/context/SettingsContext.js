@@ -209,8 +209,8 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [saveAsJpeg, loading]);
 
-  // Mantém o HEIF original intacto para não descartar Maker Notes e imagens
-  // auxiliares usadas pelo pipeline de Estilos Fotográficos da Apple.
+  // Persiste apenas a preferência. Modos temporariamente incompatíveis pausam
+  // a aplicação no disparo sem alterar este valor.
   useEffect(() => {
     if (!loading) {
       saveStoredSetting(

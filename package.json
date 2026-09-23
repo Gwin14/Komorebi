@@ -10,7 +10,9 @@
     "setup:minicpm-ios": "bash ./scripts/setup-minicpm-ios.sh",
     "web": "expo start --web",
     "postinstall": "patch-package",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --test app/utils/*.test.cjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

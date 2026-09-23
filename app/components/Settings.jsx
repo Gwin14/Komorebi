@@ -279,7 +279,7 @@ export default function Settings() {
           {Platform.OS === "ios" && (
             <CustomToggle
               badge="experimental"
-              description="Gera um HEIF editável no Fotos, sem aplicar estilo. Disponível para foto normal e sem efeitos ou recortes."
+              description="Gera HEIF editável no Fotos com crop, LUT, grain e halation. Pausa automaticamente em Live Photo, Retrato e RAW."
               label="Compatibilidade com Estilos Apple"
               value={preserveApplePhotographicStyles}
               onValueChange={(enabled) => {

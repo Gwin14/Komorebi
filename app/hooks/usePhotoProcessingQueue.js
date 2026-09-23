@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert } from "react-native";
+import * as FileSystem from "expo-file-system/legacy";
 import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
-import { makePhotoStylesCompatible } from "../../modules/camera-photographic-styles";
+import {
+  makePhotoStylesCompatible,
+  updatePhotoAssetMetadata,
+} from "../../modules/camera-photographic-styles";
 import {
   convertPhotoFormat,
   saveProcessedPortraitPhoto,
@@ -60,7 +64,6 @@ export default function usePhotoProcessingQueue(
         }
 
         const shouldApplyExifBeforeSaving =
-          !preserveApplePhotographicStyles &&
           !item.needsProcessing &&
           captureMode !== "raw" &&
           Boolean(exifData);
@@ -70,10 +73,25 @@ export default function usePhotoProcessingQueue(
         const komorebiMetadata = exifData?.komorebiMetadata;
         const saveMetadataForAsset = (assetId) =>
           saveKomorebiAssetMetadata(assetId, komorebiMetadata);
+        const removeStylesTemporaryFile = async (uri) => {
+          if (!uri) return;
+          try {
+            await FileSystem.deleteAsync(uri, { idempotent: true });
+          } catch (cleanupError) {
+            console.warn(
+              "Falha ao remover HEIF temporário dos Estilos Apple:",
+              cleanupError,
+            );
+          }
+        };
         const prepareRegularPhoto = async (uri, metadataSourceUri = originalUri) => {
           if (preserveApplePhotographicStyles) {
-            const result = await makePhotoStylesCompatible(uri);
+            const result = await makePhotoStylesCompatible(uri, {
+              metadata: exifData,
+              metadataSourceUri,
+            });
             if (!result?.verified || !result?.photoUri) {
+              await removeStylesTemporaryFile(result?.photoUri);
               throw new Error("O HEIF gerado não passou na validação dos Estilos Fotográficos");
             }
             return result.photoUri;
@@ -90,11 +108,47 @@ export default function usePhotoProcessingQueue(
             return uri;
           }
         };
+        const saveRegularPhoto = async (
+          uri,
+          metadataSourceUri = originalUri,
+        ) => {
+          let preparedUri = null;
+          try {
+            preparedUri = await prepareRegularPhoto(uri, metadataSourceUri);
+            const asset = await saveToAlbum(project, preparedUri);
+            mainAssetSaved = true;
+            if (preserveApplePhotographicStyles) {
+              if (!asset?.id) {
+                throw new Error(
+                  "O Fotos não retornou o identificador do asset salvo",
+                );
+              }
+              const metadataUpdated = await updatePhotoAssetMetadata(asset.id, {
+                metadata: exifData,
+                metadataSourceUri,
+              });
+              if (!metadataUpdated) {
+                throw new Error(
+                  "O asset salvo não foi localizado para sincronizar data e localização",
+                );
+              }
+            }
+            return asset;
+          } finally {
+            if (
+              preserveApplePhotographicStyles &&
+              preparedUri &&
+              preparedUri !== uri
+            ) {
+              await removeStylesTemporaryFile(preparedUri);
+            }
+          }
+        };
 
         if (captureMode === "raw") {
           const rawAsset = await saveToAlbum(project,originalUri || processedUri);
-          await saveMetadataForAsset(rawAsset?.id);
           mainAssetSaved = true;
+          await saveMetadataForAsset(rawAsset?.id);
 
           if (rawDerivativeAspectRatio == null) {
             return;
@@ -113,11 +167,10 @@ export default function usePhotoProcessingQueue(
             derivativeSourceUri,
             derivedUri,
           );
-          const preparedDerivative = await prepareRegularPhoto(
+          const derivedAsset = await saveRegularPhoto(
             derivedWithExif,
             derivativeSourceUri,
           );
-          const derivedAsset = await saveToAlbum(project, preparedDerivative);
           await saveMetadataForAsset(derivedAsset?.id);
         } else if (livePhotoMovieUri) {
           const result = await saveLivePhotoToLibrary({
@@ -127,8 +180,8 @@ export default function usePhotoProcessingQueue(
             albumTitle: "Komorebi",
             outputFormat,
           });
-          await saveMetadataForAsset(result.localIdentifier || localIdentifier);
           mainAssetSaved = true;
+          await saveMetadataForAsset(result.localIdentifier || localIdentifier);
           if (doubleCaptureMode) {
             const inverseUri = await cropImageToInverseAspect(
               uriToSave,
@@ -140,8 +193,7 @@ export default function usePhotoProcessingQueue(
               uriToSave,
               inverseUri,
             );
-            const preparedInverse = await prepareRegularPhoto(inverseWithExif);
-            const inverseAsset = await saveToAlbum(project, preparedInverse);
+            const inverseAsset = await saveRegularPhoto(inverseWithExif);
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (
@@ -154,8 +206,8 @@ export default function usePhotoProcessingQueue(
             albumTitle: "Komorebi",
             outputFormat,
           });
-          await saveMetadataForAsset(result.localIdentifier || localIdentifier);
           mainAssetSaved = true;
+          await saveMetadataForAsset(result.localIdentifier || localIdentifier);
           if (doubleCaptureMode) {
             const inverseUri = await cropImageToInverseAspect(
               uriToSave,
@@ -167,15 +219,12 @@ export default function usePhotoProcessingQueue(
               uriToSave,
               inverseUri,
             );
-            const preparedInverse = await prepareRegularPhoto(inverseWithExif);
-            const inverseAsset = await saveToAlbum(project, preparedInverse);
+            const inverseAsset = await saveRegularPhoto(inverseWithExif);
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (doubleCaptureMode) {
-          const preparedUri = await prepareRegularPhoto(uriToSave);
-          const asset = await saveToAlbum(project, preparedUri);
+          const asset = await saveRegularPhoto(uriToSave);
           await saveMetadataForAsset(asset?.id);
-          mainAssetSaved = true;
 
           const inverseUri = await cropImageToInverseAspect(
             uriToSave,
@@ -186,22 +235,19 @@ export default function usePhotoProcessingQueue(
             uriToSave,
             inverseUri,
           );
-          const preparedInverse = await prepareRegularPhoto(inverseUriWithExif);
-          const inverseAsset = await saveToAlbum(project, preparedInverse);
+          const inverseAsset = await saveRegularPhoto(inverseUriWithExif);
           await saveMetadataForAsset(inverseAsset?.id);
         } else {
-          const preparedUri = await prepareRegularPhoto(uriToSave);
-          const asset = await saveToAlbum(project, preparedUri);
+          const asset = await saveRegularPhoto(uriToSave);
           await saveMetadataForAsset(asset?.id);
-          mainAssetSaved = true;
         }
 
         if (saveOriginalWithoutEffects && originalUri) {
-          const preparedOriginal = await prepareRegularPhoto(
+          const originalAsset = await saveRegularPhoto(
             originalUri,
             originalUri,
           );
-          await saveToAlbum(project, preparedOriginal);
+          await saveMetadataForAsset(originalAsset?.id);
         }
       } catch (error) {
         console.error("Erro ao salvar imagem processada:", error);
