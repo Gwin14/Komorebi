@@ -10,6 +10,8 @@ export const SETTINGS_STORAGE_KEYS = {
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
   SAVE_AS_JPEG: "@settings/saveAsJpeg",
+  PRESERVE_APPLE_PHOTOGRAPHIC_STYLES:
+    "@settings/preserveApplePhotographicStyles",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
   CUSTOM_LUTS: "@settings/customLuts",
@@ -46,6 +48,7 @@ export async function loadStoredSettings(defaults) {
     savedShutterSound,
     savedLocation,
     savedSaveAsJpeg,
+    savedPreserveApplePhotographicStyles,
     savedSaveOriginalWithLUT,
     savedFirstTime,
     savedCustomLuts,
@@ -62,6 +65,7 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.SHUTTER_SOUND),
     AsyncStorage.getItem(keys.LOCATION),
     AsyncStorage.getItem(keys.SAVE_AS_JPEG),
+    AsyncStorage.getItem(keys.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES),
     AsyncStorage.getItem(keys.SAVE_ORIGINAL_WITH_LUT),
     AsyncStorage.getItem(keys.FIRSTTIME),
     AsyncStorage.getItem(keys.CUSTOM_LUTS),
@@ -86,6 +90,10 @@ export async function loadStoredSettings(defaults) {
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
     saveAsJpeg: parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg),
+    preserveApplePhotographicStyles: parseBoolean(
+      savedPreserveApplePhotographicStyles,
+      defaults.preserveApplePhotographicStyles,
+    ),
     saveOriginalWithoutEffects: parseBoolean(
       savedSaveOriginalWithLUT,
       defaults.saveOriginalWithoutEffects,

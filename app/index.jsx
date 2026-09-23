@@ -55,6 +55,7 @@ export default function App() {
     compositionScanEnabled,
     location,
     saveAsJpeg,
+    preserveApplePhotographicStyles,
     firstTime,
     loading,
     saveOriginalWithoutEffects,
@@ -291,6 +292,19 @@ export default function App() {
   const handleTakePicture = useCallback(async () => {
     cancelAutoZoomAnimation();
     cancelCompositionScan();
+    if (
+      preserveApplePhotographicStyles &&
+      (imageStacking.enabled ||
+        livePhoto.enabled ||
+        portraitCapture.enabled ||
+        rawCapture.rawMode !== "off")
+    ) {
+      Alert.alert(
+        "Modo incompatível",
+        "A compatibilidade com Estilos Apple está disponível apenas para foto normal. Desative Live Photo, Retrato, RAW ou Image Stacking para continuar.",
+      );
+      return;
+    }
     if (imageStacking.enabled) {
       if (imageStacking.capturing) {
         if (imageStacking.strategyId === "bulb") {
@@ -397,7 +411,12 @@ export default function App() {
       portraitModeEnabled: portraitCapture.enabled,
       portraitDeviceId: activeLens?.device?.id,
       outputFormat:
-        Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
+        Platform.OS === "ios" &&
+        (preserveApplePhotographicStyles || !saveAsJpeg)
+          ? "heif"
+          : "jpeg",
+      preserveApplePhotographicStyles:
+        Platform.OS === "ios" && preserveApplePhotographicStyles,
     });
   }, [
     activeLens,
@@ -424,6 +443,7 @@ export default function App() {
     portraitCapture.enabled,
     rawCapture.rawMode,
     saveAsJpeg,
+    preserveApplePhotographicStyles,
     saveOriginalWithoutEffects,
     selectedGrainId,
     selectedHalationId,

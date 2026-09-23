@@ -116,10 +116,10 @@ export const buildPhotoProcessingData = async ({
   captureMode = "standard",
   manualSettings = null,
   stackingMetadata = null,
+  preserveApplePhotographicStyles = false,
   extraData = {},
 }) => {
   const captureAspectRatio = await resolveCaptureAspectRatio(uri, aspectRatio);
-  const croppedUri = (await cropImageToAspect(uri, captureAspectRatio)) || uri;
   const komorebiMetadata = buildKomorebiExifMetadata({
     selectedLut,
     selectedLutId,
@@ -134,6 +134,28 @@ export const buildPhotoProcessingData = async ({
     stackingMetadata,
   });
   const baseExifData = { ...exifData, komorebiMetadata };
+
+  // O módulo nativo monta depois o grafo auxiliar exigido pelo Fotos. Crop,
+  // efeitos e regravação de EXIF ficam desativados para não invalidar o grafo.
+  if (preserveApplePhotographicStyles) {
+    return {
+      ...extraData,
+      preserveApplePhotographicStyles: true,
+      needsProcessing: false,
+      originalUri: uri,
+      imageUri: uri,
+      exifData: baseExifData,
+      doubleCaptureMode: false,
+      saveOriginalWithoutEffects: false,
+      aspectRatio: captureAspectRatio,
+      captureMode,
+      cube: null,
+      halationConfig: null,
+      grainConfig: null,
+    };
+  }
+
+  const croppedUri = (await cropImageToAspect(uri, captureAspectRatio)) || uri;
   const noLutData = {
     ...extraData,
     needsProcessing: false,
@@ -224,6 +246,7 @@ export const takePicture = async ({
   portraitModeEnabled = false,
   portraitDeviceId = null,
   outputFormat = "jpeg",
+  preserveApplePhotographicStyles = false,
 }) => {
   const normalizedRawMode = toVisionCameraRawMode(rawMode);
   const rawModeEnabled = normalizedRawMode !== "off";
@@ -285,6 +308,7 @@ export const takePicture = async ({
           saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "live",
+          preserveApplePhotographicStyles,
           extraData: {
             outputFormat,
             livePhotoMovieUri: livePhoto.movieUri,
@@ -332,6 +356,7 @@ export const takePicture = async ({
           saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "portrait",
+          preserveApplePhotographicStyles,
           extraData: {
             outputFormat,
             localIdentifier: portraitPhoto.localIdentifier,
@@ -434,6 +459,7 @@ export const takePicture = async ({
         aspectRatio,
         captureMode: "standard",
         manualSettings,
+        preserveApplePhotographicStyles,
         extraData: { outputFormat },
       }),
     );

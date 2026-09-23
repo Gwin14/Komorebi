@@ -26,6 +26,7 @@
     "@uginy/react-native-liquid-glass": "^1.2.6",
     "camera-image-stacking": "file:./modules/camera-image-stacking",
     "camera-live-photo": "file:./modules/camera-live-photo",
+    "camera-photographic-styles": "file:./modules/camera-photographic-styles",
     "camera-manual-controls": "file:./modules/camera-manual-controls",
     "camera-portrait-capture": "file:./modules/camera-portrait-capture",
     "camera-raw-capture": "file:./modules/camera-raw-capture",

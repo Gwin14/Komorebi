@@ -3,7 +3,13 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import styles from "./CustoToggle.styles";
 
-export default function CustomToggle({ badge, label, value, onValueChange }) {
+export default function CustomToggle({
+  badge,
+  description,
+  label,
+  value,
+  onValueChange,
+}) {
   // Animação para mover a "bolinha" do toggle
   const moveAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -29,9 +35,14 @@ export default function CustomToggle({ badge, label, value, onValueChange }) {
   return (
     <View style={styles.wrapper}>
       {label && (
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>{label}</Text>
-          {badge && <Text style={styles.badge}>{badge}</Text>}
+        <View style={styles.labelBlock}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>{label}</Text>
+            {badge && <Text style={styles.badge}>{badge}</Text>}
+          </View>
+          {description && (
+            <Text style={styles.description}>{description}</Text>
+          )}
         </View>
       )}
 

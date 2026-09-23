@@ -188,6 +188,12 @@ public class CameraLivePhotoModule: Module {
     toProcessedPhotoAt processedURL: URL,
     outputFormat: String
   ) -> URL? {
+    // Se o frame não foi alterado, preservar o contêiner HEIF inteiro mantém
+    // Maker Notes e imagens auxiliares que uma recodificação não sabe recriar.
+    if sourceURL == processedURL {
+      return processedURL
+    }
+
     guard
       let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
       let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil)

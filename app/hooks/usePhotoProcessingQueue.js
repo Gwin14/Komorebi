@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert } from "react-native";
 import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
+import { makePhotoStylesCompatible } from "../../modules/camera-photographic-styles";
 import {
   convertPhotoFormat,
   saveProcessedPortraitPhoto,
@@ -48,6 +49,7 @@ export default function usePhotoProcessingQueue(
         derivativeSourceUri,
         rawDerivativeAspectRatio,
         outputFormat = "jpeg",
+        preserveApplePhotographicStyles = false,
       } = item;
 
       try {
@@ -58,7 +60,10 @@ export default function usePhotoProcessingQueue(
         }
 
         const shouldApplyExifBeforeSaving =
-          !item.needsProcessing && captureMode !== "raw" && Boolean(exifData);
+          !preserveApplePhotographicStyles &&
+          !item.needsProcessing &&
+          captureMode !== "raw" &&
+          Boolean(exifData);
         const uriToSave = shouldApplyExifBeforeSaving
           ? await applyExifDataToImage(processedUri, exifData, originalUri)
           : processedUri;
@@ -66,6 +71,14 @@ export default function usePhotoProcessingQueue(
         const saveMetadataForAsset = (assetId) =>
           saveKomorebiAssetMetadata(assetId, komorebiMetadata);
         const prepareRegularPhoto = async (uri, metadataSourceUri = originalUri) => {
+          if (preserveApplePhotographicStyles) {
+            const result = await makePhotoStylesCompatible(uri);
+            if (!result?.verified || !result?.photoUri) {
+              throw new Error("O HEIF gerado não passou na validação dos Estilos Fotográficos");
+            }
+            return result.photoUri;
+          }
+
           try {
             return await convertPhotoFormat({
               photoUri: uri,

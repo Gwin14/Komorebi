@@ -18,9 +18,18 @@ export default StyleSheet.create({
     letterSpacing: 0.5,
   },
   labelRow: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+  },
+  labelBlock: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  description: {
+    color: "#a9a9a9",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
   },
   badge: {
     color: "#d8b66a",

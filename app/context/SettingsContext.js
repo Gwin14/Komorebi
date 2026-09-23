@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
   shutterSound: false,
   location: true,
   saveAsJpeg: false,
+  preserveApplePhotographicStyles: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
   customLuts: [],
@@ -45,6 +46,8 @@ export const SettingsProvider = ({ children }) => {
   );
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
   const [saveAsJpeg, setSaveAsJpeg] = useState(DEFAULT_SETTINGS.saveAsJpeg);
+  const [preserveApplePhotographicStyles, setPreserveApplePhotographicStyles] =
+    useState(DEFAULT_SETTINGS.preserveApplePhotographicStyles);
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
@@ -72,6 +75,9 @@ export const SettingsProvider = ({ children }) => {
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveAsJpeg(savedSettings.saveAsJpeg);
+        setPreserveApplePhotographicStyles(
+          savedSettings.preserveApplePhotographicStyles,
+        );
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
@@ -203,6 +209,17 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [saveAsJpeg, loading]);
 
+  // Mantém o HEIF original intacto para não descartar Maker Notes e imagens
+  // auxiliares usadas pelo pipeline de Estilos Fotográficos da Apple.
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES,
+        preserveApplePhotographicStyles.toString(),
+      );
+    }
+  }, [preserveApplePhotographicStyles, loading]);
+
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
     if (!loading) {
@@ -268,6 +285,8 @@ export const SettingsProvider = ({ children }) => {
     setLocation,
     saveAsJpeg,
     setSaveAsJpeg,
+    preserveApplePhotographicStyles,
+    setPreserveApplePhotographicStyles,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     firstTime,

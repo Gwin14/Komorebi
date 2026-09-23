@@ -53,6 +53,8 @@ export default function Settings() {
     setLocation,
     saveAsJpeg,
     setSaveAsJpeg,
+    preserveApplePhotographicStyles,
+    setPreserveApplePhotographicStyles,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     customLuts,
@@ -276,9 +278,25 @@ export default function Settings() {
 
           {Platform.OS === "ios" && (
             <CustomToggle
+              badge="experimental"
+              description="Gera um HEIF editável no Fotos, sem aplicar estilo. Disponível para foto normal e sem efeitos ou recortes."
+              label="Compatibilidade com Estilos Apple"
+              value={preserveApplePhotographicStyles}
+              onValueChange={(enabled) => {
+                setPreserveApplePhotographicStyles(enabled);
+                if (enabled) setSaveAsJpeg(false);
+              }}
+            />
+          )}
+
+          {Platform.OS === "ios" && (
+            <CustomToggle
               label="Salvar fotos em JPEG"
               value={saveAsJpeg}
-              onValueChange={setSaveAsJpeg}
+              onValueChange={(enabled) => {
+                setSaveAsJpeg(enabled);
+                if (enabled) setPreserveApplePhotographicStyles(false);
+              }}
             />
           )}
         </View>
