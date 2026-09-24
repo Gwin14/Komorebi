@@ -11,6 +11,17 @@ export default StyleSheet.create({
     borderRadius: 12,
     marginVertical: 4,
   },
+  wrapperGrouped: {
+    minHeight: 58,
+    backgroundColor: "transparent",
+    borderRadius: 0,
+    borderBottomColor: "#292929",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginVertical: 0,
+  },
+  wrapperGroupedLast: {
+    borderBottomWidth: 0,
+  },
   wrapperDisabled: {
     opacity: 0.48,
   },
@@ -18,7 +29,7 @@ export default StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "500",
-    letterSpacing: 0.5,
+    letterSpacing: 0.1,
   },
   labelRow: {
     flexDirection: "row",

@@ -7,6 +7,8 @@ export default function CustomToggle({
   badge,
   description,
   disabled = false,
+  grouped = false,
+  last = false,
   label,
   value,
   onValueChange,
@@ -35,7 +37,14 @@ export default function CustomToggle({
   });
 
   return (
-    <View style={[styles.wrapper, disabled && styles.wrapperDisabled]}>
+    <View
+      style={[
+        styles.wrapper,
+        grouped && styles.wrapperGrouped,
+        grouped && last && styles.wrapperGroupedLast,
+        disabled && styles.wrapperDisabled,
+      ]}
+    >
       {label && (
         <View style={styles.labelBlock}>
           <View style={styles.labelRow}>

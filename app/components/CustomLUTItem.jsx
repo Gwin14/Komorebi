@@ -19,7 +19,7 @@ export default function CustomLUTItem({ name, onDelete }) {
           pressed && styles.deleteButtonPressed,
         ]}
       >
-        <Ionicons name="trash-outline" size={20} color="#fff" />
+        <Ionicons name="trash-outline" size={19} color="#ff7474" />
       </Pressable>
     </View>
   );
