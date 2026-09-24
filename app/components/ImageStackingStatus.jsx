@@ -19,7 +19,7 @@ export default function ImageStackingStatus({ progress, onCancel }) {
       <View style={styles.card}>
         <Text style={styles.title}>{LABELS[progress.state] || "Processando"}</Text>
         <Text style={styles.detail}>
-          {progress.strategyId === "bulb"
+          {["bulb", "motionBlur"].includes(progress.strategyId)
             ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
             : `${progress.acceptedFrames || progress.capturedFrames || 0} frames`}
         </Text>

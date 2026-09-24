@@ -311,7 +311,7 @@ export default function App() {
     cancelCompositionScan();
     if (imageStacking.enabled) {
       if (imageStacking.capturing) {
-        if (imageStacking.strategyId === "bulb") {
+        if (["bulb", "motionBlur"].includes(imageStacking.strategyId)) {
           await imageStacking.stop();
         }
         return;
@@ -463,7 +463,9 @@ export default function App() {
   const handleSelectImageStackingStrategy = useCallback(
     (strategyId) => {
       if (imageStacking.capturing) return;
-      setCameraReady(false);
+      if (Boolean(strategyId) !== imageStacking.enabled) {
+        setCameraReady(false);
+      }
       if (strategyId) {
         if (!imageStacking.enabled) {
           stackingRestoreRef.current = {
@@ -816,8 +818,9 @@ export default function App() {
         imageStackingStrategyId={imageStacking.strategyId}
         onSelectImageStackingStrategy={handleSelectImageStackingStrategy}
         imageStackingCapturing={imageStacking.capturing}
-        imageStackingBulbCapturing={
-          imageStacking.capturing && imageStacking.strategyId === "bulb"
+        imageStackingContinuousCapturing={
+          imageStacking.capturing &&
+          ["bulb", "motionBlur"].includes(imageStacking.strategyId)
         }
       />
     </SafeAreaView>

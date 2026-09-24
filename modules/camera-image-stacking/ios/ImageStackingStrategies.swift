@@ -173,79 +173,6 @@ private final class RobustAverageCompositor {
   }
 }
 
-final class NoiseReductionStrategy: StackingStrategy {
-  let id: StackingStrategyID = .noiseReduction
-
-  func capturePlan(sceneLuminance: Double, options: [String: Any]) -> StackingCapturePlan {
-    let requested = options["frameCount"] as? Int ?? 8
-    return StackingCapturePlan(
-      targetFrameCount: min(12, max(3, requested)),
-      minimumFrameCount: 3,
-      maximumDuration: 15,
-      frameSource: FullResolutionPhotoFrameSource()
-    )
-  }
-
-  func compose(
-    frames: [StoredFrame],
-    context: CIContext,
-    progress: (Int, Int, Int) -> Void,
-    isCancelled: () -> Bool
-  ) throws -> (image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame) {
-    let value = try RobustAverageCompositor(context: context).compose(
-      frames: frames,
-      motionThreshold: 0.055,
-      progress: progress,
-      isCancelled: isCancelled
-    )
-    return (value.0, value.1, value.2, value.3)
-  }
-}
-
-final class NightModeStrategy: StackingStrategy {
-  let id: StackingStrategyID = .night
-
-  func capturePlan(sceneLuminance: Double, options: [String: Any]) -> StackingCapturePlan {
-    let maximum = min(16, max(8, options["maximumFrameCount"] as? Int ?? 16))
-    let adaptive = sceneLuminance < 0.14 ? 16 : sceneLuminance < 0.28 ? 12 : 8
-    return StackingCapturePlan(
-      targetFrameCount: min(maximum, adaptive),
-      minimumFrameCount: 3,
-      maximumDuration: 25,
-      frameSource: FullResolutionPhotoFrameSource()
-    )
-  }
-
-  func compose(
-    frames: [StoredFrame],
-    context: CIContext,
-    progress: (Int, Int, Int) -> Void,
-    isCancelled: () -> Bool
-  ) throws -> (image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame) {
-    let value = try RobustAverageCompositor(context: context).compose(
-      frames: frames,
-      motionThreshold: 0.075,
-      progress: progress,
-      isCancelled: isCancelled
-    )
-    let finished = value.0
-      .applyingFilter("CINoiseReduction", parameters: [
-        "inputNoiseLevel": 0.015,
-        "inputSharpness": 0.45
-      ])
-      .applyingFilter("CIHighlightShadowAdjust", parameters: [
-        "inputHighlightAmount": 0.82,
-        "inputShadowAmount": 0.35,
-        "inputRadius": 1.0
-      ])
-      .applyingFilter("CIColorControls", parameters: [
-        kCIInputContrastKey: 1.04,
-        kCIInputSaturationKey: 1.01
-      ])
-    return (finished.cropped(to: value.0.extent), value.1, value.2, value.3)
-  }
-}
-
 final class BulbStrategy: StackingStrategy {
   let id: StackingStrategyID = .bulb
 
@@ -346,6 +273,121 @@ final class BulbAccumulator {
       }
       self.accumulated = collapsed
       accumulatedDuration += frameDuration
+      accepted += 1
+    }
+  }
+
+  func result() -> CIImage? { accumulated }
+}
+
+final class MotionBlurStrategy: StackingStrategy {
+  let id: StackingStrategyID = .motionBlur
+
+  func capturePlan(sceneLuminance: Double, options: [String: Any]) -> StackingCapturePlan {
+    let requested = options["maximumDurationSeconds"] as? Double ?? 300
+    return StackingCapturePlan(
+      targetFrameCount: Int.max,
+      minimumFrameCount: 5,
+      maximumDuration: min(300, max(1, requested)),
+      frameSource: PixelBufferStreamFrameSource(
+        maximumDimension: 4096,
+        minimumFrameInterval: 0.1
+      )
+    )
+  }
+
+  func compose(
+    frames: [StoredFrame],
+    context: CIContext,
+    progress: (Int, Int, Int) -> Void,
+    isCancelled: () -> Bool
+  ) throws -> (image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame) {
+    throw StackingError.unsupportedStrategy
+  }
+}
+
+/// Builds a daylight-safe simulated long exposure. Frames are registered to
+/// the first frame so camera movement is suppressed, while scene movement is
+/// retained by the temporal average. Unlike BulbAccumulator this compositor
+/// normalizes every frame, so highlights do not grow with capture duration.
+final class MotionBlurAccumulator {
+  private let context: CIContext
+  private let aligner: FrameAligner
+  private let maximumDimension: CGFloat
+  private var reference: CIImage?
+  private var accumulated: CIImage?
+  private(set) var accepted = 0
+  private(set) var rejected = 0
+  private(set) var captured = 0
+
+  init(context: CIContext, maximumDimension: CGFloat) {
+    self.context = context
+    self.maximumDimension = maximumDimension
+    aligner = FrameAligner(context: context)
+  }
+
+  func append(pixelBuffer: CVPixelBuffer) {
+    captured += 1
+    autoreleasepool {
+      let source = CIImage(cvPixelBuffer: pixelBuffer)
+      let longestSide = max(source.extent.width, source.extent.height)
+      let scaleFactor = min(1, maximumDimension / max(1, longestSide))
+      let incoming = source
+        .transformed(by: CGAffineTransform(scaleX: scaleFactor, y: scaleFactor))
+        .applyingFilter("CIColorClamp", parameters: [
+          "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+          "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+        ])
+
+      if reference == nil {
+        guard let first = try? collapse(incoming, context: context) else {
+          rejected += 1
+          return
+        }
+        reference = first
+        accumulated = first
+        accepted = 1
+        return
+      }
+
+      guard let reference, let accumulated,
+            let aligned = aligner.align(incoming, to: reference) else {
+        rejected += 1
+        return
+      }
+      let referenceExtent = reference.extent
+      let alignedExtent = aligned.extent
+      let alignedWidthRatio = alignedExtent.width / max(referenceExtent.width, 1)
+      let alignedHeightRatio = alignedExtent.height / max(referenceExtent.height, 1)
+      let extent = accumulated.extent
+        .intersection(alignedExtent)
+        .intersection(referenceExtent)
+      guard !extent.isNull,
+            alignedWidthRatio >= 0.65,
+            alignedWidthRatio <= 1.5,
+            alignedHeightRatio >= 0.65,
+            alignedHeightRatio <= 1.5,
+            extent.width >= referenceExtent.width * 0.72,
+            extent.height >= referenceExtent.height * 0.72 else {
+        rejected += 1
+        return
+      }
+
+      let incomingWeight = 1 / Double(accepted + 1)
+      let average = accumulated.cropped(to: extent)
+        .applyingFilter("CIDissolveTransition", parameters: [
+          "inputTargetImage": aligned.cropped(to: extent),
+          "inputTime": incomingWeight
+        ])
+        .applyingFilter("CIColorClamp", parameters: [
+          "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+          "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
+        ])
+      guard let collapsed = try? collapse(average, context: context) else {
+        rejected += 1
+        return
+      }
+      self.accumulated = collapsed
       accepted += 1
     }
   }

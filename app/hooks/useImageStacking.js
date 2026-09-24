@@ -87,7 +87,7 @@ export default function useImageStacking(device) {
           deviceId,
           strategyId,
           outputFormat,
-          ...(strategyId === "bulb"
+          ...(["bulb", "motionBlur"].includes(strategyId)
             ? { maximumDurationSeconds: 300 }
             : {}),
         });
@@ -99,7 +99,7 @@ export default function useImageStacking(device) {
   );
 
   const stop = useCallback(async () => {
-    if (capturing && strategyId === "bulb") {
+    if (capturing && ["bulb", "motionBlur"].includes(strategyId)) {
       await stopImageStackingCapture();
     }
   }, [capturing, strategyId]);

@@ -53,7 +53,7 @@ export default function BottomControls({
   imageStackingStrategyId,
   onSelectImageStackingStrategy,
   imageStackingCapturing = false,
-  imageStackingBulbCapturing = false,
+  imageStackingContinuousCapturing = false,
 }) {
   const router = useRouter();
   const { bottom: bottomInset } = useSafeAreaInsets();
@@ -249,7 +249,7 @@ export default function BottomControls({
           <Shutter
             takePicture={handleShutterPress}
             isProcessing={
-              isProcessing && !imageStackingBulbCapturing
+              isProcessing && !imageStackingContinuousCapturing
             }
           />
         </View>

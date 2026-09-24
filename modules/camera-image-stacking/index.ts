@@ -2,9 +2,8 @@ import type { ComponentType } from "react";
 import { Platform, View, type ViewProps } from "react-native";
 
 export type ImageStackingStrategyId =
-  | "noiseReduction"
-  | "night"
-  | "bulb";
+  | "bulb"
+  | "motionBlur";
 
 export type ImageStackingState =
   | "idle"
@@ -24,15 +23,11 @@ type BaseCaptureRequest = {
 
 export type ImageStackingCaptureRequest =
   | (BaseCaptureRequest & {
-      strategyId: "noiseReduction";
-      frameCount?: number;
-    })
-  | (BaseCaptureRequest & {
-      strategyId: "night";
-      maximumFrameCount?: number;
-    })
-  | (BaseCaptureRequest & {
       strategyId: "bulb";
+      maximumDurationSeconds?: number;
+    })
+  | (BaseCaptureRequest & {
+      strategyId: "motionBlur";
       maximumDurationSeconds?: number;
     });
 

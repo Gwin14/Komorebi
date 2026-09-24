@@ -6,9 +6,8 @@ import UniformTypeIdentifiers
 import Vision
 
 enum StackingStrategyID: String, CaseIterable {
-  case noiseReduction
-  case night
   case bulb
+  case motionBlur
 }
 
 enum StackingPhase: String {
@@ -333,9 +332,8 @@ final class StackingStrategyRegistry {
 
   private init() {
     let values: [any StackingStrategy] = [
-      NoiseReductionStrategy(),
-      NightModeStrategy(),
-      BulbStrategy()
+      BulbStrategy(),
+      MotionBlurStrategy()
     ]
     strategies = Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) })
   }

@@ -60,7 +60,7 @@ public final class CameraImageStackingModule: Module {
     }
 
     AsyncFunction("stopImageStackingCapture") { () async in
-      await ImageStackingCameraView.activeView()?.stopBulbCapture()
+      await ImageStackingCameraView.activeView()?.stopContinuousCapture()
     }
 
     AsyncFunction("cancelImageStackingCapture") { () async in
@@ -147,6 +147,11 @@ public final class ImageStackingCameraView: ExpoView {
   }
 
   func stopBulbCapture() { controller.stopBulbCapture() }
+  func stopMotionBlurCapture() { controller.stopMotionBlurCapture() }
+  func stopContinuousCapture() {
+    stopBulbCapture()
+    stopMotionBlurCapture()
+  }
   func cancelCapture() { controller.cancelCapture() }
 
   private func updateSession() {
@@ -228,6 +233,14 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   private var bulbOutputFormat = "heif"
   private var bulbPlan: StackingCapturePlan?
   private var bulbFrameInterval: TimeInterval = 0.1
+  private var lastMotionBlurFrameAt = Date.distantPast
+  private var motionBlurAcceptingFrames = false
+  private var motionBlurAccumulator: MotionBlurAccumulator?
+  private var motionBlurContinuation: CheckedContinuation<StackingResult, Error>?
+  private var motionBlurTimer: DispatchWorkItem?
+  private var motionBlurOutputFormat = "heif"
+  private var motionBlurPlan: StackingCapturePlan?
+  private var motionBlurFrameInterval: TimeInterval = 0.1
   private var currentPhase: StackingPhase = .idle
   private var currentPhaseStartedAt = Date()
 
@@ -320,7 +333,12 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     lockCaptureSettings()
 
     if plan.usesVideoFrames {
-      return try await startBulb(plan: plan, options: options)
+      switch strategyID {
+      case .bulb:
+        return try await startBulb(plan: plan, options: options)
+      case .motionBlur:
+        return try await startMotionBlur(plan: plan, options: options)
+      }
     }
 
     let store = try FrameStore()
@@ -516,6 +534,119 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     }
   }
 
+  private func startMotionBlur(
+    plan: StackingCapturePlan,
+    options: [String: Any]
+  ) async throws -> StackingResult {
+    guard let source = plan.frameSource as? PixelBufferStreamFrameSource else {
+      restoreCaptureSettings()
+      finishOperation()
+      throw StackingError.unsupportedStrategy
+    }
+    motionBlurAccumulator = MotionBlurAccumulator(
+      context: context,
+      maximumDimension: source.maximumDimension
+    )
+    motionBlurFrameInterval = source.minimumFrameInterval
+    motionBlurPlan = plan
+    motionBlurOutputFormat = options["outputFormat"] as? String ?? "heif"
+    lastMotionBlurFrameAt = .distantPast
+    motionBlurAcceptingFrames = true
+    emit(.capturing, strategyID: .motionBlur)
+
+    let timer = DispatchWorkItem { [weak self] in self?.stopMotionBlurCapture() }
+    motionBlurTimer = timer
+    sessionQueue.asyncAfter(deadline: .now() + plan.maximumDuration, execute: timer)
+
+    return try await withCheckedThrowingContinuation { continuation in
+      stateLock.lock()
+      motionBlurContinuation = continuation
+      stateLock.unlock()
+    }
+  }
+
+  func stopMotionBlurCapture() {
+    stateLock.lock()
+    guard busy, activeStrategyID == .motionBlur,
+          let continuation = motionBlurContinuation else {
+      stateLock.unlock()
+      return
+    }
+    motionBlurContinuation = nil
+    motionBlurAcceptingFrames = false
+    let accumulator = motionBlurAccumulator
+    let plan = motionBlurPlan
+    stateLock.unlock()
+    motionBlurTimer?.cancel()
+
+    videoQueue.async { [weak self] in
+      self?.analysisQueue.async { [weak self] in
+        guard let self, let accumulator, let plan else {
+          continuation.resume(throwing: StackingError.insufficientFrames)
+          return
+        }
+        defer {
+          self.restoreCaptureSettings()
+          self.motionBlurAccumulator = nil
+          self.motionBlurPlan = nil
+          self.finishOperation()
+        }
+        do {
+          if self.isCancelled() { throw StackingError.cancelled }
+          let duration = Date().timeIntervalSince(self.startedAt)
+          guard duration >= 1,
+                accumulator.accepted >= plan.minimumFrameCount,
+                let image = accumulator.result() else {
+            throw StackingError.insufficientFrames
+          }
+          self.emit(
+            .exporting,
+            strategyID: .motionBlur,
+            captured: accumulator.captured,
+            accepted: accumulator.accepted,
+            rejected: accumulator.rejected,
+            progress: 0.92
+          )
+          let output = try StackingExporter(context: self.context).export(
+            image: image,
+            referenceURL: nil,
+            outputFormat: self.motionBlurOutputFormat,
+            strategyID: .motionBlur
+          )
+          let result = StackingResult(
+            photoURL: output.0,
+            strategyID: .motionBlur,
+            capturedFrames: accumulator.captured,
+            acceptedFrames: accumulator.accepted,
+            rejectedFrames: accumulator.rejected,
+            duration: duration,
+            width: output.1,
+            height: output.2,
+            degraded: false
+          )
+          self.emit(
+            .completed,
+            strategyID: .motionBlur,
+            captured: result.capturedFrames,
+            accepted: result.acceptedFrames,
+            rejected: result.rejectedFrames,
+            progress: 1
+          )
+          self.logResult(result)
+          continuation.resume(returning: result)
+        } catch {
+          self.emit(
+            error is StackingError && (error as? StackingError) == .cancelled
+              ? .cancelled
+              : .failed,
+            strategyID: .motionBlur
+          )
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+  }
+
   func cancelCapture() {
     stateLock.lock()
     guard busy else {
@@ -524,8 +655,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     }
     cancelled = true
     let bulb = activeStrategyID == .bulb
+    let motionBlur = activeStrategyID == .motionBlur
     stateLock.unlock()
     if bulb { stopBulbCapture() }
+    if motionBlur { stopMotionBlurCapture() }
   }
 
   func captureOutput(
@@ -550,18 +683,40 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     stateLock.lock()
     let bulbActive = busy && activeStrategyID == .bulb && !cancelled && bulbAcceptingFrames
     stateLock.unlock()
-    guard bulbActive,
-          now.timeIntervalSince(lastBulbFrameAt) >= bulbFrameInterval else { return }
-    let frameDuration = lastBulbFrameAt == .distantPast
-      ? bulbFrameInterval
-      : now.timeIntervalSince(lastBulbFrameAt)
-    lastBulbFrameAt = now
-    bulbAccumulator?.append(pixelBuffer: pixelBuffer, duration: frameDuration)
-    if let accumulator = bulbAccumulator, let plan = bulbPlan {
+    if bulbActive {
+      guard now.timeIntervalSince(lastBulbFrameAt) >= bulbFrameInterval else { return }
+      let frameDuration = lastBulbFrameAt == .distantPast
+        ? bulbFrameInterval
+        : now.timeIntervalSince(lastBulbFrameAt)
+      lastBulbFrameAt = now
+      bulbAccumulator?.append(pixelBuffer: pixelBuffer, duration: frameDuration)
+      if let accumulator = bulbAccumulator, let plan = bulbPlan {
+        let elapsed = now.timeIntervalSince(startedAt)
+        emit(
+          .capturing,
+          strategyID: .bulb,
+          captured: accumulator.captured,
+          accepted: accumulator.accepted,
+          rejected: accumulator.rejected,
+          progress: min(0.88, elapsed / plan.maximumDuration * 0.88)
+        )
+      }
+      return
+    }
+
+    stateLock.lock()
+    let motionBlurActive = busy && activeStrategyID == .motionBlur &&
+      !cancelled && motionBlurAcceptingFrames
+    stateLock.unlock()
+    guard motionBlurActive,
+          now.timeIntervalSince(lastMotionBlurFrameAt) >= motionBlurFrameInterval else { return }
+    lastMotionBlurFrameAt = now
+    motionBlurAccumulator?.append(pixelBuffer: pixelBuffer)
+    if let accumulator = motionBlurAccumulator, let plan = motionBlurPlan {
       let elapsed = now.timeIntervalSince(startedAt)
       emit(
         .capturing,
-        strategyID: .bulb,
+        strategyID: .motionBlur,
         captured: accumulator.captured,
         accepted: accumulator.accepted,
         rejected: accumulator.rejected,
@@ -667,6 +822,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     busy = false
     cancelled = false
     bulbAcceptingFrames = false
+    motionBlurAcceptingFrames = false
     activeStrategyID = nil
     stateLock.unlock()
   }

@@ -4,9 +4,8 @@ import styles from "./ImageStackingSelector.styles";
 
 const MODES = [
   { id: null, label: "Desligado", icon: "close-circle-outline" },
-  { id: "noiseReduction", label: "Menos ruído", icon: "sparkles-outline" },
-  { id: "night", label: "Noturno", icon: "moon-outline" },
   { id: "bulb", label: "Bulb", icon: "timer-outline" },
+  { id: "motionBlur", label: "Motion Blur", icon: "speedometer-outline" },
 ];
 
 export default function ImageStackingSelector({ value, onChange, disabled }) {
