@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { restoreIntelligentPreferences } from "./intelligentSettings";
 import { normalizeTopBarControls } from "./topBarControls";
 
 export const SETTINGS_STORAGE_KEYS = {
@@ -7,6 +8,8 @@ export const SETTINGS_STORAGE_KEYS = {
   LEVEL_VISIBLE: "@settings/levelVisible",
   HISTOGRAM_VISIBLE: "@settings/histogramVisible",
   COMPOSITION_SCAN_ENABLED: "@settings/compositionScanEnabled",
+  INTELLIGENT_TAGS_ENABLED: "@settings/intelligentTagsEnabled",
+  INTELLIGENT_FILENAME_ENABLED: "@settings/intelligentFilenameEnabled",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
   SAVE_AS_JPEG: "@settings/saveAsJpeg",
@@ -45,6 +48,8 @@ export async function loadStoredSettings(defaults) {
     savedLevelVisible,
     savedHistogramVisible,
     savedCompositionScanEnabled,
+    savedIntelligentTagsEnabled,
+    savedIntelligentFilenameEnabled,
     savedShutterSound,
     savedLocation,
     savedSaveAsJpeg,
@@ -62,6 +67,8 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.LEVEL_VISIBLE),
     AsyncStorage.getItem(keys.HISTOGRAM_VISIBLE),
     AsyncStorage.getItem(keys.COMPOSITION_SCAN_ENABLED),
+    AsyncStorage.getItem(keys.INTELLIGENT_TAGS_ENABLED),
+    AsyncStorage.getItem(keys.INTELLIGENT_FILENAME_ENABLED),
     AsyncStorage.getItem(keys.SHUTTER_SOUND),
     AsyncStorage.getItem(keys.LOCATION),
     AsyncStorage.getItem(keys.SAVE_AS_JPEG),
@@ -75,7 +82,15 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.ACTIVE_PROJECT_ID),
     ]);
 
-    return {
+  const intelligentPreferences = restoreIntelligentPreferences(
+    {
+      tags: savedIntelligentTagsEnabled,
+      filename: savedIntelligentFilenameEnabled,
+    },
+    defaults,
+  );
+
+  return {
     retroStyle: parseBoolean(savedRetroStyle, defaults.retroStyle),
     gridVisible: parseBoolean(savedGridVisible, defaults.gridVisible),
     levelVisible: parseBoolean(savedLevelVisible, defaults.levelVisible),
@@ -87,6 +102,7 @@ export async function loadStoredSettings(defaults) {
       savedCompositionScanEnabled,
       defaults.compositionScanEnabled,
     ),
+    ...intelligentPreferences,
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
     saveAsJpeg: parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg),
@@ -106,7 +122,7 @@ export async function loadStoredSettings(defaults) {
     ),
     projects: parseJSON(savedProjects, defaults.projects),
     activeProjectId: savedActiveProjectId || defaults.activeProjectId,
-    };
+  };
 }
 
 export function saveStoredSetting(key, value) {

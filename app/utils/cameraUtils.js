@@ -43,9 +43,32 @@ const resolveCaptureAspectRatio = async (uri, requestedRatio) => {
   }
 };
 
-export async function saveToAlbum(project, uri) {
+export async function saveToAlbum(project, uri, originalFilename = null) {
   const fileUri = normalizeUri(uri);
-  const asset = await MediaLibrary.createAssetAsync(fileUri);
+  let assetSourceUri = fileUri;
+  let temporaryNamedUri = null;
+  let temporaryNamedDirectory = null;
+
+  if (originalFilename && FileSystem.cacheDirectory) {
+    temporaryNamedDirectory = `${FileSystem.cacheDirectory}komorebi-intelligent-names/${Date.now()}-${Math.random().toString(36).slice(2, 10)}/`;
+    await FileSystem.makeDirectoryAsync(temporaryNamedDirectory, {
+      intermediates: true,
+    });
+    temporaryNamedUri = `${temporaryNamedDirectory}${originalFilename}`;
+    await FileSystem.copyAsync({ from: fileUri, to: temporaryNamedUri });
+    assetSourceUri = temporaryNamedUri;
+  }
+
+  let asset;
+  try {
+    asset = await MediaLibrary.createAssetAsync(assetSourceUri);
+  } finally {
+    if (temporaryNamedDirectory) {
+      await FileSystem.deleteAsync(temporaryNamedDirectory, {
+        idempotent: true,
+      }).catch(() => {});
+    }
+  }
 
   const albums = await MediaLibrary.getAlbumsAsync();
 

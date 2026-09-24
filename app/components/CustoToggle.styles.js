@@ -11,6 +11,9 @@ export default StyleSheet.create({
     borderRadius: 12,
     marginVertical: 4,
   },
+  wrapperDisabled: {
+    opacity: 0.48,
+  },
   label: {
     color: "#fff",
     fontSize: 16,
@@ -58,6 +61,9 @@ export default StyleSheet.create({
   trackActive: {
     backgroundColor: "rgba(255, 170, 0, 0.2)", // Amber suave ao fundo
     borderColor: "#ffaa00",
+  },
+  trackDisabled: {
+    borderColor: "#3a3a3a",
   },
   thumb: {
     width: 20,

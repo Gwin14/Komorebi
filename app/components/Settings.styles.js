@@ -34,13 +34,17 @@ export default StyleSheet.create({
   topBarSection: {
     width: "98%",
   },
-  modelSection: {
+  smartSection: {
     width: "90%",
+  },
+  modelSection: {
+    width: "100%",
     backgroundColor: "rgba(255, 255, 255, 0.035)",
     borderColor: "rgba(255, 170, 0, 0.22)",
     borderWidth: 1,
     borderRadius: 14,
     padding: 16,
+    marginTop: 10,
   },
   modelHeader: {
     flexDirection: "row",

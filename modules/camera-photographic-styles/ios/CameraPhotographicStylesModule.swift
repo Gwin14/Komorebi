@@ -81,6 +81,24 @@ public final class CameraPhotographicStylesModule: Module {
         metadataSourceURL: metadataSourceURL
       )
     }
+
+    AsyncFunction("deleteTemporaryPhoto") { (photoUri: String) throws -> Bool in
+      guard let fileURL = Self.fileURL(from: photoUri) else {
+        throw CompatibilityError.invalidURL
+      }
+      let candidate = fileURL.standardizedFileURL
+      let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
+      guard candidate.deletingLastPathComponent() == temporaryDirectory,
+            candidate.lastPathComponent.hasPrefix("komorebi-styles-"),
+            candidate.pathExtension.lowercased() == "heic" else {
+        throw CompatibilityError.invalidURL
+      }
+      guard FileManager.default.fileExists(atPath: candidate.path) else {
+        return true
+      }
+      try FileManager.default.removeItem(at: candidate)
+      return true
+    }
   }
 
   private static func fileURL(from value: String) -> URL? {
@@ -103,15 +121,24 @@ public final class CameraPhotographicStylesModule: Module {
     var properties =
       CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
     let captureProperties = imageProperties(at: metadataSourceURL) ?? [:]
-    var tiff = captureProperties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
-      ?? properties[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
-      ?? [:]
-    var exif = captureProperties[kCGImagePropertyExifDictionary] as? [CFString: Any]
-      ?? properties[kCGImagePropertyExifDictionary] as? [CFString: Any]
-      ?? [:]
-    var gps = captureProperties[kCGImagePropertyGPSDictionary] as? [CFString: Any]
-      ?? properties[kCGImagePropertyGPSDictionary] as? [CFString: Any]
-      ?? [:]
+    var tiff = captureProperties[kCGImagePropertyTIFFDictionary]
+      as? [CFString: Any] ?? [:]
+    var exif = captureProperties[kCGImagePropertyExifDictionary]
+      as? [CFString: Any] ?? [:]
+    var gps = captureProperties[kCGImagePropertyGPSDictionary]
+      as? [CFString: Any] ?? [:]
+    if let inputTiff = properties[kCGImagePropertyTIFFDictionary]
+      as? [CFString: Any] {
+      tiff.merge(inputTiff) { _, inputValue in inputValue }
+    }
+    if let inputExif = properties[kCGImagePropertyExifDictionary]
+      as? [CFString: Any] {
+      exif.merge(inputExif) { _, inputValue in inputValue }
+    }
+    if let inputGPS = properties[kCGImagePropertyGPSDictionary]
+      as? [CFString: Any] {
+      gps.merge(inputGPS) { _, inputValue in inputValue }
+    }
     let metadata = metadata ?? [:]
 
     assignString(metadata, "Make", to: &tiff, key: kCGImagePropertyTIFFMake)

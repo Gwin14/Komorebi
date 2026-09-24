@@ -15,6 +15,8 @@ const DEFAULT_SETTINGS = {
   levelVisible: false,
   histogramVisible: false,
   compositionScanEnabled: true,
+  intelligentTagsEnabled: false,
+  intelligentFilenameEnabled: false,
   shutterSound: false,
   location: true,
   saveAsJpeg: false,
@@ -39,6 +41,12 @@ export const SettingsProvider = ({ children }) => {
   );
   const [compositionScanEnabled, setCompositionScanEnabled] = useState(
     DEFAULT_SETTINGS.compositionScanEnabled,
+  );
+  const [intelligentTagsEnabled, setIntelligentTagsEnabled] = useState(
+    DEFAULT_SETTINGS.intelligentTagsEnabled,
+  );
+  const [intelligentFilenameEnabled, setIntelligentFilenameEnabled] = useState(
+    DEFAULT_SETTINGS.intelligentFilenameEnabled,
   );
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(
@@ -72,6 +80,8 @@ export const SettingsProvider = ({ children }) => {
         setLevelVisible(savedSettings.levelVisible);
         setHistogramVisible(savedSettings.histogramVisible);
         setCompositionScanEnabled(savedSettings.compositionScanEnabled);
+        setIntelligentTagsEnabled(savedSettings.intelligentTagsEnabled);
+        setIntelligentFilenameEnabled(savedSettings.intelligentFilenameEnabled);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveAsJpeg(savedSettings.saveAsJpeg);
@@ -161,6 +171,24 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [compositionScanEnabled, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.INTELLIGENT_TAGS_ENABLED,
+        intelligentTagsEnabled.toString(),
+      );
+    }
+  }, [intelligentTagsEnabled, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.INTELLIGENT_FILENAME_ENABLED,
+        intelligentFilenameEnabled.toString(),
+      );
+    }
+  }, [intelligentFilenameEnabled, loading]);
 
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
@@ -278,6 +306,10 @@ export const SettingsProvider = ({ children }) => {
     setHistogramVisible,
     compositionScanEnabled,
     setCompositionScanEnabled,
+    intelligentTagsEnabled,
+    setIntelligentTagsEnabled,
+    intelligentFilenameEnabled,
+    setIntelligentFilenameEnabled,
     loading,
     shutterSound,
     setShutterSound,

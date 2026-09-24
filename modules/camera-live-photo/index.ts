@@ -40,6 +40,7 @@ export type SaveLivePhotoOptions = {
   originalPhotoUri?: string | null;
   albumTitle?: string;
   outputFormat?: "heif" | "jpeg";
+  originalFilename?: string | null;
 };
 
 export type SaveLivePhotoResult = {
@@ -117,6 +118,7 @@ export async function saveLivePhotoToLibrary(
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",
     outputFormat: options.outputFormat ?? "heif",
+    originalFilename: options.originalFilename ?? null,
   });
 
   return {

@@ -122,10 +122,12 @@ public class CameraLivePhotoModule: Module {
         outputFormat: options["outputFormat"] as? String ?? "heif"
       ) ?? photoURL
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
+      let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.saveLivePhotoToLibrary(
         photoURL: preparedPhotoURL,
         movieURL: movieURL,
-        albumTitle: albumTitle
+        albumTitle: albumTitle,
+        originalFilename: originalFilename
       )
 
       return [
@@ -256,15 +258,25 @@ public class CameraLivePhotoModule: Module {
   static func saveLivePhotoToLibrary(
     photoURL: URL,
     movieURL: URL,
-    albumTitle: String? = nil
+    albumTitle: String? = nil,
+    originalFilename: String? = nil
   ) async throws -> String? {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
       var placeholderIdentifier: String?
 
       PHPhotoLibrary.shared().performChanges({
         let request = PHAssetCreationRequest.forAsset()
-        request.addResource(with: .photo, fileURL: photoURL, options: nil)
-        request.addResource(with: .pairedVideo, fileURL: movieURL, options: nil)
+        let photoOptions = PHAssetResourceCreationOptions()
+        photoOptions.originalFilename = originalFilename
+        let movieOptions = PHAssetResourceCreationOptions()
+        if let originalFilename {
+          movieOptions.originalFilename = URL(fileURLWithPath: originalFilename)
+            .deletingPathExtension()
+            .appendingPathExtension("mov")
+            .lastPathComponent
+        }
+        request.addResource(with: .photo, fileURL: photoURL, options: photoOptions)
+        request.addResource(with: .pairedVideo, fileURL: movieURL, options: movieOptions)
         placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
 
         if

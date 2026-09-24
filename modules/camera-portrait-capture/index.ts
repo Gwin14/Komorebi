@@ -42,6 +42,7 @@ export type SaveProcessedPortraitPhotoOptions = {
   originalPhotoUri?: string | null;
   albumTitle?: string;
   outputFormat?: "heif" | "jpeg";
+  originalFilename?: string | null;
 };
 
 export type ConvertPhotoFormatOptions = {
@@ -134,6 +135,7 @@ export async function saveProcessedPortraitPhoto(
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",
     outputFormat: options.outputFormat ?? "heif",
+    originalFilename: options.originalFilename ?? null,
   });
 
   return {

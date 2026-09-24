@@ -17,6 +17,7 @@ import useCameraBootstrap from "./hooks/useCameraBootstrap";
 import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
 import useCompositionScan from "./hooks/useCompositionScan";
+import useCompositionModel from "./hooks/useCompositionModel";
 import useControlsAnimation from "./hooks/useControlsAnimation";
 import { useDeviceOrientationState } from "./hooks/useDeviceOrientation";
 import useManualCameraControls from "./hooks/useManualCameraControls";
@@ -54,6 +55,8 @@ export default function App() {
     levelVisible,
     histogramVisible,
     compositionScanEnabled,
+    intelligentTagsEnabled,
+    intelligentFilenameEnabled,
     location,
     saveAsJpeg,
     preserveApplePhotographicStyles,
@@ -107,6 +110,8 @@ export default function App() {
   const livePhoto = useLivePhotoCapture(activeLens?.device);
   const portraitCapture = usePortraitCapture(activeLens?.device);
   const imageStacking = useImageStacking(activeLens?.device);
+  const compositionModel = useCompositionModel();
+  const intelligentModelReady = compositionModel.status.state === "ready";
   const appleStylesCompatibility = useMemo(
     () =>
       getAppleStylesCompatibility({
@@ -153,7 +158,10 @@ export default function App() {
     processingQueue,
     removeCurrentProcessing,
     setIsProcessing,
-  } = usePhotoProcessingQueue(hasMediaPermission, activeProject);
+  } = usePhotoProcessingQueue(hasMediaPermission, activeProject, {
+    generateTags: intelligentModelReady && intelligentTagsEnabled,
+    generateFilename: intelligentModelReady && intelligentFilenameEnabled,
+  });
 
   const cancelAutoZoomAnimation = useCallback(() => {
     const animation = autoZoomAnimationRef.current;
@@ -192,9 +200,10 @@ export default function App() {
   useEffect(() => () => cancelAutoZoomAnimation(), [cancelAutoZoomAnimation]);
 
   const compositionScan = useCompositionScan({
-    featureEnabled: !loading && compositionScanEnabled,
+    featureEnabled:
+      !loading && intelligentModelReady && compositionScanEnabled,
     enabled:
-      compositionScanEnabled && facing === "back" && !firstTime && !nativeCaptureMode && cameraReady &&
+      intelligentModelReady && compositionScanEnabled && facing === "back" && !firstTime && !nativeCaptureMode && cameraReady &&
       cameraPermission === "granted" && !isProcessing && processingQueue.length === 0,
     configurationKey: `${activeLens?.device?.id}:${nativeCaptureMode}:${rawCapture.rawMode}:${manual.manualMode}:${verticalMode}:${doubleCaptureMode}:${retroStyle}:${scanOrientation}`,
     preview: {

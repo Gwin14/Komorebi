@@ -107,6 +107,26 @@ private struct CompositionAnalysisContextRecord: Record {
   @Field var previewHeight: Double = 0
 }
 
+private struct PhotoIntelligenceOptionsRecord: Record {
+  @Field var imageUri = ""
+  @Field var generateTags = false
+  @Field var generateFilename = false
+}
+
+private struct PhotoIntelligenceResultRecord: Record {
+  @Field var tags: [String] = []
+  @Field var filenameStem: String?
+  @Field var modelName = ""
+
+  init() {}
+
+  init(_ value: [String: Any]) {
+    tags = value["tags"] as? [String] ?? []
+    filenameStem = value["filenameStem"] as? String
+    modelName = value["modelName"] as? String ?? ""
+  }
+}
+
 private func compositionAnalysisPoint(_ point: [String: Double]?, imageWidth: Int,
                                       imageHeight: Int, rotation: Int,
                                       previewWidth: Double, previewHeight: Double) -> [String: Double]? {
@@ -633,6 +653,34 @@ public class CompositionScanModule: Module {
     }
     AsyncFunction("deleteCompositionModel") { () throws in
       try MiniCPMCompositionService.shared.removeModel()
+    }
+    AsyncFunction("analyzePhoto") { (options: PhotoIntelligenceOptionsRecord, promise: Promise) in
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          guard options.generateTags || options.generateFilename else {
+            promise.resolve(PhotoIntelligenceResultRecord([
+              "tags": [],
+              "modelName": MiniCPMCompositionService.modelName,
+            ]))
+            return
+          }
+          let url: URL
+          if options.imageUri.hasPrefix("file://"), let fileURL = URL(string: options.imageUri) {
+            url = fileURL
+          } else {
+            url = URL(fileURLWithPath: options.imageUri)
+          }
+          let result = try MiniCPMCompositionService.shared.analyzePhoto(
+            at: url,
+            generateTags: options.generateTags,
+            generateFilename: options.generateFilename
+          )
+          promise.resolve(PhotoIntelligenceResultRecord(result))
+        } catch {
+          compositionScanLog("photo intelligence failed error=\(error.localizedDescription)")
+          promise.reject("ERR_PHOTO_INTELLIGENCE", error.localizedDescription)
+        }
+      }
     }
   }
 }

@@ -133,9 +133,11 @@ public class CameraPortraitCaptureModule: Module {
         outputFormat: options["outputFormat"] as? String ?? "heif"
       )
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
+      let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.savePhotoToLibrary(
         photoURL: prepared.url,
-        albumTitle: albumTitle
+        albumTitle: albumTitle,
+        originalFilename: originalFilename
       )
 
       return [
@@ -409,14 +411,17 @@ public class CameraPortraitCaptureModule: Module {
 
   static func savePhotoToLibrary(
     photoURL: URL,
-    albumTitle: String? = nil
+    albumTitle: String? = nil,
+    originalFilename: String? = nil
   ) async throws -> String? {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
       var placeholderIdentifier: String?
 
       PHPhotoLibrary.shared().performChanges({
         let request = PHAssetCreationRequest.forAsset()
-        request.addResource(with: .photo, fileURL: photoURL, options: nil)
+        let resourceOptions = PHAssetResourceCreationOptions()
+        resourceOptions.originalFilename = originalFilename
+        request.addResource(with: .photo, fileURL: photoURL, options: resourceOptions)
         placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
 
         if

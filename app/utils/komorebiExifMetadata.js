@@ -8,7 +8,7 @@ import { AVAILABLE_LUTS } from "./lutCatalog";
 
 const KOMOREBI_USER_COMMENT_PREFIX = "KOMOREBI_JSON_BASE64:";
 const KOMOREBI_ASSET_METADATA_PREFIX = "@komorebi/assetMetadata/";
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 const base64Chars =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

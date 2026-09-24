@@ -46,6 +46,10 @@ export default function Settings() {
     setHistogramVisible,
     compositionScanEnabled,
     setCompositionScanEnabled,
+    intelligentTagsEnabled,
+    setIntelligentTagsEnabled,
+    intelligentFilenameEnabled,
+    setIntelligentFilenameEnabled,
     loading,
     shutterSound,
     setShutterSound,
@@ -172,6 +176,7 @@ export default function Settings() {
     (control) => !topBarControls.includes(control.id),
   );
   const modelStatus = compositionModel.status;
+  const modelReady = modelStatus.state === "ready";
   const modelProgress = Math.round((modelStatus.progress ?? 0) * 100);
   const modelStateLabel = {
     ready: "Instalado e pronto",
@@ -193,7 +198,7 @@ export default function Settings() {
   const confirmModelRemoval = () => {
     Alert.alert(
       "Remover modelo local?",
-      "O Scan continuará funcionando com a análise básica do aparelho.",
+      "As funcionalidades inteligentes ficarão pausadas. Suas preferências serão mantidas para quando o modelo for baixado novamente.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -240,15 +245,6 @@ export default function Settings() {
             value={histogramVisible}
             onValueChange={setHistogramVisible}
           />
-
-          {Platform.OS === "ios" && (
-            <CustomToggle
-              badge="beta"
-              label="Scanner de composição"
-              value={compositionScanEnabled}
-              onValueChange={setCompositionScanEnabled}
-            />
-          )}
 
           <CustomToggle
             label="Som do Obturador"
@@ -303,18 +299,48 @@ export default function Settings() {
 
         <View style={styles.divider} />
 
-        {Platform.OS === "ios" && compositionScanEnabled && (
-          <View style={styles.modelSection}>
+        {Platform.OS === "ios" && (
+          <View style={styles.smartSection}>
+            <View style={styles.listHeader}>
+              <Text style={styles.sectionTitle}>Funcionalidades inteligentes</Text>
+            </View>
+            <Text style={styles.sectionSubtitle}>
+              Recursos processados localmente no aparelho. As preferências ficam pausadas enquanto o modelo não estiver instalado.
+            </Text>
+
+            <CustomToggle
+              badge="beta"
+              description="Analisa a cena e sugere um enquadramento antes da captura."
+              disabled={!modelReady}
+              label="Scanner de composição"
+              value={compositionScanEnabled}
+              onValueChange={setCompositionScanEnabled}
+            />
+            <CustomToggle
+              description="Classifica cada nova foto com tags em português, exibidas nos detalhes da galeria."
+              disabled={!modelReady}
+              label="Gerar tags inteligentes"
+              value={intelligentTagsEnabled}
+              onValueChange={setIntelligentTagsEnabled}
+            />
+            <CustomToggle
+              description="Cria um nome descritivo em português para o arquivo final."
+              disabled={!modelReady}
+              label="Gerar nome inteligente"
+              value={intelligentFilenameEnabled}
+              onValueChange={setIntelligentFilenameEnabled}
+            />
+
+            <View style={styles.modelSection}>
             <View style={styles.modelHeader}>
               <View style={styles.modelTitleBlock}>
-                <Text style={styles.sectionTitle}>Inteligência do Scan</Text>
+                <Text style={styles.sectionTitle}>Modelo local</Text>
                 <Text style={styles.modelName}>{modelStatus.modelName}</Text>
               </View>
               {modelStatus.state === "downloading" && <ActivityIndicator color="#ffaa00" />}
             </View>
             <Text style={styles.sectionSubtitle}>
-              Analisa intenção, espaço vazio, fundo e relações na cena inteiramente no aparelho.
-              O primeiro Scan após abrir o app pode demorar mais.
+              Usado pelo SCAN, pelas tags e pelos nomes inteligentes. O primeiro uso após abrir o app pode demorar mais.
             </Text>
             <Text style={styles.modelStatus}>{modelStateLabel}</Text>
             {modelStatus.state === "downloading" && (
@@ -344,6 +370,7 @@ export default function Settings() {
                 </TouchableOpacity>
               )}
             </View>
+          </View>
           </View>
         )}
 

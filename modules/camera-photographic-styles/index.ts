@@ -66,3 +66,10 @@ export async function updatePhotoAssetMetadata(
   if (!nativeModule?.updateAssetMetadata) return false;
   return nativeModule.updateAssetMetadata(localIdentifier, options);
 }
+
+export async function deletePhotographicStylesTemporaryPhoto(
+  photoUri: string,
+): Promise<boolean> {
+  if (!nativeModule?.deleteTemporaryPhoto) return false;
+  return nativeModule.deleteTemporaryPhoto(photoUri);
+}

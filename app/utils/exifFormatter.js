@@ -3,6 +3,7 @@ import {
   readKomorebiAssetMetadata,
   readKomorebiExifMetadataFromUri,
 } from "./komorebiExifMetadata";
+import { sanitizeIntelligentTags } from "./photoIntelligence";
 
 export const formatShutter = (seconds) => {
   if (!seconds) return null;
@@ -53,6 +54,7 @@ const formatEffectBadge = (effect, label) => (effect?.enabled ? label : null);
 
 const formatKomorebiMetadata = (metadata) => {
   if (!metadata) return {};
+  const intelligentTags = sanitizeIntelligentTags(metadata.intelligence?.tags);
   const badgeParts = [
     formatCaptureMode(metadata.captureMode),
     metadata.filter?.name?.toLowerCase() || null,
@@ -60,7 +62,12 @@ const formatKomorebiMetadata = (metadata) => {
     formatEffectBadge(metadata.halation, "halation"),
   ].filter(Boolean);
 
-  return badgeParts.length ? { komorebiBadges: badgeParts } : {};
+  return {
+    ...(badgeParts.length ? { komorebiBadges: badgeParts } : {}),
+    ...(intelligentTags.length >= 5
+      ? { intelligentTags }
+      : {}),
+  };
 };
 
 const normalizeCoordinate = (value) => {
@@ -98,9 +105,12 @@ export const exifHandler = async (assetId, setExifData) => {
     const info = await MediaLibrary.getAssetInfoAsync(assetId);
     const rawExif = info.exif;
     const assetCoordinates = getAssetCoordinates(info);
+    const storedKomorebiMetadata = await readKomorebiAssetMetadata(assetId);
+    const embeddedKomorebiMetadata =
+      await readKomorebiExifMetadataFromUri(info.localUri || info.uri);
     const komorebiMetadata =
-      (await readKomorebiExifMetadataFromUri(info.localUri || info.uri)) ||
-      (await readKomorebiAssetMetadata(assetId)) ||
+      storedKomorebiMetadata ||
+      embeddedKomorebiMetadata ||
       inferKomorebiMetadataFromAssetInfo(info);
 
     if (!rawExif) {

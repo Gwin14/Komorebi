@@ -59,6 +59,16 @@ export type CompositionTrackingUpdate = {
   confidence: number;
   lost: boolean;
 };
+export type PhotoIntelligenceOptions = {
+  imageUri: string;
+  generateTags: boolean;
+  generateFilename: boolean;
+};
+export type PhotoIntelligenceResult = {
+  tags: string[];
+  filenameStem: string | null;
+  modelName: string;
+};
 
 type NativeScan = CompositionModel & {
   arm(scanId: string): Promise<boolean>;
@@ -67,6 +77,7 @@ type NativeScan = CompositionModel & {
   downloadCompositionModel(): Promise<boolean>;
   cancelCompositionModelDownload(): Promise<void>;
   deleteCompositionModel(): Promise<void>;
+  analyzePhoto(options: PhotoIntelligenceOptions): Promise<PhotoIntelligenceResult>;
   addListener(eventName: "onCompositionModelStatus", listener: (status: CompositionModelStatus) => void): { remove(): void };
   addListener(eventName: "onCompositionTrackingUpdate", listener: (update: CompositionTrackingUpdate) => void): { remove(): void };
 };
@@ -126,6 +137,12 @@ export async function cancelCompositionModelDownload(): Promise<void> {
 export async function deleteCompositionModel(): Promise<void> {
   if (!nativeModule) throw new Error("Composition Scan unavailable");
   await nativeModule.deleteCompositionModel();
+}
+export async function analyzePhoto(
+  options: PhotoIntelligenceOptions,
+): Promise<PhotoIntelligenceResult> {
+  if (!nativeModule) throw new Error("Local photo intelligence unavailable");
+  return nativeModule.analyzePhoto(options);
 }
 export function addCompositionModelStatusListener(listener: (status: CompositionModelStatus) => void) {
   return nativeModule?.addListener("onCompositionModelStatus", listener) ?? { remove() {} };

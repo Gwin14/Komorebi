@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert } from "react-native";
-import * as FileSystem from "expo-file-system/legacy";
+import { analyzePhoto } from "../../modules/composition-scan";
 import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
 import {
+  deletePhotographicStylesTemporaryPhoto,
   makePhotoStylesCompatible,
   updatePhotoAssetMetadata,
 } from "../../modules/camera-photographic-styles";
@@ -18,10 +19,41 @@ import {
   saveToAlbum,
 } from "../utils/cameraUtils";
 import { saveKomorebiAssetMetadata } from "../utils/komorebiExifMetadata";
+import {
+  applyPhotoIntelligenceToMetadata,
+  buildIntelligentFilename,
+  normalizePhotoIntelligence,
+} from "../utils/photoIntelligence";
+
+const PHOTO_INTELLIGENCE_TIMEOUT_MS = 45000;
+
+const withTimeout = (promise, timeoutMs) =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("A classificação local excedeu o tempo limite")),
+      timeoutMs,
+    );
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
+const extensionForUri = (uri, fallback = "jpg") => {
+  const match = String(uri || "").split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i);
+  return match?.[1] || fallback;
+};
 
 export default function usePhotoProcessingQueue(
   hasMediaPermission,
   activeProject = null,
+  intelligenceOptions = {},
 ) {
   const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -63,20 +95,83 @@ export default function usePhotoProcessingQueue(
           return;
         }
 
+        const generateTags = Boolean(intelligenceOptions.generateTags);
+        const generateFilename = Boolean(intelligenceOptions.generateFilename);
+        const capturedAt = new Date();
+        let intelligence = null;
+        if (generateTags || generateFilename) {
+          const analysisUri =
+            captureMode === "raw"
+              ? derivativeSourceUri || processedUri
+              : processedUri;
+          try {
+            const result = await withTimeout(
+              analyzePhoto({
+                imageUri: analysisUri,
+                generateTags,
+                generateFilename,
+              }),
+              PHOTO_INTELLIGENCE_TIMEOUT_MS,
+            );
+            intelligence = normalizePhotoIntelligence(result, {
+              generateTags,
+              generateFilename,
+            });
+            console.log("[PhotoIntelligence] Resultado normalizado", {
+              tagCount: intelligence.tags.length,
+              hasFilename: Boolean(intelligence.filenameStem),
+            });
+          } catch (intelligenceError) {
+            console.warn(
+              "Classificação inteligente ignorada; a foto será salva normalmente:",
+              intelligenceError,
+            );
+          }
+        }
+
+        const primaryExtension =
+          captureMode === "raw"
+            ? extensionForUri(originalUri || processedUri, "dng")
+            : outputFormat === "heif"
+              ? "heic"
+              : "jpg";
+        const primaryFilename = intelligence?.filenameStem
+          ? buildIntelligentFilename(intelligence.filenameStem, {
+              date: capturedAt,
+              extension: primaryExtension,
+            })
+          : null;
+        const komorebiMetadata = applyPhotoIntelligenceToMetadata(
+          exifData?.komorebiMetadata,
+          intelligence,
+          primaryFilename,
+        );
+        const effectiveExifData = exifData
+          ? { ...exifData, komorebiMetadata }
+          : exifData;
+        const filenameFor = (extension, suffix = null) =>
+          intelligence?.filenameStem
+            ? buildIntelligentFilename(intelligence.filenameStem, {
+                date: capturedAt,
+                extension,
+                suffix,
+              })
+            : null;
         const shouldApplyExifBeforeSaving =
-          !item.needsProcessing &&
-          captureMode !== "raw" &&
-          Boolean(exifData);
+          captureMode !== "raw" && Boolean(effectiveExifData);
         const uriToSave = shouldApplyExifBeforeSaving
-          ? await applyExifDataToImage(processedUri, exifData, originalUri)
+          ? await applyExifDataToImage(
+              processedUri,
+              effectiveExifData,
+              originalUri,
+            )
           : processedUri;
-        const komorebiMetadata = exifData?.komorebiMetadata;
         const saveMetadataForAsset = (assetId) =>
           saveKomorebiAssetMetadata(assetId, komorebiMetadata);
         const removeStylesTemporaryFile = async (uri) => {
           if (!uri) return;
           try {
-            await FileSystem.deleteAsync(uri, { idempotent: true });
+            await deletePhotographicStylesTemporaryPhoto(uri);
           } catch (cleanupError) {
             console.warn(
               "Falha ao remover HEIF temporário dos Estilos Apple:",
@@ -87,7 +182,7 @@ export default function usePhotoProcessingQueue(
         const prepareRegularPhoto = async (uri, metadataSourceUri = originalUri) => {
           if (preserveApplePhotographicStyles) {
             const result = await makePhotoStylesCompatible(uri, {
-              metadata: exifData,
+              metadata: effectiveExifData,
               metadataSourceUri,
             });
             if (!result?.verified || !result?.photoUri) {
@@ -111,11 +206,19 @@ export default function usePhotoProcessingQueue(
         const saveRegularPhoto = async (
           uri,
           metadataSourceUri = originalUri,
+          filenameSuffix = null,
         ) => {
           let preparedUri = null;
           try {
             preparedUri = await prepareRegularPhoto(uri, metadataSourceUri);
-            const asset = await saveToAlbum(project, preparedUri);
+            const asset = await saveToAlbum(
+              project,
+              preparedUri,
+              filenameFor(
+                outputFormat === "heif" ? "heic" : extensionForUri(preparedUri),
+                filenameSuffix,
+              ),
+            );
             mainAssetSaved = true;
             if (preserveApplePhotographicStyles) {
               if (!asset?.id) {
@@ -124,7 +227,7 @@ export default function usePhotoProcessingQueue(
                 );
               }
               const metadataUpdated = await updatePhotoAssetMetadata(asset.id, {
-                metadata: exifData,
+                metadata: effectiveExifData,
                 metadataSourceUri,
               });
               if (!metadataUpdated) {
@@ -146,7 +249,11 @@ export default function usePhotoProcessingQueue(
         };
 
         if (captureMode === "raw") {
-          const rawAsset = await saveToAlbum(project,originalUri || processedUri);
+          const rawAsset = await saveToAlbum(
+            project,
+            originalUri || processedUri,
+            primaryFilename,
+          );
           mainAssetSaved = true;
           await saveMetadataForAsset(rawAsset?.id);
 
@@ -170,6 +277,7 @@ export default function usePhotoProcessingQueue(
           const derivedAsset = await saveRegularPhoto(
             derivedWithExif,
             derivativeSourceUri,
+            "processada",
           );
           await saveMetadataForAsset(derivedAsset?.id);
         } else if (livePhotoMovieUri) {
@@ -179,6 +287,7 @@ export default function usePhotoProcessingQueue(
             originalPhotoUri: originalUri,
             albumTitle: "Komorebi",
             outputFormat,
+            originalFilename: primaryFilename,
           });
           mainAssetSaved = true;
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);
@@ -193,7 +302,11 @@ export default function usePhotoProcessingQueue(
               uriToSave,
               inverseUri,
             );
-            const inverseAsset = await saveRegularPhoto(inverseWithExif);
+            const inverseAsset = await saveRegularPhoto(
+              inverseWithExif,
+              originalUri,
+              "alternativa",
+            );
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (
@@ -205,6 +318,7 @@ export default function usePhotoProcessingQueue(
             originalPhotoUri: originalUri,
             albumTitle: "Komorebi",
             outputFormat,
+            originalFilename: primaryFilename,
           });
           mainAssetSaved = true;
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);
@@ -219,7 +333,11 @@ export default function usePhotoProcessingQueue(
               uriToSave,
               inverseUri,
             );
-            const inverseAsset = await saveRegularPhoto(inverseWithExif);
+            const inverseAsset = await saveRegularPhoto(
+              inverseWithExif,
+              originalUri,
+              "alternativa",
+            );
             await saveMetadataForAsset(inverseAsset?.id);
           }
         } else if (doubleCaptureMode) {
@@ -235,7 +353,11 @@ export default function usePhotoProcessingQueue(
             uriToSave,
             inverseUri,
           );
-          const inverseAsset = await saveRegularPhoto(inverseUriWithExif);
+          const inverseAsset = await saveRegularPhoto(
+            inverseUriWithExif,
+            originalUri,
+            "alternativa",
+          );
           await saveMetadataForAsset(inverseAsset?.id);
         } else {
           const asset = await saveRegularPhoto(uriToSave);
@@ -246,6 +368,7 @@ export default function usePhotoProcessingQueue(
           const originalAsset = await saveRegularPhoto(
             originalUri,
             originalUri,
+            "original",
           );
           await saveMetadataForAsset(originalAsset?.id);
         }
@@ -264,7 +387,13 @@ export default function usePhotoProcessingQueue(
         setGalleryRefreshKey((value) => value + 1);
       }
     },
-    [hasMediaPermission, removeCurrentProcessing, activeProject],
+    [
+      activeProject,
+      hasMediaPermission,
+      intelligenceOptions.generateFilename,
+      intelligenceOptions.generateTags,
+      removeCurrentProcessing,
+    ],
   );
 
   useEffect(() => {

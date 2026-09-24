@@ -6,6 +6,7 @@ import styles from "./CustoToggle.styles";
 export default function CustomToggle({
   badge,
   description,
+  disabled = false,
   label,
   value,
   onValueChange,
@@ -23,6 +24,7 @@ export default function CustomToggle({
   }, [moveAnim, value]);
 
   const toggleHandler = () => {
+    if (disabled) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onValueChange(!value);
   };
@@ -33,7 +35,7 @@ export default function CustomToggle({
   });
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, disabled && styles.wrapperDisabled]}>
       {label && (
         <View style={styles.labelBlock}>
           <View style={styles.labelRow}>
@@ -49,10 +51,15 @@ export default function CustomToggle({
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="switch"
-        accessibilityState={{ checked: value }}
+        accessibilityState={{ checked: value, disabled }}
+        disabled={disabled}
         onPress={toggleHandler}
       >
-        <View style={[styles.track, value && styles.trackActive]}>
+        <View style={[
+          styles.track,
+          value && styles.trackActive,
+          disabled && styles.trackDisabled,
+        ]}>
           <Animated.View
             style={[
               styles.thumb,

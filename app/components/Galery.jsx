@@ -110,6 +110,7 @@ export default function Galery() {
   const [loading, setLoading] = useState(true);
   const [viewerVisible, setViewerVisible] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [intelligentTagsOpen, setIntelligentTagsOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState(null);
   const [exifData, setExifData] = useState(null);
   const [exifLoading, setExifLoading] = useState(false);
@@ -217,6 +218,7 @@ export default function Galery() {
   const setInfoPanel = useCallback(
     (open) => {
       setInfoOpen(open);
+      if (!open) setIntelligentTagsOpen(false);
       Animated.spring(infoAnimation, {
         toValue: open ? 1 : 0,
         damping: 24,
@@ -316,6 +318,7 @@ export default function Galery() {
       const photo = orderedPhotos[index];
       if (!photo || photo.id === selectedAssetId) return;
       setInfoPanel(false);
+      setIntelligentTagsOpen(false);
       setExifData(null);
       setSelectedAssetId(photo.id);
       thumbnailRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
@@ -709,6 +712,41 @@ export default function Galery() {
                             <Text style={styles.badgeText}>{badge}</Text>
                           </View>
                         ))}
+                      </View>
+                    ) : null}
+
+                    {exifData.intelligentTags?.length ? (
+                      <View style={styles.intelligentTagsSection}>
+                        <TouchableOpacity
+                          accessibilityRole="button"
+                          accessibilityState={{ expanded: intelligentTagsOpen }}
+                          onPress={() => setIntelligentTagsOpen((open) => !open)}
+                          style={styles.intelligentTagsHeader}
+                        >
+                          <View style={styles.intelligentTagsTitleRow}>
+                            <Ionicons name="sparkles-outline" size={17} color="#ffaa00" />
+                            <Text style={styles.intelligentTagsTitle}>Tags inteligentes</Text>
+                            <View style={styles.intelligentTagsCount}>
+                              <Text style={styles.intelligentTagsCountText}>
+                                {exifData.intelligentTags.length}
+                              </Text>
+                            </View>
+                          </View>
+                          <Ionicons
+                            name={intelligentTagsOpen ? "chevron-up" : "chevron-down"}
+                            size={18}
+                            color="rgba(255,255,255,0.58)"
+                          />
+                        </TouchableOpacity>
+                        {intelligentTagsOpen ? (
+                          <View style={styles.intelligentTagsChips}>
+                            {exifData.intelligentTags.map((tag) => (
+                              <View key={tag} style={styles.intelligentTagChip}>
+                                <Text style={styles.intelligentTagText}>{tag}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : null}
                       </View>
                     ) : null}
 
