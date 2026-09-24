@@ -413,18 +413,18 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
   private static func photoIntelligencePrompt(generateTags: Bool,
                                               generateFilename: Bool) -> String {
     let tagsInstruction = generateTags
-      ? "TAGS deve conter exatamente 6 tags curtas, concretas, diferentes e em português, separadas por |."
-      : "TAGS deve ficar vazio."
+      ? "Na linha TAGS, escreva exatamente 6 palavras-chave curtas e diferentes, separadas por |. Cada uma deve servir sozinha para encontrar esta foto em uma busca e deve representar algo visível, como o assunto, um objeto, o ambiente, uma ação, uma cor ou o tipo de cena."
+      : "Na linha TAGS, não escreva nada depois do sinal =."
     let nameInstruction = generateFilename
-      ? "NAME deve ser uma descrição curta em português, com 2 a 5 palavras, adequada para nome de arquivo."
-      : "NAME deve ficar vazio."
+      ? "Na linha NAME, escreva de 2 a 5 palavras que resumam o assunto principal da foto."
+      : "Na linha NAME, não escreva nada depois do sinal =."
     return """
-    Analise apenas o conteúdo visível da foto. Não invente pessoas, lugares ou eventos. Responda obrigatoriamente em exatamente duas linhas, sem JSON nem explicações.
-    A primeira linha começa com o rótulo literal TAGS e o sinal =. Depois do sinal, escreva as seis classificações visuais reais, separadas pelo caractere |.
-    A segunda linha começa com o rótulo literal NAME e o sinal =. Depois do sinal, escreva a descrição real da foto.
-    É proibido usar placeholders, números de posição ou as expressões "tag 1", "tag 2", "nome descritivo" e "nome descritivo curto".
+    Você é um indexador de fotografias. Observe a imagem e identifique primeiro o assunto principal e os elementos realmente visíveis.
+    Escreva todo o resultado somente em português do Brasil. Traduza palavras-chave comuns para português; não misture idiomas.
     \(tagsInstruction)
     \(nameInstruction)
+    Não descreva esta tarefa e não copie palavras das instruções para a resposta. Não invente detalhes ausentes da imagem.
+    Responda somente em duas linhas, sem JSON, lista, comentário ou texto adicional. A primeira deve começar exatamente com TAGS= e a segunda com NAME=.
     """
   }
 
