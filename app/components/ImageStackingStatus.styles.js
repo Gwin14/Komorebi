@@ -5,7 +5,6 @@ export default StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "flex-start",
-    paddingTop: 14,
     zIndex: 50,
   },
   card: {

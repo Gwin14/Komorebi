@@ -1,4 +1,5 @@
 import { Text, TouchableOpacity, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import styles from "./ImageStackingStatus.styles";
 
 const LABELS = {
@@ -10,12 +11,17 @@ const LABELS = {
 };
 
 export default function ImageStackingStatus({ progress, onCancel }) {
+  const { top: topInset } = useSafeAreaInsets();
+
   if (!progress || ["idle", "completed", "cancelled", "failed"].includes(progress.state)) {
     return null;
   }
   const seconds = Math.max(0, Math.floor(progress.elapsedSeconds || 0));
   return (
-    <View style={styles.container} pointerEvents="box-none">
+    <View
+      style={[styles.container, { paddingTop: topInset + 14 }]}
+      pointerEvents="box-none"
+    >
       <View style={styles.card}>
         <Text style={styles.title}>{LABELS[progress.state] || "Processando"}</Text>
         <Text style={styles.detail}>

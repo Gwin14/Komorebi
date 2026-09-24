@@ -5,6 +5,7 @@ export default StyleSheet.create({
     width: "100%",
     paddingHorizontal: 16,
     paddingVertical: 8,
+    transform: [{ translateY: -24 }],
   },
   title: {
     color: "white",
