@@ -4,6 +4,7 @@ const { restoreIntelligentPreferences } = require("./intelligentSettings");
 
 test("intelligent preferences are disabled by default", () => {
   assert.deepEqual(restoreIntelligentPreferences(), {
+    compositionScanEnabled: false,
     intelligentTagsEnabled: false,
     intelligentFilenameEnabled: false,
   });
@@ -12,9 +13,16 @@ test("intelligent preferences are disabled by default", () => {
 test("restores intelligent preferences independently of model availability", () => {
   assert.deepEqual(
     restoreIntelligentPreferences(
-      { tags: "true", filename: "true" },
-      { intelligentTagsEnabled: false, intelligentFilenameEnabled: false },
+      { compositionScan: "true", tags: "true", filename: "true" },
+      { compositionScanEnabled: false, intelligentTagsEnabled: false, intelligentFilenameEnabled: false },
     ),
-    { intelligentTagsEnabled: true, intelligentFilenameEnabled: true },
+    { compositionScanEnabled: true, intelligentTagsEnabled: true, intelligentFilenameEnabled: true },
+  );
+});
+
+test("keeps the three intelligent preferences independent", () => {
+  assert.deepEqual(
+    restoreIntelligentPreferences({ compositionScan: "true", tags: "false", filename: "true" }),
+    { compositionScanEnabled: true, intelligentTagsEnabled: false, intelligentFilenameEnabled: true },
   );
 });

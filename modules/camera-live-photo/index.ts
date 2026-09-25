@@ -18,6 +18,8 @@ export type LivePhotoCameraViewProps = ViewProps & {
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
   histogramEnabled?: boolean;
+  zebraHighlightsEnabled?: boolean;
+  zebraShadowsEnabled?: boolean;
   onSmileDetected?: () => void;
   onHistogramUpdated?: (event: {
     nativeEvent?: { bins?: number[] };

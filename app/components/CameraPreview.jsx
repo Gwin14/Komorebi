@@ -5,9 +5,11 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
+import { getZebraMaskPlugin } from "../../modules/composition-scan";
 import CompositionScanOverlay from "./CompositionScanOverlay";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
+import ZebraOverlay from "./ZebraOverlay";
 import styles from "./CameraPreview.styles";
 
 const EMPTY_HISTOGRAM = Array(64).fill(0);
@@ -24,6 +26,8 @@ export default function CameraPreview({
   gridVisible,
   levelVisible,
   histogramVisible,
+  zebraHighlightsEnabled,
+  zebraShadowsEnabled,
   setMinZoom,
   setMaxZoom,
   onSmileDetected,
@@ -44,6 +48,7 @@ export default function CameraPreview({
   smileAllowed.current = smileDetectionEnabled && !compositionScan?.busy;
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
+  const [zebraMask, setZebraMask] = useState(null);
   const previousHistogramBins = useRef(null);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const transitionOpacity = useRef(new Animated.Value(0)).current;
@@ -55,8 +60,35 @@ export default function CameraPreview({
   const transitionFinishTimeout = useRef(null);
   const transitionStartedAt = useRef(0);
   const frameProcessorActive =
-    histogramVisible || smileDetectionEnabled ||
+    histogramVisible || zebraHighlightsEnabled || zebraShadowsEnabled || smileDetectionEnabled ||
     Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId);
+
+  useEffect(() => {
+    console.log("[ZebraDebug][preview] mount");
+    return () => console.log("[ZebraDebug][preview] unmount");
+  }, []);
+
+  useEffect(() => {
+    console.log("[ZebraDebug][preview] configuração", {
+      deviceId: device?.id ?? null,
+      position: device?.position ?? null,
+      isActive,
+      highlights: zebraHighlightsEnabled,
+      shadows: zebraShadowsEnabled,
+      histogram: histogramVisible,
+      smile: smileDetectionEnabled,
+      frameProcessorActive,
+    });
+  }, [
+    device?.id,
+    device?.position,
+    frameProcessorActive,
+    histogramVisible,
+    isActive,
+    smileDetectionEnabled,
+    zebraHighlightsEnabled,
+    zebraShadowsEnabled,
+  ]);
 
   // Toque para focar
   const [focusPoint, setFocusPoint] = useState(null);
@@ -169,6 +201,15 @@ export default function CameraPreview({
     [],
   );
 
+  const handleZebraMask = useCallback((mask) => {
+    if (!mask || !Array.isArray(mask.values)) return;
+    setZebraMask(mask);
+  }, []);
+
+  useEffect(() => {
+    setZebraMask(null);
+  }, [device?.id, zebraHighlightsEnabled, zebraShadowsEnabled]);
+
   const handleHistogramUpdate = useCallback((nextBins) => {
     if (!Array.isArray(nextBins) || nextBins.length !== 64) return;
 
@@ -223,9 +264,26 @@ export default function CameraPreview({
   }, [cameraScale, transitionOpacity]);
 
   const handleCameraInitialized = useCallback(() => {
+    console.log("[ZebraDebug][preview] onInitialized", {
+      deviceId: device?.id ?? null,
+      position: device?.position ?? null,
+    });
     onCameraReady?.();
     finishCameraTransition();
-  }, [finishCameraTransition, onCameraReady]);
+  }, [device?.id, device?.position, finishCameraTransition, onCameraReady]);
+
+  const handleCameraError = useCallback(
+    (error) => {
+      console.error("[ZebraDebug][preview] onError", {
+        deviceId: device?.id ?? null,
+        position: device?.position ?? null,
+        code: error?.code,
+        message: error?.message,
+        cause: error?.cause,
+      });
+    },
+    [device?.id, device?.position],
+  );
 
   useEffect(() => {
     if (!hasCameraDevice) return undefined;
@@ -306,6 +364,10 @@ export default function CameraPreview({
     compositionScanRotation: compositionScan?.captureRotation,
     compositionCapturePlugin: compositionScan?.capturePlugin,
     compositionCaptureCallback: compositionScan?.onCaptured,
+    zebraHighlightsEnabled,
+    zebraShadowsEnabled,
+    zebraMaskPlugin: getZebraMaskPlugin(),
+    zebraMaskCallback: handleZebraMask,
   };
 
   return (
@@ -348,6 +410,7 @@ export default function CameraPreview({
             zoom={zoom}
             exposure={exposure}
             onInitialized={handleCameraInitialized}
+            onError={handleCameraError}
             histogramCallback={
               histogramVisible ? handleHistogramUpdate : undefined
             }
@@ -365,6 +428,13 @@ export default function CameraPreview({
                   : "balanced"
             }
           />
+          {(zebraHighlightsEnabled || zebraShadowsEnabled) && (
+            <ZebraOverlay
+              mask={zebraMask}
+              width={previewLayout.width}
+              height={previewLayout.height}
+            />
+          )}
         </Animated.View>
       </GestureDetector>
       {transitionVisible && (

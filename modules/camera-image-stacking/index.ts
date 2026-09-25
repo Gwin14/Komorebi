@@ -3,12 +3,14 @@ import { Platform, View, type ViewProps } from "react-native";
 
 export type ImageStackingStrategyId =
   | "bulb"
-  | "motionBlur";
+  | "motionBlur"
+  | "doubleExposure";
 
 export type ImageStackingState =
   | "idle"
   | "preparing"
   | "capturing"
+  | "awaitingSecondExposure"
   | "analyzing"
   | "compositing"
   | "exporting"
@@ -29,6 +31,10 @@ export type ImageStackingCaptureRequest =
   | (BaseCaptureRequest & {
       strategyId: "motionBlur";
       maximumDurationSeconds?: number;
+    })
+  | (BaseCaptureRequest & {
+      strategyId: "doubleExposure";
+      exposureCompensationEV?: number;
     });
 
 export type ImageStackingCapabilities = {
@@ -63,6 +69,8 @@ export type ImageStackingCameraViewProps = ViewProps & {
   deviceId?: string | null;
   isActive?: boolean;
   histogramEnabled?: boolean;
+  zebraHighlightsEnabled?: boolean;
+  zebraShadowsEnabled?: boolean;
   onInitialized?: () => void;
   onError?: (event: { nativeEvent?: { message?: string } }) => void;
   onHistogramUpdated?: (event: {
@@ -128,6 +136,10 @@ export async function startImageStackingCapture(
 
 export async function stopImageStackingCapture(): Promise<void> {
   await nativeModule?.stopImageStackingCapture?.();
+}
+
+export async function captureNextImageStackingExposure(): Promise<void> {
+  await nativeModule?.captureNextImageStackingExposure?.();
 }
 
 export async function cancelImageStackingCapture(): Promise<void> {

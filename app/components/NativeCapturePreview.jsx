@@ -18,6 +18,8 @@ export default function NativeCapturePreview({
   gridVisible,
   levelVisible,
   histogramVisible,
+  zebraHighlightsEnabled,
+  zebraShadowsEnabled,
   verticalMode,
   doubleCaptureMode,
   smileDetectionEnabled,
@@ -115,6 +117,8 @@ export default function NativeCapturePreview({
         smileDetectionEnabled={smileDetectionEnabled}
         onSmileDetected={onSmileDetected}
         histogramEnabled={histogramVisible}
+        zebraHighlightsEnabled={zebraHighlightsEnabled}
+        zebraShadowsEnabled={zebraShadowsEnabled}
         onHistogramUpdated={
           histogramVisible ? handleHistogramUpdated : undefined
         }

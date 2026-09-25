@@ -93,6 +93,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
   const {
     retroStyle, setRetroStyle, gridVisible, setGridVisible, levelVisible, setLevelVisible,
     histogramVisible, setHistogramVisible, compositionScanEnabled, setCompositionScanEnabled,
+    zebraHighlightsEnabled, setZebraHighlightsEnabled, zebraShadowsEnabled,
+    setZebraShadowsEnabled,
     intelligentTagsEnabled, setIntelligentTagsEnabled, intelligentFilenameEnabled,
     setIntelligentFilenameEnabled, loading, shutterSound, setShutterSound, location,
     setLocation, saveAsJpeg, setSaveAsJpeg, preserveApplePhotographicStyles,
@@ -211,6 +213,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       <CustomToggle grouped label="Grade" value={gridVisible} onValueChange={setGridVisible} />
       <CustomToggle grouped label="Nível" value={levelVisible} onValueChange={setLevelVisible} />
       <CustomToggle grouped label="Histograma em tempo real" value={histogramVisible} onValueChange={setHistogramVisible} />
+      {Platform.OS === "ios" && <CustomToggle grouped description="Listras vermelhas nas áreas com luminância acima de 98%." label="Zebras — brancos perdidos" value={zebraHighlightsEnabled} onValueChange={setZebraHighlightsEnabled} />}
+      {Platform.OS === "ios" && <CustomToggle grouped description="Listras azuis nas áreas com luminância abaixo de 2%." label="Zebras — sombras perdidas" value={zebraShadowsEnabled} onValueChange={setZebraShadowsEnabled} />}
       <CustomToggle grouped label="Som do obturador" value={shutterSound} onValueChange={setShutterSound} />
       <CustomToggle grouped last label="Controles na parte inferior" value={topBarBelow} onValueChange={setTopBarBelow} />
     </Section>

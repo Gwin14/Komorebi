@@ -192,6 +192,7 @@ final class BulbStrategy: StackingStrategy {
   func compose(
     frames: [StoredFrame],
     context: CIContext,
+    options: [String: Any],
     progress: (Int, Int, Int) -> Void,
     isCancelled: () -> Bool
   ) throws -> (image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame) {
@@ -280,6 +281,74 @@ final class BulbAccumulator {
   func result() -> CIImage? { accumulated }
 }
 
+final class DoubleExposureStrategy: StackingStrategy {
+  let id: StackingStrategyID = .doubleExposure
+
+  // Two normally exposed frames add one stop of light. Compensating by -1 EV
+  // keeps the combined midtones near the original exposure while preserving
+  // the physically additive relationship between both captures.
+  private let defaultExposureCompensationEV = -1.0
+
+  func capturePlan(sceneLuminance: Double, options: [String: Any]) -> StackingCapturePlan {
+    StackingCapturePlan(
+      targetFrameCount: 2,
+      minimumFrameCount: 2,
+      maximumDuration: 0,
+      frameSource: FullResolutionPhotoFrameSource()
+    )
+  }
+
+  func compose(
+    frames: [StoredFrame],
+    context: CIContext,
+    options: [String: Any],
+    progress: (Int, Int, Int) -> Void,
+    isCancelled: () -> Bool
+  ) throws -> (image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame) {
+    guard frames.count == 2 else { throw StackingError.insufficientFrames }
+    if isCancelled() { throw StackingError.cancelled }
+
+    let first = try loadImage(frames[0])
+    let second = try loadImage(frames[1])
+    let extent = first.extent.intersection(second.extent).integral
+    guard !extent.isNull, !extent.isEmpty else { throw StackingError.missingImageData }
+    progress(1, 0, 1)
+
+    let requestedEV = options["exposureCompensationEV"] as? Double
+      ?? defaultExposureCompensationEV
+    let compensationEV = min(2, max(-4, requestedEV))
+    let exposureGain = pow(2, compensationEV)
+
+    // The CIContext renders this graph in extended-linear sRGB. Scaling and
+    // addition therefore operate on scene-light values, not gamma-encoded
+    // display values, and RGBAh intermediates retain values above 1.0.
+    let exposureA = scaled(first.cropped(to: extent), by: exposureGain)
+    let exposureB = scaled(second.cropped(to: extent), by: exposureGain)
+    let summedExposure = exposureA.applyingFilter(
+      "CIAdditionCompositing",
+      parameters: [kCIInputBackgroundImageKey: exposureB]
+    ).cropped(to: extent)
+
+    // The additive result can exceed SDR white. Reduce its known headroom
+    // only after summing; the exporter performs the final sRGB conversion.
+    let firstHeadroom = max(1, Double(first.contentHeadroom))
+    let secondHeadroom = max(1, Double(second.contentHeadroom))
+    let sourceHeadroom = max(
+      1,
+      (firstHeadroom + secondHeadroom) * exposureGain
+    )
+    let toneMapped = summedExposure.applyingFilter(
+      "CIToneMapHeadroom",
+      parameters: [
+        "inputSourceHeadroom": sourceHeadroom,
+        "inputTargetHeadroom": 1.0
+      ]
+    ).cropped(to: extent)
+    progress(2, 0, 2)
+    return (toneMapped, 2, 0, frames[1])
+  }
+}
+
 final class MotionBlurStrategy: StackingStrategy {
   let id: StackingStrategyID = .motionBlur
 
@@ -299,6 +368,7 @@ final class MotionBlurStrategy: StackingStrategy {
   func compose(
     frames: [StoredFrame],
     context: CIContext,
+    options: [String: Any],
     progress: (Int, Int, Int) -> Void,
     isCancelled: () -> Bool
   ) throws -> (image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame) {

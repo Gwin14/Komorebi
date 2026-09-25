@@ -8,10 +8,11 @@ import Vision
 enum StackingStrategyID: String, CaseIterable {
   case bulb
   case motionBlur
+  case doubleExposure
 }
 
 enum StackingPhase: String {
-  case idle, preparing, capturing, analyzing, compositing, exporting
+  case idle, preparing, capturing, awaitingSecondExposure, analyzing, compositing, exporting
   case completed, cancelled, failed
 }
 
@@ -321,6 +322,7 @@ protocol StackingStrategy {
   func compose(
     frames: [StoredFrame],
     context: CIContext,
+    options: [String: Any],
     progress: (Int, Int, Int) -> Void,
     isCancelled: () -> Bool
   ) throws -> (image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame)
@@ -333,7 +335,8 @@ final class StackingStrategyRegistry {
   private init() {
     let values: [any StackingStrategy] = [
       BulbStrategy(),
-      MotionBlurStrategy()
+      MotionBlurStrategy(),
+      DoubleExposureStrategy()
     ]
     strategies = Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) })
   }
@@ -355,8 +358,15 @@ final class StackingExporter {
     strategyID: StackingStrategyID
   ) throws -> (URL, Int, Int) {
     let extent = image.extent.integral
+    let displayColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+      ?? CGColorSpaceCreateDeviceRGB()
     guard !extent.isEmpty,
-          let cgImage = context.createCGImage(image, from: extent)
+          let cgImage = context.createCGImage(
+            image,
+            from: extent,
+            format: .RGBA8,
+            colorSpace: displayColorSpace
+          )
     else { throw StackingError.cannotCreateOutput }
 
     let heif = outputFormat != "jpeg"
@@ -377,6 +387,10 @@ final class StackingExporter {
     {
       properties = sourceProperties
     }
+    // As estratégias carregam o frame com `applyOrientationProperty`, portanto
+    // os pixels exportados já estão na orientação final. Reutilizar a tag EXIF
+    // original faria Photos aplicar a rotação uma segunda vez.
+    properties[kCGImagePropertyOrientation] = 1
     properties[kCGImageDestinationLossyCompressionQuality] = 0.94
     CGImageDestinationAddImage(destination, cgImage, properties as CFDictionary)
     guard CGImageDestinationFinalize(destination) else {

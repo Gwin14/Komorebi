@@ -7,6 +7,46 @@ import Metal
 import os
 import UIKit
 
+
+private final class ZebraOverlayRenderer {
+  private let context = CIContext(options: [.cacheIntermediates: false])
+  private let kernel = CIColorKernel(source: """
+    kernel vec4 zebra(__sample pixel, float highlights, float shadows) {
+      float luma = dot(pixel.rgb, vec3(0.2126, 0.7152, 0.0722));
+      float stripe = step(0.5, fract((destCoord().x + destCoord().y) / 9.0));
+      if (highlights > 0.5 && luma >= 0.98 && stripe > 0.5) return vec4(1.0, 0.05, 0.05, 0.82);
+      if (shadows > 0.5 && luma <= 0.02 && stripe > 0.5) return vec4(0.05, 0.32, 1.0, 0.86);
+      return vec4(0.0);
+    }
+  """)
+
+  func makeImage(from pixelBuffer: CVPixelBuffer, highlights: Bool, shadows: Bool,
+                 orientation: AVCaptureVideoOrientation, mirrored: Bool) -> CGImage? {
+    guard (highlights || shadows), let kernel else { return nil }
+    var image = CIImage(cvPixelBuffer: pixelBuffer).oriented(
+      forExifOrientation: exifOrientation(for: orientation)
+    )
+    if mirrored { image = image.oriented(.upMirrored) }
+    let scale = min(1, 720 / max(image.extent.width, image.extent.height))
+    image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    guard let output = kernel.apply(
+      extent: image.extent,
+      arguments: [image, highlights ? 1.0 : 0.0, shadows ? 1.0 : 0.0]
+    ) else { return nil }
+    return context.createCGImage(output, from: output.extent)
+  }
+
+  private func exifOrientation(for orientation: AVCaptureVideoOrientation) -> Int32 {
+    switch orientation {
+    case .portrait: return 6
+    case .portraitUpsideDown: return 8
+    case .landscapeLeft: return 3
+    case .landscapeRight: return 1
+    @unknown default: return 6
+    }
+  }
+}
+
 public final class CameraImageStackingModule: Module {
   public func definition() -> ModuleDefinition {
     Name("CameraImageStacking")
@@ -31,6 +71,12 @@ public final class CameraImageStackingModule: Module {
       }
       Prop("histogramEnabled") { (view, enabled: Bool?) in
         view.histogramEnabled = enabled ?? false
+      }
+      Prop("zebraHighlightsEnabled") { (view, enabled: Bool?) in
+        view.zebraHighlightsEnabled = enabled ?? false
+      }
+      Prop("zebraShadowsEnabled") { (view, enabled: Bool?) in
+        view.zebraShadowsEnabled = enabled ?? false
       }
     }
 
@@ -63,6 +109,10 @@ public final class CameraImageStackingModule: Module {
       await ImageStackingCameraView.activeView()?.stopContinuousCapture()
     }
 
+    AsyncFunction("captureNextImageStackingExposure") { () async in
+      await ImageStackingCameraView.activeView()?.captureNextDoubleExposure()
+    }
+
     AsyncFunction("cancelImageStackingCapture") { () async in
       await ImageStackingCameraView.activeView()?.cancelCapture()
     }
@@ -72,6 +122,8 @@ public final class CameraImageStackingModule: Module {
 public final class ImageStackingCameraView: ExpoView {
   private static weak var currentActiveView: ImageStackingCameraView?
   private let controller = StackingCaptureCoordinator()
+  private let doubleExposureOverlay = UIImageView()
+  private let zebraOverlay = UIImageView()
 
   let onInitialized = EventDispatcher()
   let onError = EventDispatcher()
@@ -87,12 +139,34 @@ public final class ImageStackingCameraView: ExpoView {
   var histogramEnabled = false {
     didSet { controller.histogramEnabled = histogramEnabled }
   }
+  var zebraHighlightsEnabled = false {
+    didSet {
+      controller.zebraHighlightsEnabled = zebraHighlightsEnabled
+      if !zebraHighlightsEnabled && !zebraShadowsEnabled { zebraOverlay.image = nil }
+    }
+  }
+  var zebraShadowsEnabled = false {
+    didSet {
+      controller.zebraShadowsEnabled = zebraShadowsEnabled
+      if !zebraHighlightsEnabled && !zebraShadowsEnabled { zebraOverlay.image = nil }
+    }
+  }
 
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     backgroundColor = .black
     previewLayer.videoGravity = .resizeAspectFill
     previewLayer.session = controller.session
+    doubleExposureOverlay.contentMode = .scaleAspectFill
+    doubleExposureOverlay.clipsToBounds = true
+    doubleExposureOverlay.alpha = 0.5
+    doubleExposureOverlay.isHidden = true
+    doubleExposureOverlay.isUserInteractionEnabled = false
+    addSubview(doubleExposureOverlay)
+    zebraOverlay.contentMode = .scaleAspectFill
+    zebraOverlay.clipsToBounds = true
+    zebraOverlay.isUserInteractionEnabled = false
+    addSubview(zebraOverlay)
     controller.onProgress = { [weak self] snapshot in
       DispatchQueue.main.async {
         self?.onStackingProgress(snapshot.dictionary)
@@ -102,6 +176,15 @@ public final class ImageStackingCameraView: ExpoView {
       DispatchQueue.main.async {
         self?.onHistogramUpdated(["bins": bins])
       }
+    }
+    controller.onDoubleExposurePreview = { [weak self] data in
+      DispatchQueue.main.async {
+        self?.doubleExposureOverlay.image = data.flatMap(UIImage.init(data:))
+        self?.doubleExposureOverlay.isHidden = data == nil
+      }
+    }
+    controller.onZebraUpdated = { [weak self] image in
+      DispatchQueue.main.async { self?.zebraOverlay.image = image.map { UIImage(cgImage: $0) } }
     }
     NotificationCenter.default.addObserver(
       self,
@@ -132,6 +215,12 @@ public final class ImageStackingCameraView: ExpoView {
   public override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
   private var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
 
+  public override func layoutSubviews() {
+    super.layoutSubviews()
+    doubleExposureOverlay.frame = bounds
+    zebraOverlay.frame = bounds
+  }
+
   @MainActor
   static func activeView(for deviceId: String? = nil) -> ImageStackingCameraView? {
     guard let view = currentActiveView, view.isActive else { return nil }
@@ -152,6 +241,7 @@ public final class ImageStackingCameraView: ExpoView {
     stopBulbCapture()
     stopMotionBlurCapture()
   }
+  func captureNextDoubleExposure() { controller.captureNextDoubleExposure() }
   func cancelCapture() { controller.cancelCapture() }
 
   private func updateSession() {
@@ -204,6 +294,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   var histogramEnabled = false
   var onProgress: ((StackingProgressSnapshot) -> Void)?
   var onHistogram: (([Double]) -> Void)?
+  var onDoubleExposurePreview: ((Data?) -> Void)?
+  var zebraHighlightsEnabled = false
+  var zebraShadowsEnabled = false
+  var onZebraUpdated: ((CGImage?) -> Void)?
 
   private let photoOutput = AVCapturePhotoOutput()
   private let videoOutput = AVCaptureVideoDataOutput()
@@ -224,6 +318,8 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   private var startedAt = Date()
   private var sceneLuminance = 0.35
   private var lastHistogramAt = Date.distantPast
+  private let zebraRenderer = ZebraOverlayRenderer()
+  private var lastZebraAt = Date.distantPast
   private var lastBulbFrameAt = Date.distantPast
   private var bulbAcceptingFrames = false
   private var inFlightDelegates: [StackingPhotoDelegate] = []
@@ -241,14 +337,30 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   private var motionBlurOutputFormat = "heif"
   private var motionBlurPlan: StackingCapturePlan?
   private var motionBlurFrameInterval: TimeInterval = 0.1
+  private var doubleExposureStore: FrameStore?
+  private var doubleExposureStrategy: (any StackingStrategy)?
+  private var doubleExposureContinuation: CheckedContinuation<StackingResult, Error>?
+  private var doubleExposureOutputFormat = "heif"
+  private var doubleExposureOptions: [String: Any] = [:]
+  private var doubleExposureAdvancing = false
   private var currentPhase: StackingPhase = .idle
   private var currentPhaseStartedAt = Date()
 
   override init() {
+    let workingColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)
+      ?? CGColorSpaceCreateDeviceRGB()
+    let displayColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+      ?? CGColorSpaceCreateDeviceRGB()
+    let contextOptions: [CIContextOption: Any] = [
+      .cacheIntermediates: false,
+      .workingColorSpace: workingColorSpace,
+      .workingFormat: CIFormat.RGBAh.rawValue,
+      .outputColorSpace: displayColorSpace
+    ]
     if let metal = MTLCreateSystemDefaultDevice() {
-      context = CIContext(mtlDevice: metal, options: [.cacheIntermediates: false])
+      context = CIContext(mtlDevice: metal, options: contextOptions)
     } else {
-      context = CIContext(options: [.cacheIntermediates: false])
+      context = CIContext(options: contextOptions)
     }
     super.init()
   }
@@ -330,6 +442,11 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     let plan = strategy.capturePlan(sceneLuminance: sceneLuminance, options: options)
     emit(.preparing, strategyID: strategyID)
     sessionQueue.sync { self.applyOutputOrientation() }
+
+    if strategyID == .doubleExposure {
+      return try await startDoubleExposure(strategy: strategy, plan: plan, options: options)
+    }
+
     lockCaptureSettings()
 
     if plan.usesVideoFrames {
@@ -338,10 +455,20 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         return try await startBulb(plan: plan, options: options)
       case .motionBlur:
         return try await startMotionBlur(plan: plan, options: options)
+      case .doubleExposure:
+        finishOperation()
+        throw StackingError.unsupportedStrategy
       }
     }
 
-    let store = try FrameStore()
+    let store: FrameStore
+    do {
+      store = try FrameStore()
+    } catch {
+      finishOperation()
+      emit(.failed, strategyID: strategyID)
+      throw error
+    }
     defer {
       store.cleanup()
       restoreCaptureSettings()
@@ -366,6 +493,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         try strategy.compose(
           frames: store.frames,
           context: context,
+          options: options,
           progress: { accepted, rejected, processed in
             self.emit(
               .compositing,
@@ -421,6 +549,152 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       emit(error is StackingError && (error as? StackingError) == .cancelled ? .cancelled : .failed,
            strategyID: strategyID)
       throw error
+    }
+  }
+
+  private func startDoubleExposure(
+    strategy: any StackingStrategy,
+    plan: StackingCapturePlan,
+    options: [String: Any]
+  ) async throws -> StackingResult {
+    guard plan.targetFrameCount == 2 else {
+      finishOperation()
+      throw StackingError.unsupportedStrategy
+    }
+    let store: FrameStore
+    do {
+      store = try FrameStore()
+    } catch {
+      finishOperation()
+      emit(.failed, strategyID: .doubleExposure)
+      throw error
+    }
+    doubleExposureStore = store
+    doubleExposureStrategy = strategy
+    doubleExposureOutputFormat = options["outputFormat"] as? String ?? "heif"
+    doubleExposureOptions = [
+      "exposureCompensationEV": options["exposureCompensationEV"] as? Double ?? -1.0
+    ]
+
+    do {
+      emit(.capturing, strategyID: .doubleExposure)
+      let first = try await capturePhoto(quality: .quality)
+      if isCancelled() { throw StackingError.cancelled }
+      _ = try store.append(data: first.data, metadata: first.metadata)
+      onDoubleExposurePreview?(first.data)
+      emit(
+        .awaitingSecondExposure,
+        strategyID: .doubleExposure,
+        captured: 1,
+        accepted: 1,
+        progress: 0.5
+      )
+      return try await withCheckedThrowingContinuation { continuation in
+        stateLock.lock()
+        doubleExposureContinuation = continuation
+        stateLock.unlock()
+      }
+    } catch {
+      onDoubleExposurePreview?(nil)
+      store.cleanup()
+      doubleExposureStore = nil
+      doubleExposureStrategy = nil
+      doubleExposureOptions = [:]
+      finishOperation()
+      emit(
+        (error as? StackingError) == .cancelled ? .cancelled : .failed,
+        strategyID: .doubleExposure
+      )
+      throw error
+    }
+  }
+
+  func captureNextDoubleExposure() {
+    stateLock.lock()
+    guard busy, activeStrategyID == .doubleExposure,
+          doubleExposureContinuation != nil, !doubleExposureAdvancing else {
+      stateLock.unlock()
+      return
+    }
+    doubleExposureAdvancing = true
+    stateLock.unlock()
+
+    Task { [weak self] in
+      await self?.finishDoubleExposure()
+    }
+  }
+
+  private func finishDoubleExposure() async {
+    stateLock.lock()
+    let continuation = doubleExposureContinuation
+    let store = doubleExposureStore
+    let strategy = doubleExposureStrategy
+    doubleExposureContinuation = nil
+    stateLock.unlock()
+
+    guard let continuation, let store, let strategy else { return }
+    defer {
+      onDoubleExposurePreview?(nil)
+      store.cleanup()
+      doubleExposureStore = nil
+      doubleExposureStrategy = nil
+      doubleExposureOptions = [:]
+      finishOperation()
+    }
+
+    do {
+      if isCancelled() { throw StackingError.cancelled }
+      emit(.capturing, strategyID: .doubleExposure, captured: 1, accepted: 1, progress: 0.55)
+      let second = try await capturePhoto(quality: .quality)
+      if isCancelled() { throw StackingError.cancelled }
+      _ = try store.append(data: second.data, metadata: second.metadata)
+      onDoubleExposurePreview?(nil)
+      emit(.compositing, strategyID: .doubleExposure, captured: 2, progress: 0.72)
+      let composed = try analysisQueue.sync {
+        try strategy.compose(
+          frames: store.frames,
+          context: context,
+          options: doubleExposureOptions,
+          progress: { accepted, rejected, processed in
+            self.emit(
+              .compositing,
+              strategyID: .doubleExposure,
+              captured: 2,
+              accepted: accepted,
+              rejected: rejected,
+              progress: 0.7 + 0.15 * Double(processed) / 2
+            )
+          },
+          isCancelled: isCancelled
+        )
+      }
+      emit(.exporting, strategyID: .doubleExposure, captured: 2, accepted: 2, progress: 0.9)
+      let output = try StackingExporter(context: context).export(
+        image: composed.image,
+        referenceURL: composed.reference.url,
+        outputFormat: doubleExposureOutputFormat,
+        strategyID: .doubleExposure
+      )
+      let result = StackingResult(
+        photoURL: output.0,
+        strategyID: .doubleExposure,
+        capturedFrames: 2,
+        acceptedFrames: 2,
+        rejectedFrames: 0,
+        duration: Date().timeIntervalSince(startedAt),
+        width: output.1,
+        height: output.2,
+        degraded: false
+      )
+      emit(.completed, strategyID: .doubleExposure, captured: 2, accepted: 2, progress: 1)
+      logResult(result)
+      continuation.resume(returning: result)
+    } catch {
+      emit(
+        (error as? StackingError) == .cancelled ? .cancelled : .failed,
+        strategyID: .doubleExposure
+      )
+      continuation.resume(throwing: error)
     }
   }
 
@@ -656,9 +930,24 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     cancelled = true
     let bulb = activeStrategyID == .bulb
     let motionBlur = activeStrategyID == .motionBlur
+    let doubleExposure = activeStrategyID == .doubleExposure
+    let doubleContinuation = doubleExposure && !doubleExposureAdvancing
+      ? doubleExposureContinuation
+      : nil
+    if doubleContinuation != nil { doubleExposureContinuation = nil }
     stateLock.unlock()
     if bulb { stopBulbCapture() }
     if motionBlur { stopMotionBlurCapture() }
+    if let doubleContinuation {
+      onDoubleExposurePreview?(nil)
+      doubleExposureStore?.cleanup()
+      doubleExposureStore = nil
+      doubleExposureStrategy = nil
+      doubleExposureOptions = [:]
+      emit(.cancelled, strategyID: .doubleExposure)
+      finishOperation()
+      doubleContinuation.resume(throwing: StackingError.cancelled)
+    }
   }
 
   func captureOutput(
@@ -668,6 +957,19 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   ) {
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
     let now = Date()
+
+    if (zebraHighlightsEnabled || zebraShadowsEnabled),
+       now.timeIntervalSince(lastZebraAt) >= 0.1 {
+      lastZebraAt = now
+      let image = zebraRenderer.makeImage(
+        from: pixelBuffer,
+        highlights: zebraHighlightsEnabled,
+        shadows: zebraShadowsEnabled,
+        orientation: orientationTracker.outputOrientation,
+        mirrored: device?.position == .front
+      )
+      onZebraUpdated?(image)
+    }
 
     if histogramEnabled, now.timeIntervalSince(lastHistogramAt) >= 0.2 {
       lastHistogramAt = now
@@ -725,7 +1027,9 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     }
   }
 
-  private func capturePhoto() async throws -> (data: Data, metadata: [String: Any]) {
+  private func capturePhoto(
+    quality: AVCapturePhotoOutput.QualityPrioritization = .speed
+  ) async throws -> (data: Data, metadata: [String: Any]) {
     try await withCheckedThrowingContinuation { continuation in
       sessionQueue.async { [weak self] in
         guard let self, self.ready, self.session.isRunning else {
@@ -738,7 +1042,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         } else {
           settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.jpeg])
         }
-        settings.photoQualityPrioritization = .speed
+        settings.photoQualityPrioritization = quality
         self.applyOutputOrientation()
         let delegate = StackingPhotoDelegate(continuation: continuation)
         delegate.onFinish = { [weak self, weak delegate] in
@@ -823,6 +1127,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     cancelled = false
     bulbAcceptingFrames = false
     motionBlurAcceptingFrames = false
+    doubleExposureAdvancing = false
     activeStrategyID = nil
     stateLock.unlock()
   }

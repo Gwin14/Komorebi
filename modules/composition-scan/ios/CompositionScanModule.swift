@@ -15,6 +15,61 @@ func compositionScanLog(_ message: @autoclosure () -> String) {
 
 private let compositionImageContext = CIContext(options: [.cacheIntermediates: false])
 
+private func zebraMask(from frame: Frame, highlights: Bool, shadows: Bool) -> [String: Any] {
+  guard let buffer = CMSampleBufferGetImageBuffer(frame.buffer) else { return [:] }
+  CVPixelBufferLockBaseAddress(buffer, .readOnly)
+  defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+
+  let planar = CVPixelBufferIsPlanar(buffer)
+  let width = planar ? CVPixelBufferGetWidthOfPlane(buffer, 0) : CVPixelBufferGetWidth(buffer)
+  let height = planar ? CVPixelBufferGetHeightOfPlane(buffer, 0) : CVPixelBufferGetHeight(buffer)
+  let bytesPerRow = planar ? CVPixelBufferGetBytesPerRowOfPlane(buffer, 0) : CVPixelBufferGetBytesPerRow(buffer)
+  guard width > 0, height > 0,
+        let baseAddress = planar
+          ? CVPixelBufferGetBaseAddressOfPlane(buffer, 0)
+          : CVPixelBufferGetBaseAddress(buffer) else { return [:] }
+
+  let columns = 48
+  let rows = max(1, Int((Double(columns) * Double(height) / Double(width)).rounded()))
+  let pixels = baseAddress.assumingMemoryBound(to: UInt8.self)
+  let pixelStride = planar ? 1 : 4
+  var values = [Int]()
+  values.reserveCapacity(columns * rows)
+
+  for row in 0..<rows {
+    let y = min(height - 1, Int((Double(row) + 0.5) * Double(height) / Double(rows)))
+    let rowAddress = pixels.advanced(by: y * bytesPerRow)
+    for column in 0..<columns {
+      let x = min(width - 1, Int((Double(column) + 0.5) * Double(width) / Double(columns)))
+      let luma = Int(rowAddress[x * pixelStride])
+      if highlights && luma >= 250 {
+        values.append(1)
+      } else if shadows && luma <= 5 {
+        values.append(2)
+      } else {
+        values.append(0)
+      }
+    }
+  }
+
+  let orientation: String
+  switch frame.orientation {
+  case .left: orientation = "landscape-left"
+  case .right: orientation = "landscape-right"
+  case .down: orientation = "portrait-upside-down"
+  default: orientation = "portrait"
+  }
+  return [
+    "columns": columns,
+    "rows": rows,
+    "values": values,
+    "frameWidth": width,
+    "frameHeight": height,
+    "orientation": orientation,
+    "mirrored": frame.isMirrored,
+  ]
+}
+
 private func compositionImage(from frame: Frame, rotation: Int, maxDimension: CGFloat) -> CGImage? {
   guard let buffer = CMSampleBufferGetImageBuffer(frame.buffer) else { return nil }
   var source = CIImage(cvPixelBuffer: buffer)
@@ -586,6 +641,13 @@ final class CompositionScanSession {
 @objc(CompositionScanPlugin)
 public class CompositionScanPlugin: FrameProcessorPlugin {
   public override func callback(_ frame: Frame, withArguments arguments: [AnyHashable: Any]?) -> Any {
+    if arguments?["zebra"] as? Bool == true {
+      return zebraMask(
+        from: frame,
+        highlights: arguments?["highlights"] as? Bool == true,
+        shadows: arguments?["shadows"] as? Bool == true
+      )
+    }
     guard let id = arguments?["scanId"] as? String else { return "" }
     let rotation = arguments?["rotation"] as? Int ?? 0
     if arguments?["tracking"] as? Bool == true {

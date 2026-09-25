@@ -2,10 +2,13 @@ import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
   container: {
-    width: "100%",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    transform: [{ translateY: -24 }],
+    width: 216,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(18,18,18,0.97)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
   },
   title: {
     color: "white",
@@ -15,17 +18,14 @@ export default StyleSheet.create({
     marginBottom: 10,
   },
   options: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 8,
+    gap: 6,
   },
   option: {
-    flex: 1,
-    maxWidth: 100,
-    minHeight: 64,
+    minHeight: 42,
+    paddingHorizontal: 12,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.14)",
     backgroundColor: "rgba(255,255,255,0.05)",
@@ -36,9 +36,8 @@ export default StyleSheet.create({
   },
   label: {
     color: "white",
-    fontSize: 10,
-    marginTop: 5,
-    textAlign: "center",
+    fontSize: 12,
+    marginLeft: 10,
   },
   labelActive: {
     color: "#ffaa00",

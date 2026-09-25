@@ -4,9 +4,13 @@ const parseStoredBoolean = (value, fallback = false) => {
 };
 
 const restoreIntelligentPreferences = (
-  { tags = null, filename = null } = {},
+  { compositionScan = null, tags = null, filename = null } = {},
   defaults = {},
 ) => ({
+  compositionScanEnabled: parseStoredBoolean(
+    compositionScan,
+    defaults.compositionScanEnabled,
+  ),
   intelligentTagsEnabled: parseStoredBoolean(
     tags,
     defaults.intelligentTagsEnabled,

@@ -9,12 +9,14 @@ import { reconcileProjectsWithAlbums } from "../utils/projects";
 
 const SettingsContext = createContext(null);
 
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
   retroStyle: false,
   gridVisible: false,
   levelVisible: false,
   histogramVisible: false,
-  compositionScanEnabled: true,
+  zebraHighlightsEnabled: false,
+  zebraShadowsEnabled: false,
+  compositionScanEnabled: false,
   intelligentTagsEnabled: false,
   intelligentFilenameEnabled: false,
   shutterSound: false,
@@ -38,6 +40,12 @@ export const SettingsProvider = ({ children }) => {
   );
   const [histogramVisible, setHistogramVisible] = useState(
     DEFAULT_SETTINGS.histogramVisible,
+  );
+  const [zebraHighlightsEnabled, setZebraHighlightsEnabled] = useState(
+    DEFAULT_SETTINGS.zebraHighlightsEnabled,
+  );
+  const [zebraShadowsEnabled, setZebraShadowsEnabled] = useState(
+    DEFAULT_SETTINGS.zebraShadowsEnabled,
   );
   const [compositionScanEnabled, setCompositionScanEnabled] = useState(
     DEFAULT_SETTINGS.compositionScanEnabled,
@@ -79,6 +87,8 @@ export const SettingsProvider = ({ children }) => {
         setGridVisible(savedSettings.gridVisible);
         setLevelVisible(savedSettings.levelVisible);
         setHistogramVisible(savedSettings.histogramVisible);
+        setZebraHighlightsEnabled(savedSettings.zebraHighlightsEnabled);
+        setZebraShadowsEnabled(savedSettings.zebraShadowsEnabled);
         setCompositionScanEnabled(savedSettings.compositionScanEnabled);
         setIntelligentTagsEnabled(savedSettings.intelligentTagsEnabled);
         setIntelligentFilenameEnabled(savedSettings.intelligentFilenameEnabled);
@@ -161,6 +171,24 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [histogramVisible, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.ZEBRA_HIGHLIGHTS_ENABLED,
+        zebraHighlightsEnabled.toString(),
+      );
+    }
+  }, [zebraHighlightsEnabled, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.ZEBRA_SHADOWS_ENABLED,
+        zebraShadowsEnabled.toString(),
+      );
+    }
+  }, [zebraShadowsEnabled, loading]);
 
   // Salvar disponibilidade do Scan de composição.
   useEffect(() => {
@@ -304,6 +332,10 @@ export const SettingsProvider = ({ children }) => {
     setLevelVisible,
     histogramVisible,
     setHistogramVisible,
+    zebraHighlightsEnabled,
+    setZebraHighlightsEnabled,
+    zebraShadowsEnabled,
+    setZebraShadowsEnabled,
     compositionScanEnabled,
     setCompositionScanEnabled,
     intelligentTagsEnabled,

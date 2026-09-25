@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { restoreIntelligentPreferences } from "./intelligentSettings";
+import { restoreZebraPreferences } from "./zebraSettings";
 import { normalizeTopBarControls } from "./topBarControls";
 
 export const SETTINGS_STORAGE_KEYS = {
@@ -7,6 +8,8 @@ export const SETTINGS_STORAGE_KEYS = {
   GRID_VISIBLE: "@settings/gridVisible",
   LEVEL_VISIBLE: "@settings/levelVisible",
   HISTOGRAM_VISIBLE: "@settings/histogramVisible",
+  ZEBRA_HIGHLIGHTS_ENABLED: "@settings/zebraHighlightsEnabled",
+  ZEBRA_SHADOWS_ENABLED: "@settings/zebraShadowsEnabled",
   COMPOSITION_SCAN_ENABLED: "@settings/compositionScanEnabled",
   INTELLIGENT_TAGS_ENABLED: "@settings/intelligentTagsEnabled",
   INTELLIGENT_FILENAME_ENABLED: "@settings/intelligentFilenameEnabled",
@@ -47,6 +50,8 @@ export async function loadStoredSettings(defaults) {
     savedGridVisible,
     savedLevelVisible,
     savedHistogramVisible,
+    savedZebraHighlightsEnabled,
+    savedZebraShadowsEnabled,
     savedCompositionScanEnabled,
     savedIntelligentTagsEnabled,
     savedIntelligentFilenameEnabled,
@@ -66,6 +71,8 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.GRID_VISIBLE),
     AsyncStorage.getItem(keys.LEVEL_VISIBLE),
     AsyncStorage.getItem(keys.HISTOGRAM_VISIBLE),
+    AsyncStorage.getItem(keys.ZEBRA_HIGHLIGHTS_ENABLED),
+    AsyncStorage.getItem(keys.ZEBRA_SHADOWS_ENABLED),
     AsyncStorage.getItem(keys.COMPOSITION_SCAN_ENABLED),
     AsyncStorage.getItem(keys.INTELLIGENT_TAGS_ENABLED),
     AsyncStorage.getItem(keys.INTELLIGENT_FILENAME_ENABLED),
@@ -84,8 +91,16 @@ export async function loadStoredSettings(defaults) {
 
   const intelligentPreferences = restoreIntelligentPreferences(
     {
+      compositionScan: savedCompositionScanEnabled,
       tags: savedIntelligentTagsEnabled,
       filename: savedIntelligentFilenameEnabled,
+    },
+    defaults,
+  );
+  const zebraPreferences = restoreZebraPreferences(
+    {
+      highlights: savedZebraHighlightsEnabled,
+      shadows: savedZebraShadowsEnabled,
     },
     defaults,
   );
@@ -98,10 +113,7 @@ export async function loadStoredSettings(defaults) {
       savedHistogramVisible,
       defaults.histogramVisible,
     ),
-    compositionScanEnabled: parseBoolean(
-      savedCompositionScanEnabled,
-      defaults.compositionScanEnabled,
-    ),
+    ...zebraPreferences,
     ...intelligentPreferences,
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),

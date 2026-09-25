@@ -54,6 +54,8 @@ export default function App() {
     gridVisible,
     levelVisible,
     histogramVisible,
+    zebraHighlightsEnabled,
+    zebraShadowsEnabled,
     compositionScanEnabled,
     intelligentTagsEnabled,
     intelligentFilenameEnabled,
@@ -322,6 +324,8 @@ export default function App() {
       if (imageStacking.capturing) {
         if (["bulb", "motionBlur"].includes(imageStacking.strategyId)) {
           await imageStacking.stop();
+        } else if (imageStacking.strategyId === "doubleExposure") {
+          await imageStacking.advance();
         }
         return;
       }
@@ -631,7 +635,7 @@ export default function App() {
     },
     imageStackingAvailable: imageStacking.available,
     imageStackingStrategyId: imageStacking.strategyId,
-    toggleImageStackingControl: () => toggleMode("stacking"),
+    onSelectImageStackingStrategy: handleSelectImageStackingStrategy,
     selectedLutId,
     smileDetectionEnabled,
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
@@ -702,6 +706,8 @@ export default function App() {
                 gridVisible={gridVisible}
                 levelVisible={levelVisible}
                 histogramVisible={histogramVisible}
+                zebraHighlightsEnabled={zebraHighlightsEnabled}
+                zebraShadowsEnabled={zebraShadowsEnabled}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
                 smileDetectionEnabled={smileDetectionEnabled}
@@ -722,6 +728,8 @@ export default function App() {
                 gridVisible={gridVisible}
                 levelVisible={levelVisible}
                 histogramVisible={histogramVisible}
+                zebraHighlightsEnabled={zebraHighlightsEnabled}
+                zebraShadowsEnabled={zebraShadowsEnabled}
                 setMinZoom={setMinZoom}
                 setMaxZoom={setMaxZoom}
                 onSmileDetected={handleTakePicture}
@@ -824,12 +832,10 @@ export default function App() {
         onSelectLens={handleSelectLens}
         galleryRefreshKey={galleryRefreshKey}
         activeProject={activeProject}
-        imageStackingStrategyId={imageStacking.strategyId}
-        onSelectImageStackingStrategy={handleSelectImageStackingStrategy}
         imageStackingCapturing={imageStacking.capturing}
         imageStackingContinuousCapturing={
           imageStacking.capturing &&
-          ["bulb", "motionBlur"].includes(imageStacking.strategyId)
+          ["bulb", "motionBlur", "doubleExposure"].includes(imageStacking.strategyId)
         }
       />
     </SafeAreaView>

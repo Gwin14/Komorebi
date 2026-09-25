@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import {
   cancelImageStackingCapture,
+  captureNextImageStackingExposure,
   getImageStackingCapabilities,
   isImageStackingAvailable,
   startImageStackingCapture,
@@ -79,7 +80,7 @@ export default function useImageStacking(device) {
   );
 
   const start = useCallback(
-    async ({ outputFormat = "heif" } = {}) => {
+    async ({ outputFormat = "heif", exposureCompensationEV = -1 } = {}) => {
       if (!strategyId || !deviceId || capturing) return null;
       setCapturing(true);
       try {
@@ -89,6 +90,9 @@ export default function useImageStacking(device) {
           outputFormat,
           ...(["bulb", "motionBlur"].includes(strategyId)
             ? { maximumDurationSeconds: 300 }
+            : {}),
+          ...(strategyId === "doubleExposure"
+            ? { exposureCompensationEV }
             : {}),
         });
       } finally {
@@ -101,6 +105,12 @@ export default function useImageStacking(device) {
   const stop = useCallback(async () => {
     if (capturing && ["bulb", "motionBlur"].includes(strategyId)) {
       await stopImageStackingCapture();
+    }
+  }, [capturing, strategyId]);
+
+  const advance = useCallback(async () => {
+    if (capturing && strategyId === "doubleExposure") {
+      await captureNextImageStackingExposure();
     }
   }, [capturing, strategyId]);
 
@@ -125,6 +135,7 @@ export default function useImageStacking(device) {
       selectStrategy,
       start,
       stop,
+      advance,
       cancel,
       handleProgress,
     }),
@@ -137,6 +148,7 @@ export default function useImageStacking(device) {
       progress,
       selectStrategy,
       start,
+      advance,
       stop,
       strategyId,
     ],

@@ -105,6 +105,9 @@ export function getCompositionCapturePlugin() {
   }
   return plugin;
 }
+export function getZebraMaskPlugin() {
+  return getCompositionCapturePlugin();
+}
 export function isCompositionScanAvailable() {
   return Boolean(nativeModule && getCompositionCapturePlugin());
 }

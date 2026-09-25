@@ -12,12 +12,16 @@ index 44ce80c..24991e3 100644
  } from 'react-native-vision-camera'
  import type {
    Face,
-@@ -44,10 +45,21 @@ type CallbackType = (
+@@ -44,10 +45,29 @@ type CallbackType = (
    frame: Frame
  ) => void | Promise<void>
  
 +type HistogramCallbackType = (
 +  bins: number[]
++) => void | Promise<void>
++
++type ZebraMaskCallbackType = (
++  mask: Record<string, unknown>
 +) => void | Promise<void>
 +
  type ComponentType = {
@@ -31,10 +35,14 @@ index 44ce80c..24991e3 100644
 +  compositionScanRotation?: number
 +  compositionCapturePlugin?: FrameProcessorPlugin
 +  compositionCaptureCallback?: (token: string, scanId: string) => void
++  zebraHighlightsEnabled?: boolean
++  zebraShadowsEnabled?: boolean
++  zebraMaskPlugin?: FrameProcessorPlugin
++  zebraMaskCallback?: ZebraMaskCallbackType
    skiaActions?: (
      faces: Face[],
      frame: DrawableFrame
-@@ -101,6 +112,13 @@ export function Camera( {
+@@ -101,6 +120,17 @@ export function Camera( {
    ref,
    faceDetectionOptions,
    faceDetectionCallback,
@@ -45,10 +53,14 @@ index 44ce80c..24991e3 100644
 +  compositionScanRotation = 0,
 +  compositionCapturePlugin,
 +  compositionCaptureCallback,
++  zebraHighlightsEnabled = false,
++  zebraShadowsEnabled = false,
++  zebraMaskPlugin,
++  zebraMaskCallback,
    skiaActions,
    ...props
  }: ComponentType ) {
-@@ -109,6 +127,13 @@ export function Camera( {
+@@ -109,6 +135,19 @@ export function Camera( {
     */
    const isAsyncContextBusy = useSharedValue( false )
    const faces = useSharedValue<string>( '[]' )
@@ -56,13 +68,31 @@ index 44ce80c..24991e3 100644
 +  const histogramEnabled = Boolean( histogramCallback )
 +  const capturedScanId = useSharedValue( '' )
 +  const lastCompositionTrackingUpdate = useSharedValue( 0 )
++  const lastZebraUpdate = useSharedValue( 0 )
++  const skiaFrameCount = useSharedValue( 0 )
++  const lastSkiaDebugAt = useSharedValue( 0 )
 +  const runCaptureOnJs = React.useMemo( () => Worklets.createRunOnJS(
 +    compositionCaptureCallback ?? ( () => {} )
 +  ), [ compositionCaptureCallback ] )
++  const runZebraOnJs = React.useMemo( () => Worklets.createRunOnJS(
++    zebraMaskCallback ?? ( () => {} )
++  ), [ zebraMaskCallback ] )
    const {
      detectFaces,
      stopListeners
-@@ -139,6 +163,10 @@ export function Camera( {
+@@ -125,9 +161,9 @@ export function Camera( {
+   const logOnJs = Worklets.createRunOnJS( (
+     log: string,
+-    error?: Error
++    error?: string
+   ) => {
+     if ( error ) {
+-      console.error( log, error.message ?? JSON.stringify( error ) )
++      console.error( log, error )
+     } else {
+       console.log( log )
+     }
+@@ -139,6 +175,10 @@ export function Camera( {
      faceDetectionCallback
    ] )
  
@@ -73,7 +103,7 @@ index 44ce80c..24991e3 100644
    /**
     * Async context that will handle face detection
     */
-@@ -147,6 +175,50 @@ export function Camera( {
+@@ -147,6 +187,50 @@ export function Camera( {
    ) => {
      'worklet'
      try {
@@ -124,7 +154,7 @@ index 44ce80c..24991e3 100644
        faces.value = JSON.stringify(
          detectFaces( frame )
        )
-@@ -170,6 +242,10 @@ export function Camera( {
+@@ -170,6 +254,10 @@ export function Camera( {
      }
    }, [
      detectFaces,
@@ -134,11 +164,107 @@ index 44ce80c..24991e3 100644
 +    runHistogramOnJs,
      runOnJs
    ] )
+
+@@ -195,12 +283,71 @@ export function Camera( {
+   const skiaFrameProcessor = useSkiaFrameProcessor( ( frame ) => {
+     'worklet'
++    skiaFrameCount.value += 1
++    const debugNow = performance.now()
++    const shouldDebug = debugNow - lastSkiaDebugAt.value >= 2000
++    if (shouldDebug) {
++      lastSkiaDebugAt.value = debugNow
++      logOnJs(
++        `[ZebraDebug][wrapper] frame=${skiaFrameCount.value} before skiaActions ` +
++        `size=${frame.width}x${frame.height} orientation=${frame.orientation}`
++      )
++    }
++    if (compositionScanId && compositionCapturePlugin && capturedScanId.value !== compositionScanId) {
++      capturedScanId.value = compositionScanId
++      let token = ''
++      try {
++        token = compositionCapturePlugin.call(frame, { scanId: compositionScanId, rotation: compositionScanRotation }) as string
++      } catch {}
++      runCaptureOnJs(token, compositionScanId)
++    }
++    const trackingNow = performance.now()
++    if (
++      compositionTrackingId && compositionCapturePlugin &&
++      trackingNow - lastCompositionTrackingUpdate.value >= 100
++    ) {
++      lastCompositionTrackingUpdate.value = trackingNow
++      try {
++        compositionCapturePlugin.call(frame, {
++          scanId: compositionTrackingId,
++          rotation: compositionScanRotation,
++          tracking: true
++        })
++      } catch {}
++    }
+-    frame.render()
+-    skiaActions!( JSON.parse(
+-      faces.value
+-    ), frame )
++    try {
++      skiaActions!( JSON.parse(
++        faces.value
++      ), frame )
++      if (shouldDebug) {
++        logOnJs(`[ZebraDebug][wrapper] frame=${skiaFrameCount.value} after skiaActions`)
++      }
++    } catch (error: any) {
++      const errorMessage =
++        error?.message ?? error?.toString?.() ?? JSON.stringify(error) ?? 'unknown error'
++      if (shouldDebug) {
++        logOnJs(
++          `[ZebraDebug][wrapper] frame=${skiaFrameCount.value} skiaActions failed`,
++          errorMessage
++        )
++      }
++      // Nunca deixe o preview sem um frame quando o efeito falhar.
++      frame.render()
++    }
+-    runAsync( frame )
++    if (faceDetectionEnabled || histogramEnabled) runAsync( frame )
+   }, [
+     runOnAsyncContext,
+-    skiaActions
++    skiaActions,
++    compositionScanId,
++    compositionTrackingId,
++    compositionScanRotation,
++    compositionCapturePlugin,
++    capturedScanId,
++    lastCompositionTrackingUpdate,
++    runCaptureOnJs,
++    faceDetectionEnabled,
++    histogramEnabled,
++    skiaFrameCount,
++    lastSkiaDebugAt,
++    logOnJs
+   ] )
  
-@@ -210,8 +286,37 @@ export function Camera( {
+@@ -210,8 +321,56 @@ export function Camera( {
     */
    const cameraFrameProcessor = useFrameProcessor( ( frame ) => {
      'worklet'
++    const zebraNow = performance.now()
++    if (
++      zebraMaskPlugin && (zebraHighlightsEnabled || zebraShadowsEnabled) &&
++      zebraNow - lastZebraUpdate.value >= 100
++    ) {
++      lastZebraUpdate.value = zebraNow
++      try {
++        const mask = zebraMaskPlugin.call(frame, {
++          zebra: true,
++          highlights: zebraHighlightsEnabled,
++          shadows: zebraShadowsEnabled
++        }) as Record<string, unknown>
++        runZebraOnJs(mask)
++      } catch (error: any) {
++        const message = error?.message ?? error?.toString?.() ?? 'unknown error'
++        logOnJs('[ZebraDebug][mask] native sampling failed', message)
++      }
++    }
 -    runAsync( frame )
 -  }, [ runOnAsyncContext ] )
 +    // Consume the request before crossing runtimes. Never retain a Frame in JS.
@@ -171,15 +297,17 @@ index 44ce80c..24991e3 100644
 +    if (faceDetectionEnabled || histogramEnabled) runAsync( frame )
 +  }, [ runOnAsyncContext, compositionScanId, compositionTrackingId, compositionScanRotation, compositionCapturePlugin, capturedScanId,
 +       lastCompositionTrackingUpdate,
-+       runCaptureOnJs, faceDetectionEnabled, histogramEnabled ] )
++       runCaptureOnJs, faceDetectionEnabled, histogramEnabled, zebraMaskPlugin,
++       zebraHighlightsEnabled, zebraShadowsEnabled, lastZebraUpdate, runZebraOnJs, logOnJs ] )
  
    /**
     * Camera frame processor
-@@ -224,6 +329,7 @@ export function Camera( {
+@@ -224,6 +383,8 @@ export function Camera( {
        !!skiaActions
      ) return skiaFrameProcessor
  
-+    if (!faceDetectionEnabled && !histogramEnabled && !compositionScanId && !compositionTrackingId) return undefined
++    if (!faceDetectionEnabled && !histogramEnabled && !compositionScanId && !compositionTrackingId &&
++        !(zebraMaskPlugin && (zebraHighlightsEnabled || zebraShadowsEnabled))) return undefined
      return cameraFrameProcessor
    } )()
  

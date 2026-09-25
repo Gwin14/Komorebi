@@ -15,7 +15,6 @@ import { getProjectAlbumName } from "../utils/projects";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
-import ImageStackingSelector from "./ImageStackingSelector";
 import Shutter from "./shutter";
 import styles, { BOTTOM_CONTROLS_MARGIN } from "./BottomControls.styles";
 
@@ -50,8 +49,6 @@ export default function BottomControls({
   onSelectLens,
   galleryRefreshKey,
   activeProject = null,
-  imageStackingStrategyId,
-  onSelectImageStackingStrategy,
   imageStackingCapturing = false,
   imageStackingContinuousCapturing = false,
 }) {
@@ -308,13 +305,6 @@ export default function BottomControls({
           </View>
         )}
 
-        {activeControl === "stacking" && (
-          <ImageStackingSelector
-            value={imageStackingStrategyId}
-            onChange={onSelectImageStackingStrategy}
-            disabled={imageStackingCapturing}
-          />
-        )}
       </Animated.View>
     </View>
   );

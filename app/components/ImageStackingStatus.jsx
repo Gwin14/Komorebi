@@ -5,6 +5,7 @@ import styles from "./ImageStackingStatus.styles";
 const LABELS = {
   preparing: "Preparando",
   capturing: "Capturando",
+  awaitingSecondExposure: "Enquadre a segunda foto",
   analyzing: "Analisando",
   compositing: "Compondo",
   exporting: "Exportando",
@@ -25,7 +26,9 @@ export default function ImageStackingStatus({ progress, onCancel }) {
       <View style={styles.card}>
         <Text style={styles.title}>{LABELS[progress.state] || "Processando"}</Text>
         <Text style={styles.detail}>
-          {["bulb", "motionBlur"].includes(progress.strategyId)
+          {progress.strategyId === "doubleExposure"
+            ? `${progress.capturedFrames || 0}/2`
+            : ["bulb", "motionBlur"].includes(progress.strategyId)
             ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
             : `${progress.acceptedFrames || progress.capturedFrames || 0} frames`}
         </Text>

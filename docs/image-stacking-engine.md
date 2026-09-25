@@ -8,8 +8,9 @@ vazias nas demais plataformas.
 ## Fluxo
 
 1. `ImageStackingCameraView` mantém a sessão e o preview AVFoundation.
-2. `StackingCaptureCoordinator` valida exclusividade, trava foco, exposição e
-   balanço de branco, escolhe o plano da estratégia e captura os frames.
+2. `StackingCaptureCoordinator` valida exclusividade, escolhe o plano da
+   estratégia e captura os frames. Bulb e Motion Blur travam foco, exposição e
+   balanço de branco; Dupla exposição mede cada disparo de forma independente.
 3. Capturas fotográficas são gravadas em um `FrameStore` temporário por sessão.
    Bulb usa diretamente `CVPixelBuffer` e nunca grava frames intermediários.
 4. `FrameAnalyzer` mede luminância, nitidez e diferença local.
@@ -35,6 +36,14 @@ float para limitar o grafo do Core Image e manter a acumulação linear.
 - `BulbStrategy`: stream limitado a 4096 px no maior lado, amostrado em cadência
   adaptada, alinhamento global e soma ponderada pelo intervalo temporal. Para ao
   segundo disparo ou automaticamente em cinco minutos; exige um segundo válido.
+- `MotionBlurStrategy`: stream contínuo com alinhamento global e média temporal
+  para simular longa exposição sem acumular o brilho da cena.
+- `DoubleExposureStrategy`: duas fotos em resolução completa, sem alinhamento,
+  convertidas pelo Core Image para extended-linear sRGB e somadas como luz. A
+  compensação padrão de -1 EV neutraliza o stop adicional das duas exposições;
+  `CIToneMapHeadroom` reduz o resultado para SDR antes da conversão final para
+  sRGB. Após a primeira foto, o preview exibe sua sobreposição e aguarda
+  explicitamente o segundo disparo.
 
 Noise Reduction e Night exigem três frames válidos. Quando atingem esse mínimo,
 podem produzir resultado degradado e informam isso nos metadados.
@@ -60,6 +69,10 @@ O resultado entra na fila existente de processamento como `captureMode:
 "stacking"`. LUT, grain, halation, crop, captura dupla, projetos e JPEG/HEIF
 operam sobre esse arquivo. “Salvar original sem efeitos” salva o resultado
 empilhado antes dos efeitos, nunca os frames fonte.
+
+O seletor fica em um popover ancorado ao botão de stacking da barra superior.
+Durante Dupla exposição, orientação, lente e demais controles permanecem
+bloqueados; obturador e Cancelar continuam disponíveis.
 
 Os metadados Komorebi usam schema 3 e incluem versão do engine, estratégia,
 frames capturados/aceitos/rejeitados, duração e indicação de resultado degradado.

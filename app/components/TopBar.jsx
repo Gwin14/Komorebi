@@ -9,6 +9,7 @@ import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
+import ImageStackingSelector from "./ImageStackingSelector";
 import styles from "./TopBar.styles";
 
 export default function TopBar({
@@ -38,7 +39,7 @@ export default function TopBar({
   togglePortraitModeEnabled,
   imageStackingAvailable,
   imageStackingStrategyId,
-  toggleImageStackingControl,
+  onSelectImageStackingStrategy,
   unavailableReasons = {},
   projects = [],
   activeProjectId,
@@ -49,6 +50,7 @@ export default function TopBar({
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
   const [open, setOpen] = useState(false);
+  const [stackingOpen, setStackingOpen] = useState(false);
   const [data, setData] = useState(null);
   const [place, setPlace] = useState(null);
   const [coords, setCoords] = useState(null);
@@ -171,9 +173,8 @@ export default function TopBar({
     },
     stacking: {
       icon: imageStackingStrategyId ? "layers" : "layers-outline",
-      onPress: toggleImageStackingControl,
-      active:
-        activeControl === "stacking" || Boolean(imageStackingStrategyId),
+      onPress: () => setStackingOpen(true),
+      active: Boolean(imageStackingStrategyId),
     },
     projects: {
       icon: activeProjectId ? "folder" : "folder-outline",
@@ -253,6 +254,52 @@ export default function TopBar({
                   triggerActive={Boolean(activeProjectId)}
                   triggerIconSize={26}
                 />
+              </Animated.View>
+            </View>
+          );
+        }
+
+        if (controlId === "stacking") {
+          return (
+            <View key={controlId}>
+              <Animated.View style={animatedStyle}>
+                <Popover
+                  isVisible={stackingOpen}
+                  onRequestClose={() => setStackingOpen(false)}
+                  backgroundStyle={{ backgroundColor: "transparent" }}
+                  popoverStyle={{ backgroundColor: "transparent" }}
+                  from={
+                    <TouchableOpacity
+                      style={[
+                        styles.controlButton,
+                        control.active && styles.controlButtonActive,
+                      ]}
+                      onPress={() => {
+                        if (disabled) {
+                          Alert.alert(
+                            "Recurso indisponível",
+                            unavailableReason || "Os controles ficam bloqueados durante a captura.",
+                          );
+                          return;
+                        }
+                        setStackingOpen(true);
+                      }}
+                      activeOpacity={0.72}
+                      accessibilityState={{ disabled }}
+                    >
+                      <Ionicons name={control.icon} size={26} color={iconColor} />
+                    </TouchableOpacity>
+                  }
+                >
+                  <ImageStackingSelector
+                    value={imageStackingStrategyId}
+                    disabled={disabled}
+                    onChange={(strategyId) => {
+                      setStackingOpen(false);
+                      onSelectImageStackingStrategy(strategyId);
+                    }}
+                  />
+                </Popover>
               </Animated.View>
             </View>
           );
