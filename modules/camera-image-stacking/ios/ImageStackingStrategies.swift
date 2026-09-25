@@ -16,6 +16,19 @@ private func scaled(_ image: CIImage, by value: Double) -> CIImage {
   ])
 }
 
+private let photographicToneMapKernel = CIColorKernel(source: """
+  kernel vec4 photographicToneMap(__sample pixel) {
+    vec3 linear = max(pixel.rgb, vec3(0.0));
+    float luminance = dot(linear, vec3(0.2126, 0.7152, 0.0722));
+    if (luminance <= 0.000001) return vec4(linear, pixel.a);
+
+    // Film-like highlight roll-off. Working on luminance instead of each
+    // channel independently retains hue in strongly colored highlights.
+    float compressed = pow(1.0 - exp(-luminance), 1.08);
+    return vec4(linear * (compressed / luminance), pixel.a);
+  }
+""")
+
 private func collapse(_ image: CIImage, context: CIContext) throws -> CIImage {
   let renderExtent = image.extent.integral
   let linearSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)
@@ -284,10 +297,9 @@ final class BulbAccumulator {
 final class DoubleExposureStrategy: StackingStrategy {
   let id: StackingStrategyID = .doubleExposure
 
-  // Two normally exposed frames add one stop of light. Compensating by -1 EV
-  // keeps the combined midtones near the original exposure while preserving
-  // the physically additive relationship between both captures.
-  private let defaultExposureCompensationEV = -1.0
+  // Processed camera files already contain a display-oriented tone curve.
+  // Keep another half stop of highlight margin before adding their light.
+  private let defaultExposureCompensationEV = -1.5
 
   func capturePlan(sceneLuminance: Double, options: [String: Any]) -> StackingCapturePlan {
     StackingCapturePlan(
@@ -329,21 +341,16 @@ final class DoubleExposureStrategy: StackingStrategy {
       parameters: [kCIInputBackgroundImageKey: exposureB]
     ).cropped(to: extent)
 
-    // The additive result can exceed SDR white. Reduce its known headroom
-    // only after summing; the exporter performs the final sRGB conversion.
-    let firstHeadroom = max(1, Double(first.contentHeadroom))
-    let secondHeadroom = max(1, Double(second.contentHeadroom))
-    let sourceHeadroom = max(
-      1,
-      (firstHeadroom + secondHeadroom) * exposureGain
-    )
-    let toneMapped = summedExposure.applyingFilter(
-      "CIToneMapHeadroom",
-      parameters: [
-        "inputSourceHeadroom": sourceHeadroom,
-        "inputTargetHeadroom": 1.0
-      ]
-    ).cropped(to: extent)
+    // Camera HEIF/JPEG files often report SDR headroom even when the sum
+    // exceeds display white, making metadata-driven mapping ineffective. The
+    // photographic shoulder always compresses highlights after the linear
+    // addition. The exporter then performs the display-sRGB conversion.
+    guard let toneMapped = photographicToneMapKernel?.apply(
+      extent: extent,
+      arguments: [summedExposure]
+    )?.cropped(to: extent) else {
+      throw StackingError.cannotCreateOutput
+    }
     progress(2, 0, 2)
     return (toneMapped, 2, 0, frames[1])
   }

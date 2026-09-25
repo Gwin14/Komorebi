@@ -20,6 +20,7 @@ export default function NativeCapturePreview({
   histogramVisible,
   zebraHighlightsEnabled,
   zebraShadowsEnabled,
+  exposure,
   verticalMode,
   doubleCaptureMode,
   smileDetectionEnabled,
@@ -119,6 +120,7 @@ export default function NativeCapturePreview({
         histogramEnabled={histogramVisible}
         zebraHighlightsEnabled={zebraHighlightsEnabled}
         zebraShadowsEnabled={zebraShadowsEnabled}
+        {...(mode === "stacking" ? { exposureBias: exposure } : {})}
         onHistogramUpdated={
           histogramVisible ? handleHistogramUpdated : undefined
         }

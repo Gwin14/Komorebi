@@ -708,6 +708,7 @@ export default function App() {
                 histogramVisible={histogramVisible}
                 zebraHighlightsEnabled={zebraHighlightsEnabled}
                 zebraShadowsEnabled={zebraShadowsEnabled}
+                exposure={exposure}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
                 smileDetectionEnabled={smileDetectionEnabled}

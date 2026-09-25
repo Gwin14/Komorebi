@@ -64,7 +64,7 @@ function makeMaskPaths(mask, viewWidth, viewHeight) {
 
 function makeStripePath(width, height) {
   const path = Skia.Path.Make();
-  for (let x = -height; x < width + height; x += 12) {
+  for (let x = -height; x < width + height; x += 8) {
     path.moveTo(x, height);
     path.lineTo(x + height, 0);
   }
@@ -83,10 +83,10 @@ export default function ZebraOverlay({ mask, width, height }) {
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Canvas style={StyleSheet.absoluteFill}>
         <Group clip={paths.highlights}>
-          <Path path={stripes} color="rgba(255, 20, 20, 0.88)" style="stroke" strokeWidth={5} />
+          <Path path={stripes} color="rgba(255, 20, 20, 0.88)" style="stroke" strokeWidth={3} />
         </Group>
         <Group clip={paths.shadows}>
-          <Path path={stripes} color="rgba(20, 82, 255, 0.9)" style="stroke" strokeWidth={5} />
+          <Path path={stripes} color="rgba(20, 82, 255, 0.9)" style="stroke" strokeWidth={3} />
         </Group>
       </Canvas>
     </View>

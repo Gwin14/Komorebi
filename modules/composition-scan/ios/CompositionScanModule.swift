@@ -20,6 +20,7 @@ private func zebraMask(from frame: Frame, highlights: Bool, shadows: Bool) -> [S
   CVPixelBufferLockBaseAddress(buffer, .readOnly)
   defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
 
+  let pixelFormat = CVPixelBufferGetPixelFormatType(buffer)
   let planar = CVPixelBufferIsPlanar(buffer)
   let width = planar ? CVPixelBufferGetWidthOfPlane(buffer, 0) : CVPixelBufferGetWidth(buffer)
   let height = planar ? CVPixelBufferGetHeightOfPlane(buffer, 0) : CVPixelBufferGetHeight(buffer)
@@ -29,22 +30,67 @@ private func zebraMask(from frame: Frame, highlights: Bool, shadows: Bool) -> [S
           ? CVPixelBufferGetBaseAddressOfPlane(buffer, 0)
           : CVPixelBufferGetBaseAddress(buffer) else { return [:] }
 
-  let columns = 48
+  // A denser mask keeps zebras tight around small clipped highlights/shadows
+  // instead of expanding them into visibly large preview blocks.
+  let columns = 96
   let rows = max(1, Int((Double(columns) * Double(height) / Double(width)).rounded()))
   let pixels = baseAddress.assumingMemoryBound(to: UInt8.self)
-  let pixelStride = planar ? 1 : 4
+
+  // Camera YUV buffers normally use video-range luma (16...235), not the
+  // full 0...255 range. Comparing them with 250/5 only caught occasional
+  // outliers, which appeared as random zebra artifacts on the preview.
+  let videoRange = pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange ||
+    pixelFormat == kCVPixelFormatType_420YpCbCr8Planar
+  let highlightThreshold = videoRange ? 231 : 250
+  let shadowThreshold = videoRange ? 20 : 5
+
+  func luma(atX x: Int, y: Int) -> Int {
+    let rowAddress = pixels.advanced(by: y * bytesPerRow)
+    if planar { return Int(rowAddress[x]) }
+
+    // VisionCamera can also request BGRA frames. The first byte is blue, so
+    // treating it as luma makes saturated colours look randomly clipped.
+    if pixelFormat == kCVPixelFormatType_32BGRA {
+      let offset = x * 4
+      let blue = Int(rowAddress[offset])
+      let green = Int(rowAddress[offset + 1])
+      let red = Int(rowAddress[offset + 2])
+      return (54 * red + 183 * green + 19 * blue + 128) >> 8
+    }
+
+    return Int(rowAddress[x * 4])
+  }
+
   var values = [Int]()
   values.reserveCapacity(columns * rows)
 
   for row in 0..<rows {
-    let y = min(height - 1, Int((Double(row) + 0.5) * Double(height) / Double(rows)))
-    let rowAddress = pixels.advanced(by: y * bytesPerRow)
     for column in 0..<columns {
-      let x = min(width - 1, Int((Double(column) + 0.5) * Double(width) / Double(columns)))
-      let luma = Int(rowAddress[x * pixelStride])
-      if highlights && luma >= 250 {
+      var highlightSamples = 0
+      var shadowSamples = 0
+
+      // Sample a small grid inside each mask cell. Requiring agreement among
+      // several pixels suppresses hot pixels and sensor noise without doing a
+      // costly full-frame conversion on every frame.
+      for sampleY in 0..<3 {
+        let y = min(
+          height - 1,
+          Int((Double(row) + (Double(sampleY) + 0.5) / 3) * Double(height) / Double(rows))
+        )
+        for sampleX in 0..<3 {
+          let x = min(
+            width - 1,
+            Int((Double(column) + (Double(sampleX) + 0.5) / 3) * Double(width) / Double(columns))
+          )
+          let sample = luma(atX: x, y: y)
+          if sample >= highlightThreshold { highlightSamples += 1 }
+          if sample <= shadowThreshold { shadowSamples += 1 }
+        }
+      }
+
+      if highlights && highlightSamples >= 4 {
         values.append(1)
-      } else if shadows && luma <= 5 {
+      } else if shadows && shadowSamples >= 4 {
         values.append(2)
       } else {
         values.append(0)
@@ -54,8 +100,11 @@ private func zebraMask(from frame: Frame, highlights: Bool, shadows: Bool) -> [S
 
   let orientation: String
   switch frame.orientation {
-  case .left: orientation = "landscape-left"
-  case .right: orientation = "landscape-right"
+  // `Frame.orientation` describes how the buffer must be rotated to become
+  // upright. Its left/right direction is therefore the inverse of the
+  // transform applied by ZebraOverlay to the raw buffer coordinates.
+  case .left: orientation = "landscape-right"
+  case .right: orientation = "landscape-left"
   case .down: orientation = "portrait-upside-down"
   default: orientation = "portrait"
   }

@@ -78,6 +78,9 @@ public final class CameraImageStackingModule: Module {
       Prop("zebraShadowsEnabled") { (view, enabled: Bool?) in
         view.zebraShadowsEnabled = enabled ?? false
       }
+      Prop("exposureBias") { (view, value: Double?) in
+        view.exposureBias = Float(value ?? 0)
+      }
     }
 
     AsyncFunction("getCapabilities") { (deviceId: String) async throws -> [String: Any] in
@@ -150,6 +153,9 @@ public final class ImageStackingCameraView: ExpoView {
       controller.zebraShadowsEnabled = zebraShadowsEnabled
       if !zebraHighlightsEnabled && !zebraShadowsEnabled { zebraOverlay.image = nil }
     }
+  }
+  var exposureBias: Float = 0 {
+    didSet { controller.setExposureBias(exposureBias) }
   }
 
   public required init(appContext: AppContext? = nil) {
@@ -311,6 +317,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
 
   private var device: AVCaptureDevice?
   private var configuredDeviceID: String?
+  private var requestedExposureBias: Float = 0
   private var ready = false
   private var busy = false
   private var cancelled = false
@@ -405,6 +412,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
 
         self.device = device
         self.configuredDeviceID = deviceId
+        self.applyExposureBias(to: device)
         self.ready = true
         self.session.commitConfiguration()
         configurationOpen = false
@@ -426,6 +434,31 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     sessionQueue.async { [weak self] in
       guard let self, self.session.isRunning else { return }
       self.session.stopRunning()
+    }
+  }
+
+  func setExposureBias(_ value: Float) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      self.requestedExposureBias = value
+      guard let device = self.device else { return }
+      self.applyExposureBias(to: device)
+    }
+  }
+
+  private func applyExposureBias(to device: AVCaptureDevice) {
+    let bias = min(
+      device.maxExposureTargetBias,
+      max(device.minExposureTargetBias, requestedExposureBias)
+    )
+    do {
+      try device.lockForConfiguration()
+      device.setExposureTargetBias(bias, completionHandler: nil)
+      device.unlockForConfiguration()
+    } catch {
+      logger.error(
+        "Could not set exposure bias: \(error.localizedDescription, privacy: .public)"
+      )
     }
   }
 
@@ -573,7 +606,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     doubleExposureStrategy = strategy
     doubleExposureOutputFormat = options["outputFormat"] as? String ?? "heif"
     doubleExposureOptions = [
-      "exposureCompensationEV": options["exposureCompensationEV"] as? Double ?? -1.0
+      "exposureCompensationEV": options["exposureCompensationEV"] as? Double ?? -1.5
     ]
 
     do {

@@ -71,6 +71,7 @@ export type ImageStackingCameraViewProps = ViewProps & {
   histogramEnabled?: boolean;
   zebraHighlightsEnabled?: boolean;
   zebraShadowsEnabled?: boolean;
+  exposureBias?: number;
   onInitialized?: () => void;
   onError?: (event: { nativeEvent?: { message?: string } }) => void;
   onHistogramUpdated?: (event: {

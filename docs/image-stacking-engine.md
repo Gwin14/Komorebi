@@ -40,9 +40,10 @@ float para limitar o grafo do Core Image e manter a acumulação linear.
   para simular longa exposição sem acumular o brilho da cena.
 - `DoubleExposureStrategy`: duas fotos em resolução completa, sem alinhamento,
   convertidas pelo Core Image para extended-linear sRGB e somadas como luz. A
-  compensação padrão de -1 EV neutraliza o stop adicional das duas exposições;
-  `CIToneMapHeadroom` reduz o resultado para SDR antes da conversão final para
-  sRGB. Após a primeira foto, o preview exibe sua sobreposição e aguarda
+  compensação padrão de -1,5 EV preserva margem para as altas luzes; uma curva
+  fotográfica baseada em luminância comprime o resultado para SDR, preservando
+  matiz e saturação, antes da conversão final para sRGB. Após a primeira foto,
+  o preview exibe sua sobreposição e aguarda
   explicitamente o segundo disparo.
 
 Noise Reduction e Night exigem três frames válidos. Quando atingem esse mínimo,
@@ -72,7 +73,9 @@ empilhado antes dos efeitos, nunca os frames fonte.
 
 O seletor fica em um popover ancorado ao botão de stacking da barra superior.
 Durante Dupla exposição, orientação, lente e demais controles permanecem
-bloqueados; obturador e Cancelar continuam disponíveis.
+bloqueados; obturador, Cancelar e compensação EV continuam disponíveis. O EV
+atua na exposição automática real do `AVCaptureDevice` antes de cada disparo;
+a compensação interna da soma permanece independente.
 
 Os metadados Komorebi usam schema 3 e incluem versão do engine, estratégia,
 frames capturados/aceitos/rejeitados, duração e indicação de resultado degradado.

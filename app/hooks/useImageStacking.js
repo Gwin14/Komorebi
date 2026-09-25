@@ -80,7 +80,7 @@ export default function useImageStacking(device) {
   );
 
   const start = useCallback(
-    async ({ outputFormat = "heif", exposureCompensationEV = -1 } = {}) => {
+    async ({ outputFormat = "heif", exposureCompensationEV = -1.5 } = {}) => {
       if (!strategyId || !deviceId || capturing) return null;
       setCapturing(true);
       try {
