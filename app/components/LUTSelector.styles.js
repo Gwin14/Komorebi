@@ -29,7 +29,6 @@ export default StyleSheet.create({
   selectedMark: { position: "absolute", top: 4, right: 4, width: 17, height: 17, borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: "#ffaa00", borderWidth: 1, borderColor: "rgba(0,0,0,0.25)" },
   optionName: { color: "rgba(255,255,255,0.72)", fontSize: 10, fontWeight: "600", textAlign: "center", marginTop: 6, textShadowColor: "rgba(0,0,0,0.95)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   optionNameSelected: { color: "#ffaa00", fontWeight: "700" },
-  grainDot: { position: "absolute", borderRadius: 2, backgroundColor: "rgba(255,255,255,0.65)" },
   halationPreview: { backgroundColor: "#171717" },
   halationGlow: { position: "absolute", left: 8, right: 8, height: 12, borderRadius: 8, opacity: 0.9 },
   shutterDivider: {

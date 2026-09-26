@@ -3,9 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
+import { Worklets } from "react-native-worklets-core";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
+import { BlendMode, FilterMode, Skia, TileMode } from "@shopify/react-native-skia";
 import { getZebraMaskPlugin } from "../../modules/composition-scan";
+import { getCachedLUT } from "../utils/lutStore";
+import { getGrainConfig } from "../utils/grainCatalog";
+import { getHalationConfig } from "../utils/halationCatalog";
+import { colorEffect, halationEffect, identityLut, makeLutImage } from "../utils/liveEffectFilters";
 import CompositionScanOverlay from "./CompositionScanOverlay";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
@@ -42,6 +48,7 @@ export default function CameraPreview({
   onFocusAtPoint,
   compositionScan,
   onPreviewLayout,
+  effectPreview,
 }) {
   const isTakingPhoto = useRef(false);
   const smileAllowed = useRef(false);
@@ -49,6 +56,7 @@ export default function CameraPreview({
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
   const [zebraMask, setZebraMask] = useState(null);
+  const [skiaFailed, setSkiaFailed] = useState(false);
   const previousHistogramBins = useRef(null);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const transitionOpacity = useRef(new Animated.Value(0)).current;
@@ -59,9 +67,78 @@ export default function CameraPreview({
   const transitionFallbackTimeout = useRef(null);
   const transitionFinishTimeout = useRef(null);
   const transitionStartedAt = useRef(0);
+  const lut = useMemo(() =>
+    effectPreview?.lutEnabled && effectPreview?.selectedLutId !== "none" && effectPreview?.lutsLoaded
+      ? makeLutImage(getCachedLUT(effectPreview.selectedLutId)) ?? identityLut
+      : identityLut,
+    [effectPreview?.lutEnabled, effectPreview?.selectedLutId, effectPreview?.lutsLoaded],
+  );
+  const halation = effectPreview?.halationEnabled
+    ? getHalationConfig(effectPreview.selectedHalationId) : null;
+  const grain = effectPreview?.grainEnabled
+    ? getGrainConfig(effectPreview.selectedGrainId) : null;
+  useEffect(() => {
+    setSkiaFailed(false);
+  }, [device?.id, lut, halation, grain]);
+  const reportSkiaFailure = useMemo(
+    () => Worklets.createRunOnJS(() => setSkiaFailed(true)),
+    [],
+  );
+  const skiaActive = Boolean(
+    (effectPreview?.lutEnabled && effectPreview?.selectedLutId !== "none" && lut?.image) ||
+    halation || grain,
+  ) &&
+    !zebraHighlightsEnabled && !zebraShadowsEnabled && !skiaFailed;
   const frameProcessorActive =
     histogramVisible || zebraHighlightsEnabled || zebraShadowsEnabled || smileDetectionEnabled ||
-    Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId);
+    Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId) || skiaActive;
+  const skiaActions = useMemo(() => {
+    if (!skiaActive) return undefined;
+    return (_faces, frame) => {
+      "worklet";
+      try {
+        if (lut?.image && colorEffect && (grain || lut !== identityLut)) {
+          const builder = Skia.RuntimeShaderBuilder(colorEffect);
+          builder.setUniform("lutSize", [lut.size]);
+          builder.setUniform("domainMin", lut.domainMin);
+          builder.setUniform("domainScale", lut.domainScale);
+          builder.setUniform("grainStrength", [grain ? grain.lumaStrength * 2 / 255 : 0]);
+          builder.setUniform("grainPhase", [grain ? Math.floor(frame.timestamp / 33333333) % 997 : 0]);
+          const filter = Skia.ImageFilter.MakeRuntimeShaderWithChildren(
+            builder, 0, ["source", "lut"],
+            [null, Skia.ImageFilter.MakeImage(lut.image, null, null, FilterMode.Linear)],
+          );
+          const paint = Skia.Paint();
+          paint.setImageFilter(filter);
+          frame.render(paint);
+        } else {
+          frame.render();
+        }
+        if (halation && halationEffect) {
+          const builder = Skia.RuntimeShaderBuilder(halationEffect);
+          builder.setUniform("threshold", [halation.threshold]);
+          builder.setUniform("softness", [halation.softness]);
+          builder.setUniform("contrastRadius", [halation.contrastRadius * 0.15]);
+          builder.setUniform("minContrast", [halation.minContrast]);
+          builder.setUniform("contrastSoftness", [halation.contrastSoftness]);
+          const highlights = Skia.ImageFilter.MakeRuntimeShader(builder, "source", null);
+          const glow = Skia.Paint();
+          glow.setImageFilter(Skia.ImageFilter.MakeBlur(
+            halation.fringeRadius * 0.5,
+            halation.fringeRadius * 0.5,
+            TileMode.Clamp,
+            highlights,
+          ));
+          glow.setBlendMode(BlendMode.Screen);
+          glow.setAlphaf(halation.targetPeakOpacity);
+          frame.render(glow);
+        }
+      } catch {
+        frame.render();
+        reportSkiaFailure();
+      }
+    };
+  }, [grain, halation, lut, reportSkiaFailure, skiaActive]);
 
   useEffect(() => {
     console.log("[ZebraDebug][preview] mount");
@@ -368,6 +445,7 @@ export default function CameraPreview({
     zebraShadowsEnabled,
     zebraMaskPlugin: getZebraMaskPlugin(),
     zebraMaskCallback: handleZebraMask,
+    skiaActions,
   };
 
   return (

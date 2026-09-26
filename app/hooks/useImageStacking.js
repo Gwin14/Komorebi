@@ -80,7 +80,8 @@ export default function useImageStacking(device) {
   );
 
   const start = useCallback(
-    async ({ outputFormat = "heif", exposureCompensationEV = -1.5 } = {}) => {
+    async ({ outputFormat = "heif", exposureCompensationEV = -1.5,
+      previewDoubleExposure = false, previewStacking = false } = {}) => {
       if (!strategyId || !deviceId || capturing) return null;
       setCapturing(true);
       try {
@@ -88,6 +89,8 @@ export default function useImageStacking(device) {
           deviceId,
           strategyId,
           outputFormat,
+          previewDoubleExposure,
+          previewStacking,
           ...(["bulb", "motionBlur"].includes(strategyId)
             ? { maximumDurationSeconds: 300 }
             : {}),

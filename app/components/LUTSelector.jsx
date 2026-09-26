@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import { Canvas, ColorMatrix, Fill, FractalNoise } from "@shopify/react-native-skia";
 import React from "react";
-import { Animated, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Shutter from "./shutter";
 import styles from "./LUTSelector.styles";
 
@@ -25,17 +26,13 @@ const CUSTOM_GRADIENTS = [
   ["#3d405b", "#81739d", "#f2cc8f"],
   ["#264653", "#2a9d8f", "#e9c46a"],
 ];
-const GRAIN_DOTS = [
-  ["9%", "18%", 1], ["24%", "68%", 1], ["42%", "25%", 1],
-  ["69%", "72%", 1], ["84%", "34%", 1], ["55%", "82%", 1],
-  ["15%", "43%", 1], ["75%", "12%", 1], ["32%", "8%", 2],
-  ["91%", "76%", 1], ["48%", "55%", 2], ["5%", "84%", 1],
-  ["62%", "42%", 2], ["35%", "77%", 2], ["88%", "8%", 2],
-  ["20%", "22%", 2], ["78%", "52%", 2], ["52%", "10%", 2],
-  ["9%", "28%", 2], ["58%", "66%", 2], ["28%", "48%", 2],
-  ["72%", "30%", 3], ["43%", "86%", 3], ["87%", "58%", 3],
+const GRAIN_PREVIEW_OPACITY = { soft: 0.18, medium: 0.32, strong: 0.48 };
+const GRAYSCALE = [
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0.2126, 0.7152, 0.0722, 0, 0,
+  0, 0, 0, 1, 0,
 ];
-const GRAIN_DOT_COUNTS = { none: 0, soft: 9, medium: 17, strong: 24 };
 const HALATION_PREVIEWS = {
   none: ["#777", "#333", "#181818"],
   soft: ["#fff7dc", "#c87555", "#2a1715"],
@@ -70,9 +67,14 @@ function FilterPreview({ option }) {
 function GrainPreview({ option }) {
   return (
     <LinearGradient colors={["#aaa9a3", "#555550", "#202020"]} style={styles.preview}>
-      {GRAIN_DOTS.slice(0, GRAIN_DOT_COUNTS[option.id] || 0).map(([left, top, size], index) => (
-        <View key={index} style={[styles.grainDot, { left, top, width: size, height: size }]} />
-      ))}
+      {option.id !== "none" && (
+        <Canvas pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: GRAIN_PREVIEW_OPACITY[option.id] }]}>
+          <Fill>
+            <FractalNoise freqX={0.65} freqY={0.65} octaves={1} seed={7} />
+            <ColorMatrix matrix={GRAYSCALE} />
+          </Fill>
+        </Canvas>
+      )}
       {option.id === "none" && <Ionicons name="remove-outline" size={24} color="rgba(255,255,255,0.82)" />}
     </LinearGradient>
   );

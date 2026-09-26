@@ -21,6 +21,8 @@ export type ImageStackingState =
 type BaseCaptureRequest = {
   deviceId: string;
   outputFormat?: "heif" | "jpeg";
+  previewDoubleExposure?: boolean;
+  previewStacking?: boolean;
 };
 
 export type ImageStackingCaptureRequest =
@@ -71,7 +73,14 @@ export type ImageStackingCameraViewProps = ViewProps & {
   histogramEnabled?: boolean;
   zebraHighlightsEnabled?: boolean;
   zebraShadowsEnabled?: boolean;
+  previewLutSize?: number;
+  previewLutValues?: number[];
+  previewLutDomain?: number[];
+  previewGrainStrength?: number;
+  previewHalation?: number[];
   exposureBias?: number;
+  previewDoubleExposure?: boolean;
+  previewStacking?: boolean;
   onInitialized?: () => void;
   onError?: (event: { nativeEvent?: { message?: string } }) => void;
   onHistogramUpdated?: (event: {
@@ -80,6 +89,9 @@ export type ImageStackingCameraViewProps = ViewProps & {
   }) => void;
   onStackingProgress?: (event: {
     nativeEvent?: Partial<ImageStackingProgress>;
+  }) => void;
+  onPreviewImage?: (event: {
+    nativeEvent?: { type?: "doubleExposure" | "stacking"; base64?: string | null };
   }) => void;
 };
 

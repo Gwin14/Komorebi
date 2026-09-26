@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Image, StyleSheet, View } from "react-native";
 import { LivePhotoCameraView } from "../../modules/camera-live-photo";
 import { PortraitCameraView } from "../../modules/camera-portrait-capture";
 import { ImageStackingCameraView } from "../../modules/camera-image-stacking";
+import { getCachedLUT } from "../utils/lutStore";
+import { getGrainConfig } from "../utils/grainCatalog";
+import { getHalationConfig } from "../utils/halationCatalog";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
 import styles from "./CameraPreview.styles";
@@ -26,8 +29,12 @@ export default function NativeCapturePreview({
   smileDetectionEnabled,
   onSmileDetected,
   onStackingProgress,
+  effectPreview,
+  previewDoubleExposure,
+  previewStacking,
 }) {
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
+  const [previewImage, setPreviewImage] = useState(null);
   const previousHistogramBins = useRef(null);
   const NativeCameraView =
     mode === "live"
@@ -36,6 +43,45 @@ export default function NativeCapturePreview({
         ? ImageStackingCameraView
         : PortraitCameraView;
   const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
+  const nativeLut = useMemo(() => {
+    if (!effectPreview?.lutEnabled || effectPreview.selectedLutId === "none" || !effectPreview.lutsLoaded) {
+      return { size: 0, values: [], domain: [0, 0, 0, 1, 1, 1] };
+    }
+    const cube = getCachedLUT(effectPreview.selectedLutId);
+    if (!cube?.size || cube.lut?.length !== cube.size ** 3 ||
+      !cube.lut.every((color) => [color.r, color.g, color.b].every(Number.isFinite))) {
+      return { size: 0, values: [], domain: [0, 0, 0, 1, 1, 1] };
+    }
+    return {
+      size: cube.size,
+      values: cube.lut.flatMap((color) => [color.r, color.g, color.b]),
+      domain: [...(cube.domainMin ?? [0, 0, 0]), ...(cube.domainMax ?? [1, 1, 1])],
+    };
+  }, [effectPreview?.lutEnabled, effectPreview?.selectedLutId, effectPreview?.lutsLoaded]);
+  const grainConfig = effectPreview?.grainEnabled
+    ? getGrainConfig(effectPreview.selectedGrainId) : null;
+  const halationConfig = effectPreview?.halationEnabled
+    ? getHalationConfig(effectPreview.selectedHalationId) : null;
+  const nativeHalation = useMemo(() => halationConfig ? [
+    halationConfig.threshold,
+    halationConfig.softness,
+    halationConfig.contrastRadius * 0.65,
+    halationConfig.minContrast,
+    halationConfig.fringeRadius,
+    halationConfig.targetPeakOpacity,
+  ] : [], [halationConfig]);
+
+  useEffect(() => {
+    setPreviewImage(null);
+  }, [device?.id, mode]);
+
+  const handlePreviewImage = useCallback((event) => {
+    const value = event?.nativeEvent ?? event;
+    if (value?.type !== "doubleExposure" && value?.type !== "stacking") return;
+    setPreviewImage(value.base64
+      ? { type: value.type, uri: `data:image/jpeg;base64,${value.base64}` }
+      : null);
+  }, []);
 
   useEffect(() => {
     if (!device || !mode) return;
@@ -120,6 +166,12 @@ export default function NativeCapturePreview({
         histogramEnabled={histogramVisible}
         zebraHighlightsEnabled={zebraHighlightsEnabled}
         zebraShadowsEnabled={zebraShadowsEnabled}
+        previewLutSize={nativeLut.size}
+        previewLutValues={nativeLut.values}
+        previewLutDomain={nativeLut.domain}
+        previewGrainStrength={grainConfig ? grainConfig.lumaStrength * 2 / 255 : 0}
+        previewHalation={nativeHalation}
+        {...(mode === "stacking" ? { previewDoubleExposure, previewStacking } : {})}
         {...(mode === "stacking" ? { exposureBias: exposure } : {})}
         onHistogramUpdated={
           histogramVisible ? handleHistogramUpdated : undefined
@@ -127,7 +179,23 @@ export default function NativeCapturePreview({
         onStackingProgress={
           mode === "stacking" ? onStackingProgress : undefined
         }
+        onPreviewImage={mode === "stacking" ? handlePreviewImage : undefined}
       />
+
+      {mode === "stacking" && previewImage && (
+        (previewImage.type === "doubleExposure" && previewDoubleExposure) ||
+        (previewImage.type === "stacking" && previewStacking)
+      ) && (
+        <Image
+          pointerEvents="none"
+          source={{ uri: previewImage.uri }}
+          resizeMode="cover"
+          onError={(event) => console.warn("[ImageStacking] preview decode failed", event.nativeEvent?.error)}
+          style={[StyleSheet.absoluteFill, {
+            opacity: previewImage.type === "doubleExposure" ? 0.5 : 1,
+          }]}
+        />
+      )}
 
       {gridVisible && (
         <View pointerEvents="none" style={styles.gridOverlay}>

@@ -60,7 +60,8 @@ public final class CameraImageStackingModule: Module {
         "onInitialized",
         "onError",
         "onHistogramUpdated",
-        "onStackingProgress"
+        "onStackingProgress",
+        "onPreviewImage"
       )
 
       Prop("deviceId") { (view, deviceId: String?) in
@@ -80,6 +81,27 @@ public final class CameraImageStackingModule: Module {
       }
       Prop("exposureBias") { (view, value: Double?) in
         view.exposureBias = Float(value ?? 0)
+      }
+      Prop("previewDoubleExposure") { (view, enabled: Bool?) in
+        view.previewDoubleExposure = enabled ?? false
+      }
+      Prop("previewStacking") { (view, enabled: Bool?) in
+        view.previewStacking = enabled ?? false
+      }
+      Prop("previewLutSize") { (view, size: Int?) in
+        view.previewLutSize = size ?? 0
+      }
+      Prop("previewLutValues") { (view, values: [Double]?) in
+        view.previewLutValues = values ?? []
+      }
+      Prop("previewLutDomain") { (view, domain: [Double]?) in
+        view.effectRenderer.setLutDomain(domain ?? [])
+      }
+      Prop("previewGrainStrength") { (view, strength: Double?) in
+        view.effectRenderer.setGrainStrength(strength ?? 0)
+      }
+      Prop("previewHalation") { (view, parameters: [Double]?) in
+        view.effectRenderer.setHalation(parameters ?? [])
       }
     }
 
@@ -125,13 +147,20 @@ public final class CameraImageStackingModule: Module {
 public final class ImageStackingCameraView: ExpoView {
   private static weak var currentActiveView: ImageStackingCameraView?
   private let controller = StackingCaptureCoordinator()
-  private let doubleExposureOverlay = UIImageView()
   private let zebraOverlay = UIImageView()
 
   let onInitialized = EventDispatcher()
   let onError = EventDispatcher()
   let onHistogramUpdated = EventDispatcher()
   let onStackingProgress = EventDispatcher()
+  let onPreviewImage = EventDispatcher()
+  let effectRenderer = LiveEffectPreviewRenderer()
+  var previewLutSize = 0 {
+    didSet { effectRenderer.setLut(size: previewLutSize, values: previewLutValues) }
+  }
+  var previewLutValues: [Double] = [] {
+    didSet { effectRenderer.setLut(size: previewLutSize, values: previewLutValues) }
+  }
 
   var deviceId: String? {
     didSet { updateSession() }
@@ -157,18 +186,25 @@ public final class ImageStackingCameraView: ExpoView {
   var exposureBias: Float = 0 {
     didSet { controller.setExposureBias(exposureBias) }
   }
+  var previewDoubleExposure = false {
+    didSet {
+      if previewDoubleExposure == oldValue { return }
+      controller.previewDoubleExposureEnabled = previewDoubleExposure
+    }
+  }
+  var previewStacking = false {
+    didSet {
+      if previewStacking == oldValue { return }
+      controller.previewStackingEnabled = previewStacking
+    }
+  }
 
   public required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     backgroundColor = .black
     previewLayer.videoGravity = .resizeAspectFill
     previewLayer.session = controller.session
-    doubleExposureOverlay.contentMode = .scaleAspectFill
-    doubleExposureOverlay.clipsToBounds = true
-    doubleExposureOverlay.alpha = 0.5
-    doubleExposureOverlay.isHidden = true
-    doubleExposureOverlay.isUserInteractionEnabled = false
-    addSubview(doubleExposureOverlay)
+    addSubview(effectRenderer.imageView)
     zebraOverlay.contentMode = .scaleAspectFill
     zebraOverlay.clipsToBounds = true
     zebraOverlay.isUserInteractionEnabled = false
@@ -183,14 +219,27 @@ public final class ImageStackingCameraView: ExpoView {
         self?.onHistogramUpdated(["bins": bins])
       }
     }
-    controller.onDoubleExposurePreview = { [weak self] data in
+    controller.onDoubleExposurePreview = { [weak self] image in
+      let base64 = image.flatMap {
+        UIImage(cgImage: $0).jpegData(compressionQuality: 0.72)?.base64EncodedString()
+      }
       DispatchQueue.main.async {
-        self?.doubleExposureOverlay.image = data.flatMap(UIImage.init(data:))
-        self?.doubleExposureOverlay.isHidden = data == nil
+        self?.onPreviewImage(["type": "doubleExposure", "base64": base64 as Any? ?? NSNull()])
+      }
+    }
+    controller.onStackingPreview = { [weak self] image in
+      let base64 = image.flatMap {
+        UIImage(cgImage: $0).jpegData(compressionQuality: 0.65)?.base64EncodedString()
+      }
+      DispatchQueue.main.async {
+        self?.onPreviewImage(["type": "stacking", "base64": base64 as Any? ?? NSNull()])
       }
     }
     controller.onZebraUpdated = { [weak self] image in
       DispatchQueue.main.async { self?.zebraOverlay.image = image.map { UIImage(cgImage: $0) } }
+    }
+    controller.onEffectFrame = { [weak self] buffer, mirrored in
+      self?.effectRenderer.submit(buffer, orientation: 1, mirrored: mirrored)
     }
     NotificationCenter.default.addObserver(
       self,
@@ -223,7 +272,7 @@ public final class ImageStackingCameraView: ExpoView {
 
   public override func layoutSubviews() {
     super.layoutSubviews()
-    doubleExposureOverlay.frame = bounds
+    effectRenderer.imageView.frame = bounds
     zebraOverlay.frame = bounds
   }
 
@@ -238,7 +287,9 @@ public final class ImageStackingCameraView: ExpoView {
     strategyID: StackingStrategyID,
     options: [String: Any]
   ) async throws -> StackingResult {
-    try await controller.startCapture(strategyID: strategyID, options: options)
+    previewDoubleExposure = options["previewDoubleExposure"] as? Bool ?? false
+    previewStacking = options["previewStacking"] as? Bool ?? false
+    return try await controller.startCapture(strategyID: strategyID, options: options)
   }
 
   func stopBulbCapture() { controller.stopBulbCapture() }
@@ -300,7 +351,9 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   var histogramEnabled = false
   var onProgress: ((StackingProgressSnapshot) -> Void)?
   var onHistogram: (([Double]) -> Void)?
-  var onDoubleExposurePreview: ((Data?) -> Void)?
+  var onDoubleExposurePreview: ((CGImage?) -> Void)?
+  var onStackingPreview: ((CGImage?) -> Void)?
+  var onEffectFrame: ((CVPixelBuffer, Bool) -> Void)?
   var zebraHighlightsEnabled = false
   var zebraShadowsEnabled = false
   var onZebraUpdated: ((CGImage?) -> Void)?
@@ -311,6 +364,40 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   private let videoQueue = DispatchQueue(label: "dev.komorebi.image-stacking.video")
   private let analysisQueue = DispatchQueue(label: "dev.komorebi.image-stacking.analysis", qos: .userInitiated)
   private let stateLock = NSLock()
+  private var doubleExposurePreviewEnabled = false
+  private var stackingPreviewEnabled = false
+  private var stackingPreviewGeneration = 0
+  private var lastStackingPreviewAt = Date.distantPast
+  private var stackingPreviewInFlight = false
+
+  var previewDoubleExposureEnabled: Bool {
+    get {
+      stateLock.lock()
+      defer { stateLock.unlock() }
+      return doubleExposurePreviewEnabled
+    }
+    set {
+      stateLock.lock()
+      doubleExposurePreviewEnabled = newValue
+      stateLock.unlock()
+      if !newValue { onDoubleExposurePreview?(nil) }
+    }
+  }
+
+  var previewStackingEnabled: Bool {
+    get {
+      stateLock.lock()
+      defer { stateLock.unlock() }
+      return stackingPreviewEnabled
+    }
+    set {
+      stateLock.lock()
+      stackingPreviewEnabled = newValue
+      stackingPreviewGeneration += 1
+      stateLock.unlock()
+      if !newValue { onStackingPreview?(nil) }
+    }
+  }
   private let logger = Logger(subsystem: "dev.komorebi", category: "ImageStacking")
   private let orientationTracker = StackingOrientationTracker()
   private let context: CIContext
@@ -614,7 +701,11 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       let first = try await capturePhoto(quality: .quality)
       if isCancelled() { throw StackingError.cancelled }
       _ = try store.append(data: first.data, metadata: first.metadata)
-      onDoubleExposurePreview?(first.data)
+      if previewDoubleExposureEnabled {
+        let preview = makePhotoPreview(first.data)
+        if preview == nil { logger.error("double exposure preview thumbnail failed") }
+        onDoubleExposurePreview?(preview)
+      }
       emit(
         .awaitingSecondExposure,
         strategyID: .doubleExposure,
@@ -729,6 +820,21 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       )
       continuation.resume(throwing: error)
     }
+  }
+
+  private func makePhotoPreview(_ data: Data) -> CGImage? {
+    if let source = CGImageSourceCreateWithData(data as CFData, nil),
+       let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+         kCGImageSourceCreateThumbnailFromImageAlways: true,
+         kCGImageSourceCreateThumbnailWithTransform: true,
+         kCGImageSourceThumbnailMaxPixelSize: 1024
+       ] as CFDictionary) {
+      return thumbnail
+    }
+    guard let image = CIImage(data: data), !image.extent.isEmpty else { return nil }
+    let scale = min(1, 1024 / max(image.extent.width, image.extent.height))
+    let preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    return context.createCGImage(preview, from: preview.extent)
   }
 
   private func startBulb(
@@ -961,6 +1067,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       return
     }
     cancelled = true
+    stackingPreviewGeneration += 1
     let bulb = activeStrategyID == .bulb
     let motionBlur = activeStrategyID == .motionBlur
     let doubleExposure = activeStrategyID == .doubleExposure
@@ -969,6 +1076,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       : nil
     if doubleContinuation != nil { doubleExposureContinuation = nil }
     stateLock.unlock()
+    if bulb || motionBlur { onStackingPreview?(nil) }
     if bulb { stopBulbCapture() }
     if motionBlur { stopMotionBlurCapture() }
     if let doubleContinuation {
@@ -989,6 +1097,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     from connection: AVCaptureConnection
   ) {
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+    onEffectFrame?(pixelBuffer, device?.position == .front)
     let now = Date()
 
     if (zebraHighlightsEnabled || zebraShadowsEnabled),
@@ -1026,6 +1135,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       lastBulbFrameAt = now
       bulbAccumulator?.append(pixelBuffer: pixelBuffer, duration: frameDuration)
       if let accumulator = bulbAccumulator, let plan = bulbPlan {
+        scheduleStackingPreview(accumulator.result(), strategyID: .bulb, now: now)
         let elapsed = now.timeIntervalSince(startedAt)
         emit(
           .capturing,
@@ -1048,6 +1158,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     lastMotionBlurFrameAt = now
     motionBlurAccumulator?.append(pixelBuffer: pixelBuffer)
     if let accumulator = motionBlurAccumulator, let plan = motionBlurPlan {
+      scheduleStackingPreview(accumulator.result(), strategyID: .motionBlur, now: now)
       let elapsed = now.timeIntervalSince(startedAt)
       emit(
         .capturing,
@@ -1057,6 +1168,51 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         rejected: accumulator.rejected,
         progress: min(0.88, elapsed / plan.maximumDuration * 0.88)
       )
+    }
+  }
+
+  private func scheduleStackingPreview(
+    _ image: CIImage?,
+    strategyID: StackingStrategyID,
+    now: Date
+  ) {
+    guard let image, !image.extent.isEmpty else { return }
+    stateLock.lock()
+    guard stackingPreviewEnabled,
+          busy,
+          !cancelled,
+          activeStrategyID == strategyID,
+          !stackingPreviewInFlight,
+          now.timeIntervalSince(lastStackingPreviewAt) >= 0.2 else {
+      stateLock.unlock()
+      return
+    }
+    stackingPreviewInFlight = true
+    lastStackingPreviewAt = now
+    let generation = stackingPreviewGeneration
+    stateLock.unlock()
+
+    let mirrored = device?.position == .front
+    analysisQueue.async { [weak self] in
+      guard let self else { return }
+      autoreleasepool {
+        let scale = min(1, 640 / max(image.extent.width, image.extent.height))
+        var preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        // The video output already rotates pixel buffers via videoRotationAngle.
+        if mirrored { preview = preview.oriented(.upMirrored) }
+        let output = self.context.createCGImage(preview, from: preview.extent)
+        self.stateLock.lock()
+        let current = self.stackingPreviewEnabled && self.busy && !self.cancelled &&
+          self.activeStrategyID == strategyID && self.stackingPreviewGeneration == generation
+        self.stateLock.unlock()
+        if current {
+          if output == nil { self.logger.error("stacking preview render failed") }
+          self.onStackingPreview?(output)
+        }
+        self.stateLock.lock()
+        self.stackingPreviewInFlight = false
+        self.stateLock.unlock()
+      }
     }
   }
 
@@ -1148,6 +1304,8 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     busy = true
     cancelled = false
     activeStrategyID = strategyID
+    stackingPreviewGeneration += 1
+    lastStackingPreviewAt = .distantPast
     startedAt = Date()
     currentPhase = .idle
     currentPhaseStartedAt = startedAt
@@ -1162,7 +1320,9 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     motionBlurAcceptingFrames = false
     doubleExposureAdvancing = false
     activeStrategyID = nil
+    stackingPreviewGeneration += 1
     stateLock.unlock()
+    onStackingPreview?(nil)
   }
 
   private func emit(

@@ -54,6 +54,11 @@ export default function App() {
     gridVisible,
     levelVisible,
     histogramVisible,
+    previewLut,
+    previewHalation,
+    previewGrain,
+    previewDoubleExposure,
+    previewStacking,
     zebraHighlightsEnabled,
     zebraShadowsEnabled,
     compositionScanEnabled,
@@ -140,6 +145,19 @@ export default function App() {
 
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
+
+  const effectPreview = useMemo(() => ({
+    lutEnabled: previewLut,
+    halationEnabled: previewHalation,
+    grainEnabled: previewGrain,
+    selectedLutId,
+    selectedHalationId,
+    selectedGrainId,
+    lutsLoaded,
+  }), [
+    previewLut, previewHalation, previewGrain,
+    selectedLutId, selectedHalationId, selectedGrainId, lutsLoaded,
+  ]);
 
   const controlsAnim = useControlsAnimation(activeControl);
   const { animateShutter, shutterAnim } = useShutterAnimation();
@@ -337,6 +355,8 @@ export default function App() {
         const result = await imageStacking.start({
           outputFormat:
             Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
+          previewDoubleExposure,
+          previewStacking,
         });
         if (!result) return;
         const additionalExif = await getLocationExif(location);
@@ -468,6 +488,8 @@ export default function App() {
     selectedGrainId,
     selectedHalationId,
     selectedLutId,
+    previewDoubleExposure,
+    previewStacking,
     setIsProcessing,
     verticalMode,
     imageStacking,
@@ -714,6 +736,9 @@ export default function App() {
                 smileDetectionEnabled={smileDetectionEnabled}
                 onSmileDetected={handleTakePicture}
                 onStackingProgress={imageStacking.handleProgress}
+                effectPreview={effectPreview}
+                previewDoubleExposure={previewDoubleExposure}
+                previewStacking={previewStacking}
               />
             ) : (
               <CameraPreview
@@ -748,6 +773,7 @@ export default function App() {
                 onFocusAtPoint={manual.focusAtPoint}
                 compositionScan={compositionScan}
                 onPreviewLayout={setScanPreviewLayout}
+                effectPreview={effectPreview}
               />
             )}
           </View>
