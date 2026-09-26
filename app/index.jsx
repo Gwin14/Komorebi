@@ -93,6 +93,7 @@ export default function App() {
   const captureInFlightRef = useRef(false);
   const stackingStartInFlightRef = useRef(false);
   const stackingRestoreRef = useRef(null);
+  const stackingSwitchInFlightRef = useRef(false);
   const [scanPreviewLayout, setScanPreviewLayout] = useState({ width: 0, height: 0 });
   const { orientation: scanOrientation } = useDeviceOrientationState();
   const [pictureSize, setPictureSize] = useState(null);
@@ -515,48 +516,57 @@ export default function App() {
   ]);
 
   const handleSelectImageStackingStrategy = useCallback(
-    (strategyId) => {
-      if (imageStacking.capturing) return;
-      if (Boolean(strategyId) !== imageStacking.enabled) {
-        setCameraReady(false);
+    async (strategyId) => {
+      if (imageStacking.capturing || stackingSwitchInFlightRef.current) return;
+      if (strategyId === imageStacking.strategyId) return;
+      stackingSwitchInFlightRef.current = true;
+      try {
+        if (!strategyId && imageStacking.enabled) {
+          await imageStacking.deactivateSession();
+        }
+        if (Boolean(strategyId) !== imageStacking.enabled) {
+          setCameraReady(false);
+        }
+        if (strategyId) {
+          if (!imageStacking.enabled) {
+            stackingRestoreRef.current = {
+              rawMode: rawCapture.rawMode,
+              livePhoto: livePhoto.enabled,
+              portrait: portraitCapture.enabled,
+              flash,
+              smile: smileDetectionEnabled,
+              manual: manual.manualMode === "manual",
+            };
+          }
+          rawCapture.setRawMode("off");
+          livePhoto.setEnabled(false);
+          portraitCapture.setEnabled(false);
+          setFlash("off");
+          setSmileDetectionEnabled(false);
+          if (manual.manualMode === "manual") manual.toggleManualMode();
+        } else if (imageStacking.enabled && stackingRestoreRef.current) {
+          const previous = stackingRestoreRef.current;
+          stackingRestoreRef.current = null;
+          if (previous.rawMode !== "off" && rawCapture.available) {
+            rawCapture.setRawMode(previous.rawMode);
+          } else if (previous.livePhoto && livePhoto.available) {
+            livePhoto.setEnabled(true);
+          } else if (previous.portrait && portraitCapture.available) {
+            portraitCapture.setEnabled(true);
+          }
+          if (previous.flash !== "off" && activeLens?.device?.hasFlash) {
+            setFlash(previous.flash);
+          }
+          setSmileDetectionEnabled(previous.smile);
+          if (previous.manual && manual.available && manual.manualMode !== "manual") {
+            manual.toggleManualMode();
+          }
+        }
+        imageStacking.selectStrategy(strategyId);
+        setActiveControl("none");
+      } finally {
+        stackingSwitchInFlightRef.current = false;
       }
-      if (strategyId) {
-        if (!imageStacking.enabled) {
-          stackingRestoreRef.current = {
-            rawMode: rawCapture.rawMode,
-            livePhoto: livePhoto.enabled,
-            portrait: portraitCapture.enabled,
-            flash,
-            smile: smileDetectionEnabled,
-            manual: manual.manualMode === "manual",
-          };
-        }
-        rawCapture.setRawMode("off");
-        livePhoto.setEnabled(false);
-        portraitCapture.setEnabled(false);
-        setFlash("off");
-        setSmileDetectionEnabled(false);
-        if (manual.manualMode === "manual") manual.toggleManualMode();
-      } else if (imageStacking.enabled && stackingRestoreRef.current) {
-        const previous = stackingRestoreRef.current;
-        stackingRestoreRef.current = null;
-        if (previous.rawMode !== "off" && rawCapture.available) {
-          rawCapture.setRawMode(previous.rawMode);
-        } else if (previous.livePhoto && livePhoto.available) {
-          livePhoto.setEnabled(true);
-        } else if (previous.portrait && portraitCapture.available) {
-          portraitCapture.setEnabled(true);
-        }
-        if (previous.flash !== "off" && activeLens?.device?.hasFlash) {
-          setFlash(previous.flash);
-        }
-        setSmileDetectionEnabled(previous.smile);
-        if (previous.manual && manual.available && manual.manualMode !== "manual") {
-          manual.toggleManualMode();
-        }
-      }
-      imageStacking.selectStrategy(strategyId);
-      setActiveControl("none");
     },
     [
       activeLens?.device?.hasFlash,
@@ -584,7 +594,7 @@ export default function App() {
     setCameraReady(false);
   }, [
     activeLens?.device?.id,
-    imageStacking.strategyId,
+    nativeCaptureMode,
     rawCapture.rawModeEnabled,
   ]);
 

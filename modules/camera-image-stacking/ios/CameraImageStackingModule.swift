@@ -141,6 +141,10 @@ public final class CameraImageStackingModule: Module {
     AsyncFunction("cancelImageStackingCapture") { () async in
       await ImageStackingCameraView.activeView()?.cancelCapture()
     }
+
+    AsyncFunction("deactivateImageStackingSession") { () async in
+      await ImageStackingCameraView.activeView()?.deactivateSession()
+    }
   }
 }
 
@@ -300,6 +304,7 @@ public final class ImageStackingCameraView: ExpoView {
   }
   func captureNextDoubleExposure() { controller.captureNextDoubleExposure() }
   func cancelCapture() { controller.cancelCapture() }
+  func deactivateSession() async { await controller.stopSessionAndWait() }
 
   private func updateSession() {
     guard let deviceId, isActive else {
@@ -521,6 +526,16 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     sessionQueue.async { [weak self] in
       guard let self, self.session.isRunning else { return }
       self.session.stopRunning()
+    }
+  }
+
+  func stopSessionAndWait() async {
+    cancelCapture()
+    await withCheckedContinuation { continuation in
+      sessionQueue.async { [weak self] in
+        if let self, self.session.isRunning { self.session.stopRunning() }
+        continuation.resume()
+      }
     }
   }
 

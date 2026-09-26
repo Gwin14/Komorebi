@@ -158,3 +158,7 @@ export async function captureNextImageStackingExposure(): Promise<void> {
 export async function cancelImageStackingCapture(): Promise<void> {
   await nativeModule?.cancelImageStackingCapture?.();
 }
+
+export async function deactivateImageStackingSession(): Promise<void> {
+  await nativeModule?.deactivateImageStackingSession?.();
+}

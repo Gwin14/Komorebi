@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import {
   cancelImageStackingCapture,
+  deactivateImageStackingSession,
   captureNextImageStackingExposure,
   getImageStackingCapabilities,
   isImageStackingAvailable,
@@ -122,6 +123,10 @@ export default function useImageStacking(device) {
     await cancelImageStackingCapture();
   }, []);
 
+  const deactivateSession = useCallback(async () => {
+    await deactivateImageStackingSession();
+  }, []);
+
   const handleProgress = useCallback((event) => {
     const value = event?.nativeEvent ?? event;
     if (!value?.state) return;
@@ -141,12 +146,14 @@ export default function useImageStacking(device) {
       stop,
       advance,
       cancel,
+      deactivateSession,
       handleProgress,
     }),
     [
       available,
       capabilities,
       cancel,
+      deactivateSession,
       capturing,
       handleProgress,
       progress,
