@@ -42,6 +42,7 @@ export default function BottomControls({
   availableGrains,
   availableHalations,
   isProcessing,
+  showProcessingFeedback = isProcessing,
   processingQueueLength,
   // 🆕 Props de lentes
   lenses,
@@ -50,6 +51,10 @@ export default function BottomControls({
   galleryRefreshKey,
   activeProject = null,
   imageStackingCapturing = false,
+  imageStackingFinishing = false,
+  imageStackingStrategyId = null,
+  imageStackingProgressState = "idle",
+  stackingSoundSignal = 0,
   imageStackingContinuousCapturing = false,
 }) {
   const router = useRouter();
@@ -60,11 +65,24 @@ export default function BottomControls({
   const [lastPhotoUri, setLastPhotoUri] = useState(null);
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const isBusy = isProcessing || processingQueueLength > 0;
+  const isBusy = showProcessingFeedback || processingQueueLength > 0;
+  const lastSoundSignal = useRef(stackingSoundSignal);
+
+  useEffect(() => {
+    if (stackingSoundSignal !== lastSoundSignal.current && shutterSound) {
+      void playShutterSound();
+    }
+    lastSoundSignal.current = stackingSoundSignal;
+  }, [stackingSoundSignal, shutterSound, playShutterSound]);
 
   const handleShutterPress = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (shutterSound) {
+    const twoTapStacking = imageStackingCapturing &&
+      ["bulb", "motionBlur", "doubleExposure"].includes(imageStackingStrategyId);
+    const finishingTap = twoTapStacking && !imageStackingFinishing &&
+      (imageStackingStrategyId !== "doubleExposure" ||
+        imageStackingProgressState === "awaitingSecondExposure");
+    if (shutterSound && (!imageStackingStrategyId || finishingTap)) {
       await playShutterSound();
     }
     await takePicture();
@@ -246,8 +264,9 @@ export default function BottomControls({
           <Shutter
             takePicture={handleShutterPress}
             isProcessing={
-              isProcessing && !imageStackingContinuousCapturing
+              (isProcessing && !imageStackingContinuousCapturing) || imageStackingFinishing
             }
+            capturing={imageStackingCapturing && !imageStackingFinishing}
           />
         </View>
 
@@ -300,7 +319,10 @@ export default function BottomControls({
               availableGrains={availableGrains}
               availableHalations={availableHalations}
               takePicture={handleShutterPress}
-              isProcessing={isProcessing}
+              isProcessing={
+                (isProcessing && !imageStackingContinuousCapturing) || imageStackingFinishing
+              }
+              capturing={imageStackingCapturing && !imageStackingFinishing}
             />
           </View>
         )}

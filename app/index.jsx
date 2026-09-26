@@ -9,7 +9,6 @@ import CameraPreview from "./components/CameraPreview";
 import ExposureSlider from "./components/ExposureSlider";
 import ManualControlsPanel from "./components/ManualControlsPanel";
 import NativeCapturePreview from "./components/NativeCapturePreview";
-import ImageStackingStatus from "./components/ImageStackingStatus";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
@@ -97,6 +96,8 @@ export default function App() {
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [activeControl, setActiveControl] = useState("none");
+  const [stackingFinishing, setStackingFinishing] = useState(false);
+  const [stackingSoundSignal, setStackingSoundSignal] = useState(0);
 
   const [selectedLutId, setSelectedLutId] = useState("none");
   const [selectedGrainId, setSelectedGrainId] = useState("none");
@@ -340,16 +341,19 @@ export default function App() {
     cancelCompositionScan();
     if (imageStacking.enabled) {
       if (imageStacking.capturing) {
+        if (stackingFinishing) return;
         if (["bulb", "motionBlur"].includes(imageStacking.strategyId)) {
+          setStackingFinishing(true);
           await imageStacking.stop();
         } else if (imageStacking.strategyId === "doubleExposure") {
+          if (imageStacking.progress.state !== "awaitingSecondExposure") return;
+          setStackingFinishing(true);
           await imageStacking.advance();
         }
         return;
       }
       if (!cameraReady || isProcessing || !hasMediaPermission) return;
 
-      animateShutter();
       setIsProcessing(true);
       try {
         const result = await imageStacking.start({
@@ -359,6 +363,9 @@ export default function App() {
           previewStacking,
         });
         if (!result) return;
+        if (!["bulb", "motionBlur", "doubleExposure"].includes(imageStacking.strategyId)) {
+          setStackingSoundSignal((value) => value + 1);
+        }
         const additionalExif = await getLocationExif(location);
         enqueueProcessing(
           await buildPhotoProcessingData({
@@ -398,6 +405,7 @@ export default function App() {
           );
         }
       } finally {
+        setStackingFinishing(false);
         setIsProcessing(false);
       }
       return;
@@ -493,6 +501,7 @@ export default function App() {
     setIsProcessing,
     verticalMode,
     imageStacking,
+    stackingFinishing,
   ]);
 
   const handleSelectImageStackingStrategy = useCallback(
@@ -687,6 +696,8 @@ export default function App() {
     onChangeProject: handleChangeProject,
     onCreateProject: handleCreateProject,
     controlsDisabled: imageStacking.capturing,
+    stackingProgress: imageStacking.progress,
+    onCancelStacking: imageStacking.cancel,
   };
 
   if (loading) return null;
@@ -780,11 +791,6 @@ export default function App() {
         </GestureDetector>
       )}
 
-      <ImageStackingStatus
-        progress={imageStacking.progress}
-        onCancel={imageStacking.cancel}
-      />
-
       {appleStylesCompatibility.suspensionReason && (
         <View style={styles.appleStylesPaused} pointerEvents="none">
           <Text style={styles.appleStylesPausedText}>
@@ -853,6 +859,7 @@ export default function App() {
         availableGrains={AVAILABLE_GRAINS}
         availableHalations={AVAILABLE_HALATIONS}
         isProcessing={isProcessing}
+        showProcessingFeedback={isProcessing && (!imageStacking.capturing || stackingFinishing)}
         processingQueueLength={processingQueue.length}
         lenses={lenses}
         activeLensId={activeLensId}
@@ -860,6 +867,10 @@ export default function App() {
         galleryRefreshKey={galleryRefreshKey}
         activeProject={activeProject}
         imageStackingCapturing={imageStacking.capturing}
+        imageStackingFinishing={stackingFinishing}
+        imageStackingStrategyId={imageStacking.strategyId}
+        imageStackingProgressState={imageStacking.progress.state}
+        stackingSoundSignal={stackingSoundSignal}
         imageStackingContinuousCapturing={
           imageStacking.capturing &&
           ["bulb", "motionBlur", "doubleExposure"].includes(imageStacking.strategyId)

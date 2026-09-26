@@ -116,7 +116,7 @@ function OptionCard({ option, selected, type, onPress }) {
 export default function LUTSelector({
   selectedLutId, onSelectLut, selectedGrainId, onSelectGrain,
   selectedHalationId, onSelectHalation, visible, availableLuts,
-  availableGrains, availableHalations, takePicture, isProcessing,
+  availableGrains, availableHalations, takePicture, isProcessing, capturing,
 }) {
   const [activeTab, setActiveTab] = React.useState("filter");
   const slideAnim = React.useRef(new Animated.Value(0)).current;
@@ -183,7 +183,7 @@ export default function LUTSelector({
       </View>
       <View style={styles.shutterDivider} />
       <View style={styles.quickShutterSlot}>
-        <Shutter takePicture={takePicture} isProcessing={isProcessing} compact />
+        <Shutter takePicture={takePicture} isProcessing={isProcessing} capturing={capturing} compact />
       </View>
     </Animated.View>
   );

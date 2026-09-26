@@ -83,6 +83,7 @@ export default function useImageStacking(device) {
     async ({ outputFormat = "heif", exposureCompensationEV = -1.5,
       previewDoubleExposure = false, previewStacking = false } = {}) => {
       if (!strategyId || !deviceId || capturing) return null;
+      setProgress({ ...IDLE_PROGRESS, strategyId, state: "preparing" });
       setCapturing(true);
       try {
         return await startImageStackingCapture({
