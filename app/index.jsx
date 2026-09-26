@@ -90,6 +90,8 @@ export default function App() {
   const lastZoom = useSharedValue(1);
 
   const cameraRef = useRef(null);
+  const captureInFlightRef = useRef(false);
+  const stackingStartInFlightRef = useRef(false);
   const stackingRestoreRef = useRef(null);
   const [scanPreviewLayout, setScanPreviewLayout] = useState({ width: 0, height: 0 });
   const { orientation: scanOrientation } = useDeviceOrientationState();
@@ -352,8 +354,9 @@ export default function App() {
         }
         return;
       }
-      if (!cameraReady || isProcessing || !hasMediaPermission) return;
+      if (!cameraReady || isProcessing || !hasMediaPermission || stackingStartInFlightRef.current) return;
 
+      stackingStartInFlightRef.current = true;
       setIsProcessing(true);
       try {
         const result = await imageStacking.start({
@@ -405,6 +408,7 @@ export default function App() {
           );
         }
       } finally {
+        stackingStartInFlightRef.current = false;
         setStackingFinishing(false);
         setIsProcessing(false);
       }
@@ -419,6 +423,8 @@ export default function App() {
       return;
     }
 
+    if (captureInFlightRef.current || isProcessing || !cameraReady) return;
+    captureInFlightRef.current = true;
     animateShutter();
 
     const manualSettings =
@@ -432,7 +438,8 @@ export default function App() {
           }
         : null;
 
-    takePicture({
+    try {
+      await takePicture({
       cameraRef,
       cameraReady,
       isProcessing,
@@ -464,7 +471,10 @@ export default function App() {
           : "jpeg",
       preserveApplePhotographicStyles:
         appleStylesCompatibility.effective,
-    });
+      });
+    } finally {
+      captureInFlightRef.current = false;
+    }
   }, [
     activeLens,
     cancelAutoZoomAnimation,

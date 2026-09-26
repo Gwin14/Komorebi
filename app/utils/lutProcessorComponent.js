@@ -19,9 +19,16 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const [ready, setReady] = useState(false);
   const pendingRef = useRef(null);
   const originalExifRef = useRef(null);
+  const requestCounterRef = useRef(0);
+  const activeRequestRef = useRef(null);
+  const dispatchedDataRef = useRef(null);
 
   const sendToWebView = useCallback(
     async (data) => {
+      if (dispatchedDataRef.current === data) return;
+      dispatchedDataRef.current = data;
+      const requestId = ++requestCounterRef.current;
+      activeRequestRef.current = { id: requestId, data };
       try {
         let base64 = data.base64;
         if (!base64 && data.imageUri) {
@@ -42,6 +49,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
           originalExifRef.current = null;
         }
         const payload = JSON.stringify({
+          requestId,
           base64,
           cube: data.cube,
           halationConfig: data.halationConfig || null,
@@ -50,7 +58,10 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
         });
         webViewRef.current?.injectJavaScript(`processImage(${payload}); true;`);
       } catch (e) {
-        onError?.(e);
+        if (activeRequestRef.current?.id === requestId) {
+          activeRequestRef.current = null;
+          onError?.(e);
+        }
       }
     },
     [onError],
@@ -78,21 +89,30 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
     async (event) => {
       try {
         const message = JSON.parse(event.nativeEvent.data);
+        const request = activeRequestRef.current;
+        if (!request || message.requestId !== request.id) return;
         if (message.type === "success") {
           const savedUri = await saveProcessedImage(
             message.data,
-            imageData?.exifData,
+            request.data.exifData,
             originalExifRef.current,
           );
-          if (savedUri) onProcessed?.(savedUri, imageData);
+          if (activeRequestRef.current?.id !== request.id) return;
+          activeRequestRef.current = null;
+          if (savedUri) onProcessed?.(savedUri, request.data);
+          else onError?.(new Error("Falha ao salvar a imagem processada"));
         } else if (message.type === "error") {
+          activeRequestRef.current = null;
           onError?.(new Error(message.message));
         }
       } catch (error) {
-        onError?.(error);
+        if (activeRequestRef.current) {
+          activeRequestRef.current = null;
+          onError?.(error);
+        }
       }
     },
-    [imageData, onProcessed, onError],
+    [onProcessed, onError],
   );
 
   // WebView sempre montada — sem cold start a cada foto
