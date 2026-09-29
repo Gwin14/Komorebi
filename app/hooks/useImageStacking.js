@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import {
   cancelImageStackingCapture,
+  deactivateImageStackingSession,
   captureNextImageStackingExposure,
   getImageStackingCapabilities,
   isImageStackingAvailable,
@@ -80,14 +81,18 @@ export default function useImageStacking(device) {
   );
 
   const start = useCallback(
-    async ({ outputFormat = "heif", exposureCompensationEV = -1.5 } = {}) => {
+    async ({ outputFormat = "heif", exposureCompensationEV = -1.5,
+      previewDoubleExposure = false, previewStacking = false } = {}) => {
       if (!strategyId || !deviceId || capturing) return null;
+      setProgress({ ...IDLE_PROGRESS, strategyId, state: "preparing" });
       setCapturing(true);
       try {
         return await startImageStackingCapture({
           deviceId,
           strategyId,
           outputFormat,
+          previewDoubleExposure,
+          previewStacking,
           ...(["bulb", "motionBlur"].includes(strategyId)
             ? { maximumDurationSeconds: 300 }
             : {}),
@@ -118,6 +123,10 @@ export default function useImageStacking(device) {
     await cancelImageStackingCapture();
   }, []);
 
+  const deactivateSession = useCallback(async () => {
+    await deactivateImageStackingSession();
+  }, []);
+
   const handleProgress = useCallback((event) => {
     const value = event?.nativeEvent ?? event;
     if (!value?.state) return;
@@ -137,12 +146,14 @@ export default function useImageStacking(device) {
       stop,
       advance,
       cancel,
+      deactivateSession,
       handleProgress,
     }),
     [
       available,
       capabilities,
       cancel,
+      deactivateSession,
       capturing,
       handleProgress,
       progress,

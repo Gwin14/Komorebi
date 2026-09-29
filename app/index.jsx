@@ -9,7 +9,6 @@ import CameraPreview from "./components/CameraPreview";
 import ExposureSlider from "./components/ExposureSlider";
 import ManualControlsPanel from "./components/ManualControlsPanel";
 import NativeCapturePreview from "./components/NativeCapturePreview";
-import ImageStackingStatus from "./components/ImageStackingStatus";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
@@ -54,6 +53,11 @@ export default function App() {
     gridVisible,
     levelVisible,
     histogramVisible,
+    previewLut,
+    previewHalation,
+    previewGrain,
+    previewDoubleExposure,
+    previewStacking,
     zebraHighlightsEnabled,
     zebraShadowsEnabled,
     compositionScanEnabled,
@@ -86,12 +90,17 @@ export default function App() {
   const lastZoom = useSharedValue(1);
 
   const cameraRef = useRef(null);
+  const captureInFlightRef = useRef(false);
+  const stackingStartInFlightRef = useRef(false);
   const stackingRestoreRef = useRef(null);
+  const stackingSwitchInFlightRef = useRef(false);
   const [scanPreviewLayout, setScanPreviewLayout] = useState({ width: 0, height: 0 });
   const { orientation: scanOrientation } = useDeviceOrientationState();
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [activeControl, setActiveControl] = useState("none");
+  const [stackingFinishing, setStackingFinishing] = useState(false);
+  const [stackingSoundSignal, setStackingSoundSignal] = useState(0);
 
   const [selectedLutId, setSelectedLutId] = useState("none");
   const [selectedGrainId, setSelectedGrainId] = useState("none");
@@ -137,9 +146,102 @@ export default function App() {
       : portraitCapture.enabled
         ? "portrait"
         : null;
+  const [renderedNativeCaptureMode, setRenderedNativeCaptureMode] = useState(
+    nativeCaptureMode,
+  );
+  const [cameraHandoffActive, setCameraHandoffActive] = useState(false);
+  const pendingNativeCaptureModeRef = useRef(nativeCaptureMode);
+  const cameraStopFallbackRef = useRef(null);
+  const cameraHandoffTimeoutRef = useRef(null);
+
+  const beginCameraHandoff = useCallback((delay) => {
+    if (cameraStopFallbackRef.current) {
+      clearTimeout(cameraStopFallbackRef.current);
+      cameraStopFallbackRef.current = null;
+    }
+    if (cameraHandoffTimeoutRef.current) {
+      clearTimeout(cameraHandoffTimeoutRef.current);
+      cameraHandoffTimeoutRef.current = null;
+    }
+
+    // Commit an empty preview first so VisionCamera and its AVCaptureSession
+    // are fully destroyed before another session claims the same device.
+    setCameraHandoffActive(true);
+    cameraHandoffTimeoutRef.current = setTimeout(() => {
+      cameraHandoffTimeoutRef.current = null;
+      setRenderedNativeCaptureMode(pendingNativeCaptureModeRef.current);
+      setCameraHandoffActive(false);
+    }, delay);
+  }, []);
+
+  useEffect(() => {
+    pendingNativeCaptureModeRef.current = nativeCaptureMode;
+
+    if (nativeCaptureMode === renderedNativeCaptureMode) {
+      if (cameraHandoffTimeoutRef.current) {
+        clearTimeout(cameraHandoffTimeoutRef.current);
+        cameraHandoffTimeoutRef.current = null;
+      }
+      setCameraHandoffActive(false);
+      return undefined;
+    }
+
+    if (renderedNativeCaptureMode) {
+      // Native views stop their AVCaptureSession asynchronously. Remove the
+      // old view in one commit, then give stopRunning() time to release the
+      // camera before mounting VisionCamera or another native mode.
+      beginCameraHandoff(500);
+      return undefined;
+    }
+
+    // Stop VisionCamera first. Its frame processor and Skia Canvas must drain
+    // before React replaces them with one of the native capture previews.
+    cameraStopFallbackRef.current = setTimeout(() => {
+      cameraStopFallbackRef.current = null;
+      beginCameraHandoff(250);
+    }, 750);
+
+    return () => {
+      if (cameraStopFallbackRef.current) {
+        clearTimeout(cameraStopFallbackRef.current);
+        cameraStopFallbackRef.current = null;
+      }
+      if (cameraHandoffTimeoutRef.current) {
+        clearTimeout(cameraHandoffTimeoutRef.current);
+        cameraHandoffTimeoutRef.current = null;
+      }
+    };
+  }, [beginCameraHandoff, nativeCaptureMode, renderedNativeCaptureMode]);
+
+  const handleCameraStopped = useCallback(() => {
+    if (!pendingNativeCaptureModeRef.current) return;
+    beginCameraHandoff(250);
+  }, [beginCameraHandoff]);
+
+  useEffect(() => () => {
+    if (cameraStopFallbackRef.current) {
+      clearTimeout(cameraStopFallbackRef.current);
+    }
+    if (cameraHandoffTimeoutRef.current) {
+      clearTimeout(cameraHandoffTimeoutRef.current);
+    }
+  }, []);
 
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
+
+  const effectPreview = useMemo(() => ({
+    lutEnabled: previewLut,
+    halationEnabled: previewHalation,
+    grainEnabled: previewGrain,
+    selectedLutId,
+    selectedHalationId,
+    selectedGrainId,
+    lutsLoaded,
+  }), [
+    previewLut, previewHalation, previewGrain,
+    selectedLutId, selectedHalationId, selectedGrainId, lutsLoaded,
+  ]);
 
   const controlsAnim = useControlsAnimation(activeControl);
   const { animateShutter, shutterAnim } = useShutterAnimation();
@@ -322,23 +424,32 @@ export default function App() {
     cancelCompositionScan();
     if (imageStacking.enabled) {
       if (imageStacking.capturing) {
+        if (stackingFinishing) return;
         if (["bulb", "motionBlur"].includes(imageStacking.strategyId)) {
+          setStackingFinishing(true);
           await imageStacking.stop();
         } else if (imageStacking.strategyId === "doubleExposure") {
+          if (imageStacking.progress.state !== "awaitingSecondExposure") return;
+          setStackingFinishing(true);
           await imageStacking.advance();
         }
         return;
       }
-      if (!cameraReady || isProcessing || !hasMediaPermission) return;
+      if (!cameraReady || isProcessing || !hasMediaPermission || stackingStartInFlightRef.current) return;
 
-      animateShutter();
+      stackingStartInFlightRef.current = true;
       setIsProcessing(true);
       try {
         const result = await imageStacking.start({
           outputFormat:
             Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
+          previewDoubleExposure,
+          previewStacking,
         });
         if (!result) return;
+        if (!["bulb", "motionBlur", "doubleExposure"].includes(imageStacking.strategyId)) {
+          setStackingSoundSignal((value) => value + 1);
+        }
         const additionalExif = await getLocationExif(location);
         enqueueProcessing(
           await buildPhotoProcessingData({
@@ -378,6 +489,8 @@ export default function App() {
           );
         }
       } finally {
+        stackingStartInFlightRef.current = false;
+        setStackingFinishing(false);
         setIsProcessing(false);
       }
       return;
@@ -391,6 +504,8 @@ export default function App() {
       return;
     }
 
+    if (captureInFlightRef.current || isProcessing || !cameraReady) return;
+    captureInFlightRef.current = true;
     animateShutter();
 
     const manualSettings =
@@ -404,7 +519,8 @@ export default function App() {
           }
         : null;
 
-    takePicture({
+    try {
+      await takePicture({
       cameraRef,
       cameraReady,
       isProcessing,
@@ -436,7 +552,10 @@ export default function App() {
           : "jpeg",
       preserveApplePhotographicStyles:
         appleStylesCompatibility.effective,
-    });
+      });
+    } finally {
+      captureInFlightRef.current = false;
+    }
   }, [
     activeLens,
     cancelAutoZoomAnimation,
@@ -468,54 +587,66 @@ export default function App() {
     selectedGrainId,
     selectedHalationId,
     selectedLutId,
+    previewDoubleExposure,
+    previewStacking,
     setIsProcessing,
     verticalMode,
     imageStacking,
+    stackingFinishing,
   ]);
 
   const handleSelectImageStackingStrategy = useCallback(
-    (strategyId) => {
-      if (imageStacking.capturing) return;
-      if (Boolean(strategyId) !== imageStacking.enabled) {
-        setCameraReady(false);
+    async (strategyId) => {
+      if (imageStacking.capturing || stackingSwitchInFlightRef.current) return;
+      if (strategyId === imageStacking.strategyId) return;
+      stackingSwitchInFlightRef.current = true;
+      try {
+        if (!strategyId && imageStacking.enabled) {
+          await imageStacking.deactivateSession();
+        }
+        if (Boolean(strategyId) !== imageStacking.enabled) {
+          setCameraReady(false);
+        }
+        if (strategyId) {
+          if (!imageStacking.enabled) {
+            stackingRestoreRef.current = {
+              rawMode: rawCapture.rawMode,
+              livePhoto: livePhoto.enabled,
+              portrait: portraitCapture.enabled,
+              flash,
+              smile: smileDetectionEnabled,
+              manual: manual.manualMode === "manual",
+            };
+          }
+          rawCapture.setRawMode("off");
+          livePhoto.setEnabled(false);
+          portraitCapture.setEnabled(false);
+          setFlash("off");
+          setSmileDetectionEnabled(false);
+          if (manual.manualMode === "manual") manual.toggleManualMode();
+        } else if (imageStacking.enabled && stackingRestoreRef.current) {
+          const previous = stackingRestoreRef.current;
+          stackingRestoreRef.current = null;
+          if (previous.rawMode !== "off" && rawCapture.available) {
+            rawCapture.setRawMode(previous.rawMode);
+          } else if (previous.livePhoto && livePhoto.available) {
+            livePhoto.setEnabled(true);
+          } else if (previous.portrait && portraitCapture.available) {
+            portraitCapture.setEnabled(true);
+          }
+          if (previous.flash !== "off" && activeLens?.device?.hasFlash) {
+            setFlash(previous.flash);
+          }
+          setSmileDetectionEnabled(previous.smile);
+          if (previous.manual && manual.available && manual.manualMode !== "manual") {
+            manual.toggleManualMode();
+          }
+        }
+        imageStacking.selectStrategy(strategyId);
+        setActiveControl("none");
+      } finally {
+        stackingSwitchInFlightRef.current = false;
       }
-      if (strategyId) {
-        if (!imageStacking.enabled) {
-          stackingRestoreRef.current = {
-            rawMode: rawCapture.rawMode,
-            livePhoto: livePhoto.enabled,
-            portrait: portraitCapture.enabled,
-            flash,
-            smile: smileDetectionEnabled,
-            manual: manual.manualMode === "manual",
-          };
-        }
-        rawCapture.setRawMode("off");
-        livePhoto.setEnabled(false);
-        portraitCapture.setEnabled(false);
-        setFlash("off");
-        setSmileDetectionEnabled(false);
-        if (manual.manualMode === "manual") manual.toggleManualMode();
-      } else if (imageStacking.enabled && stackingRestoreRef.current) {
-        const previous = stackingRestoreRef.current;
-        stackingRestoreRef.current = null;
-        if (previous.rawMode !== "off" && rawCapture.available) {
-          rawCapture.setRawMode(previous.rawMode);
-        } else if (previous.livePhoto && livePhoto.available) {
-          livePhoto.setEnabled(true);
-        } else if (previous.portrait && portraitCapture.available) {
-          portraitCapture.setEnabled(true);
-        }
-        if (previous.flash !== "off" && activeLens?.device?.hasFlash) {
-          setFlash(previous.flash);
-        }
-        setSmileDetectionEnabled(previous.smile);
-        if (previous.manual && manual.available && manual.manualMode !== "manual") {
-          manual.toggleManualMode();
-        }
-      }
-      imageStacking.selectStrategy(strategyId);
-      setActiveControl("none");
     },
     [
       activeLens?.device?.hasFlash,
@@ -543,7 +674,7 @@ export default function App() {
     setCameraReady(false);
   }, [
     activeLens?.device?.id,
-    imageStacking.strategyId,
+    nativeCaptureMode,
     rawCapture.rawModeEnabled,
   ]);
 
@@ -665,6 +796,8 @@ export default function App() {
     onChangeProject: handleChangeProject,
     onCreateProject: handleCreateProject,
     controlsDisabled: imageStacking.capturing,
+    stackingProgress: imageStacking.progress,
+    onCancelStacking: imageStacking.cancel,
   };
 
   if (loading) return null;
@@ -696,9 +829,13 @@ export default function App() {
       {!firstTime && cameraPermission === "granted" && (
         <GestureDetector gesture={composedGestures}>
           <View style={styles.previewContainer}>
-            {nativeCaptureMode ? (
+            {cameraHandoffActive ? null : renderedNativeCaptureMode ? (
               <NativeCapturePreview
-                mode={nativeCaptureMode}
+                mode={renderedNativeCaptureMode}
+                isActive={
+                  nativeCaptureMode === renderedNativeCaptureMode &&
+                  !cameraHandoffActive
+                }
                 retroStyle={retroStyle}
                 device={activeLens?.device}
                 flash={flash}
@@ -714,6 +851,9 @@ export default function App() {
                 smileDetectionEnabled={smileDetectionEnabled}
                 onSmileDetected={handleTakePicture}
                 onStackingProgress={imageStacking.handleProgress}
+                effectPreview={effectPreview}
+                previewDoubleExposure={previewDoubleExposure}
+                previewStacking={previewStacking}
               />
             ) : (
               <CameraPreview
@@ -738,7 +878,7 @@ export default function App() {
                 location={location}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
-                isActive={!firstTime}
+                isActive={!firstTime && !nativeCaptureMode}
                 manualPhotoMode={manual.manualMode === "manual"}
                 manualExposureActive={
                   manual.manualMode === "manual" &&
@@ -748,16 +888,13 @@ export default function App() {
                 onFocusAtPoint={manual.focusAtPoint}
                 compositionScan={compositionScan}
                 onPreviewLayout={setScanPreviewLayout}
+                effectPreview={effectPreview}
+                onCameraStopped={handleCameraStopped}
               />
             )}
           </View>
         </GestureDetector>
       )}
-
-      <ImageStackingStatus
-        progress={imageStacking.progress}
-        onCancel={imageStacking.cancel}
-      />
 
       {appleStylesCompatibility.suspensionReason && (
         <View style={styles.appleStylesPaused} pointerEvents="none">
@@ -827,6 +964,7 @@ export default function App() {
         availableGrains={AVAILABLE_GRAINS}
         availableHalations={AVAILABLE_HALATIONS}
         isProcessing={isProcessing}
+        showProcessingFeedback={isProcessing && (!imageStacking.capturing || stackingFinishing)}
         processingQueueLength={processingQueue.length}
         lenses={lenses}
         activeLensId={activeLensId}
@@ -834,6 +972,10 @@ export default function App() {
         galleryRefreshKey={galleryRefreshKey}
         activeProject={activeProject}
         imageStackingCapturing={imageStacking.capturing}
+        imageStackingFinishing={stackingFinishing}
+        imageStackingStrategyId={imageStacking.strategyId}
+        imageStackingProgressState={imageStacking.progress.state}
+        stackingSoundSignal={stackingSoundSignal}
         imageStackingContinuousCapturing={
           imageStacking.capturing &&
           ["bulb", "motionBlur", "doubleExposure"].includes(imageStacking.strategyId)

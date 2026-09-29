@@ -10,6 +10,7 @@ import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
 import ImageStackingSelector from "./ImageStackingSelector";
+import ImageStackingStatus from "./ImageStackingStatus";
 import styles from "./TopBar.styles";
 
 export default function TopBar({
@@ -46,6 +47,8 @@ export default function TopBar({
   onChangeProject,
   onCreateProject,
   controlsDisabled = false,
+  stackingProgress,
+  onCancelStacking,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
@@ -185,7 +188,9 @@ export default function TopBar({
 
   return (
     <View style={styles.buttonsContainer}>
-      {topBarControls.map((controlId) => {
+      {controlsDisabled ? (
+        <ImageStackingStatus progress={stackingProgress} onCancel={onCancelStacking} />
+      ) : topBarControls.map((controlId) => {
         if (controlId === "stacking" && !imageStackingAvailable) return null;
         if (controlId === "manual" && !manualControlsAvailable) return null;
         const control = controlOptions[controlId];

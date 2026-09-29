@@ -143,13 +143,23 @@ export default function Galery() {
           sortBy: MediaLibrary.SortBy.creationTime,
           first: 100,
         });
-        const resolvedAssets = await Promise.all(
-          assets.assets.map(async (asset) => {
-            if (!asset.uri.startsWith("ph://")) return asset;
-            const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-            return { ...asset, uri: info.localUri || asset.uri };
-          }),
-        );
+        const resolvedAssets = [];
+        for (let index = 0; index < assets.assets.length; index += 4) {
+          const batch = await Promise.all(
+            assets.assets.slice(index, index + 4).map(async (asset) => {
+              if (!asset?.uri || !asset?.id) return null;
+              if (!asset.uri.startsWith("ph://")) return asset;
+              try {
+                const info = await MediaLibrary.getAssetInfoAsync(asset.id);
+                return { ...asset, uri: info.localUri || asset.uri };
+              } catch (error) {
+                console.warn("Não foi possível carregar o asset da galeria:", asset.id, error);
+                return null;
+              }
+            }),
+          );
+          resolvedAssets.push(...batch.filter((asset) => asset && Number.isFinite(asset.creationTime)));
+        }
         setPhotos(resolvedAssets);
       } catch (error) {
         console.log("Erro ao carregar fotos:", error);

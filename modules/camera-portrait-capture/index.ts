@@ -22,6 +22,11 @@ export type PortraitCameraViewProps = ViewProps & {
   histogramEnabled?: boolean;
   zebraHighlightsEnabled?: boolean;
   zebraShadowsEnabled?: boolean;
+  previewLutSize?: number;
+  previewLutValues?: number[];
+  previewLutDomain?: number[];
+  previewGrainStrength?: number;
+  previewHalation?: number[];
   onSmileDetected?: () => void;
   onHistogramUpdated?: (event: {
     nativeEvent?: { bins?: number[] };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert } from "react-native";
 import { analyzePhoto } from "../../modules/composition-scan";
 import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
@@ -58,6 +58,7 @@ export default function usePhotoProcessingQueue(
   const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
+  const savingItemRef = useRef(null);
 
   const enqueueProcessing = useCallback((data) => {
     setProcessingQueue((prev) => [...prev, data]);
@@ -69,6 +70,8 @@ export default function usePhotoProcessingQueue(
 
   const handleProcessed = useCallback(
     async (processedUri, item = {}, project = activeProject) => {
+      if (savingItemRef.current === item) return;
+      savingItemRef.current = item;
       let mainAssetSaved = false;
       const {
         alreadySaved = false,

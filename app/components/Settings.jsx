@@ -28,6 +28,7 @@ const ACCENT = "#ffaa00";
 export const SETTINGS_PAGES = {
   ROOT: "root",
   CAMERA: "camera",
+  PREVIEWS: "previews",
   CAPTURE: "capture",
   INTELLIGENCE: "intelligence",
   CONTROLS: "controls",
@@ -93,6 +94,9 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
   const {
     retroStyle, setRetroStyle, gridVisible, setGridVisible, levelVisible, setLevelVisible,
     histogramVisible, setHistogramVisible, compositionScanEnabled, setCompositionScanEnabled,
+    previewLut, setPreviewLut, previewHalation, setPreviewHalation,
+    previewGrain, setPreviewGrain, previewDoubleExposure, setPreviewDoubleExposure,
+    previewStacking, setPreviewStacking,
     zebraHighlightsEnabled, setZebraHighlightsEnabled, zebraShadowsEnabled,
     setZebraShadowsEnabled,
     intelligentTagsEnabled, setIntelligentTagsEnabled, intelligentFilenameEnabled,
@@ -179,6 +183,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
 
   const pageTitles = {
     [SETTINGS_PAGES.ROOT]: "Configurações", [SETTINGS_PAGES.CAMERA]: "Câmera",
+    [SETTINGS_PAGES.PREVIEWS]: "Previews",
     [SETTINGS_PAGES.CAPTURE]: "Captura e arquivos", [SETTINGS_PAGES.INTELLIGENCE]: "Recursos inteligentes",
     [SETTINGS_PAGES.CONTROLS]: "Barra de controles", [SETTINGS_PAGES.LUTS]: "LUTs personalizados",
     [SETTINGS_PAGES.ABOUT]: "Sobre e suporte",
@@ -194,6 +199,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       <Text style={styles.intro}>Ajuste a experiência da câmera e o modo como suas fotos são salvas.</Text>
       <Section title="Fotografia">
         <MenuRow description="Viewfinder, guias e som do obturador" icon="camera-outline" label="Câmera" onPress={() => openPage(SETTINGS_PAGES.CAMERA)} />
+        <MenuRow description="Visualização opcional dos efeitos durante a captura" icon="eye-outline" label="Previews" onPress={() => openPage(SETTINGS_PAGES.PREVIEWS)} />
         <MenuRow description="Formato, cópias e metadados" icon="images-outline" label="Captura e arquivos" onPress={() => openPage(SETTINGS_PAGES.CAPTURE)} />
         {Platform.OS === "ios" && <MenuRow description="Composição, nomes e tags no aparelho" icon="sparkles-outline" label="Recursos inteligentes" onPress={() => openPage(SETTINGS_PAGES.INTELLIGENCE)} status={modelReady ? "Ativo" : "Opcional"} />}
       </Section>
@@ -218,6 +224,23 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       <CustomToggle grouped label="Som do obturador" value={shutterSound} onValueChange={setShutterSound} />
       <CustomToggle grouped last label="Controles na parte inferior" value={topBarBelow} onValueChange={setTopBarBelow} />
     </Section>
+  );
+
+  const renderPreviews = () => (
+    <>
+      <Text style={styles.intro}>Os efeitos são aplicados aos frames da câmera em tempo real. A foto salva continua usando o processamento de alta resolução.</Text>
+      <Section title="Efeitos">
+        <CustomToggle grouped label="LUT" description="Aplica as cores do LUT selecionado à imagem ao vivo." value={previewLut} onValueChange={setPreviewLut} />
+        <CustomToggle grouped label="Halation" description="Espalha o brilho das altas luzes da cena." value={previewHalation} onValueChange={setPreviewHalation} />
+        <CustomToggle grouped last label="Grain" description="Aplica grão fino à imagem ao vivo." value={previewGrain} onValueChange={setPreviewGrain} />
+      </Section>
+      {Platform.OS === "ios" && (
+        <Section title="Captura em camadas">
+          <CustomToggle grouped label="Dupla exposição" description="Mostra a primeira foto sobre a imagem ao vivo." value={previewDoubleExposure} onValueChange={setPreviewDoubleExposure} />
+          <CustomToggle grouped last label="Stacking" description="Mostra o resultado acumulado durante Bulb e Motion Blur." value={previewStacking} onValueChange={setPreviewStacking} />
+        </Section>
+      )}
+    </>
   );
 
   const renderCapture = () => (
@@ -317,6 +340,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
   const renderPage = (pageToRender) => {
     switch (pageToRender) {
       case SETTINGS_PAGES.CAMERA: return renderCamera();
+      case SETTINGS_PAGES.PREVIEWS: return renderPreviews();
       case SETTINGS_PAGES.CAPTURE: return renderCapture();
       case SETTINGS_PAGES.INTELLIGENCE: return renderIntelligence();
       case SETTINGS_PAGES.CONTROLS: return renderControls();

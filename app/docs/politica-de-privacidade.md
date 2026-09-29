@@ -1,6 +1,6 @@
 # Política de Privacidade - Komorebi
 
-**Última atualização:** julho de 2026
+**Última atualização:** setembro de 2026
 **Versão do app:** 1.0.0
 
 ---
@@ -77,9 +77,12 @@ Algumas funções dependem de serviços externos. Nesses casos, dados necessári
 | **Leaflet / Carto basemaps / unpkg**                             | Exibir mapa na galeria para fotos com GPS.         | Carregamento de scripts, estilos e tiles de mapa; o mapa é centrado nas coordenadas da foto.                       |
 | **Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criar molduras com foto e metadados.               | Quando você abre uma foto nesse recurso, a imagem pode ser enviada/injetada no site em WebView para processamento. |
 | **Notion** (`fabiosantoss.notion.site`)                          | Formulário de feedback.                            | Informações que você digitar voluntariamente no formulário.                                                        |
+| **Sentry** (`sentry.io`)                                        | Diagnosticar falhas e medir o desempenho do app.   | Mensagens de erro, rastros de execução, versão do app e informações técnicas do dispositivo e das operações afetadas. |
 | **Links externos**                                               | Abrir site, GitHub, Instagram, Threads ou YouTube. | O acesso passa a ocorrer fora do app ou em WebView, conforme o serviço.                                            |
 
 Esses serviços têm políticas próprias. O Komorebi não controla as práticas de privacidade, disponibilidade ou segurança desses terceiros.
+
+O Sentry pode receber esses dados técnicos automaticamente quando o app apresenta uma falha ou durante a amostragem de desempenho. O Komorebi não configura o envio de fotos, arquivos RAW, LUTs ou coordenadas GPS ao Sentry. Informações técnicas de rede também podem ser processadas pelo serviço ao receber os eventos. Consulte a [política de privacidade do Sentry](https://sentry.io/privacy/) para saber como ele trata e retém esses dados.
 
 ---
 
@@ -87,13 +90,13 @@ Esses serviços têm políticas próprias. O Komorebi não controla as práticas
 
 O Komorebi não exibe anúncios, não integra redes de publicidade e não vende, aluga ou comercializa dados pessoais.
 
-O projeto atual também não inclui serviço próprio de analytics de uso ou rastreamento comportamental.
+O projeto não inclui serviço próprio de analytics de uso ou rastreamento comportamental. O monitoramento técnico de erros e desempenho é descrito na seção 6.
 
 ---
 
 ## 8. Segurança e retenção
 
-Os dados locais ficam sujeitos às proteções do seu dispositivo e do sistema operacional. O Komorebi não mantém cópias em servidor próprio.
+Os dados locais ficam sujeitos às proteções do seu dispositivo e do sistema operacional. O Komorebi não mantém cópias em servidor próprio. Os diagnósticos enviados ao Sentry seguem as práticas de segurança e retenção desse serviço.
 
 Você controla a retenção dos seus dados ao:
 
@@ -115,6 +118,7 @@ Como o Komorebi não mantém uma base remota própria de dados pessoais, seus pr
 - não usar serviços externos como feedback, mapa ou EXIF Frame.
 
 Solicitações ou dúvidas sobre privacidade podem ser enviadas pelos canais de contato abaixo.
+Para solicitar informações ou exclusão de diagnósticos relacionados ao uso do app, entre em contato pelos mesmos canais.
 
 ---
 

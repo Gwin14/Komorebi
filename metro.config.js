@@ -1,6 +1,8 @@
-const { getDefaultConfig } = require("expo/metro-config");
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname, {
+  includeWebReplay: false,
+});
 
 // adiciona .cube e .CUBE às extensões de assets
 config.resolver.assetExts.push("CUBE");

@@ -26,4 +26,13 @@ export default StyleSheet.create({
     shadowRadius: 6,
     elevation: 5,
   },
+  captureGlow: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    bottom: 10,
+    left: 10,
+    borderRadius: 20,
+    backgroundColor: "#ffaa00",
+  },
 });

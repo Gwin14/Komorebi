@@ -3,9 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
+import { Worklets, useSharedValue } from "react-native-worklets-core";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
+import { BlendMode, FilterMode, MipmapMode, Skia, TileMode } from "@shopify/react-native-skia";
 import { getZebraMaskPlugin } from "../../modules/composition-scan";
+import { getCachedLUT } from "../utils/lutStore";
+import { getGrainConfig } from "../utils/grainCatalog";
+import { getHalationConfig } from "../utils/halationCatalog";
+import { colorEffect, grainEffect, halationEffect, identityLut, makeLutImage } from "../utils/liveEffectFilters";
 import CompositionScanOverlay from "./CompositionScanOverlay";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
@@ -42,13 +48,18 @@ export default function CameraPreview({
   onFocusAtPoint,
   compositionScan,
   onPreviewLayout,
+  effectPreview,
+  onCameraStopped,
 }) {
   const isTakingPhoto = useRef(false);
   const smileAllowed = useRef(false);
+  const onSmileDetectedRef = useRef(onSmileDetected);
   smileAllowed.current = smileDetectionEnabled && !compositionScan?.busy;
+  onSmileDetectedRef.current = onSmileDetected;
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
   const [zebraMask, setZebraMask] = useState(null);
+  const [skiaFailed, setSkiaFailed] = useState(false);
   const previousHistogramBins = useRef(null);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const transitionOpacity = useRef(new Animated.Value(0)).current;
@@ -59,9 +70,99 @@ export default function CameraPreview({
   const transitionFallbackTimeout = useRef(null);
   const transitionFinishTimeout = useRef(null);
   const transitionStartedAt = useRef(0);
+  const lut = useMemo(() =>
+    effectPreview?.lutEnabled && effectPreview?.selectedLutId !== "none" && effectPreview?.lutsLoaded
+      ? makeLutImage(getCachedLUT(effectPreview.selectedLutId)) ?? identityLut
+      : identityLut,
+    [effectPreview?.lutEnabled, effectPreview?.selectedLutId, effectPreview?.lutsLoaded],
+  );
+  const halation = effectPreview?.halationEnabled
+    ? getHalationConfig(effectPreview.selectedHalationId) : null;
+  const grain = effectPreview?.grainEnabled
+    ? getGrainConfig(effectPreview.selectedGrainId) : null;
+  const effectParams = useSharedValue({ grain: null, halation: null });
+  useEffect(() => {
+    effectParams.value = { grain, halation };
+  }, [effectParams, grain, halation]);
+  useEffect(() => {
+    setSkiaFailed(false);
+  }, [device?.id, lut, halation, grain]);
+  const reportSkiaFailure = useMemo(
+    () => Worklets.createRunOnJS(() => setSkiaFailed(true)),
+    [],
+  );
+  const skiaActive = Boolean(
+    (effectPreview?.lutEnabled && effectPreview?.selectedLutId !== "none" && lut?.image) ||
+    halation || grain,
+  ) &&
+    !zebraHighlightsEnabled && !zebraShadowsEnabled && !skiaFailed;
   const frameProcessorActive =
     histogramVisible || zebraHighlightsEnabled || zebraShadowsEnabled || smileDetectionEnabled ||
-    Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId);
+    Boolean(compositionScan?.captureScanId || compositionScan?.trackingScanId) || skiaActive;
+  const skiaActions = useMemo(() => {
+    if (!skiaActive) return undefined;
+    return (_faces, frame) => {
+      "worklet";
+      const frameResources = [];
+      try {
+        const { grain: selectedGrain, halation: selectedHalation } = effectParams.value;
+        const source = frame.__skImage.makeShaderOptions(
+          TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None,
+        );
+        frameResources.push(source);
+        let base = source;
+        if (lut !== identityLut && lut?.image && colorEffect) {
+          const lutShader = lut.image.makeShaderOptions(
+            TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None,
+          );
+          frameResources.push(lutShader);
+          base = colorEffect.makeShaderWithChildren([
+            lut.size, ...lut.domainMin, ...lut.domainScale,
+            selectedGrain ? selectedGrain.lumaStrength * 2 / 255 : 0,
+            selectedGrain ? Math.floor(frame.timestamp / 33333333) % 997 : 0,
+          ], [source, lutShader]);
+          frameResources.push(base);
+        } else if (selectedGrain && grainEffect) {
+          base = grainEffect.makeShaderWithChildren([
+            selectedGrain.lumaStrength * 2 / 255,
+            Math.floor(frame.timestamp / 33333333) % 997,
+          ], [source]);
+          frameResources.push(base);
+        }
+        const rect = Skia.XYWHRect(0, 0, frame.width, frame.height);
+        const paint = Skia.Paint();
+        frameResources.push(paint);
+        paint.setShader(base);
+        frame.drawRect(rect, paint);
+        if (selectedHalation && halationEffect) {
+          const halo = halationEffect.makeShaderWithChildren([
+            selectedHalation.threshold,
+            selectedHalation.softness,
+            selectedHalation.contrastRadius * 0.15,
+            selectedHalation.minContrast,
+            selectedHalation.contrastSoftness,
+            selectedHalation.fringeRadius * 0.5,
+          ], [source]);
+          frameResources.push(halo);
+          const glow = Skia.Paint();
+          frameResources.push(glow);
+          glow.setShader(halo);
+          glow.setBlendMode(BlendMode.Screen);
+          glow.setAlphaf(selectedHalation.targetPeakOpacity);
+          frame.drawRect(rect, glow);
+        }
+      } catch {
+        frame.render();
+        reportSkiaFailure();
+      } finally {
+        // The wrapper flushes the Skia surface after this callback returns.
+        // Defer disposal so queued draw commands never reference dead handles.
+        for (const resource of frameResources) {
+          frame.deferDisposal(resource);
+        }
+      }
+    };
+  }, [effectParams, lut, reportSkiaFailure, skiaActive]);
 
   useEffect(() => {
     console.log("[ZebraDebug][preview] mount");
@@ -183,13 +284,13 @@ export default function CameraPreview({
         face.smilingProbability > 0.7
       ) {
         isTakingPhoto.current = true;
-        onSmileDetected?.();
+        onSmileDetectedRef.current?.();
         setTimeout(() => {
           isTakingPhoto.current = false;
         }, 2500);
       }
     },
-    [onSmileDetected],
+    [],
   );
 
   const faceDetectionOptions = useMemo(
@@ -368,6 +469,7 @@ export default function CameraPreview({
     zebraShadowsEnabled,
     zebraMaskPlugin: getZebraMaskPlugin(),
     zebraMaskCallback: handleZebraMask,
+    skiaActions,
   };
 
   return (
@@ -410,6 +512,7 @@ export default function CameraPreview({
             zoom={zoom}
             exposure={exposure}
             onInitialized={handleCameraInitialized}
+            onStopped={onCameraStopped}
             onError={handleCameraError}
             histogramCallback={
               histogramVisible ? handleHistogramUpdate : undefined

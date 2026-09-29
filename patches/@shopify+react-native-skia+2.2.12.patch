@@ -1,0 +1,15 @@
+diff --git a/node_modules/@shopify/react-native-skia/cpp/api/JsiSkHostObjects.h b/node_modules/@shopify/react-native-skia/cpp/api/JsiSkHostObjects.h
+--- a/node_modules/@shopify/react-native-skia/cpp/api/JsiSkHostObjects.h
++++ b/node_modules/@shopify/react-native-skia/cpp/api/JsiSkHostObjects.h
+@@ -89,7 +89,10 @@
+    * macro.
+    */
+   JSI_HOST_FUNCTION(dispose) {
+-    // This is a no-op on native
++    // Release the native object now. Camera frame processors create images,
++    // shaders and paints every frame, and waiting for worklet GC can retain
++    // the camera's pixel buffers until AVCaptureVideoDataOutput stalls.
++    _object = T{};
+     return jsi::Value::undefined();
+   }
+ 

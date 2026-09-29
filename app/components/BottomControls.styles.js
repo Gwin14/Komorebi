@@ -34,12 +34,21 @@ export default StyleSheet.create({
     width: "100%",
     height: "100%",
   },
-  shimmerOverlay: {
-    ...StyleSheet.absoluteFillObject,
+  processingBadge: {
+    position: "absolute",
+    top: -6,
+    right: -5,
+    minWidth: 30,
+    height: 19,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: "#ffaa00",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 2,
   },
-  shimmerGradient: {
-    flex: 1,
-  },
+  processingBadgeText: { color: "#111", fontSize: 11, fontWeight: "700" },
   toolsContainer: {
     width: "100%",
 

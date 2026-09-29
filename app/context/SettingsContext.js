@@ -14,6 +14,11 @@ export const DEFAULT_SETTINGS = {
   gridVisible: false,
   levelVisible: false,
   histogramVisible: false,
+  previewLut: false,
+  previewHalation: false,
+  previewGrain: false,
+  previewDoubleExposure: false,
+  previewStacking: false,
   zebraHighlightsEnabled: false,
   zebraShadowsEnabled: false,
   compositionScanEnabled: false,
@@ -41,6 +46,11 @@ export const SettingsProvider = ({ children }) => {
   const [histogramVisible, setHistogramVisible] = useState(
     DEFAULT_SETTINGS.histogramVisible,
   );
+  const [previewLut, setPreviewLut] = useState(DEFAULT_SETTINGS.previewLut);
+  const [previewHalation, setPreviewHalation] = useState(DEFAULT_SETTINGS.previewHalation);
+  const [previewGrain, setPreviewGrain] = useState(DEFAULT_SETTINGS.previewGrain);
+  const [previewDoubleExposure, setPreviewDoubleExposure] = useState(DEFAULT_SETTINGS.previewDoubleExposure);
+  const [previewStacking, setPreviewStacking] = useState(DEFAULT_SETTINGS.previewStacking);
   const [zebraHighlightsEnabled, setZebraHighlightsEnabled] = useState(
     DEFAULT_SETTINGS.zebraHighlightsEnabled,
   );
@@ -87,6 +97,11 @@ export const SettingsProvider = ({ children }) => {
         setGridVisible(savedSettings.gridVisible);
         setLevelVisible(savedSettings.levelVisible);
         setHistogramVisible(savedSettings.histogramVisible);
+        setPreviewLut(savedSettings.previewLut);
+        setPreviewHalation(savedSettings.previewHalation);
+        setPreviewGrain(savedSettings.previewGrain);
+        setPreviewDoubleExposure(savedSettings.previewDoubleExposure);
+        setPreviewStacking(savedSettings.previewStacking);
         setZebraHighlightsEnabled(savedSettings.zebraHighlightsEnabled);
         setZebraShadowsEnabled(savedSettings.zebraShadowsEnabled);
         setCompositionScanEnabled(savedSettings.compositionScanEnabled);
@@ -171,6 +186,20 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [histogramVisible, loading]);
+
+  useEffect(() => {
+    if (loading) return;
+    const values = [
+      [SETTINGS_STORAGE_KEYS.PREVIEW_LUT, previewLut],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_HALATION, previewHalation],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_GRAIN, previewGrain],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_DOUBLE_EXPOSURE, previewDoubleExposure],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_STACKING, previewStacking],
+    ];
+    values.forEach(([key, enabled]) => {
+      void saveStoredSetting(key, String(enabled));
+    });
+  }, [loading, previewLut, previewHalation, previewGrain, previewDoubleExposure, previewStacking]);
 
   useEffect(() => {
     if (!loading) {
@@ -332,6 +361,16 @@ export const SettingsProvider = ({ children }) => {
     setLevelVisible,
     histogramVisible,
     setHistogramVisible,
+    previewLut,
+    setPreviewLut,
+    previewHalation,
+    setPreviewHalation,
+    previewGrain,
+    setPreviewGrain,
+    previewDoubleExposure,
+    setPreviewDoubleExposure,
+    previewStacking,
+    setPreviewStacking,
     zebraHighlightsEnabled,
     setZebraHighlightsEnabled,
     zebraShadowsEnabled,

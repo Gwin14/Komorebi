@@ -129,6 +129,21 @@ public class CameraPortraitCaptureModule: Module {
       Prop("zebraShadowsEnabled") { (view, enabled: Bool?) in
         view.zebraShadowsEnabled = enabled ?? false
       }
+      Prop("previewLutSize") { (view, size: Int?) in
+        view.previewLutSize = size ?? 0
+      }
+      Prop("previewLutValues") { (view, values: [Double]?) in
+        view.previewLutValues = values ?? []
+      }
+      Prop("previewLutDomain") { (view, domain: [Double]?) in
+        view.effectRenderer.setLutDomain(domain ?? [])
+      }
+      Prop("previewGrainStrength") { (view, strength: Double?) in
+        view.effectRenderer.setGrainStrength(strength ?? 0)
+      }
+      Prop("previewHalation") { (view, parameters: [Double]?) in
+        view.effectRenderer.setHalation(parameters ?? [])
+      }
     }
 
     AsyncFunction("getCapabilities") { (deviceId: String) async throws -> [String: Any] in
@@ -532,7 +547,14 @@ public final class PortraitCameraView: ExpoView {
 
   private static weak var currentActiveView: PortraitCameraView?
   private let controller = PortraitCameraController()
+  let effectRenderer = LiveEffectPreviewRenderer()
   private let zebraOverlay = UIImageView()
+  var previewLutSize = 0 {
+    didSet { effectRenderer.setLut(size: previewLutSize, values: previewLutValues) }
+  }
+  var previewLutValues: [Double] = [] {
+    didSet { effectRenderer.setLut(size: previewLutSize, values: previewLutValues) }
+  }
 
   var deviceId: String? {
     didSet {
@@ -580,6 +602,7 @@ public final class PortraitCameraView: ExpoView {
     backgroundColor = .black
     videoPreviewLayer.videoGravity = .resizeAspectFill
     videoPreviewLayer.session = controller.session
+    addSubview(effectRenderer.imageView)
     zebraOverlay.contentMode = .scaleAspectFill
     zebraOverlay.clipsToBounds = true
     zebraOverlay.isUserInteractionEnabled = false
@@ -593,6 +616,9 @@ public final class PortraitCameraView: ExpoView {
     controller.onZebraUpdated = { [weak self] image in
       DispatchQueue.main.async { self?.zebraOverlay.image = image.map { UIImage(cgImage: $0) } }
     }
+    controller.onEffectFrame = { [weak self] buffer, orientation, mirrored in
+      self?.effectRenderer.submit(buffer, orientation: orientation, mirrored: mirrored)
+    }
   }
 
   public override class var layerClass: AnyClass {
@@ -605,6 +631,7 @@ public final class PortraitCameraView: ExpoView {
 
   public override func layoutSubviews() {
     super.layoutSubviews()
+    effectRenderer.imageView.frame = bounds
     zebraOverlay.frame = bounds
   }
 
@@ -751,6 +778,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   var zebraHighlightsEnabled = false
   var zebraShadowsEnabled = false
   var onZebraUpdated: ((CGImage?) -> Void)?
+  var onEffectFrame: ((CVPixelBuffer, Int32, Bool) -> Void)?
   private let zebraRenderer = ZebraOverlayRenderer()
   private var lastZebraAt = Date.distantPast
   private var lastSmileAt = Date.distantPast
@@ -871,6 +899,12 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
       return
     }
+
+    onEffectFrame?(
+      pixelBuffer,
+      LiveEffectPreviewRenderer.exifOrientation(for: orientationTracker.outputOrientation),
+      activeCaptureDevice?.position == .front
+    )
 
     let now = Date()
     if (zebraHighlightsEnabled || zebraShadowsEnabled),

@@ -621,10 +621,10 @@ export const generateRuntimeHTML = () => `
       return lerp(c0, c1, bFrac);
     };
 
-    function processImage({ base64, cube, halationConfig, grainConfig }) {
+    function processImage({ requestId, base64, cube, halationConfig, grainConfig }) {
       const img = new Image();
       img.onerror = () => {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', message: 'Erro ao carregar imagem' }));
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', requestId, message: 'Erro ao carregar imagem' }));
       };
       img.onload = () => {
         const MAX_DIMENSION = 3000;
@@ -670,10 +670,14 @@ export const generateRuntimeHTML = () => `
         }
 
         canvas.toBlob((blob) => {
+          if (!blob) {
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', requestId, message: 'Falha ao processar imagem' }));
+            return;
+          }
           const reader = new FileReader();
           reader.onloadend = () => {
             const b64 = reader.result.split(',')[1];
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'success', data: b64 }));
+            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'success', requestId, data: b64 }));
           };
           reader.readAsDataURL(blob);
         }, 'image/jpeg', 0.86);
