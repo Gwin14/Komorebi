@@ -505,6 +505,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         self.device = device
         self.configuredDeviceID = deviceId
         self.applyExposureBias(to: device)
+        // The live renderer expects video buffers in display orientation.
+        // Configure rotation before the session emits its first preview frame,
+        // not only when an image-stacking capture starts.
+        self.applyOutputOrientation()
         self.ready = true
         self.session.commitConfiguration()
         configurationOpen = false

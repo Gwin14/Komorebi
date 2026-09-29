@@ -49,6 +49,7 @@ export default function CameraPreview({
   compositionScan,
   onPreviewLayout,
   effectPreview,
+  onCameraStopped,
 }) {
   const isTakingPhoto = useRef(false);
   const smileAllowed = useRef(false);
@@ -154,10 +155,10 @@ export default function CameraPreview({
         frame.render();
         reportSkiaFailure();
       } finally {
-        // These shaders reference the current camera buffer. Release their JSI
-        // handles on every frame instead of waiting for worklet GC to run.
-        for (let index = frameResources.length - 1; index >= 0; index -= 1) {
-          frameResources[index].dispose();
+        // The wrapper flushes the Skia surface after this callback returns.
+        // Defer disposal so queued draw commands never reference dead handles.
+        for (const resource of frameResources) {
+          frame.deferDisposal(resource);
         }
       }
     };
@@ -511,6 +512,7 @@ export default function CameraPreview({
             zoom={zoom}
             exposure={exposure}
             onInitialized={handleCameraInitialized}
+            onStopped={onCameraStopped}
             onError={handleCameraError}
             histogramCallback={
               histogramVisible ? handleHistogramUpdate : undefined

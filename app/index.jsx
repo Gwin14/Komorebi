@@ -146,6 +146,86 @@ export default function App() {
       : portraitCapture.enabled
         ? "portrait"
         : null;
+  const [renderedNativeCaptureMode, setRenderedNativeCaptureMode] = useState(
+    nativeCaptureMode,
+  );
+  const [cameraHandoffActive, setCameraHandoffActive] = useState(false);
+  const pendingNativeCaptureModeRef = useRef(nativeCaptureMode);
+  const cameraStopFallbackRef = useRef(null);
+  const cameraHandoffTimeoutRef = useRef(null);
+
+  const beginCameraHandoff = useCallback((delay) => {
+    if (cameraStopFallbackRef.current) {
+      clearTimeout(cameraStopFallbackRef.current);
+      cameraStopFallbackRef.current = null;
+    }
+    if (cameraHandoffTimeoutRef.current) {
+      clearTimeout(cameraHandoffTimeoutRef.current);
+      cameraHandoffTimeoutRef.current = null;
+    }
+
+    // Commit an empty preview first so VisionCamera and its AVCaptureSession
+    // are fully destroyed before another session claims the same device.
+    setCameraHandoffActive(true);
+    cameraHandoffTimeoutRef.current = setTimeout(() => {
+      cameraHandoffTimeoutRef.current = null;
+      setRenderedNativeCaptureMode(pendingNativeCaptureModeRef.current);
+      setCameraHandoffActive(false);
+    }, delay);
+  }, []);
+
+  useEffect(() => {
+    pendingNativeCaptureModeRef.current = nativeCaptureMode;
+
+    if (nativeCaptureMode === renderedNativeCaptureMode) {
+      if (cameraHandoffTimeoutRef.current) {
+        clearTimeout(cameraHandoffTimeoutRef.current);
+        cameraHandoffTimeoutRef.current = null;
+      }
+      setCameraHandoffActive(false);
+      return undefined;
+    }
+
+    if (renderedNativeCaptureMode) {
+      // Native views stop their AVCaptureSession asynchronously. Remove the
+      // old view in one commit, then give stopRunning() time to release the
+      // camera before mounting VisionCamera or another native mode.
+      beginCameraHandoff(500);
+      return undefined;
+    }
+
+    // Stop VisionCamera first. Its frame processor and Skia Canvas must drain
+    // before React replaces them with one of the native capture previews.
+    cameraStopFallbackRef.current = setTimeout(() => {
+      cameraStopFallbackRef.current = null;
+      beginCameraHandoff(250);
+    }, 750);
+
+    return () => {
+      if (cameraStopFallbackRef.current) {
+        clearTimeout(cameraStopFallbackRef.current);
+        cameraStopFallbackRef.current = null;
+      }
+      if (cameraHandoffTimeoutRef.current) {
+        clearTimeout(cameraHandoffTimeoutRef.current);
+        cameraHandoffTimeoutRef.current = null;
+      }
+    };
+  }, [beginCameraHandoff, nativeCaptureMode, renderedNativeCaptureMode]);
+
+  const handleCameraStopped = useCallback(() => {
+    if (!pendingNativeCaptureModeRef.current) return;
+    beginCameraHandoff(250);
+  }, [beginCameraHandoff]);
+
+  useEffect(() => () => {
+    if (cameraStopFallbackRef.current) {
+      clearTimeout(cameraStopFallbackRef.current);
+    }
+    if (cameraHandoffTimeoutRef.current) {
+      clearTimeout(cameraHandoffTimeoutRef.current);
+    }
+  }, []);
 
   const { cameraPermission, hasMediaPermission, lutsLoaded } =
     useCameraBootstrap({ customLuts, firstTime });
@@ -749,9 +829,13 @@ export default function App() {
       {!firstTime && cameraPermission === "granted" && (
         <GestureDetector gesture={composedGestures}>
           <View style={styles.previewContainer}>
-            {nativeCaptureMode ? (
+            {cameraHandoffActive ? null : renderedNativeCaptureMode ? (
               <NativeCapturePreview
-                mode={nativeCaptureMode}
+                mode={renderedNativeCaptureMode}
+                isActive={
+                  nativeCaptureMode === renderedNativeCaptureMode &&
+                  !cameraHandoffActive
+                }
                 retroStyle={retroStyle}
                 device={activeLens?.device}
                 flash={flash}
@@ -794,7 +878,7 @@ export default function App() {
                 location={location}
                 verticalMode={verticalMode}
                 doubleCaptureMode={doubleCaptureMode}
-                isActive={!firstTime}
+                isActive={!firstTime && !nativeCaptureMode}
                 manualPhotoMode={manual.manualMode === "manual"}
                 manualExposureActive={
                   manual.manualMode === "manual" &&
@@ -805,6 +889,7 @@ export default function App() {
                 compositionScan={compositionScan}
                 onPreviewLayout={setScanPreviewLayout}
                 effectPreview={effectPreview}
+                onCameraStopped={handleCameraStopped}
               />
             )}
           </View>

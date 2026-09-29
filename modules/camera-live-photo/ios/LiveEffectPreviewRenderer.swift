@@ -25,6 +25,7 @@ final class LiveEffectPreviewRenderer {
   private var lutDomain: [Double] = [0, 0, 0, 1, 1, 1]
   private var grainStrength = 0.0
   private var halation: [Double] = []
+  private var hasPresentedFirstFrame = false
 
   private static let grainKernel = CIColorKernel(source: """
     kernel vec4 grain(__sample image, __sample random, float strength) {
@@ -50,6 +51,7 @@ final class LiveEffectPreviewRenderer {
     imageView.clipsToBounds = true
     imageView.isUserInteractionEnabled = false
     imageView.isHidden = true
+    imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
   }
 
   static func exifOrientation(for orientation: AVCaptureVideoOrientation) -> Int32 {
@@ -99,7 +101,10 @@ final class LiveEffectPreviewRenderer {
   }
 
   private var isEnabled: Bool {
-    cubeData != nil || grainStrength > 0 || halation.count >= 6
+    // The video-data output is the canonical preview for the native capture
+    // modes. AVCaptureVideoPreviewLayer can remain black while ownership of
+    // the camera moves from VisionCamera to a new AVCaptureSession.
+    true
   }
 
   private func updateVisibility(_ enabled: Bool) {
@@ -113,7 +118,7 @@ final class LiveEffectPreviewRenderer {
   func submit(_ pixelBuffer: CVPixelBuffer, orientation: Int32, mirrored: Bool) {
     let now = CFAbsoluteTimeGetCurrent()
     lock.lock()
-    guard isEnabled, !inFlight, now - lastFrameAt >= 1.0 / 24.0 else {
+    guard isEnabled, !inFlight, now - lastFrameAt >= 1.0 / 30.0 else {
       lock.unlock()
       return
     }
@@ -135,7 +140,7 @@ final class LiveEffectPreviewRenderer {
         var image = CIImage(cvPixelBuffer: pixelBuffer)
         if orientation != 1 { image = image.oriented(forExifOrientation: orientation) }
         if mirrored { image = image.oriented(.upMirrored) }
-        let scale = min(1.0, 720.0 / max(image.extent.width, image.extent.height))
+        let scale = min(1.0, 1080.0 / max(image.extent.width, image.extent.height))
         image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let extent = image.extent
 
@@ -190,8 +195,15 @@ final class LiveEffectPreviewRenderer {
             let valid = self.generation == currentGeneration && self.isEnabled
             self.lock.unlock()
             if valid {
+              if let container = self.imageView.superview {
+                self.imageView.frame = container.bounds
+              }
               self.imageView.image = UIImage(cgImage: output)
               self.imageView.isHidden = false
+              if !self.hasPresentedFirstFrame {
+                self.hasPresentedFirstFrame = true
+                print("[NativeEffectPreview] first frame presented")
+              }
             }
           }
         }

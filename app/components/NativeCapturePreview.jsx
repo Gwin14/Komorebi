@@ -14,6 +14,7 @@ const EMPTY_HISTOGRAM = Array(64).fill(0);
 
 export default function NativeCapturePreview({
   mode,
+  isActive = true,
   retroStyle,
   device,
   flash,
@@ -155,10 +156,10 @@ export default function NativeCapturePreview({
       ]}
     >
       <NativeCameraView
-        style={styles.camera}
+        style={StyleSheet.absoluteFill}
         deviceId={device.id}
         flashMode={flash === "on" ? "on" : "off"}
-        isActive={true}
+        isActive={isActive}
         onInitialized={handleInitialized}
         onError={handleError}
         smileDetectionEnabled={smileDetectionEnabled}

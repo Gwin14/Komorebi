@@ -595,6 +595,18 @@ index 85098d6..04872ba 100644
 diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts b/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
 --- a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
 +++ b/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
+@@ -28,6 +28,11 @@ export interface DrawableFrame extends Frame, SkCanvas {
+    * @internal
+    */
+   readonly __skImage: SkImage
++  /**
++   * Keeps a Skia resource alive until this frame has been submitted to the GPU.
++   * @internal
++   */
++  deferDisposal(resource: { dispose(): void }): void
+   /**
+    * A private method to dispose the internally created Texture after rendering has completed.
+    * @internal
 @@ -87,6 +87,10 @@
    canvas.save()
  
@@ -634,7 +646,40 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
  
    const getSkiaSurface = (frame: Frame): SkSurface => {
      'worklet'
-@@ -253,13 +263,18 @@
+@@ -225,6 +239,7 @@ export function createSkiaFrameProcessor(
+     const nativeBuffer = (frame as FrameInternal).getNativeBuffer()
+     const image = Skia.Image.MakeImageFromNativeBuffer(nativeBuffer.pointer)
+     if (image == null) throw new Error('Failed to create a Skia image from the camera frame')
++    const deferredResources: Array<{ dispose(): void }> = []
+ 
+     // Creates a `Proxy` that holds the SkCanvas, but also adds additional methods such as render() and dispose().
+     const canvasProxy = new Proxy(canvas as DrawableCanvas, {
+@@ -233,6 +248,11 @@ export function createSkiaFrameProcessor(
+         switch (property) {
+           case '__skImage':
+             return image
++          case 'deferDisposal':
++            return (resource: { dispose(): void }) => {
++              'worklet'
++              deferredResources.push(resource)
++            }
+           case 'render':
+             return (paint?: SkPaint) => {
+               'worklet'
+@@ -242,7 +262,11 @@ export function createSkiaFrameProcessor(
+           case 'dispose':
+             return () => {
+               'worklet'
+-              // dispose the Frame and the SkImage/Texture
++              for (let index = deferredResources.length - 1; index >= 0; index--) {
++                deferredResources[index].dispose()
++              }
++              deferredResources.length = 0
++              // dispose the Frame and the SkImage/Texture after submitted draws
+               image.dispose()
+               nativeBuffer.delete()
+             }
+@@ -253,13 +278,18 @@
    return {
      frameProcessor: withFrameRefCounting((frame) => {
        'worklet'
