@@ -13,6 +13,20 @@ export type CameraCapabilities = {
   maxFocusLensPosition: number;
 };
 
+export type CameraZoomPreset = {
+  zoomFactor: number;
+  displayZoom: number;
+  source: "physical" | "secondary-native";
+};
+
+export type CameraZoomCapabilities = {
+  minZoom: number;
+  maxZoom: number;
+  displayZoomMultiplier: number;
+  isVirtualDevice: boolean;
+  presets: CameraZoomPreset[];
+};
+
 // The native module only exists on iOS (and not in Expo Go), so resolve it
 // lazily and degrade to a no-op everywhere else.
 let nativeModule: any = null;
@@ -36,6 +50,18 @@ export async function getCameraCapabilities(
 ): Promise<CameraCapabilities | null> {
   if (!nativeModule) return null;
   return nativeModule.getCapabilities(deviceId);
+}
+
+/**
+ * Reads the optical and native-resolution zoom stops exposed by AVFoundation.
+ * Unlike model-name tables, this also discovers new devices and sensor-crop
+ * modes such as the iPhone 17 Pro telephoto camera's 8x stop.
+ */
+export async function getCameraZoomCapabilities(
+  deviceId: string,
+): Promise<CameraZoomCapabilities | null> {
+  if (!nativeModule?.getZoomCapabilities) return null;
+  return nativeModule.getZoomCapabilities(deviceId);
 }
 
 export async function setManualExposure(

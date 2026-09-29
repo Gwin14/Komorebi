@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Platform } from "react-native";
 import { useCameraDevices } from "react-native-vision-camera";
+import { getCameraZoomCapabilities } from "../../modules/camera-manual-controls";
 
 const PHYSICAL_DEVICE_META = {
   "ultra-wide-angle-camera": {
@@ -30,12 +32,14 @@ const getMaxResolution = (device, widthKey, heightKey) =>
     ),
   );
 
-const getDevicePreferenceScore = (device) => {
+const getDevicePreferenceScore = (device, preferLogical = false) => {
   const name = String(device.name ?? "").toLowerCase();
   let score = 0;
 
   if (name.includes("lidar") || name.includes("depth")) score -= 1_000_000;
-  if (name.includes("wide")) score += 10_000;
+  if (preferLogical && device.isMultiCam) score += 2_000_000;
+  if (preferLogical) score += (device.physicalDevices?.length ?? 0) * 100_000;
+  if (device.physicalDevices?.includes("wide-angle-camera")) score += 10_000;
   if (device.hasFlash) score += 500;
   if (device.supportsFocus) score += 250;
   if (device.supportsRawCapture) score += 100;
@@ -46,12 +50,107 @@ const getDevicePreferenceScore = (device) => {
   return score;
 };
 
+const formatZoomLabel = (displayZoom) => {
+  if (!Number.isFinite(displayZoom)) return "1";
+  const rounded = Math.round(displayZoom * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+};
+
+const makeZoomPreset = (device, preset) => ({
+  id: `zoom:${preset.zoomFactor.toFixed(4)}`,
+  label: formatZoomLabel(preset.displayZoom),
+  type:
+    Math.abs(preset.displayZoom - 1) < 0.05
+      ? "wide"
+      : preset.displayZoom < 1
+        ? "ultra-wide"
+        : "telephoto",
+  device,
+  order: preset.zoomFactor,
+  zoomFactor: preset.zoomFactor,
+  displayZoom: preset.displayZoom,
+  source: preset.source,
+});
+
+const dedupePresets = (presets) => {
+  const sorted = [...presets].sort((a, b) => a.zoomFactor - b.zoomFactor);
+  return sorted.filter(
+    (preset, index) =>
+      index === 0 ||
+      Math.abs(preset.zoomFactor - sorted[index - 1].zoomFactor) >= 0.01,
+  );
+};
+
+const buildIOSFallbackPresets = (device) => {
+  const neutralZoom = Math.max(device.minZoom, device.neutralZoom || 1);
+  const displayMultiplier = 1 / neutralZoom;
+  const factors = [device.minZoom, neutralZoom];
+
+  return dedupePresets(
+    factors
+      .filter(
+        (zoomFactor) =>
+          Number.isFinite(zoomFactor) && zoomFactor <= device.maxZoom,
+      )
+      .map((zoomFactor) => ({
+        zoomFactor,
+        displayZoom: zoomFactor * displayMultiplier,
+        source: "physical",
+      })),
+  );
+};
+
 export function usePhysicalCameraDevices(facing = "back") {
   const devices = useCameraDevices();
   const [activeLensId, setActiveLensId] = useState(null);
+  const [iosZoomCapabilities, setIOSZoomCapabilities] = useState(null);
+
+  const position = facing === "back" ? "back" : "front";
+  const iosDevice = useMemo(() => {
+    if (Platform.OS !== "ios") return null;
+
+    return devices
+      .filter((device) => device.position === position)
+      .sort(
+        (a, b) =>
+          getDevicePreferenceScore(b, true) -
+          getDevicePreferenceScore(a, true),
+      )[0];
+  }, [devices, position]);
+
+  const refreshZoomCapabilities = useCallback(async () => {
+    if (Platform.OS !== "ios" || !iosDevice?.id) return null;
+
+    try {
+      const capabilities = await getCameraZoomCapabilities(iosDevice.id);
+      if (capabilities) {
+        setIOSZoomCapabilities({ deviceId: iosDevice.id, ...capabilities });
+      }
+      return capabilities;
+    } catch (error) {
+      console.warn("Não foi possível ler os fatores nativos de zoom:", error);
+      return null;
+    }
+  }, [iosDevice?.id]);
+
+  useEffect(() => {
+    setIOSZoomCapabilities(null);
+    void refreshZoomCapabilities();
+  }, [refreshZoomCapabilities]);
 
   const lenses = useMemo(() => {
-    const position = facing === "back" ? "back" : "front";
+    if (Platform.OS === "ios" && iosDevice) {
+      const nativePresets =
+        iosZoomCapabilities?.deviceId === iosDevice.id
+          ? iosZoomCapabilities.presets
+          : null;
+      const presets =
+        nativePresets?.length > 0
+          ? dedupePresets(nativePresets)
+          : buildIOSFallbackPresets(iosDevice);
+
+      return presets.map((preset) => makeZoomPreset(iosDevice, preset));
+    }
 
     const lensMap = new Map();
 
@@ -71,6 +170,8 @@ export function usePhysicalCameraDevices(facing = "back") {
           type: meta.type,
           device,
           order: meta.order,
+          zoomFactor: device.neutralZoom ?? 1,
+          displayZoom: Number(meta.label) || 1,
           score: getDevicePreferenceScore(device),
         };
         const current = lensMap.get(meta.type);
@@ -84,9 +185,7 @@ export function usePhysicalCameraDevices(facing = "back") {
       .map(({ score, ...lens }) => lens)
       .sort((a, b) => a.order - b.order);
 
-    if (physicalLenses.length > 0) {
-      return physicalLenses;
-    }
+    if (physicalLenses.length > 0) return physicalLenses;
 
     return devices
       .filter((device) => device.position === position)
@@ -96,8 +195,10 @@ export function usePhysicalCameraDevices(facing = "back") {
         type: "unknown",
         device,
         order: index + 10,
+        zoomFactor: device.neutralZoom ?? 1,
+        displayZoom: 1,
       }));
-  }, [devices, facing]);
+  }, [devices, iosDevice, iosZoomCapabilities, position]);
 
   useEffect(() => {
     if (lenses.length === 0) return;
@@ -108,12 +209,15 @@ export function usePhysicalCameraDevices(facing = "back") {
   }, [lenses, activeLensId]);
 
   const activeLens =
-    lenses.find((lens) => lens.id === activeLensId) ?? lenses[0];
+    lenses.find((lens) => lens.id === activeLensId) ??
+    lenses.find((lens) => lens.type === "wide") ??
+    lenses[0];
 
   return {
     lenses,
     activeLens,
-    activeLensId,
+    activeLensId: activeLens?.id ?? activeLensId,
     setActiveLensId,
+    refreshZoomCapabilities,
   };
 }

@@ -116,8 +116,13 @@ export default function App() {
     [customLuts],
   );
 
-  const { lenses, activeLens, activeLensId, setActiveLensId } =
-    usePhysicalCameraDevices(facing);
+  const {
+    lenses,
+    activeLens,
+    activeLensId,
+    setActiveLensId,
+    refreshZoomCapabilities,
+  } = usePhysicalCameraDevices(facing);
 
   const manual = useManualCameraControls(activeLens?.device);
   const rawCapture = useRawCapture(activeLens?.device);
@@ -397,28 +402,43 @@ export default function App() {
     }
   }, [availableLuts, selectedLutId]);
 
-  // 🆕 Sincronizar zoom quando facing muda (troca câmera frontal/traseira)
-  // A lente padrão da frontal é neutralZoom=1
+  // Cada câmera lógica tem sua própria escala interna. Em aparelhos com
+  // ultra-wide, o zoom neutro da câmera principal geralmente não é 1.
   useEffect(() => {
     cancelAutoZoomAnimation();
-    setZoom(1);
-    zoomSV.value = 1;
-  }, [cancelAutoZoomAnimation, facing, zoomSV]);
+    const initialZoom =
+      activeLens?.zoomFactor ?? activeLens?.device?.neutralZoom ?? 1;
+    setZoom(initialZoom);
+    zoomSV.value = initialZoom;
+  }, [
+    activeLens?.device?.id,
+    activeLens?.device?.neutralZoom,
+    activeLens?.zoomFactor,
+    cancelAutoZoomAnimation,
+    facing,
+    zoomSV,
+  ]);
 
   const handleSelectLens = useCallback(
     (lensId) => {
       if (imageStacking.capturing) return;
-      if (lensId === activeLensId) return;
+      const selectedLens = lenses.find((lens) => lens.id === lensId);
+      if (!selectedLens) return;
+      const selectedZoom =
+        selectedLens.zoomFactor ?? selectedLens.device?.neutralZoom ?? 1;
       cancelAutoZoomAnimation();
-      setZoom(1);
-      zoomSV.value = 1;
-      setCameraReady(false);
+      setZoom(selectedZoom);
+      zoomSV.value = selectedZoom;
+      if (selectedLens.device?.id !== activeLens?.device?.id) {
+        setCameraReady(false);
+      }
       setActiveLensId(lensId);
     },
     [
-      activeLensId,
+      activeLens?.device?.id,
       cancelAutoZoomAnimation,
       imageStacking.capturing,
+      lenses,
       setActiveLensId,
       zoomSV,
     ],
@@ -696,6 +716,7 @@ export default function App() {
   );
 
   const handleCameraReady = useCallback(() => {
+    void refreshZoomCapabilities();
     if (nativeCaptureMode) {
       setPictureSize(null);
       setCameraReady(true);
@@ -703,7 +724,7 @@ export default function App() {
     }
 
     onCameraReady(cameraRef, setPictureSize, setCameraReady);
-  }, [nativeCaptureMode]);
+  }, [nativeCaptureMode, refreshZoomCapabilities]);
 
   useEffect(() => {
     setCameraReady(false);

@@ -51,6 +51,11 @@ public class CameraManualControlsModule: Module {
       ]
     }
 
+    AsyncFunction("getZoomCapabilities") { (deviceId: String) -> [String: Any] in
+      let device = try Self.findDevice(deviceId)
+      return Self.zoomCapabilities(for: device)
+    }
+
     AsyncFunction("setManualExposure") { (deviceId: String, iso: Double, durationSeconds: Double) async throws in
       let device = try Self.findDevice(deviceId)
 
@@ -189,5 +194,111 @@ public class CameraManualControlsModule: Module {
       throw ManualControlsError.deviceNotFound(deviceId)
     }
     return device
+  }
+
+  private static func zoomCapabilities(for device: AVCaptureDevice) -> [String: Any] {
+    let constituents: [AVCaptureDevice]
+    let switchFactors: [Double]
+
+    if #available(iOS 13.0, *), device.isVirtualDevice {
+      constituents = device.constituentDevices
+      switchFactors = device.virtualDeviceSwitchOverVideoZoomFactors.map(\.doubleValue)
+    } else {
+      constituents = [device]
+      switchFactors = []
+    }
+
+    // A virtual camera's zoom starts at its widest constituent. Every switch
+    // factor is the native zoom at which the following constituent takes over.
+    var constituentBaseFactors = [1.0]
+    constituentBaseFactors.append(contentsOf: switchFactors)
+
+    let wideIndex = constituents.firstIndex(where: {
+      $0.deviceType == .builtInWideAngleCamera
+    })
+    let displayMultiplier: Double
+    if #available(iOS 18.0, *) {
+      displayMultiplier = Double(device.displayVideoZoomFactorMultiplier)
+    } else if let wideIndex, wideIndex < constituentBaseFactors.count {
+      displayMultiplier = 1.0 / constituentBaseFactors[wideIndex]
+    } else {
+      displayMultiplier = 1.0
+    }
+
+    // switchOverVideoZoomFactors are transition thresholds, not necessarily
+    // the nominal full-field-of-view zoom shown by Camera.app. In particular,
+    // recent iPhones may begin switching from ultra-wide around 0.9x even
+    // though the main camera's user-facing native stop is exactly 1x.
+    if let wideIndex,
+       wideIndex < constituentBaseFactors.count,
+       displayMultiplier > 0 {
+      constituentBaseFactors[wideIndex] = 1.0 / displayMultiplier
+    }
+
+    let minZoom = Double(device.minAvailableVideoZoomFactor)
+    let maxZoom = Double(device.maxAvailableVideoZoomFactor)
+    var presets: [[String: Any]] = []
+
+    for (index, constituent) in constituents.enumerated() {
+      guard index < constituentBaseFactors.count else { continue }
+      let baseFactor = constituentBaseFactors[index]
+      Self.appendZoomPreset(
+        zoomFactor: baseFactor,
+        source: "physical",
+        displayMultiplier: displayMultiplier,
+        minZoom: minZoom,
+        maxZoom: maxZoom,
+        to: &presets
+      )
+
+      if #available(iOS 16.0, *) {
+        for secondaryFactor in constituent.activeFormat.secondaryNativeResolutionZoomFactors {
+          Self.appendZoomPreset(
+            zoomFactor: baseFactor * Double(secondaryFactor),
+            source: "secondary-native",
+            displayMultiplier: displayMultiplier,
+            minZoom: minZoom,
+            maxZoom: maxZoom,
+            to: &presets
+          )
+        }
+      }
+    }
+
+    presets.sort {
+      (($0["zoomFactor"] as? Double) ?? 0) < (($1["zoomFactor"] as? Double) ?? 0)
+    }
+
+    return [
+      "minZoom": minZoom,
+      "maxZoom": maxZoom,
+      "displayZoomMultiplier": displayMultiplier,
+      "isVirtualDevice": device.isVirtualDevice,
+      "presets": presets,
+    ]
+  }
+
+  private static func appendZoomPreset(
+    zoomFactor: Double,
+    source: String,
+    displayMultiplier: Double,
+    minZoom: Double,
+    maxZoom: Double,
+    to presets: inout [[String: Any]]
+  ) {
+    guard zoomFactor.isFinite,
+          zoomFactor >= minZoom - 0.001,
+          zoomFactor <= maxZoom + 0.001 else { return }
+
+    let alreadyPresent = presets.contains {
+      abs((($0["zoomFactor"] as? Double) ?? 0) - zoomFactor) < 0.01
+    }
+    guard !alreadyPresent else { return }
+
+    presets.append([
+      "zoomFactor": zoomFactor,
+      "displayZoom": zoomFactor * displayMultiplier,
+      "source": source,
+    ])
   }
 }
