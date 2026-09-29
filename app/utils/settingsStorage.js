@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { restoreIntelligentPreferences } from "./intelligentSettings";
+import { restoreZebraPreferences } from "./zebraSettings";
 import { normalizeTopBarControls } from "./topBarControls";
 
 export const SETTINGS_STORAGE_KEYS = {
@@ -6,10 +8,21 @@ export const SETTINGS_STORAGE_KEYS = {
   GRID_VISIBLE: "@settings/gridVisible",
   LEVEL_VISIBLE: "@settings/levelVisible",
   HISTOGRAM_VISIBLE: "@settings/histogramVisible",
+  PREVIEW_LUT: "@settings/previewLut",
+  PREVIEW_HALATION: "@settings/previewHalation",
+  PREVIEW_GRAIN: "@settings/previewGrain",
+  PREVIEW_DOUBLE_EXPOSURE: "@settings/previewDoubleExposure",
+  PREVIEW_STACKING: "@settings/previewStacking",
+  ZEBRA_HIGHLIGHTS_ENABLED: "@settings/zebraHighlightsEnabled",
+  ZEBRA_SHADOWS_ENABLED: "@settings/zebraShadowsEnabled",
   COMPOSITION_SCAN_ENABLED: "@settings/compositionScanEnabled",
+  INTELLIGENT_TAGS_ENABLED: "@settings/intelligentTagsEnabled",
+  INTELLIGENT_FILENAME_ENABLED: "@settings/intelligentFilenameEnabled",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
   SAVE_AS_JPEG: "@settings/saveAsJpeg",
+  PRESERVE_APPLE_PHOTOGRAPHIC_STYLES:
+    "@settings/preserveApplePhotographicStyles",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
   CUSTOM_LUTS: "@settings/customLuts",
@@ -42,10 +55,20 @@ export async function loadStoredSettings(defaults) {
     savedGridVisible,
     savedLevelVisible,
     savedHistogramVisible,
+    savedPreviewLut,
+    savedPreviewHalation,
+    savedPreviewGrain,
+    savedPreviewDoubleExposure,
+    savedPreviewStacking,
+    savedZebraHighlightsEnabled,
+    savedZebraShadowsEnabled,
     savedCompositionScanEnabled,
+    savedIntelligentTagsEnabled,
+    savedIntelligentFilenameEnabled,
     savedShutterSound,
     savedLocation,
     savedSaveAsJpeg,
+    savedPreserveApplePhotographicStyles,
     savedSaveOriginalWithLUT,
     savedFirstTime,
     savedCustomLuts,
@@ -58,10 +81,20 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.GRID_VISIBLE),
     AsyncStorage.getItem(keys.LEVEL_VISIBLE),
     AsyncStorage.getItem(keys.HISTOGRAM_VISIBLE),
+    AsyncStorage.getItem(keys.PREVIEW_LUT),
+    AsyncStorage.getItem(keys.PREVIEW_HALATION),
+    AsyncStorage.getItem(keys.PREVIEW_GRAIN),
+    AsyncStorage.getItem(keys.PREVIEW_DOUBLE_EXPOSURE),
+    AsyncStorage.getItem(keys.PREVIEW_STACKING),
+    AsyncStorage.getItem(keys.ZEBRA_HIGHLIGHTS_ENABLED),
+    AsyncStorage.getItem(keys.ZEBRA_SHADOWS_ENABLED),
     AsyncStorage.getItem(keys.COMPOSITION_SCAN_ENABLED),
+    AsyncStorage.getItem(keys.INTELLIGENT_TAGS_ENABLED),
+    AsyncStorage.getItem(keys.INTELLIGENT_FILENAME_ENABLED),
     AsyncStorage.getItem(keys.SHUTTER_SOUND),
     AsyncStorage.getItem(keys.LOCATION),
     AsyncStorage.getItem(keys.SAVE_AS_JPEG),
+    AsyncStorage.getItem(keys.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES),
     AsyncStorage.getItem(keys.SAVE_ORIGINAL_WITH_LUT),
     AsyncStorage.getItem(keys.FIRSTTIME),
     AsyncStorage.getItem(keys.CUSTOM_LUTS),
@@ -71,7 +104,23 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.ACTIVE_PROJECT_ID),
     ]);
 
-    return {
+  const intelligentPreferences = restoreIntelligentPreferences(
+    {
+      compositionScan: savedCompositionScanEnabled,
+      tags: savedIntelligentTagsEnabled,
+      filename: savedIntelligentFilenameEnabled,
+    },
+    defaults,
+  );
+  const zebraPreferences = restoreZebraPreferences(
+    {
+      highlights: savedZebraHighlightsEnabled,
+      shadows: savedZebraShadowsEnabled,
+    },
+    defaults,
+  );
+
+  return {
     retroStyle: parseBoolean(savedRetroStyle, defaults.retroStyle),
     gridVisible: parseBoolean(savedGridVisible, defaults.gridVisible),
     levelVisible: parseBoolean(savedLevelVisible, defaults.levelVisible),
@@ -79,13 +128,20 @@ export async function loadStoredSettings(defaults) {
       savedHistogramVisible,
       defaults.histogramVisible,
     ),
-    compositionScanEnabled: parseBoolean(
-      savedCompositionScanEnabled,
-      defaults.compositionScanEnabled,
-    ),
+    previewLut: parseBoolean(savedPreviewLut, defaults.previewLut),
+    previewHalation: parseBoolean(savedPreviewHalation, defaults.previewHalation),
+    previewGrain: parseBoolean(savedPreviewGrain, defaults.previewGrain),
+    previewDoubleExposure: parseBoolean(savedPreviewDoubleExposure, defaults.previewDoubleExposure),
+    previewStacking: parseBoolean(savedPreviewStacking, defaults.previewStacking),
+    ...zebraPreferences,
+    ...intelligentPreferences,
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
     saveAsJpeg: parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg),
+    preserveApplePhotographicStyles: parseBoolean(
+      savedPreserveApplePhotographicStyles,
+      defaults.preserveApplePhotographicStyles,
+    ),
     saveOriginalWithoutEffects: parseBoolean(
       savedSaveOriginalWithLUT,
       defaults.saveOriginalWithoutEffects,
@@ -98,7 +154,7 @@ export async function loadStoredSettings(defaults) {
     ),
     projects: parseJSON(savedProjects, defaults.projects),
     activeProjectId: savedActiveProjectId || defaults.activeProjectId,
-    };
+  };
 }
 
 export function saveStoredSetting(key, value) {

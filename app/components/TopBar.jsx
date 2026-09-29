@@ -9,6 +9,8 @@ import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
+import ImageStackingSelector from "./ImageStackingSelector";
+import ImageStackingStatus from "./ImageStackingStatus";
 import styles from "./TopBar.styles";
 
 export default function TopBar({
@@ -36,15 +38,22 @@ export default function TopBar({
   portraitCaptureAvailable,
   portraitModeEnabled,
   togglePortraitModeEnabled,
+  imageStackingAvailable,
+  imageStackingStrategyId,
+  onSelectImageStackingStrategy,
   unavailableReasons = {},
   projects = [],
   activeProjectId,
   onChangeProject,
   onCreateProject,
+  controlsDisabled = false,
+  stackingProgress,
+  onCancelStacking,
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
   const [open, setOpen] = useState(false);
+  const [stackingOpen, setStackingOpen] = useState(false);
   const [data, setData] = useState(null);
   const [place, setPlace] = useState(null);
   const [coords, setCoords] = useState(null);
@@ -165,6 +174,11 @@ export default function TopBar({
       onPress: togglePortraitModeEnabled,
       active: portraitModeEnabled,
     },
+    stacking: {
+      icon: imageStackingStrategyId ? "layers" : "layers-outline",
+      onPress: () => setStackingOpen(true),
+      active: Boolean(imageStackingStrategyId),
+    },
     projects: {
       icon: activeProjectId ? "folder" : "folder-outline",
       onPress: () => {},
@@ -174,14 +188,20 @@ export default function TopBar({
 
   return (
     <View style={styles.buttonsContainer}>
-      {topBarControls.map((controlId) => {
+      {controlsDisabled ? (
+        <ImageStackingStatus progress={stackingProgress} onCancel={onCancelStacking} />
+      ) : topBarControls.map((controlId) => {
+        if (controlId === "stacking" && !imageStackingAvailable) return null;
         if (controlId === "manual" && !manualControlsAvailable) return null;
         const control = controlOptions[controlId];
         if (!control) return null;
 
         const disabled =
+          controlsDisabled ||
           (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
+          (controlId === "manual" && Boolean(unavailableReasons.manual)) ||
           (controlId === "rawCapture" && !rawCaptureAvailable) ||
+          (controlId === "stacking" && !imageStackingAvailable) ||
           (controlId === "livePhoto" && !livePhotoAvailable) ||
           (controlId === "portrait" && !portraitCaptureAvailable);
         const unavailableReason = unavailableReasons[controlId];
@@ -244,6 +264,52 @@ export default function TopBar({
           );
         }
 
+        if (controlId === "stacking") {
+          return (
+            <View key={controlId}>
+              <Animated.View style={animatedStyle}>
+                <Popover
+                  isVisible={stackingOpen}
+                  onRequestClose={() => setStackingOpen(false)}
+                  backgroundStyle={{ backgroundColor: "transparent" }}
+                  popoverStyle={{ backgroundColor: "transparent" }}
+                  from={
+                    <TouchableOpacity
+                      style={[
+                        styles.controlButton,
+                        control.active && styles.controlButtonActive,
+                      ]}
+                      onPress={() => {
+                        if (disabled) {
+                          Alert.alert(
+                            "Recurso indisponível",
+                            unavailableReason || "Os controles ficam bloqueados durante a captura.",
+                          );
+                          return;
+                        }
+                        setStackingOpen(true);
+                      }}
+                      activeOpacity={0.72}
+                      accessibilityState={{ disabled }}
+                    >
+                      <Ionicons name={control.icon} size={26} color={iconColor} />
+                    </TouchableOpacity>
+                  }
+                >
+                  <ImageStackingSelector
+                    value={imageStackingStrategyId}
+                    disabled={disabled}
+                    onChange={(strategyId) => {
+                      setStackingOpen(false);
+                      onSelectImageStackingStrategy(strategyId);
+                    }}
+                  />
+                </Popover>
+              </Animated.View>
+            </View>
+          );
+        }
+
         return (
           <TouchableOpacity
             key={controlId}
@@ -256,7 +322,9 @@ export default function TopBar({
                 Alert.alert(
                   "Recurso indisponível",
                   unavailableReason ||
-                    "Este recurso não é compatível com a lente atual.",
+                    (controlsDisabled
+                      ? "Os controles ficam bloqueados durante a captura."
+                      : "Este recurso não é compatível com a lente atual."),
                 );
                 return;
               }

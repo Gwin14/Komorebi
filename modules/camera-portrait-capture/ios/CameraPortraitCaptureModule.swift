@@ -5,6 +5,47 @@ import ImageIO
 import Photos
 import UniformTypeIdentifiers
 import CoreImage
+import UIKit
+
+
+private final class ZebraOverlayRenderer {
+  private let context = CIContext(options: [.cacheIntermediates: false])
+  private let kernel = CIColorKernel(source: """
+    kernel vec4 zebra(__sample pixel, float highlights, float shadows) {
+      float luma = dot(pixel.rgb, vec3(0.2126, 0.7152, 0.0722));
+      float stripe = step(0.5, fract((destCoord().x + destCoord().y) / 9.0));
+      if (highlights > 0.5 && luma >= 0.98 && stripe > 0.5) return vec4(1.0, 0.05, 0.05, 0.82);
+      if (shadows > 0.5 && luma <= 0.02 && stripe > 0.5) return vec4(0.05, 0.32, 1.0, 0.86);
+      return vec4(0.0);
+    }
+  """)
+
+  func makeImage(from pixelBuffer: CVPixelBuffer, highlights: Bool, shadows: Bool,
+                 orientation: AVCaptureVideoOrientation, mirrored: Bool) -> CGImage? {
+    guard (highlights || shadows), let kernel else { return nil }
+    var image = CIImage(cvPixelBuffer: pixelBuffer).oriented(
+      forExifOrientation: exifOrientation(for: orientation)
+    )
+    if mirrored { image = image.oriented(.upMirrored) }
+    let scale = min(1, 720 / max(image.extent.width, image.extent.height))
+    image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    guard let output = kernel.apply(
+      extent: image.extent,
+      arguments: [image, highlights ? 1.0 : 0.0, shadows ? 1.0 : 0.0]
+    ) else { return nil }
+    return context.createCGImage(output, from: output.extent)
+  }
+
+  private func exifOrientation(for orientation: AVCaptureVideoOrientation) -> Int32 {
+    switch orientation {
+    case .portrait: return 6
+    case .portraitUpsideDown: return 8
+    case .landscapeLeft: return 3
+    case .landscapeRight: return 1
+    @unknown default: return 6
+    }
+  }
+}
 
 public class CameraPortraitCaptureModule: Module {
   enum PortraitCaptureError: Error, LocalizedError {
@@ -80,6 +121,29 @@ public class CameraPortraitCaptureModule: Module {
       Prop("histogramEnabled") { (view, enabled: Bool?) in
         view.histogramEnabled = enabled ?? false
       }
+
+      Prop("zebraHighlightsEnabled") { (view, enabled: Bool?) in
+        view.zebraHighlightsEnabled = enabled ?? false
+      }
+
+      Prop("zebraShadowsEnabled") { (view, enabled: Bool?) in
+        view.zebraShadowsEnabled = enabled ?? false
+      }
+      Prop("previewLutSize") { (view, size: Int?) in
+        view.previewLutSize = size ?? 0
+      }
+      Prop("previewLutValues") { (view, values: [Double]?) in
+        view.previewLutValues = values ?? []
+      }
+      Prop("previewLutDomain") { (view, domain: [Double]?) in
+        view.effectRenderer.setLutDomain(domain ?? [])
+      }
+      Prop("previewGrainStrength") { (view, strength: Double?) in
+        view.effectRenderer.setGrainStrength(strength ?? 0)
+      }
+      Prop("previewHalation") { (view, parameters: [Double]?) in
+        view.effectRenderer.setHalation(parameters ?? [])
+      }
     }
 
     AsyncFunction("getCapabilities") { (deviceId: String) async throws -> [String: Any] in
@@ -133,9 +197,11 @@ public class CameraPortraitCaptureModule: Module {
         outputFormat: options["outputFormat"] as? String ?? "heif"
       )
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
+      let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.savePhotoToLibrary(
         photoURL: prepared.url,
-        albumTitle: albumTitle
+        albumTitle: albumTitle,
+        originalFilename: originalFilename
       )
 
       return [
@@ -409,14 +475,17 @@ public class CameraPortraitCaptureModule: Module {
 
   static func savePhotoToLibrary(
     photoURL: URL,
-    albumTitle: String? = nil
+    albumTitle: String? = nil,
+    originalFilename: String? = nil
   ) async throws -> String? {
     try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String?, Error>) in
       var placeholderIdentifier: String?
 
       PHPhotoLibrary.shared().performChanges({
         let request = PHAssetCreationRequest.forAsset()
-        request.addResource(with: .photo, fileURL: photoURL, options: nil)
+        let resourceOptions = PHAssetResourceCreationOptions()
+        resourceOptions.originalFilename = originalFilename
+        request.addResource(with: .photo, fileURL: photoURL, options: resourceOptions)
         placeholderIdentifier = request.placeholderForCreatedAsset?.localIdentifier
 
         if
@@ -478,6 +547,14 @@ public final class PortraitCameraView: ExpoView {
 
   private static weak var currentActiveView: PortraitCameraView?
   private let controller = PortraitCameraController()
+  let effectRenderer = LiveEffectPreviewRenderer()
+  private let zebraOverlay = UIImageView()
+  var previewLutSize = 0 {
+    didSet { effectRenderer.setLut(size: previewLutSize, values: previewLutValues) }
+  }
+  var previewLutValues: [Double] = [] {
+    didSet { effectRenderer.setLut(size: previewLutSize, values: previewLutValues) }
+  }
 
   var deviceId: String? {
     didSet {
@@ -499,6 +576,20 @@ public final class PortraitCameraView: ExpoView {
     }
   }
 
+  var zebraHighlightsEnabled: Bool = false {
+    didSet {
+      controller.zebraHighlightsEnabled = zebraHighlightsEnabled
+      if !zebraHighlightsEnabled && !zebraShadowsEnabled { zebraOverlay.image = nil }
+    }
+  }
+
+  var zebraShadowsEnabled: Bool = false {
+    didSet {
+      controller.zebraShadowsEnabled = zebraShadowsEnabled
+      if !zebraHighlightsEnabled && !zebraShadowsEnabled { zebraOverlay.image = nil }
+    }
+  }
+
   var isActive: Bool = true {
     didSet {
       updateSession()
@@ -511,11 +602,22 @@ public final class PortraitCameraView: ExpoView {
     backgroundColor = .black
     videoPreviewLayer.videoGravity = .resizeAspectFill
     videoPreviewLayer.session = controller.session
+    addSubview(effectRenderer.imageView)
+    zebraOverlay.contentMode = .scaleAspectFill
+    zebraOverlay.clipsToBounds = true
+    zebraOverlay.isUserInteractionEnabled = false
+    addSubview(zebraOverlay)
     controller.onSmileDetected = { [weak self] in
       self?.onSmileDetected()
     }
     controller.onHistogramUpdated = { [weak self] bins in
       self?.onHistogramUpdated(["bins": bins])
+    }
+    controller.onZebraUpdated = { [weak self] image in
+      DispatchQueue.main.async { self?.zebraOverlay.image = image.map { UIImage(cgImage: $0) } }
+    }
+    controller.onEffectFrame = { [weak self] buffer, orientation, mirrored in
+      self?.effectRenderer.submit(buffer, orientation: orientation, mirrored: mirrored)
     }
   }
 
@@ -525,6 +627,12 @@ public final class PortraitCameraView: ExpoView {
 
   private var videoPreviewLayer: AVCaptureVideoPreviewLayer {
     layer as! AVCaptureVideoPreviewLayer
+  }
+
+  public override func layoutSubviews() {
+    super.layoutSubviews()
+    effectRenderer.imageView.frame = bounds
+    zebraOverlay.frame = bounds
   }
 
   @MainActor
@@ -667,6 +775,12 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   var onSmileDetected: (() -> Void)?
   var histogramEnabled = false
   var onHistogramUpdated: (([Double]) -> Void)?
+  var zebraHighlightsEnabled = false
+  var zebraShadowsEnabled = false
+  var onZebraUpdated: ((CGImage?) -> Void)?
+  var onEffectFrame: ((CVPixelBuffer, Int32, Bool) -> Void)?
+  private let zebraRenderer = ZebraOverlayRenderer()
+  private var lastZebraAt = Date.distantPast
   private var lastSmileAt = Date.distantPast
   private var lastHistogramAt = Date.distantPast
   private let sessionQueue = DispatchQueue(label: "dev.komorebi.portrait-capture.session")
@@ -786,7 +900,25 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
       return
     }
 
+    onEffectFrame?(
+      pixelBuffer,
+      LiveEffectPreviewRenderer.exifOrientation(for: orientationTracker.outputOrientation),
+      activeCaptureDevice?.position == .front
+    )
+
     let now = Date()
+    if (zebraHighlightsEnabled || zebraShadowsEnabled),
+       now.timeIntervalSince(lastZebraAt) >= 0.1 {
+      lastZebraAt = now
+      let image = zebraRenderer.makeImage(
+        from: pixelBuffer,
+        highlights: zebraHighlightsEnabled,
+        shadows: zebraShadowsEnabled,
+        orientation: orientationTracker.outputOrientation,
+        mirrored: activeCaptureDevice?.position == .front
+      )
+      onZebraUpdated?(image)
+    }
     if histogramEnabled,
        now.timeIntervalSince(lastHistogramAt) >= 0.2
     {

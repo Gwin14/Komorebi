@@ -11,16 +11,39 @@ export default StyleSheet.create({
     borderRadius: 12,
     marginVertical: 4,
   },
+  wrapperGrouped: {
+    minHeight: 58,
+    backgroundColor: "transparent",
+    borderRadius: 0,
+    borderBottomColor: "#292929",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginVertical: 0,
+  },
+  wrapperGroupedLast: {
+    borderBottomWidth: 0,
+  },
+  wrapperDisabled: {
+    opacity: 0.48,
+  },
   label: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "500",
-    letterSpacing: 0.5,
+    letterSpacing: 0.1,
   },
   labelRow: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
+  },
+  labelBlock: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  description: {
+    color: "#a9a9a9",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
   },
   badge: {
     color: "#d8b66a",
@@ -49,6 +72,9 @@ export default StyleSheet.create({
   trackActive: {
     backgroundColor: "rgba(255, 170, 0, 0.2)", // Amber suave ao fundo
     borderColor: "#ffaa00",
+  },
+  trackDisabled: {
+    borderColor: "#3a3a3a",
   },
   thumb: {
     width: 20,

@@ -20,6 +20,13 @@ export type PortraitCameraViewProps = ViewProps & {
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
   histogramEnabled?: boolean;
+  zebraHighlightsEnabled?: boolean;
+  zebraShadowsEnabled?: boolean;
+  previewLutSize?: number;
+  previewLutValues?: number[];
+  previewLutDomain?: number[];
+  previewGrainStrength?: number;
+  previewHalation?: number[];
   onSmileDetected?: () => void;
   onHistogramUpdated?: (event: {
     nativeEvent?: { bins?: number[] };
@@ -42,6 +49,7 @@ export type SaveProcessedPortraitPhotoOptions = {
   originalPhotoUri?: string | null;
   albumTitle?: string;
   outputFormat?: "heif" | "jpeg";
+  originalFilename?: string | null;
 };
 
 export type ConvertPhotoFormatOptions = {
@@ -134,6 +142,7 @@ export async function saveProcessedPortraitPhoto(
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",
     outputFormat: options.outputFormat ?? "heif",
+    originalFilename: options.originalFilename ?? null,
   });
 
   return {

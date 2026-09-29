@@ -18,6 +18,13 @@ export type LivePhotoCameraViewProps = ViewProps & {
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
   histogramEnabled?: boolean;
+  zebraHighlightsEnabled?: boolean;
+  zebraShadowsEnabled?: boolean;
+  previewLutSize?: number;
+  previewLutValues?: number[];
+  previewLutDomain?: number[];
+  previewGrainStrength?: number;
+  previewHalation?: number[];
   onSmileDetected?: () => void;
   onHistogramUpdated?: (event: {
     nativeEvent?: { bins?: number[] };
@@ -40,6 +47,7 @@ export type SaveLivePhotoOptions = {
   originalPhotoUri?: string | null;
   albumTitle?: string;
   outputFormat?: "heif" | "jpeg";
+  originalFilename?: string | null;
 };
 
 export type SaveLivePhotoResult = {
@@ -117,6 +125,7 @@ export async function saveLivePhotoToLibrary(
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",
     outputFormat: options.outputFormat ?? "heif",
+    originalFilename: options.originalFilename ?? null,
   });
 
   return {

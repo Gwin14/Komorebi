@@ -5,10 +5,25 @@ import styles from "./shutter.styles";
 export default function Shutter({
   takePicture,
   isProcessing,
+  capturing = false,
   compact = false,
 }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const captureGlow = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!capturing) {
+      captureGlow.setValue(0);
+      return;
+    }
+    const pulse = Animated.loop(Animated.sequence([
+      Animated.timing(captureGlow, { toValue: 1, duration: 1400, useNativeDriver: true }),
+      Animated.timing(captureGlow, { toValue: 0, duration: 1400, useNativeDriver: true }),
+    ]));
+    pulse.start();
+    return () => pulse.stop();
+  }, [captureGlow, capturing]);
 
   useEffect(() => {
     if (isProcessing) {
@@ -65,7 +80,12 @@ export default function Shutter({
         accessibilityRole="button"
         accessibilityLabel={compact ? "Captura rápida" : "Tirar foto"}
         accessibilityState={{ disabled: isProcessing }}
-      />
+      >
+        {capturing && <Animated.View pointerEvents="none" style={[
+          styles.captureGlow,
+          { opacity: captureGlow.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.58] }) },
+        ]} />}
+      </TouchableOpacity>
     </Animated.View>
   );
 }

@@ -10,7 +10,9 @@
     "setup:minicpm-ios": "bash ./scripts/setup-minicpm-ios.sh",
     "web": "expo start --web",
     "postinstall": "patch-package",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test": "node --test app/utils/*.test.cjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -22,13 +24,16 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
+    "@sentry/react-native": "~7.2.0",
     "@shopify/react-native-skia": "2.2.12",
     "@uginy/react-native-liquid-glass": "^1.2.6",
+    "camera-image-stacking": "file:./modules/camera-image-stacking",
     "camera-live-photo": "file:./modules/camera-live-photo",
     "camera-manual-controls": "file:./modules/camera-manual-controls",
+    "camera-photographic-styles": "file:./modules/camera-photographic-styles",
     "camera-portrait-capture": "file:./modules/camera-portrait-capture",
     "camera-raw-capture": "file:./modules/camera-raw-capture",
-    "expo": "~54.0.33",
+    "expo": "54.0.33",
     "expo-asset": "~12.0.10",
     "expo-av": "^16.0.8",
     "expo-blur": "^15.0.8",
@@ -76,6 +81,7 @@
     "react-native-worklets-core": "^1.6.3"
   },
   "devDependencies": {
+    "@expo/cli": "^54.0.27",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",

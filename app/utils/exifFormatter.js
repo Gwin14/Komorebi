@@ -3,6 +3,7 @@ import {
   readKomorebiAssetMetadata,
   readKomorebiExifMetadataFromUri,
 } from "./komorebiExifMetadata";
+import { sanitizeIntelligentTags } from "./photoIntelligence";
 
 export const formatShutter = (seconds) => {
   if (!seconds) return null;
@@ -53,6 +54,7 @@ const formatEffectBadge = (effect, label) => (effect?.enabled ? label : null);
 
 const formatKomorebiMetadata = (metadata) => {
   if (!metadata) return {};
+  const intelligentTags = sanitizeIntelligentTags(metadata.intelligence?.tags);
   const badgeParts = [
     formatCaptureMode(metadata.captureMode),
     metadata.filter?.name?.toLowerCase() || null,
@@ -60,8 +62,24 @@ const formatKomorebiMetadata = (metadata) => {
     formatEffectBadge(metadata.halation, "halation"),
   ].filter(Boolean);
 
-  return badgeParts.length ? { komorebiBadges: badgeParts } : {};
+  return {
+    ...(badgeParts.length ? { komorebiBadges: badgeParts } : {}),
+    ...(intelligentTags.length >= 5
+      ? { intelligentTags }
+      : {}),
+  };
 };
+
+const normalizeCoordinate = (value) => {
+  if (value == null || value === "") return null;
+  const coordinate = Number(value);
+  return Number.isFinite(coordinate) ? coordinate : null;
+};
+
+const getAssetCoordinates = (info) => ({
+  latitude: normalizeCoordinate(info?.location?.latitude),
+  longitude: normalizeCoordinate(info?.location?.longitude),
+});
 
 const inferKomorebiMetadataFromAssetInfo = (info) => {
   const mediaSubtypes = info?.mediaSubtypes || [];
@@ -86,14 +104,19 @@ export const exifHandler = async (assetId, setExifData) => {
   try {
     const info = await MediaLibrary.getAssetInfoAsync(assetId);
     const rawExif = info.exif;
+    const assetCoordinates = getAssetCoordinates(info);
+    const storedKomorebiMetadata = await readKomorebiAssetMetadata(assetId);
+    const embeddedKomorebiMetadata =
+      await readKomorebiExifMetadataFromUri(info.localUri || info.uri);
     const komorebiMetadata =
-      (await readKomorebiExifMetadataFromUri(info.localUri || info.uri)) ||
-      (await readKomorebiAssetMetadata(assetId)) ||
+      storedKomorebiMetadata ||
+      embeddedKomorebiMetadata ||
       inferKomorebiMetadataFromAssetInfo(info);
 
     if (!rawExif) {
       const komorebiExif = {
         date: formatExifDate(info.creationTime),
+        ...assetCoordinates,
         ...formatKomorebiMetadata(komorebiMetadata),
       };
       setExifData(Object.keys(komorebiExif).length ? komorebiExif : null);
@@ -132,7 +155,7 @@ export const exifHandler = async (assetId, setExifData) => {
             ? gps.GPSLatitudeRef === "S" || gps.GPSLatitude < 0
               ? -Math.abs(gps.GPSLatitude)
               : Math.abs(gps.GPSLatitude)
-            : null,
+            : assetCoordinates.latitude,
       longitude:
         gps?.Longitude !== undefined
           ? gps.LongitudeRef === "W"
@@ -142,7 +165,7 @@ export const exifHandler = async (assetId, setExifData) => {
             ? gps.GPSLongitudeRef === "W" || gps.GPSLongitude < 0
               ? -Math.abs(gps.GPSLongitude)
               : Math.abs(gps.GPSLongitude)
-            : null,
+            : assetCoordinates.longitude,
       ...formatKomorebiMetadata(komorebiMetadata),
     };
 

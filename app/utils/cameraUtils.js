@@ -43,9 +43,32 @@ const resolveCaptureAspectRatio = async (uri, requestedRatio) => {
   }
 };
 
-export async function saveToAlbum(project, uri) {
+export async function saveToAlbum(project, uri, originalFilename = null) {
   const fileUri = normalizeUri(uri);
-  const asset = await MediaLibrary.createAssetAsync(fileUri);
+  let assetSourceUri = fileUri;
+  let temporaryNamedUri = null;
+  let temporaryNamedDirectory = null;
+
+  if (originalFilename && FileSystem.cacheDirectory) {
+    temporaryNamedDirectory = `${FileSystem.cacheDirectory}komorebi-intelligent-names/${Date.now()}-${Math.random().toString(36).slice(2, 10)}/`;
+    await FileSystem.makeDirectoryAsync(temporaryNamedDirectory, {
+      intermediates: true,
+    });
+    temporaryNamedUri = `${temporaryNamedDirectory}${originalFilename}`;
+    await FileSystem.copyAsync({ from: fileUri, to: temporaryNamedUri });
+    assetSourceUri = temporaryNamedUri;
+  }
+
+  let asset;
+  try {
+    asset = await MediaLibrary.createAssetAsync(assetSourceUri);
+  } finally {
+    if (temporaryNamedDirectory) {
+      await FileSystem.deleteAsync(temporaryNamedDirectory, {
+        idempotent: true,
+      }).catch(() => {});
+    }
+  }
 
   const albums = await MediaLibrary.getAlbumsAsync();
 
@@ -71,7 +94,7 @@ export async function saveToAlbum(project, uri) {
   return asset;
 }
 
-const getLocationExif = async (locationEnabled) => {
+export const getLocationExif = async (locationEnabled) => {
   const additionalExif = {};
 
   try {
@@ -100,7 +123,7 @@ const getLocationExif = async (locationEnabled) => {
   return additionalExif;
 };
 
-const buildPhotoProcessingData = async ({
+export const buildPhotoProcessingData = async ({
   uri,
   selectedLutId,
   selectedLut,
@@ -115,10 +138,11 @@ const buildPhotoProcessingData = async ({
   aspectRatio,
   captureMode = "standard",
   manualSettings = null,
+  stackingMetadata = null,
+  preserveApplePhotographicStyles = false,
   extraData = {},
 }) => {
   const captureAspectRatio = await resolveCaptureAspectRatio(uri, aspectRatio);
-  const croppedUri = (await cropImageToAspect(uri, captureAspectRatio)) || uri;
   const komorebiMetadata = buildKomorebiExifMetadata({
     selectedLut,
     selectedLutId,
@@ -130,8 +154,11 @@ const buildPhotoProcessingData = async ({
     doubleCaptureMode,
     captureMode,
     manualSettings,
+    stackingMetadata,
   });
   const baseExifData = { ...exifData, komorebiMetadata };
+
+  const croppedUri = (await cropImageToAspect(uri, captureAspectRatio)) || uri;
   const noLutData = {
     ...extraData,
     needsProcessing: false,
@@ -139,9 +166,10 @@ const buildPhotoProcessingData = async ({
     imageUri: croppedUri,
     exifData: baseExifData,
     doubleCaptureMode,
-    saveOriginalWithoutEffects: false,
+    saveOriginalWithoutEffects,
     aspectRatio: captureAspectRatio,
     captureMode,
+    preserveApplePhotographicStyles,
     cube: null,
     halationConfig: null,
     grainConfig: null,
@@ -180,6 +208,7 @@ const buildPhotoProcessingData = async ({
       doubleCaptureMode,
       captureMode,
       manualSettings,
+      stackingMetadata,
     }),
   };
 
@@ -192,6 +221,7 @@ const buildPhotoProcessingData = async ({
     originalUri: uri,
     aspectRatio: captureAspectRatio,
     captureMode,
+    preserveApplePhotographicStyles,
   };
 };
 
@@ -221,6 +251,7 @@ export const takePicture = async ({
   portraitModeEnabled = false,
   portraitDeviceId = null,
   outputFormat = "jpeg",
+  preserveApplePhotographicStyles = false,
 }) => {
   const normalizedRawMode = toVisionCameraRawMode(rawMode);
   const rawModeEnabled = normalizedRawMode !== "off";
@@ -282,6 +313,7 @@ export const takePicture = async ({
           saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "live",
+          preserveApplePhotographicStyles,
           extraData: {
             outputFormat,
             livePhotoMovieUri: livePhoto.movieUri,
@@ -329,6 +361,7 @@ export const takePicture = async ({
           saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "portrait",
+          preserveApplePhotographicStyles,
           extraData: {
             outputFormat,
             localIdentifier: portraitPhoto.localIdentifier,
@@ -431,6 +464,7 @@ export const takePicture = async ({
         aspectRatio,
         captureMode: "standard",
         manualSettings,
+        preserveApplePhotographicStyles,
         extraData: { outputFormat },
       }),
     );

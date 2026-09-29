@@ -20,6 +20,7 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
   private var lastError: String?
   private var task: URLSessionDownloadTask?
   private var engine: KMCompositionModel?
+  private let inferenceLock = NSLock()
   private var lastLoggedProgressBucket = -1
   private lazy var session: URLSession = {
     let configuration = URLSessionConfiguration.default
@@ -128,6 +129,8 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
 
   func removeModel() throws {
     cancelDownload()
+    inferenceLock.lock()
+    defer { inferenceLock.unlock() }
     engine = nil
     if FileManager.default.fileExists(atPath: modelDirectory.path) {
       try FileManager.default.removeItem(at: modelDirectory)
@@ -233,6 +236,8 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
     CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: 0.82] as CFDictionary)
     guard CGImageDestinationFinalize(destination) else { return nil }
 
+    inferenceLock.lock()
+    defer { inferenceLock.unlock() }
     do {
       if engine == nil {
         let loadStartedAt = CFAbsoluteTimeGetCurrent()
@@ -313,6 +318,8 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
       compositionScanLog("model warmup skipped ready=\(isReady) compatible=\(isCompatible) runtime=\(runtimeAvailable)")
       return false
     }
+    inferenceLock.lock()
+    defer { inferenceLock.unlock() }
     guard engine == nil else {
       compositionScanLog("model warmup already complete")
       return false
@@ -322,6 +329,177 @@ final class MiniCPMCompositionService: NSObject, URLSessionDownloadDelegate {
     engine = try KMCompositionModel(modelPath: modelURL.path, mmprojPath: mmprojURL.path)
     compositionScanLog("model warmup completed elapsedMs=\(Int((CFAbsoluteTimeGetCurrent() - startedAt) * 1_000))")
     return true
+  }
+
+  func analyzePhoto(at sourceURL: URL, generateTags: Bool,
+                    generateFilename: Bool) throws -> [String: Any] {
+    guard isReady, isCompatible, KMCompositionModel.isRuntimeAvailable() else {
+      throw NSError(domain: "CompositionScan", code: 30,
+                    userInfo: [NSLocalizedDescriptionKey: "O modelo local não está pronto."])
+    }
+    guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+          let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1024,
+          ] as CFDictionary) else {
+      throw NSError(domain: "CompositionScan", code: 31,
+                    userInfo: [NSLocalizedDescriptionKey: "Não foi possível abrir a foto para classificação."])
+    }
+
+    let temporary = FileManager.default.temporaryDirectory
+      .appendingPathComponent("komorebi-intelligence-\(UUID().uuidString).jpg")
+    defer { try? FileManager.default.removeItem(at: temporary) }
+    guard let destination = CGImageDestinationCreateWithURL(
+      temporary as CFURL,
+      "public.jpeg" as CFString,
+      1,
+      nil
+    ) else {
+      throw NSError(domain: "CompositionScan", code: 32,
+                    userInfo: [NSLocalizedDescriptionKey: "Não foi possível preparar a foto."])
+    }
+    CGImageDestinationAddImage(
+      destination,
+      image,
+      [kCGImageDestinationLossyCompressionQuality: 0.84] as CFDictionary
+    )
+    guard CGImageDestinationFinalize(destination) else {
+      throw NSError(domain: "CompositionScan", code: 33,
+                    userInfo: [NSLocalizedDescriptionKey: "Não foi possível preparar a foto."])
+    }
+
+    inferenceLock.lock()
+    defer { inferenceLock.unlock() }
+    // O modelo e o projetor visual juntos mantêm uma quantidade significativa
+    // de memória Metal. Uma instância nova também garante que estados
+    // recorrentes do Qwen3.5 nunca vazem de uma foto para a seguinte.
+    let raw = try autoreleasepool { () throws -> String in
+      engine = nil
+      let photoEngine = try KMCompositionModel(
+        modelPath: modelURL.path,
+        mmprojPath: mmprojURL.path
+      )
+      return try photoEngine.analyzeImage(
+        atPath: temporary.path,
+        prompt: Self.photoIntelligencePrompt(
+          generateTags: generateTags,
+          generateFilename: generateFilename
+        )
+      ) ?? ""
+    }
+    #if DEBUG
+    let compactRaw = raw
+      .replacingOccurrences(of: "\n", with: " ")
+      .replacingOccurrences(of: "\r", with: " ")
+      .prefix(300)
+    compositionScanLog("photo intelligence raw=\(compactRaw)")
+    #endif
+    let parsed = Self.parsePhotoIntelligence(
+      raw,
+      generateTags: generateTags,
+      generateFilename: generateFilename
+    )
+    compositionScanLog(
+      "photo intelligence parsed tags=\(parsed.tags.count) filename=\(parsed.filenameStem != nil)"
+    )
+    return [
+      "tags": parsed.tags,
+      "filenameStem": parsed.filenameStem as Any,
+      "modelName": Self.modelName,
+    ]
+  }
+
+  private static func photoIntelligencePrompt(generateTags: Bool,
+                                              generateFilename: Bool) -> String {
+    let tagsInstruction = generateTags
+      ? "Na linha TAGS, escreva exatamente 6 palavras-chave curtas e diferentes, separadas por |. Cada uma deve servir sozinha para encontrar esta foto em uma busca e deve representar algo visível, como o assunto, um objeto, o ambiente, uma ação, uma cor ou o tipo de cena."
+      : "Na linha TAGS, não escreva nada depois do sinal =."
+    let nameInstruction = generateFilename
+      ? "Na linha NAME, escreva de 2 a 5 palavras que resumam o assunto principal da foto."
+      : "Na linha NAME, não escreva nada depois do sinal =."
+    return """
+    Você é um indexador de fotografias. Observe a imagem e identifique primeiro o assunto principal e os elementos realmente visíveis.
+    Escreva todo o resultado somente em português do Brasil. Traduza palavras-chave comuns para português; não misture idiomas.
+    \(tagsInstruction)
+    \(nameInstruction)
+    Não descreva esta tarefa e não copie palavras das instruções para a resposta. Não invente detalhes ausentes da imagem.
+    Responda somente em duas linhas, sem JSON, lista, comentário ou texto adicional. A primeira deve começar exatamente com TAGS= e a segunda com NAME=.
+    """
+  }
+
+  private static func parsePhotoIntelligence(
+    _ raw: String,
+    generateTags: Bool,
+    generateFilename: Bool
+  ) -> (tags: [String], filenameStem: String?) {
+    func value(for fields: [String]) -> String? {
+      let alternatives = fields
+        .map { NSRegularExpression.escapedPattern(for: $0) }
+        .joined(separator: "|")
+      let pattern = "(?im)(?:\\b|[\"'])(?:\(alternatives))[\"']?\\s*[:=]\\s*([^\\r\\n;]+)"
+      guard let regex = try? NSRegularExpression(pattern: pattern),
+            let match = regex.firstMatch(
+              in: raw,
+              range: NSRange(raw.startIndex..<raw.endIndex, in: raw)
+            ),
+            match.numberOfRanges > 1,
+            let range = Range(match.range(at: 1), in: raw) else { return nil }
+      return String(raw[range])
+    }
+    let tagsValue = value(for: ["TAGS", "ETIQUETAS", "PALAVRAS-CHAVE"])
+    let nameValue = value(for: ["NAME", "NOME", "FILENAME"])
+
+    var seen = Set<String>()
+    let tags: [String]
+    if generateTags {
+      let candidates = Array((tagsValue ?? "")
+        .components(separatedBy: CharacterSet(charactersIn: "|,;"))
+        .map {
+          $0.replacingOccurrences(
+            of: #"<\|[^>]+\|>"#,
+            with: "",
+            options: .regularExpression
+          )
+          .trimmingCharacters(
+            in: CharacterSet.whitespacesAndNewlines.union(
+              CharacterSet(charactersIn: "[]{}()\"'`#.-")
+            )
+          )
+          .lowercased()
+        }
+        .filter {
+          !$0.isEmpty &&
+          $0.count <= 40 &&
+          $0.range(of: #"^tag\s*\d+$"#, options: .regularExpression) == nil &&
+          seen.insert($0).inserted
+        }
+        .prefix(8))
+      tags = candidates.count >= 5 ? candidates : []
+    } else {
+      tags = []
+    }
+    let cleanName = nameValue?
+      .replacingOccurrences(
+        of: #"<\|[^>]+\|>"#,
+        with: "",
+        options: .regularExpression
+      )
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "\"'`.,;:"))
+    let nameWords = cleanName?
+      .components(separatedBy: CharacterSet(charactersIn: " -_"))
+      .filter { !$0.isEmpty }
+      ?? []
+    let normalizedName = nameWords.joined(separator: " ").lowercased()
+    let hasValidName = generateFilename &&
+      nameWords.count >= 2 &&
+      normalizedName != "nome descritivo" &&
+      normalizedName != "nome descritivo curto"
+    let filenameStem = hasValidName
+      ? String(nameWords.prefix(6).joined(separator: " ").prefix(80))
+      : nil
+    return (tags, filenameStem)
   }
 
   private static func prompt(recentAdvice _: [[String: String]], frameAspectRatio: Double,

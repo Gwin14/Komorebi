@@ -9,15 +9,25 @@ import { reconcileProjectsWithAlbums } from "../utils/projects";
 
 const SettingsContext = createContext(null);
 
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
   retroStyle: false,
   gridVisible: false,
   levelVisible: false,
   histogramVisible: false,
-  compositionScanEnabled: true,
+  previewLut: false,
+  previewHalation: false,
+  previewGrain: false,
+  previewDoubleExposure: false,
+  previewStacking: false,
+  zebraHighlightsEnabled: false,
+  zebraShadowsEnabled: false,
+  compositionScanEnabled: false,
+  intelligentTagsEnabled: false,
+  intelligentFilenameEnabled: false,
   shutterSound: false,
   location: true,
   saveAsJpeg: false,
+  preserveApplePhotographicStyles: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
   customLuts: [],
@@ -36,8 +46,25 @@ export const SettingsProvider = ({ children }) => {
   const [histogramVisible, setHistogramVisible] = useState(
     DEFAULT_SETTINGS.histogramVisible,
   );
+  const [previewLut, setPreviewLut] = useState(DEFAULT_SETTINGS.previewLut);
+  const [previewHalation, setPreviewHalation] = useState(DEFAULT_SETTINGS.previewHalation);
+  const [previewGrain, setPreviewGrain] = useState(DEFAULT_SETTINGS.previewGrain);
+  const [previewDoubleExposure, setPreviewDoubleExposure] = useState(DEFAULT_SETTINGS.previewDoubleExposure);
+  const [previewStacking, setPreviewStacking] = useState(DEFAULT_SETTINGS.previewStacking);
+  const [zebraHighlightsEnabled, setZebraHighlightsEnabled] = useState(
+    DEFAULT_SETTINGS.zebraHighlightsEnabled,
+  );
+  const [zebraShadowsEnabled, setZebraShadowsEnabled] = useState(
+    DEFAULT_SETTINGS.zebraShadowsEnabled,
+  );
   const [compositionScanEnabled, setCompositionScanEnabled] = useState(
     DEFAULT_SETTINGS.compositionScanEnabled,
+  );
+  const [intelligentTagsEnabled, setIntelligentTagsEnabled] = useState(
+    DEFAULT_SETTINGS.intelligentTagsEnabled,
+  );
+  const [intelligentFilenameEnabled, setIntelligentFilenameEnabled] = useState(
+    DEFAULT_SETTINGS.intelligentFilenameEnabled,
   );
   const [loading, setLoading] = useState(true);
   const [shutterSound, setShutterSound] = useState(
@@ -45,6 +72,8 @@ export const SettingsProvider = ({ children }) => {
   );
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
   const [saveAsJpeg, setSaveAsJpeg] = useState(DEFAULT_SETTINGS.saveAsJpeg);
+  const [preserveApplePhotographicStyles, setPreserveApplePhotographicStyles] =
+    useState(DEFAULT_SETTINGS.preserveApplePhotographicStyles);
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
@@ -68,10 +97,22 @@ export const SettingsProvider = ({ children }) => {
         setGridVisible(savedSettings.gridVisible);
         setLevelVisible(savedSettings.levelVisible);
         setHistogramVisible(savedSettings.histogramVisible);
+        setPreviewLut(savedSettings.previewLut);
+        setPreviewHalation(savedSettings.previewHalation);
+        setPreviewGrain(savedSettings.previewGrain);
+        setPreviewDoubleExposure(savedSettings.previewDoubleExposure);
+        setPreviewStacking(savedSettings.previewStacking);
+        setZebraHighlightsEnabled(savedSettings.zebraHighlightsEnabled);
+        setZebraShadowsEnabled(savedSettings.zebraShadowsEnabled);
         setCompositionScanEnabled(savedSettings.compositionScanEnabled);
+        setIntelligentTagsEnabled(savedSettings.intelligentTagsEnabled);
+        setIntelligentFilenameEnabled(savedSettings.intelligentFilenameEnabled);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveAsJpeg(savedSettings.saveAsJpeg);
+        setPreserveApplePhotographicStyles(
+          savedSettings.preserveApplePhotographicStyles,
+        );
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
@@ -146,6 +187,38 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [histogramVisible, loading]);
 
+  useEffect(() => {
+    if (loading) return;
+    const values = [
+      [SETTINGS_STORAGE_KEYS.PREVIEW_LUT, previewLut],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_HALATION, previewHalation],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_GRAIN, previewGrain],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_DOUBLE_EXPOSURE, previewDoubleExposure],
+      [SETTINGS_STORAGE_KEYS.PREVIEW_STACKING, previewStacking],
+    ];
+    values.forEach(([key, enabled]) => {
+      void saveStoredSetting(key, String(enabled));
+    });
+  }, [loading, previewLut, previewHalation, previewGrain, previewDoubleExposure, previewStacking]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.ZEBRA_HIGHLIGHTS_ENABLED,
+        zebraHighlightsEnabled.toString(),
+      );
+    }
+  }, [zebraHighlightsEnabled, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.ZEBRA_SHADOWS_ENABLED,
+        zebraShadowsEnabled.toString(),
+      );
+    }
+  }, [zebraShadowsEnabled, loading]);
+
   // Salvar disponibilidade do Scan de composição.
   useEffect(() => {
     if (!loading) {
@@ -155,6 +228,24 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [compositionScanEnabled, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.INTELLIGENT_TAGS_ENABLED,
+        intelligentTagsEnabled.toString(),
+      );
+    }
+  }, [intelligentTagsEnabled, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.INTELLIGENT_FILENAME_ENABLED,
+        intelligentFilenameEnabled.toString(),
+      );
+    }
+  }, [intelligentFilenameEnabled, loading]);
 
   // 💾 Salvar "Som de shutter"
   useEffect(() => {
@@ -202,6 +293,17 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [saveAsJpeg, loading]);
+
+  // Persiste apenas a preferência. Modos temporariamente incompatíveis pausam
+  // a aplicação no disparo sem alterar este valor.
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES,
+        preserveApplePhotographicStyles.toString(),
+      );
+    }
+  }, [preserveApplePhotographicStyles, loading]);
 
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
@@ -259,8 +361,26 @@ export const SettingsProvider = ({ children }) => {
     setLevelVisible,
     histogramVisible,
     setHistogramVisible,
+    previewLut,
+    setPreviewLut,
+    previewHalation,
+    setPreviewHalation,
+    previewGrain,
+    setPreviewGrain,
+    previewDoubleExposure,
+    setPreviewDoubleExposure,
+    previewStacking,
+    setPreviewStacking,
+    zebraHighlightsEnabled,
+    setZebraHighlightsEnabled,
+    zebraShadowsEnabled,
+    setZebraShadowsEnabled,
     compositionScanEnabled,
     setCompositionScanEnabled,
+    intelligentTagsEnabled,
+    setIntelligentTagsEnabled,
+    intelligentFilenameEnabled,
+    setIntelligentFilenameEnabled,
     loading,
     shutterSound,
     setShutterSound,
@@ -268,6 +388,8 @@ export const SettingsProvider = ({ children }) => {
     setLocation,
     saveAsJpeg,
     setSaveAsJpeg,
+    preserveApplePhotographicStyles,
+    setPreserveApplePhotographicStyles,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     firstTime,

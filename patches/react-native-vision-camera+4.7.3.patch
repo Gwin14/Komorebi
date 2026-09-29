@@ -592,3 +592,151 @@ index 85098d6..04872ba 100644
    /**
     * Metadata information describing the captured image. (iOS only)
     *
+diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts b/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
+--- a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
++++ b/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
+@@ -28,6 +28,11 @@ export interface DrawableFrame extends Frame, SkCanvas {
+    * @internal
+    */
+   readonly __skImage: SkImage
++  /**
++   * Keeps a Skia resource alive until this frame has been submitted to the GPU.
++   * @internal
++   */
++  deferDisposal(resource: { dispose(): void }): void
+   /**
+    * A private method to dispose the internally created Texture after rendering has completed.
+    * @internal
+@@ -87,6 +87,10 @@
+   canvas.save()
+ 
+   try {
++    // Keep this calculation inside the worklet. A captured helper is not
++    // available in every VisionCamera frame processor runtime.
++    const previewScale = Math.min(1, 720 / Math.max(frame.width, frame.height))
++    canvas.scale(previewScale, previewScale)
+     // 2. properly rotate canvas so Frame is rendered up-right.
+     const orientation = relativeTo(frame.orientation, previewOrientation)
+     switch (orientation) {
+@@ -131,13 +135,14 @@
+  */
+ function getSurfaceSize(frame: Frame): Size {
+   'worklet'
++  const previewScale = Math.min(1, 720 / Math.max(frame.width, frame.height))
+   switch (frame.orientation) {
+     case 'portrait':
+     case 'portrait-upside-down':
+-      return { width: frame.width, height: frame.height }
++      return { width: Math.round(frame.width * previewScale), height: Math.round(frame.height * previewScale) }
+     case 'landscape-left':
+     case 'landscape-right':
+-      return { width: frame.height, height: frame.width }
++      return { width: Math.round(frame.height * previewScale), height: Math.round(frame.width * previewScale) }
+   }
+ }
+ 
+@@ -174,6 +179,10 @@
+ ): DrawableFrameProcessor {
+   const Skia = SkiaProxy.Skia
+   const Worklets = WorkletsProxy.Worklets
++  const debugFrameCount = Worklets.createSharedValue(0)
++  const logStage = Worklets.createRunOnJS((stage: string, frameNumber: number) => {
++    console.log(`[SkiaPipeline] frame=${frameNumber} ${stage}`)
++  })
+ 
+   const getSkiaSurface = (frame: Frame): SkSurface => {
+     'worklet'
+@@ -225,6 +239,7 @@ export function createSkiaFrameProcessor(
+     const nativeBuffer = (frame as FrameInternal).getNativeBuffer()
+     const image = Skia.Image.MakeImageFromNativeBuffer(nativeBuffer.pointer)
+     if (image == null) throw new Error('Failed to create a Skia image from the camera frame')
++    const deferredResources: Array<{ dispose(): void }> = []
+ 
+     // Creates a `Proxy` that holds the SkCanvas, but also adds additional methods such as render() and dispose().
+     const canvasProxy = new Proxy(canvas as DrawableCanvas, {
+@@ -233,6 +248,11 @@ export function createSkiaFrameProcessor(
+         switch (property) {
+           case '__skImage':
+             return image
++          case 'deferDisposal':
++            return (resource: { dispose(): void }) => {
++              'worklet'
++              deferredResources.push(resource)
++            }
+           case 'render':
+             return (paint?: SkPaint) => {
+               'worklet'
+@@ -242,7 +262,11 @@ export function createSkiaFrameProcessor(
+           case 'dispose':
+             return () => {
+               'worklet'
+-              // dispose the Frame and the SkImage/Texture
++              for (let index = deferredResources.length - 1; index >= 0; index--) {
++                deferredResources[index].dispose()
++              }
++              deferredResources.length = 0
++              // dispose the Frame and the SkImage/Texture after submitted draws
+               image.dispose()
+               nativeBuffer.delete()
+             }
+@@ -253,13 +278,18 @@
+   return {
+     frameProcessor: withFrameRefCounting((frame) => {
+       'worklet'
++      const frameNumber = ++debugFrameCount.value
++      const trace = frameNumber <= 25
++      if (trace) logStage('surface-start', frameNumber)
+ 
+       // 1. Set up Skia Surface with size of Frame
+       const surface = getSkiaSurface(frame)
++      if (trace) logStage('surface-done', frameNumber)
+ 
+       // 2. Create DrawableFrame proxy which internally creates an SkImage/Texture
+       const canvas = surface.getCanvas()
+       const drawableFrame = createDrawableProxy(frame, canvas)
++      if (trace) logStage('drawable-done', frameNumber)
+ 
+       try {
+         // 3. Clear the current Canvas
+@@ -271,19 +286,31 @@
+           // 5. Run any user drawing operations
+           frameProcessor(drawableFrame)
+         })
++        if (trace) logStage('draw-done', frameNumber)
+ 
+         // 6. Flush draw operations and submit to GPU
++        if (trace) logStage('flush-start', frameNumber)
+         surface.flush()
++        if (trace) logStage('flush-done', frameNumber)
+       } finally {
+         // 7. Delete the SkImage/Texture that holds the Frame
+         drawableFrame.dispose()
+       }
++      if (trace) logStage('drawable-disposed', frameNumber)
+ 
+       // 8. Capture rendered results as a Texture/SkImage to later render to screen
+       const snapshot = surface.makeImageSnapshot()
+-      const snapshotCopy = snapshot.makeNonTextureImage()
+-      snapshot.dispose()
++      if (trace) logStage('snapshot-done', frameNumber)
++      let snapshotCopy: SkImage
++      try {
++        if (trace) logStage('readback-start', frameNumber)
++        snapshotCopy = snapshot.makeNonTextureImage()
++        if (trace) logStage('readback-done', frameNumber)
++      } finally {
++        snapshot.dispose()
++      }
+       offscreenTextures.value.push(snapshotCopy)
++      if (trace) logStage('queued', frameNumber)
+ 
+       // 9. Close old textures that are still in the queue.
+       while (offscreenTextures.value.length > 1) {
+@@ -292,6 +319,7 @@
+         if (texture == null) break
+         texture.dispose()
+       }
++      if (trace) logStage('complete', frameNumber)
+     }),
+     type: 'drawable-skia',
+     offscreenTextures: offscreenTextures,

@@ -1,11 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, TouchableOpacity, View } from "react-native";
+import { Animated, Text, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
@@ -42,6 +41,7 @@ export default function BottomControls({
   availableGrains,
   availableHalations,
   isProcessing,
+  showProcessingFeedback = isProcessing,
   processingQueueLength,
   // 🆕 Props de lentes
   lenses,
@@ -49,6 +49,12 @@ export default function BottomControls({
   onSelectLens,
   galleryRefreshKey,
   activeProject = null,
+  imageStackingCapturing = false,
+  imageStackingFinishing = false,
+  imageStackingStrategyId = null,
+  imageStackingProgressState = "idle",
+  stackingSoundSignal = 0,
+  imageStackingContinuousCapturing = false,
 }) {
   const router = useRouter();
   const { bottom: bottomInset } = useSafeAreaInsets();
@@ -57,12 +63,24 @@ export default function BottomControls({
   const deviceOrientationStyle = useDeviceOrientation();
   const [lastPhotoUri, setLastPhotoUri] = useState(null);
 
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const isBusy = isProcessing || processingQueueLength > 0;
+  const processingCount = Math.max(processingQueueLength, showProcessingFeedback ? 1 : 0);
+  const lastSoundSignal = useRef(stackingSoundSignal);
+
+  useEffect(() => {
+    if (stackingSoundSignal !== lastSoundSignal.current && shutterSound) {
+      void playShutterSound();
+    }
+    lastSoundSignal.current = stackingSoundSignal;
+  }, [stackingSoundSignal, shutterSound, playShutterSound]);
 
   const handleShutterPress = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    if (shutterSound) {
+    const twoTapStacking = imageStackingCapturing &&
+      ["bulb", "motionBlur", "doubleExposure"].includes(imageStackingStrategyId);
+    const finishingTap = twoTapStacking && !imageStackingFinishing &&
+      (imageStackingStrategyId !== "doubleExposure" ||
+        imageStackingProgressState === "awaitingSecondExposure");
+    if (shutterSound && (!imageStackingStrategyId || finishingTap)) {
       await playShutterSound();
     }
     await takePicture();
@@ -103,28 +121,6 @@ export default function BottomControls({
     }
   };
 
-  useEffect(() => {
-    let loop;
-
-    if (isBusy) {
-      shimmerAnim.setValue(0);
-
-      loop = Animated.loop(
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 1200,
-          useNativeDriver: true,
-        }),
-      );
-
-      loop.start();
-    }
-
-    return () => {
-      loop?.stop();
-    };
-  }, [isBusy, shimmerAnim]);
-
   const shutterTranslate = controlsAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 100],
@@ -150,6 +146,7 @@ export default function BottomControls({
   const showLensSelector =
     lenses &&
     lenses.length > 1 &&
+    !imageStackingCapturing &&
     (activeControl === "none" || activeControl === "manual");
 
   return (
@@ -197,39 +194,13 @@ export default function BottomControls({
               ) : (
                 <Ionicons name="images-outline" size={20} color="white" />
               )}
-
-              {isBusy && (
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.shimmerOverlay,
-                    {
-                      transform: [
-                        {
-                          translateX: shimmerAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [-40, 40],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                >
-                  <LinearGradient
-                    colors={[
-                      "transparent",
-                      "rgba(255,255,255,0.4)",
-                      "rgba(255,255,255,0.9)",
-                      "rgba(255,255,255,0.4)",
-                      "transparent",
-                    ]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.shimmerGradient}
-                  />
-                </Animated.View>
-              )}
             </Reanimated.View>
+            {processingCount > 0 && (
+              <View pointerEvents="none" style={styles.processingBadge} accessibilityLabel={`${processingCount} foto${processingCount === 1 ? "" : "s"} em processamento`}>
+                <Ionicons name="sync-outline" size={11} color="#111" />
+                <Text style={styles.processingBadgeText}>{processingCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -242,12 +213,19 @@ export default function BottomControls({
         >
           <Shutter
             takePicture={handleShutterPress}
-            isProcessing={isProcessing}
+            isProcessing={
+              (isProcessing && !imageStackingContinuousCapturing) || imageStackingFinishing
+            }
+            capturing={imageStackingCapturing && !imageStackingFinishing}
           />
         </View>
 
         <View style={styles.rightControls}>
-          <TouchableOpacity style={styles.flipButton} onPress={onToggleFacing}>
+          <TouchableOpacity
+            style={styles.flipButton}
+            onPress={onToggleFacing}
+            disabled={imageStackingCapturing}
+          >
             <Reanimated.View style={deviceOrientationStyle}>
               <Ionicons name="camera-reverse-outline" size={28} color="white" />
             </Reanimated.View>
@@ -291,10 +269,14 @@ export default function BottomControls({
               availableGrains={availableGrains}
               availableHalations={availableHalations}
               takePicture={handleShutterPress}
-              isProcessing={isProcessing}
+              isProcessing={
+                (isProcessing && !imageStackingContinuousCapturing) || imageStackingFinishing
+              }
+              capturing={imageStackingCapturing && !imageStackingFinishing}
             />
           </View>
         )}
+
       </Animated.View>
     </View>
   );

@@ -56,6 +56,12 @@ export const TOP_BAR_CONTROLS = [
     alwaysEnabled: false,
   },
   {
+    id: "stacking",
+    label: "Image Stacking",
+    icon: "layers-outline",
+    alwaysEnabled: false,
+  },
+  {
     id: "rawCapture",
     label: "RAW / ProRAW",
     icon: "aperture-outline",
@@ -87,6 +93,7 @@ export function getDefaultTopBarControls(platform = Platform.OS) {
     ...(platform === "ios" ? ["livePhoto"] : []),
     "vertical",
     "manual",
+    ...(platform === "ios" ? ["stacking"] : []),
     "settings",
   ];
 }

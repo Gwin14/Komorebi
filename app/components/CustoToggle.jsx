@@ -3,7 +3,16 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, Text, View } from "react-native";
 import styles from "./CustoToggle.styles";
 
-export default function CustomToggle({ badge, label, value, onValueChange }) {
+export default function CustomToggle({
+  badge,
+  description,
+  disabled = false,
+  grouped = false,
+  last = false,
+  label,
+  value,
+  onValueChange,
+}) {
   // Animação para mover a "bolinha" do toggle
   const moveAnim = useRef(new Animated.Value(value ? 1 : 0)).current;
 
@@ -17,6 +26,7 @@ export default function CustomToggle({ badge, label, value, onValueChange }) {
   }, [moveAnim, value]);
 
   const toggleHandler = () => {
+    if (disabled) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onValueChange(!value);
   };
@@ -27,21 +37,38 @@ export default function CustomToggle({ badge, label, value, onValueChange }) {
   });
 
   return (
-    <View style={styles.wrapper}>
+    <View
+      style={[
+        styles.wrapper,
+        grouped && styles.wrapperGrouped,
+        grouped && last && styles.wrapperGroupedLast,
+        disabled && styles.wrapperDisabled,
+      ]}
+    >
       {label && (
-        <View style={styles.labelRow}>
-          <Text style={styles.label}>{label}</Text>
-          {badge && <Text style={styles.badge}>{badge}</Text>}
+        <View style={styles.labelBlock}>
+          <View style={styles.labelRow}>
+            <Text style={styles.label}>{label}</Text>
+            {badge && <Text style={styles.badge}>{badge}</Text>}
+          </View>
+          {description && (
+            <Text style={styles.description}>{description}</Text>
+          )}
         </View>
       )}
 
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="switch"
-        accessibilityState={{ checked: value }}
+        accessibilityState={{ checked: value, disabled }}
+        disabled={disabled}
         onPress={toggleHandler}
       >
-        <View style={[styles.track, value && styles.trackActive]}>
+        <View style={[
+          styles.track,
+          value && styles.trackActive,
+          disabled && styles.trackDisabled,
+        ]}>
           <Animated.View
             style={[
               styles.thumb,
