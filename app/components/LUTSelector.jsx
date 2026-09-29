@@ -1,9 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { Canvas, ColorMatrix, Fill, FractalNoise } from "@shopify/react-native-skia";
+import {
+  Canvas,
+  ColorMatrix,
+  Fill,
+  FractalNoise,
+} from "@shopify/react-native-skia";
 import React from "react";
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Animated,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Shutter from "./shutter";
 import styles from "./LUTSelector.styles";
 
@@ -28,10 +40,8 @@ const CUSTOM_GRADIENTS = [
 ];
 const GRAIN_PREVIEW_OPACITY = { soft: 0.18, medium: 0.32, strong: 0.48 };
 const GRAYSCALE = [
-  0.2126, 0.7152, 0.0722, 0, 0,
-  0.2126, 0.7152, 0.0722, 0, 0,
-  0.2126, 0.7152, 0.0722, 0, 0,
-  0, 0, 0, 1, 0,
+  0.2126, 0.7152, 0.0722, 0, 0, 0.2126, 0.7152, 0.0722, 0, 0, 0.2126, 0.7152,
+  0.0722, 0, 0, 0, 0, 0, 1, 0,
 ];
 const HALATION_PREVIEWS = {
   none: ["#777", "#333", "#181818"],
@@ -53,29 +63,56 @@ const getLutGradient = (lut) => {
   );
   return CUSTOM_GRADIENTS[hash % CUSTOM_GRADIENTS.length];
 };
-const optionName = (option) => option.id === "none" ? "Desligado" : option.name;
+const optionName = (option) =>
+  option.id === "none" ? "Desligado" : option.name;
 
 function FilterPreview({ option }) {
   return (
-    <LinearGradient colors={getLutGradient(option)} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }} style={styles.preview}>
+    <LinearGradient
+      colors={getLutGradient(option)}
+      start={{ x: 0.1, y: 0 }}
+      end={{ x: 0.9, y: 1 }}
+      style={styles.preview}
+    >
       <View style={styles.previewSheen} />
-      {option.id === "none" && <Ionicons name="remove-outline" size={24} color="rgba(255,255,255,0.82)" />}
+      {option.id === "none" && (
+        <Ionicons
+          name="remove-outline"
+          size={24}
+          color="rgba(255,255,255,0.82)"
+        />
+      )}
     </LinearGradient>
   );
 }
 
 function GrainPreview({ option }) {
   return (
-    <LinearGradient colors={["#aaa9a3", "#555550", "#202020"]} style={styles.preview}>
+    <LinearGradient
+      colors={["#aaa9a3", "#555550", "#202020"]}
+      style={styles.preview}
+    >
       {option.id !== "none" && (
-        <Canvas pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: GRAIN_PREVIEW_OPACITY[option.id] }]}>
+        <Canvas
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            { opacity: GRAIN_PREVIEW_OPACITY[option.id] },
+          ]}
+        >
           <Fill>
             <FractalNoise freqX={0.65} freqY={0.65} octaves={1} seed={7} />
             <ColorMatrix matrix={GRAYSCALE} />
           </Fill>
         </Canvas>
       )}
-      {option.id === "none" && <Ionicons name="remove-outline" size={24} color="rgba(255,255,255,0.82)" />}
+      {option.id === "none" && (
+        <Ionicons
+          name="remove-outline"
+          size={24}
+          color="rgba(255,255,255,0.82)"
+        />
+      )}
     </LinearGradient>
   );
 }
@@ -83,14 +120,31 @@ function GrainPreview({ option }) {
 function HalationPreview({ option }) {
   return (
     <View style={[styles.preview, styles.halationPreview]}>
-      <LinearGradient colors={HALATION_PREVIEWS[option.id] || HALATION_PREVIEWS.none} locations={[0, 0.38, 1]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={styles.halationGlow} />
-      {option.id === "none" && <Ionicons name="remove-outline" size={24} color="rgba(255,255,255,0.82)" />}
+      <LinearGradient
+        colors={HALATION_PREVIEWS[option.id] || HALATION_PREVIEWS.none}
+        locations={[0, 0.38, 1]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={styles.halationGlow}
+      />
+      {option.id === "none" && (
+        <Ionicons
+          name="remove-outline"
+          size={24}
+          color="rgba(255,255,255,0.82)"
+        />
+      )}
     </View>
   );
 }
 
 function OptionCard({ option, selected, type, onPress }) {
-  const Preview = type === "filter" ? FilterPreview : type === "grain" ? GrainPreview : HalationPreview;
+  const Preview =
+    type === "filter"
+      ? FilterPreview
+      : type === "grain"
+        ? GrainPreview
+        : HalationPreview;
   return (
     <TouchableOpacity
       style={[styles.optionCard, selected && styles.optionCardSelected]}
@@ -108,32 +162,65 @@ function OptionCard({ option, selected, type, onPress }) {
           </View>
         )}
       </View>
-      <Text numberOfLines={1} style={[styles.optionName, selected && styles.optionNameSelected]}>{optionName(option)}</Text>
+      <Text
+        numberOfLines={1}
+        style={[styles.optionName, selected && styles.optionNameSelected]}
+      >
+        {optionName(option)}
+      </Text>
     </TouchableOpacity>
   );
 }
 
 export default function LUTSelector({
-  selectedLutId, onSelectLut, selectedGrainId, onSelectGrain,
-  selectedHalationId, onSelectHalation, visible, availableLuts,
-  availableGrains, availableHalations, takePicture, isProcessing, capturing,
+  selectedLutId,
+  onSelectLut,
+  selectedGrainId,
+  onSelectGrain,
+  selectedHalationId,
+  onSelectHalation,
+  visible,
+  availableLuts,
+  availableGrains,
+  availableHalations,
+  takePicture,
+  isProcessing,
+  capturing,
 }) {
   const [activeTab, setActiveTab] = React.useState("filter");
   const slideAnim = React.useRef(new Animated.Value(0)).current;
 
   React.useEffect(() => {
-    Animated.timing(slideAnim, { toValue: visible ? 1 : 0, duration: 260, useNativeDriver: true }).start();
+    Animated.timing(slideAnim, {
+      toValue: visible ? 1 : 0,
+      duration: 260,
+      useNativeDriver: true,
+    }).start();
   }, [slideAnim, visible]);
 
   if (!visible) return null;
 
   const sections = {
-    filter: { options: availableLuts, selectedId: selectedLutId, select: onSelectLut },
-    grain: { options: availableGrains, selectedId: selectedGrainId, select: onSelectGrain },
-    halation: { options: availableHalations, selectedId: selectedHalationId, select: onSelectHalation },
+    filter: {
+      options: availableLuts,
+      selectedId: selectedLutId,
+      select: onSelectLut,
+    },
+    grain: {
+      options: availableGrains,
+      selectedId: selectedGrainId,
+      select: onSelectGrain,
+    },
+    halation: {
+      options: availableHalations,
+      selectedId: selectedHalationId,
+      select: onSelectHalation,
+    },
   };
   const currentSection = sections[activeTab];
-  const enabledEffects = [selectedGrainId, selectedHalationId].filter((id) => id !== "none").length;
+  const enabledEffects = [selectedGrainId, selectedHalationId].filter(
+    (id) => id !== "none",
+  ).length;
   const selectTab = (tabId) => {
     Haptics.selectionAsync();
     setActiveTab(tabId);
@@ -144,10 +231,22 @@ export default function LUTSelector({
   };
 
   return (
-    <Animated.View style={[styles.container, {
-      opacity: slideAnim,
-      transform: [{ translateY: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [220, 0] }) }],
-    }]}>
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          opacity: slideAnim,
+          transform: [
+            {
+              translateY: slideAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [220, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
       <View style={styles.panel}>
         <View style={styles.panelHeader}>
           <View>
@@ -156,7 +255,9 @@ export default function LUTSelector({
           {enabledEffects > 0 && (
             <View style={styles.activeEffectsBadge}>
               <View style={styles.activeEffectsDot} />
-              <Text style={styles.activeEffectsText}>{enabledEffects} {enabledEffects === 1 ? "efeito" : "efeitos"}</Text>
+              <Text style={styles.activeEffectsText}>
+                {enabledEffects} {enabledEffects === 1 ? "efeito" : "efeitos"}
+              </Text>
             </View>
           )}
         </View>
@@ -164,26 +265,59 @@ export default function LUTSelector({
         <View style={styles.tabBar}>
           {TABS.map((tab) => {
             const active = tab.id === activeTab;
-            const effectEnabled = (tab.id === "grain" && selectedGrainId !== "none") || (tab.id === "halation" && selectedHalationId !== "none");
+            const effectEnabled =
+              (tab.id === "grain" && selectedGrainId !== "none") ||
+              (tab.id === "halation" && selectedHalationId !== "none");
             return (
-              <TouchableOpacity key={tab.id} style={[styles.tab, active && styles.tabActive]} onPress={() => selectTab(tab.id)} accessibilityRole="tab" accessibilityState={{ selected: active }}>
-                <Ionicons name={tab.icon} size={15} color={active ? ACCENT : "rgba(255,255,255,0.55)"} />
-                <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>{tab.label}</Text>
-                {effectEnabled && !active && <View style={styles.tabStatusDot} />}
+              <TouchableOpacity
+                key={tab.id}
+                style={[styles.tab, active && styles.tabActive]}
+                onPress={() => selectTab(tab.id)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+              >
+                <Ionicons
+                  name={tab.icon}
+                  size={15}
+                  color={active ? ACCENT : "rgba(255,255,255,0.55)"}
+                />
+                <Text
+                  style={[styles.tabLabel, active && styles.tabLabelActive]}
+                >
+                  {tab.label}
+                </Text>
+                {effectEnabled && !active && (
+                  <View style={styles.tabStatusDot} />
+                )}
               </TouchableOpacity>
             );
           })}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.optionsContent}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.optionsContent}
+        >
           {currentSection.options.map((option) => (
-            <OptionCard key={`${activeTab}-${option.id}`} option={option} type={activeTab} selected={currentSection.selectedId === option.id} onPress={() => selectOption(option.id)} />
+            <OptionCard
+              key={`${activeTab}-${option.id}`}
+              option={option}
+              type={activeTab}
+              selected={currentSection.selectedId === option.id}
+              onPress={() => selectOption(option.id)}
+            />
           ))}
         </ScrollView>
       </View>
       <View style={styles.shutterDivider} />
       <View style={styles.quickShutterSlot}>
-        <Shutter takePicture={takePicture} isProcessing={isProcessing} capturing={capturing} compact />
+        <Shutter
+          takePicture={takePicture}
+          isProcessing={isProcessing}
+          capturing={capturing}
+          compact
+        />
       </View>
     </Animated.View>
   );

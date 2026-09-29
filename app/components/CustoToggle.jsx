@@ -51,9 +51,7 @@ export default function CustomToggle({
             <Text style={styles.label}>{label}</Text>
             {badge && <Text style={styles.badge}>{badge}</Text>}
           </View>
-          {description && (
-            <Text style={styles.description}>{description}</Text>
-          )}
+          {description && <Text style={styles.description}>{description}</Text>}
         </View>
       )}
 
@@ -64,11 +62,13 @@ export default function CustomToggle({
         disabled={disabled}
         onPress={toggleHandler}
       >
-        <View style={[
-          styles.track,
-          value && styles.trackActive,
-          disabled && styles.trackDisabled,
-        ]}>
+        <View
+          style={[
+            styles.track,
+            value && styles.trackActive,
+            disabled && styles.trackDisabled,
+          ]}
+        >
           <Animated.View
             style={[
               styles.thumb,

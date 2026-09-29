@@ -51,7 +51,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 }
 `;
 
-const LEGACY_WINDOW_SETUP = /#if os\(iOS\) \|\| os\(tvOS\)\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\n\s*factory\.startReactNative\(\n\s*withModuleName: "main",\n\s*in: window,\n\s*launchOptions: launchOptions\)\n#endif\n\n/;
+const LEGACY_WINDOW_SETUP =
+  /#if os\(iOS\) \|\| os\(tvOS\)\n\s*window = UIWindow\(frame: UIScreen\.main\.bounds\)\n\s*factory\.startReactNative\(\n\s*withModuleName: "main",\n\s*in: window,\n\s*launchOptions: launchOptions\)\n#endif\n\n/;
 
 const SCENE_CONFIGURATION_METHOD = `  public func application(
     _ application: UIApplication,
@@ -98,29 +99,39 @@ module.exports = function withUiSceneManifest(config) {
     return cfg;
   });
 
-  config = withDangerousMod(config, ["ios", async (cfg) => {
-    const projectName = cfg.modRequest.projectName;
-    const sourceDir = path.join(cfg.modRequest.platformProjectRoot, projectName);
-    const appDelegatePath = path.join(sourceDir, "AppDelegate.swift");
-    const sceneDelegatePath = path.join(sourceDir, "SceneDelegate.swift");
-    let appDelegate = fs.readFileSync(appDelegatePath, "utf8");
-
-    appDelegate = appDelegate.replace(LEGACY_WINDOW_SETUP, "");
-    appDelegate = appDelegate.replace(
-      "  public override func application(\n    _ application: UIApplication,\n    configurationForConnecting connectingSceneSession: UISceneSession,",
-      "  public func application(\n    _ application: UIApplication,\n    configurationForConnecting connectingSceneSession: UISceneSession,",
-    );
-    if (!appDelegate.includes("configurationForConnecting connectingSceneSession")) {
-      appDelegate = appDelegate.replace(
-        "  // Linking API\n",
-        `${SCENE_CONFIGURATION_METHOD}  // Linking API\n`,
+  config = withDangerousMod(config, [
+    "ios",
+    async (cfg) => {
+      const projectName = cfg.modRequest.projectName;
+      const sourceDir = path.join(
+        cfg.modRequest.platformProjectRoot,
+        projectName,
       );
-    }
+      const appDelegatePath = path.join(sourceDir, "AppDelegate.swift");
+      const sceneDelegatePath = path.join(sourceDir, "SceneDelegate.swift");
+      let appDelegate = fs.readFileSync(appDelegatePath, "utf8");
 
-    fs.writeFileSync(appDelegatePath, appDelegate);
-    fs.writeFileSync(sceneDelegatePath, SCENE_DELEGATE);
-    return cfg;
-  }]);
+      appDelegate = appDelegate.replace(LEGACY_WINDOW_SETUP, "");
+      appDelegate = appDelegate.replace(
+        "  public override func application(\n    _ application: UIApplication,\n    configurationForConnecting connectingSceneSession: UISceneSession,",
+        "  public func application(\n    _ application: UIApplication,\n    configurationForConnecting connectingSceneSession: UISceneSession,",
+      );
+      if (
+        !appDelegate.includes(
+          "configurationForConnecting connectingSceneSession",
+        )
+      ) {
+        appDelegate = appDelegate.replace(
+          "  // Linking API\n",
+          `${SCENE_CONFIGURATION_METHOD}  // Linking API\n`,
+        );
+      }
+
+      fs.writeFileSync(appDelegatePath, appDelegate);
+      fs.writeFileSync(sceneDelegatePath, SCENE_DELEGATE);
+      return cfg;
+    },
+  ]);
 
   return withXcodeProject(config, (cfg) => {
     const project = cfg.modResults;

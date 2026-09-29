@@ -46,7 +46,9 @@ const withTimeout = (promise, timeoutMs) =>
   });
 
 const extensionForUri = (uri, fallback = "jpg") => {
-  const match = String(uri || "").split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i);
+  const match = String(uri || "")
+    .split(/[?#]/)[0]
+    .match(/\.([a-z0-9]+)$/i);
   return match?.[1] || fallback;
 };
 
@@ -182,7 +184,10 @@ export default function usePhotoProcessingQueue(
             );
           }
         };
-        const prepareRegularPhoto = async (uri, metadataSourceUri = originalUri) => {
+        const prepareRegularPhoto = async (
+          uri,
+          metadataSourceUri = originalUri,
+        ) => {
           if (preserveApplePhotographicStyles) {
             const result = await makePhotoStylesCompatible(uri, {
               metadata: effectiveExifData,
@@ -190,7 +195,9 @@ export default function usePhotoProcessingQueue(
             });
             if (!result?.verified || !result?.photoUri) {
               await removeStylesTemporaryFile(result?.photoUri);
-              throw new Error("O HEIF gerado não passou na validação dos Estilos Fotográficos");
+              throw new Error(
+                "O HEIF gerado não passou na validação dos Estilos Fotográficos",
+              );
             }
             return result.photoUri;
           }

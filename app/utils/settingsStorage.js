@@ -76,7 +76,7 @@ export async function loadStoredSettings(defaults) {
     savedTopBarControls,
     savedProjects,
     savedActiveProjectId,
-    ] = await Promise.all([
+  ] = await Promise.all([
     AsyncStorage.getItem(keys.RETRO_STYLE),
     AsyncStorage.getItem(keys.GRID_VISIBLE),
     AsyncStorage.getItem(keys.LEVEL_VISIBLE),
@@ -102,7 +102,7 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.TOP_BAR_CONTROLS),
     AsyncStorage.getItem(keys.PROJECTS),
     AsyncStorage.getItem(keys.ACTIVE_PROJECT_ID),
-    ]);
+  ]);
 
   const intelligentPreferences = restoreIntelligentPreferences(
     {
@@ -129,10 +129,19 @@ export async function loadStoredSettings(defaults) {
       defaults.histogramVisible,
     ),
     previewLut: parseBoolean(savedPreviewLut, defaults.previewLut),
-    previewHalation: parseBoolean(savedPreviewHalation, defaults.previewHalation),
+    previewHalation: parseBoolean(
+      savedPreviewHalation,
+      defaults.previewHalation,
+    ),
     previewGrain: parseBoolean(savedPreviewGrain, defaults.previewGrain),
-    previewDoubleExposure: parseBoolean(savedPreviewDoubleExposure, defaults.previewDoubleExposure),
-    previewStacking: parseBoolean(savedPreviewStacking, defaults.previewStacking),
+    previewDoubleExposure: parseBoolean(
+      savedPreviewDoubleExposure,
+      defaults.previewDoubleExposure,
+    ),
+    previewStacking: parseBoolean(
+      savedPreviewStacking,
+      defaults.previewStacking,
+    ),
     ...zebraPreferences,
     ...intelligentPreferences,
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),

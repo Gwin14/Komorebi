@@ -1,10 +1,7 @@
 import type { ComponentType } from "react";
 import { Platform, View, type ViewProps } from "react-native";
 
-export type ImageStackingStrategyId =
-  | "bulb"
-  | "motionBlur"
-  | "doubleExposure";
+export type ImageStackingStrategyId = "bulb" | "motionBlur" | "doubleExposure";
 
 export type ImageStackingState =
   | "idle"
@@ -91,7 +88,10 @@ export type ImageStackingCameraViewProps = ViewProps & {
     nativeEvent?: Partial<ImageStackingProgress>;
   }) => void;
   onPreviewImage?: (event: {
-    nativeEvent?: { type?: "doubleExposure" | "stacking"; base64?: string | null };
+    nativeEvent?: {
+      type?: "doubleExposure" | "stacking";
+      base64?: string | null;
+    };
   }) => void;
 };
 
@@ -132,9 +132,7 @@ export async function getImageStackingCapabilities(
     supportedStrategies: Array.isArray(value.supportedStrategies)
       ? value.supportedStrategies
       : [],
-    maximumBulbDurationSeconds: Number(
-      value.maximumBulbDurationSeconds || 0,
-    ),
+    maximumBulbDurationSeconds: Number(value.maximumBulbDurationSeconds || 0),
   };
 }
 

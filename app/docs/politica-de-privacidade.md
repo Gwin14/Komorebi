@@ -70,15 +70,15 @@ O Komorebi não faz upload automático das suas fotos. Compartilhamentos ou envi
 
 Algumas funções dependem de serviços externos. Nesses casos, dados necessários para a função podem ser enviados ao provedor correspondente:
 
-| Serviço                                                          | Finalidade                                         | Dados enviados ou acessados                                                                                        |
-| ---------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Open-Meteo** (`api.open-meteo.com`)                            | Dados meteorológicos no painel de tempo.           | Latitude e longitude aproximadas.                                                                                  |
-| **BigDataCloud** (`api.bigdatacloud.net`)                        | Geocodificação reversa para cidade/região/país.    | Latitude e longitude aproximadas.                                                                                  |
-| **Leaflet / Carto basemaps / unpkg**                             | Exibir mapa na galeria para fotos com GPS.         | Carregamento de scripts, estilos e tiles de mapa; o mapa é centrado nas coordenadas da foto.                       |
-| **Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criar molduras com foto e metadados.               | Quando você abre uma foto nesse recurso, a imagem pode ser enviada/injetada no site em WebView para processamento. |
-| **Notion** (`fabiosantoss.notion.site`)                          | Formulário de feedback.                            | Informações que você digitar voluntariamente no formulário.                                                        |
-| **Sentry** (`sentry.io`)                                        | Diagnosticar falhas e medir o desempenho do app.   | Mensagens de erro, rastros de execução, versão do app e informações técnicas do dispositivo e das operações afetadas. |
-| **Links externos**                                               | Abrir site, GitHub, Instagram, Threads ou YouTube. | O acesso passa a ocorrer fora do app ou em WebView, conforme o serviço.                                            |
+| Serviço                                                          | Finalidade                                         | Dados enviados ou acessados                                                                                           |
+| ---------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Open-Meteo** (`api.open-meteo.com`)                            | Dados meteorológicos no painel de tempo.           | Latitude e longitude aproximadas.                                                                                     |
+| **BigDataCloud** (`api.bigdatacloud.net`)                        | Geocodificação reversa para cidade/região/país.    | Latitude e longitude aproximadas.                                                                                     |
+| **Leaflet / Carto basemaps / unpkg**                             | Exibir mapa na galeria para fotos com GPS.         | Carregamento de scripts, estilos e tiles de mapa; o mapa é centrado nas coordenadas da foto.                          |
+| **Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criar molduras com foto e metadados.               | Quando você abre uma foto nesse recurso, a imagem pode ser enviada/injetada no site em WebView para processamento.    |
+| **Notion** (`fabiosantoss.notion.site`)                          | Formulário de feedback.                            | Informações que você digitar voluntariamente no formulário.                                                           |
+| **Sentry** (`sentry.io`)                                         | Diagnosticar falhas e medir o desempenho do app.   | Mensagens de erro, rastros de execução, versão do app e informações técnicas do dispositivo e das operações afetadas. |
+| **Links externos**                                               | Abrir site, GitHub, Instagram, Threads ou YouTube. | O acesso passa a ocorrer fora do app ou em WebView, conforme o serviço.                                               |
 
 Esses serviços têm políticas próprias. O Komorebi não controla as práticas de privacidade, disponibilidade ou segurança desses terceiros.
 

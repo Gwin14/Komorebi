@@ -7,19 +7,36 @@ export const LEVEL_ADVICE_COOLDOWN = 90000;
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const area = (rect) => rect.width * rect.height;
-const center = (rect) => ({ x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
-const contains = (rect, point) => point && point.x >= rect.x && point.x <= rect.x + rect.width &&
-  point.y >= rect.y && point.y <= rect.y + rect.height;
+const center = (rect) => ({
+  x: rect.x + rect.width / 2,
+  y: rect.y + rect.height / 2,
+});
+const contains = (rect, point) =>
+  point &&
+  point.x >= rect.x &&
+  point.x <= rect.x + rect.width &&
+  point.y >= rect.y &&
+  point.y <= rect.y + rect.height;
 const centerDistance = (rect, point) => {
   const rectCenter = center(rect);
   return Math.hypot(rectCenter.x - point.x, rectCenter.y - point.y);
 };
 
-function visibleSubjects(items, transform, minConfidence = COMPOSITION_MIN_CONFIDENCE) {
+function visibleSubjects(
+  items,
+  transform,
+  minConfidence = COMPOSITION_MIN_CONFIDENCE,
+) {
   return (items ?? [])
-    .filter((item) => item.confidence >= minConfidence &&
-      [item.rect?.x, item.rect?.y, item.rect?.width, item.rect?.height].every(Number.isFinite) &&
-      item.rect.width > 0 && item.rect.height > 0)
+    .filter(
+      (item) =>
+        item.confidence >= minConfidence &&
+        [item.rect?.x, item.rect?.y, item.rect?.width, item.rect?.height].every(
+          Number.isFinite,
+        ) &&
+        item.rect.width > 0 &&
+        item.rect.height > 0,
+    )
     .map((item) => ({ ...item, rect: transform.rect(item.rect) }))
     .filter((item) => area(item.rect) > 0)
     .sort((a, b) => area(b.rect) - area(a.rect));
@@ -30,7 +47,9 @@ function unionRects(items) {
   const left = Math.min(...items.map((item) => item.rect.x));
   const top = Math.min(...items.map((item) => item.rect.y));
   const right = Math.max(...items.map((item) => item.rect.x + item.rect.width));
-  const bottom = Math.max(...items.map((item) => item.rect.y + item.rect.height));
+  const bottom = Math.max(
+    ...items.map((item) => item.rect.y + item.rect.height),
+  );
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
@@ -43,9 +62,13 @@ function sceneSubject(analysis, transform, preferredPoint) {
   const rectangles = visibleSubjects(analysis.rectangles, transform);
   if (preferredPoint) {
     for (const [kind, items] of [
-      ["face", faces], ["person", people], ["subject", subjects], ["architecture", rectangles],
+      ["face", faces],
+      ["person", people],
+      ["subject", subjects],
+      ["architecture", rectangles],
     ]) {
-      const hit = items.filter((item) => contains(item.rect, preferredPoint))
+      const hit = items
+        .filter((item) => contains(item.rect, preferredPoint))
         .sort((a, b) => area(a.rect) - area(b.rect))[0];
       if (hit) return { kind, rect: hit.rect, selected: true };
     }
@@ -54,7 +77,11 @@ function sceneSubject(analysis, transform, preferredPoint) {
       ...people.map((item) => ({ kind: "person", ...item })),
       ...subjects.map((item) => ({ kind: "subject", ...item })),
       ...rectangles.map((item) => ({ kind: "architecture", ...item })),
-    ].sort((a, b) => centerDistance(a.rect, preferredPoint) - centerDistance(b.rect, preferredPoint))[0];
+    ].sort(
+      (a, b) =>
+        centerDistance(a.rect, preferredPoint) -
+        centerDistance(b.rect, preferredPoint),
+    )[0];
     if (nearest && centerDistance(nearest.rect, preferredPoint) <= 0.22) {
       return { kind: nearest.kind, rect: nearest.rect, selected: true };
     }
@@ -68,12 +95,25 @@ function sceneSubject(analysis, transform, preferredPoint) {
   return null;
 }
 
-function fixedAspectRect(bounds, padding = 1, { minSize = 0.22, maxSize = 0.74 } = {}) {
+function fixedAspectRect(
+  bounds,
+  padding = 1,
+  { minSize = 0.22, maxSize = 0.74 } = {},
+) {
   const subjectCenter = center(bounds);
-  const size = clamp(Math.max(bounds.width, bounds.height) * padding, minSize, maxSize);
+  const size = clamp(
+    Math.max(bounds.width, bounds.height) * padding,
+    minSize,
+    maxSize,
+  );
   const centerX = clamp(subjectCenter.x, size / 2, 1 - size / 2);
   const centerY = clamp(subjectCenter.y, size / 2, 1 - size / 2);
-  return { x: centerX - size / 2, y: centerY - size / 2, width: size, height: size };
+  return {
+    x: centerX - size / 2,
+    y: centerY - size / 2,
+    width: size,
+    height: size,
+  };
 }
 
 function modelBounds(frame, transform, preferredPoint) {
@@ -81,14 +121,27 @@ function modelBounds(frame, transform, preferredPoint) {
   const centerY = Number(frame?.centerY);
   const width = Number(frame?.width ?? frame?.size);
   const height = Number(frame?.height ?? frame?.size);
-  if (![centerX, centerY, width, height].every(Number.isFinite) ||
-      width < 40 || width > 900 || height < 40 || height > 900 ||
-      centerX - width / 2 < 0 || centerX + width / 2 > 1000 ||
-      centerY - height / 2 < 0 || centerY + height / 2 > 1000) return null;
+  if (
+    ![centerX, centerY, width, height].every(Number.isFinite) ||
+    width < 40 ||
+    width > 900 ||
+    height < 40 ||
+    height > 900 ||
+    centerX - width / 2 < 0 ||
+    centerX + width / 2 > 1000 ||
+    centerY - height / 2 < 0 ||
+    centerY + height / 2 > 1000
+  )
+    return null;
   // Older prompts contained this exact sample. MiniCPM sometimes echoed it
   // verbatim for unrelated scenes, creating the same large frame every time.
-  if (Math.abs(centerX - 500) <= 2 && Math.abs(centerY - 450) <= 2 &&
-      Math.abs(width - 600) <= 2 && Math.abs(height - 760) <= 2) return null;
+  if (
+    Math.abs(centerX - 500) <= 2 &&
+    Math.abs(centerY - 450) <= 2 &&
+    Math.abs(width - 600) <= 2 &&
+    Math.abs(height - 760) <= 2
+  )
+    return null;
   const rect = transform.rect({
     x: (centerX - width / 2) / 1000,
     y: (centerY - height / 2) / 1000,
@@ -100,10 +153,20 @@ function modelBounds(frame, transform, preferredPoint) {
 
 function concreteSubjectLabel(value) {
   if (typeof value !== "string") return "";
-  const label = value.replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ").trim();
-  const normalized = label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const generic = /^(a |o |as |os |um |uma )?(cena|assunto|elemento|ambiente|paisagem|composicao|principal)$/u;
-  return label.length >= 3 && label.length <= 24 && label.split(" ").length <= 3 && !generic.test(normalized)
+  const label = value
+    .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalized = label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const generic =
+    /^(a |o |as |os |um |uma )?(cena|assunto|elemento|ambiente|paisagem|composicao|principal)$/u;
+  return label.length >= 3 &&
+    label.length <= 24 &&
+    label.split(" ").length <= 3 &&
+    !generic.test(normalized)
     ? label
     : "";
 }
@@ -130,33 +193,42 @@ function buildResult(analysis, preview, context = {}) {
   const transform = createCompositionTransform(analysis.geometry, preview);
   const selectedPoint = context.subjectPoint;
   const subject = sceneSubject(analysis, transform, selectedPoint);
-  const suggested = modelBounds(analysis.judgement?.frame, transform, selectedPoint);
+  const suggested = modelBounds(
+    analysis.judgement?.frame,
+    transform,
+    selectedPoint,
+  );
   const crop = cropSettings(analysis.judgement?.cropIntent);
-  const compactVisionSubject = subject && (
-    ["person", "group", "face"].includes(subject.kind) ||
-    (subject.kind === "subject" && area(subject.rect) <= 0.45)
-  );
-  const selectedVisionSubject = Boolean(subject?.selected) && (
-    ["person", "group", "face"].includes(subject.kind) || area(subject.rect) <= 0.55
-  );
-  const subjectPadding = subject?.kind === "face"
-    ? Math.max(1.6, crop.padding)
-    : crop.padding;
+  const compactVisionSubject =
+    subject &&
+    (["person", "group", "face"].includes(subject.kind) ||
+      (subject.kind === "subject" && area(subject.rect) <= 0.45));
+  const selectedVisionSubject =
+    Boolean(subject?.selected) &&
+    (["person", "group", "face"].includes(subject.kind) ||
+      area(subject.rect) <= 0.55);
+  const subjectPadding =
+    subject?.kind === "face" ? Math.max(1.6, crop.padding) : crop.padding;
   const pointFallback = selectedPoint
-    ? fixedAspectRect({
-      x: selectedPoint.x - 0.2,
-      y: selectedPoint.y - 0.2,
-      width: 0.4,
-      height: 0.4,
-    }, 1, { minSize: 0.4, maxSize: 0.4 })
+    ? fixedAspectRect(
+        {
+          x: selectedPoint.x - 0.2,
+          y: selectedPoint.y - 0.2,
+          width: 0.4,
+          height: 0.4,
+        },
+        1,
+        { minSize: 0.4, maxSize: 0.4 },
+      )
     : null;
-  const selectedModelFrame = suggested && Math.max(suggested.width, suggested.height) <= crop.maxSize
-    ? fixedAspectRect(suggested, crop.padding, crop)
-    : null;
+  const selectedModelFrame =
+    suggested && Math.max(suggested.width, suggested.height) <= crop.maxSize
+      ? fixedAspectRect(suggested, crop.padding, crop)
+      : null;
   const rect = selectedVisionSubject
     ? fixedAspectRect(subject.rect, subjectPadding, crop)
     : selectedPoint
-      ? selectedModelFrame ?? pointFallback
+      ? (selectedModelFrame ?? pointFallback)
       : compactVisionSubject
         ? fixedAspectRect(subject.rect, subjectPadding, crop)
         : suggested
@@ -165,42 +237,54 @@ function buildResult(analysis, preview, context = {}) {
             ? fixedAspectRect(subject.rect, subjectPadding, crop)
             : { x: 0.14, y: 0.14, width: 0.72, height: 0.72 };
   const message = messageFor(analysis, subject, Boolean(selectedPoint));
-  const subjectTopic = concreteSubjectLabel(analysis.judgement?.subject) || subject?.kind;
+  const subjectTopic =
+    concreteSubjectLabel(analysis.judgement?.subject) || subject?.kind;
   return {
     kind: "advice",
     message,
     topic: subjectTopic || (selectedPoint ? "seleção" : "cena"),
-    gizmos: [{
-      id: "composition-frame",
-      type: "framing",
-      rect,
-      label: message,
-      anchor: "scene",
-    }],
+    gizmos: [
+      {
+        id: "composition-frame",
+        type: "framing",
+        rect,
+        label: message,
+        anchor: "scene",
+      },
+    ],
   };
 }
 
 export function generateCompositionCandidates(analysis, preview, context) {
   const result = buildResult(analysis, preview, context);
-  return [{
-    category: "framing",
-    topic: result.topic,
-    priority: 1,
-    severity: 1,
-    gizmo: result.gizmos[0],
-  }];
+  return [
+    {
+      category: "framing",
+      topic: result.topic,
+      priority: 1,
+      severity: 1,
+      gizmo: result.gizmos[0],
+    },
+  ];
 }
 
 export function createCompositionAdvisor() {
   let history = [];
   return {
-    reset() { history = []; },
+    reset() {
+      history = [];
+    },
     context() {
-      return { recentAdvice: history.map(({ topic, message }) => ({ topic, message })) };
+      return {
+        recentAdvice: history.map(({ topic, message }) => ({ topic, message })),
+      };
     },
     generate(analysis, preview, context) {
       const result = buildResult(analysis, preview, context);
-      history = [...history, { topic: result.topic, message: result.message }].slice(-ADVICE_HISTORY_LIMIT);
+      history = [
+        ...history,
+        { topic: result.topic, message: result.message },
+      ].slice(-ADVICE_HISTORY_LIMIT);
       return result;
     },
   };

@@ -321,9 +321,7 @@ function TopBarCustomizer({ controls, onChange }) {
                 disabled={controlId === "settings"}
                 hitSlop={8}
                 onPress={() => remove(controlId)}
-                style={
-                  controlId === "settings" && styles.controlActionDisabled
-                }
+                style={controlId === "settings" && styles.controlActionDisabled}
               >
                 <Ionicons name="close" size={21} color="#ff7373" />
               </Pressable>
@@ -352,7 +350,9 @@ function TopBarCustomizer({ controls, onChange }) {
                   ]}
                 >
                   <Ionicons name={control.icon} size={18} color="#ffb21d" />
-                  <Text style={styles.availableControlText}>{control.label}</Text>
+                  <Text style={styles.availableControlText}>
+                    {control.label}
+                  </Text>
                 </Pressable>
               );
             })}

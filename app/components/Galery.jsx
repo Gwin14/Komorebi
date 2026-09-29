@@ -56,7 +56,9 @@ const getSectionTitle = (timestamp) => {
   if (daysAgo === 0) return "Hoje";
   if (daysAgo === 1) return "Ontem";
   if (daysAgo > 1 && daysAgo < 7) {
-    const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(photoDate);
+    const weekday = new Intl.DateTimeFormat("pt-BR", {
+      weekday: "long",
+    }).format(photoDate);
     return weekday.charAt(0).toUpperCase() + weekday.slice(1);
   }
   const formattedDate = new Intl.DateTimeFormat("pt-BR", {
@@ -81,7 +83,11 @@ const groupPhotosByDate = (photos) => {
       const dateKey = getDateKey(photo.creationTime);
       const group = photosByDate.get(dateKey);
       if (group) group.photos.push(photo);
-      else photosByDate.set(dateKey, { timestamp: photo.creationTime, photos: [photo] });
+      else
+        photosByDate.set(dateKey, {
+          timestamp: photo.creationTime,
+          photos: [photo],
+        });
     });
 
   return Array.from(photosByDate.values()).map((group) => {
@@ -153,12 +159,20 @@ export default function Galery() {
                 const info = await MediaLibrary.getAssetInfoAsync(asset.id);
                 return { ...asset, uri: info.localUri || asset.uri };
               } catch (error) {
-                console.warn("Não foi possível carregar o asset da galeria:", asset.id, error);
+                console.warn(
+                  "Não foi possível carregar o asset da galeria:",
+                  asset.id,
+                  error,
+                );
                 return null;
               }
             }),
           );
-          resolvedAssets.push(...batch.filter((asset) => asset && Number.isFinite(asset.creationTime)));
+          resolvedAssets.push(
+            ...batch.filter(
+              (asset) => asset && Number.isFinite(asset.creationTime),
+            ),
+          );
         }
         setPhotos(resolvedAssets);
       } catch (error) {
@@ -183,7 +197,10 @@ export default function Galery() {
     () => [...photos].sort((a, b) => b.creationTime - a.creationTime),
     [photos],
   );
-  const photoSections = useMemo(() => groupPhotosByDate(orderedPhotos), [orderedPhotos]);
+  const photoSections = useMemo(
+    () => groupPhotosByDate(orderedPhotos),
+    [orderedPhotos],
+  );
   const selectedIndex = useMemo(
     () => orderedPhotos.findIndex((photo) => photo.id === selectedAssetId),
     [orderedPhotos, selectedAssetId],
@@ -211,9 +228,13 @@ export default function Galery() {
     async (project) => {
       try {
         const albums = await MediaLibrary.getAlbumsAsync();
-        const album = albums.find((item) => item.title === getProjectAlbumName(project));
+        const album = albums.find(
+          (item) => item.title === getProjectAlbumName(project),
+        );
         if (album) await MediaLibrary.deleteAlbumsAsync(album, false);
-        setProjects((previous) => previous.filter((item) => item.id !== project.id));
+        setProjects((previous) =>
+          previous.filter((item) => item.id !== project.id),
+        );
         if (viewProjectId === project.id) {
           setViewProjectId(null);
           loadKomorebiPhotos(null);
@@ -247,9 +268,7 @@ export default function Galery() {
       return;
     }
     node.measureInWindow((x, y, width, height) => {
-      callback(
-        width > 0 && height > 0 ? { x, y, width, height } : null,
-      );
+      callback(width > 0 && height > 0 ? { x, y, width, height } : null);
     });
   }, []);
 
@@ -331,14 +350,20 @@ export default function Galery() {
       setIntelligentTagsOpen(false);
       setExifData(null);
       setSelectedAssetId(photo.id);
-      thumbnailRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+      thumbnailRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0.5,
+      });
     },
     [orderedPhotos, selectedAssetId, setInfoPanel],
   );
 
   const handlePagerScrollEnd = useCallback(
     (event) => {
-      const index = Math.round(event.nativeEvent.contentOffset.x / Math.max(screenWidth, 1));
+      const index = Math.round(
+        event.nativeEvent.contentOffset.x / Math.max(screenWidth, 1),
+      );
       selectPhotoAtIndex(index);
     },
     [screenWidth, selectPhotoAtIndex],
@@ -346,7 +371,10 @@ export default function Galery() {
 
   const selectThumbnail = useCallback(
     (index) => {
-      pagerRef.current?.scrollToOffset({ offset: index * screenWidth, animated: true });
+      pagerRef.current?.scrollToOffset({
+        offset: index * screenWidth,
+        animated: true,
+      });
       selectPhotoAtIndex(index);
     },
     [screenWidth, selectPhotoAtIndex],
@@ -384,7 +412,8 @@ export default function Galery() {
           Math.abs(gesture.dy) > 12 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
         onPanResponderRelease: (_, gesture) => {
-          if (gesture.dy < -INFO_SWIPE_DISTANCE || gesture.vy < -0.55) setInfoPanel(true);
+          if (gesture.dy < -INFO_SWIPE_DISTANCE || gesture.vy < -0.55)
+            setInfoPanel(true);
         },
       }),
     [setInfoPanel],
@@ -422,7 +451,9 @@ export default function Galery() {
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>Permissão para acessar fotos é necessária.</Text>
+        <Text style={styles.permissionText}>
+          Permissão para acessar fotos é necessária.
+        </Text>
         <Pressable style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.permissionButtonText}>Permitir acesso</Text>
         </Pressable>
@@ -489,7 +520,10 @@ export default function Galery() {
       <BlurView
         intensity={30}
         tint="dark"
-        style={[styles.navigationBar, { paddingTop: safeAreaInsets.top, height: 48 + safeAreaInsets.top }]}
+        style={[
+          styles.navigationBar,
+          { paddingTop: safeAreaInsets.top, height: 48 + safeAreaInsets.top },
+        ]}
       >
         <BackButton top={70} left={5} />
         <Text style={styles.title}>Galeria</Text>
@@ -512,7 +546,9 @@ export default function Galery() {
         stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
-        renderSectionHeader={({ section }) => <Text style={styles.sectionTitle}>{section.title}</Text>}
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+        )}
         renderItem={({ item: row }) => (
           <View style={styles.photoRow}>
             {row.map((photo) => (
@@ -529,15 +565,19 @@ export default function Galery() {
                 <Image source={{ uri: photo.uri }} style={styles.image} />
               </TouchableOpacity>
             ))}
-            {Array.from({ length: PHOTOS_PER_ROW - row.length }).map((_, index) => (
-              <View key={`empty-${index}`} style={styles.photoPlaceholder} />
-            ))}
+            {Array.from({ length: PHOTOS_PER_ROW - row.length }).map(
+              (_, index) => (
+                <View key={`empty-${index}`} style={styles.photoPlaceholder} />
+              ),
+            )}
           </View>
         )}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyTitle}>Sua galeria está vazia</Text>
-            <Text style={styles.emptyText}>As fotos feitas com a Komorebi aparecerão aqui.</Text>
+            <Text style={styles.emptyText}>
+              As fotos feitas com a Komorebi aparecerão aqui.
+            </Text>
           </View>
         }
       />
@@ -563,256 +603,354 @@ export default function Galery() {
             pointerEvents={transitionRunning ? "none" : "auto"}
             style={[styles.viewerContent, { opacity: viewerOpacity }]}
           >
-          <View style={[styles.viewerTopBar, { paddingTop: safeAreaInsets.top + 8 }]}>
-            <TouchableOpacity
-              accessibilityLabel="Fechar foto"
-              accessibilityRole="button"
-              onPress={infoOpen ? () => setInfoPanel(false) : closeViewer}
-              style={styles.viewerRoundButton}
+            <View
+              style={[
+                styles.viewerTopBar,
+                { paddingTop: safeAreaInsets.top + 8 },
+              ]}
             >
-              <Ionicons name="chevron-back" size={25} color="#fff" />
-            </TouchableOpacity>
-            <View style={styles.viewerHeading}>
-              <Text style={styles.viewerDate} numberOfLines={1}>
-                {selectedPhoto ? getViewerDate(selectedPhoto.creationTime) : ""}
-              </Text>
-              <Text style={styles.viewerCounter}>
-                {selectedIndex + 1} de {orderedPhotos.length}
-              </Text>
+              <TouchableOpacity
+                accessibilityLabel="Fechar foto"
+                accessibilityRole="button"
+                onPress={infoOpen ? () => setInfoPanel(false) : closeViewer}
+                style={styles.viewerRoundButton}
+              >
+                <Ionicons name="chevron-back" size={25} color="#fff" />
+              </TouchableOpacity>
+              <View style={styles.viewerHeading}>
+                <Text style={styles.viewerDate} numberOfLines={1}>
+                  {selectedPhoto
+                    ? getViewerDate(selectedPhoto.creationTime)
+                    : ""}
+                </Text>
+                <Text style={styles.viewerCounter}>
+                  {selectedIndex + 1} de {orderedPhotos.length}
+                </Text>
+              </View>
+              <TouchableOpacity
+                accessibilityLabel="Informações da foto"
+                accessibilityRole="button"
+                onPress={() => setInfoPanel(true)}
+                style={styles.viewerRoundButton}
+              >
+                <Ionicons name="information" size={23} color="#fff" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              accessibilityLabel="Informações da foto"
-              accessibilityRole="button"
-              onPress={() => setInfoPanel(true)}
-              style={styles.viewerRoundButton}
-            >
-              <Ionicons name="information" size={23} color="#fff" />
-            </TouchableOpacity>
-          </View>
 
-          <Animated.View
-            style={[
-              styles.viewerGestureArea,
-              {
-                paddingTop: safeAreaInsets.top + 60,
-                transform: [
-                  { translateY: photoTranslateY },
-                  { scale: photoScale },
-                ],
-              },
-            ]}
-          >
-            <FlatList
-              ref={pagerRef}
-              data={orderedPhotos}
-              horizontal
-              pagingEnabled
-              directionalLockEnabled
-              disableIntervalMomentum
-              scrollEnabled={orderedPhotos.length > 1}
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(photo) => photo.id}
-              getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
-              onMomentumScrollEnd={handlePagerScrollEnd}
-              renderItem={({ item: photo }) => (
-                <View style={[styles.viewerPhotoPage, { width: screenWidth }]}>
+            <Animated.View
+              style={[
+                styles.viewerGestureArea,
+                {
+                  paddingTop: safeAreaInsets.top + 60,
+                  transform: [
+                    { translateY: photoTranslateY },
+                    { scale: photoScale },
+                  ],
+                },
+              ]}
+            >
+              <FlatList
+                ref={pagerRef}
+                data={orderedPhotos}
+                horizontal
+                pagingEnabled
+                directionalLockEnabled
+                disableIntervalMomentum
+                scrollEnabled={orderedPhotos.length > 1}
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(photo) => photo.id}
+                getItemLayout={(_, index) => ({
+                  length: screenWidth,
+                  offset: screenWidth * index,
+                  index,
+                })}
+                onMomentumScrollEnd={handlePagerScrollEnd}
+                renderItem={({ item: photo }) => (
                   <View
-                    style={styles.viewerPhotoFrame}
-                    {...viewerPanResponder.panHandlers}
+                    style={[styles.viewerPhotoPage, { width: screenWidth }]}
                   >
-                    <Image source={{ uri: photo.uri }} resizeMode="cover" style={styles.viewerPhoto} />
-                  </View>
-                </View>
-              )}
-            />
-          </Animated.View>
-
-          <Animated.View
-            pointerEvents={infoOpen ? "none" : "auto"}
-            style={[
-              styles.viewerBottom,
-              {
-                opacity: infoAnimation.interpolate({
-                  inputRange: [0, 0.7],
-                  outputRange: [1, 0],
-                }),
-                paddingBottom: Math.max(safeAreaInsets.bottom, 14),
-                transform: [{ translateY: chromeTranslateY }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => setInfoPanel(true)}
-              style={styles.infoHandleButton}
-            >
-              <View style={styles.infoHandle} />
-              <View style={styles.infoButtonContent}>
-                <Ionicons name="chevron-up" size={17} color="#ffaa00" />
-                <Text style={styles.infoButtonText}>Detalhes da foto</Text>
-              </View>
-            </TouchableOpacity>
-            <FlatList
-              ref={thumbnailRef}
-              data={orderedPhotos}
-              horizontal
-              initialScrollIndex={Math.max(selectedIndex, 0)}
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.thumbnailList}
-              keyExtractor={(photo) => `thumbnail-${photo.id}`}
-              getItemLayout={(_, index) => ({ length: 58, offset: 58 * index, index })}
-              onScrollToIndexFailed={({ index }) => {
-                setTimeout(() => {
-                  thumbnailRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0.5 });
-                }, 100);
-              }}
-              renderItem={({ item, index }) => {
-                const active = item.id === selectedAssetId;
-                return (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => selectThumbnail(index)}
-                    style={[styles.thumbnailButton, active && styles.thumbnailButtonActive]}
-                  >
-                    <Image source={{ uri: item.uri }} style={styles.thumbnailImage} />
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </Animated.View>
-
-          <Animated.View pointerEvents={infoOpen ? "auto" : "none"} style={[styles.infoBackdrop, { opacity: infoAnimation }]}>
-            <Pressable accessibilityLabel="Fechar informações" onPress={() => setInfoPanel(false)} style={styles.infoBackdropPressable} />
-          </Animated.View>
-
-          <Animated.View
-            pointerEvents={infoOpen ? "auto" : "none"}
-            style={[
-              styles.infoPanel,
-              {
-                paddingBottom: Math.max(safeAreaInsets.bottom, 18),
-                transform: [{ translateY: panelTranslateY }],
-              },
-            ]}
-          >
-            <BlurView intensity={72} tint="dark" style={styles.infoPanelBlur}>
-              <View style={styles.infoPanelHandle} />
-              <View style={styles.infoHeader}>
-                <View>
-                  <Text style={styles.infoEyebrow}>FOTO {selectedIndex + 1}</Text>
-                  <Text style={styles.infoTitle}>Informações</Text>
-                </View>
-                <TouchableOpacity onPress={() => setInfoPanel(false)} style={styles.infoCloseButton}>
-                  <Ionicons name="close" size={22} color="#fff" />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView contentContainerStyle={styles.infoScrollContent} showsVerticalScrollIndicator={false}>
-                {exifLoading ? (
-                  <View style={styles.photoDataLoading}>
-                    <ActivityIndicator color="#ffaa00" size="small" />
-                    <Text style={styles.loadingText}>Lendo metadados…</Text>
-                  </View>
-                ) : exifData ? (
-                  <>
-                    {exifData.komorebiBadges?.length ? (
-                      <View style={styles.badgeContainer}>
-                        {exifData.komorebiBadges.map((badge) => (
-                          <View key={badge} style={styles.badge}>
-                            <Text style={styles.badgeText}>{badge}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    {exifData.intelligentTags?.length ? (
-                      <View style={styles.intelligentTagsSection}>
-                        <TouchableOpacity
-                          accessibilityRole="button"
-                          accessibilityState={{ expanded: intelligentTagsOpen }}
-                          onPress={() => setIntelligentTagsOpen((open) => !open)}
-                          style={styles.intelligentTagsHeader}
-                        >
-                          <View style={styles.intelligentTagsTitleRow}>
-                            <Ionicons name="sparkles-outline" size={17} color="#ffaa00" />
-                            <Text style={styles.intelligentTagsTitle}>Tags inteligentes</Text>
-                            <View style={styles.intelligentTagsCount}>
-                              <Text style={styles.intelligentTagsCountText}>
-                                {exifData.intelligentTags.length}
-                              </Text>
-                            </View>
-                          </View>
-                          <Ionicons
-                            name={intelligentTagsOpen ? "chevron-up" : "chevron-down"}
-                            size={18}
-                            color="rgba(255,255,255,0.58)"
-                          />
-                        </TouchableOpacity>
-                        {intelligentTagsOpen ? (
-                          <View style={styles.intelligentTagsChips}>
-                            {exifData.intelligentTags.map((tag) => (
-                              <View key={tag} style={styles.intelligentTagChip}>
-                                <Text style={styles.intelligentTagText}>{tag}</Text>
-                              </View>
-                            ))}
-                          </View>
-                        ) : null}
-                      </View>
-                    ) : null}
-
-                    <View style={styles.exifContainer}>
-                      {Object.entries(EXIF_SCHEMA).map(([key, config]) => {
-                        const value = exifData[key];
-                        if (!value || key === "latitude" || key === "longitude") return null;
-                        return (
-                          <View key={key} style={[styles.exifItemWrapper, key === "date" && styles.exifItemWide]}>
-                            <ExifItem icon={config.icon} label={config.label} value={String(value)} />
-                          </View>
-                        );
-                      })}
+                    <View
+                      style={styles.viewerPhotoFrame}
+                      {...viewerPanResponder.panHandlers}
+                    >
+                      <Image
+                        source={{ uri: photo.uri }}
+                        resizeMode="cover"
+                        style={styles.viewerPhoto}
+                      />
                     </View>
-
-                    {(exifData.latitude ?? exifData.GPSLatitude) != null &&
-                    (exifData.longitude ?? exifData.GPSLongitude) != null ? (
-                      <View pointerEvents="none" style={styles.mapContainer}>
-                        <MapViewWeb
-                          latitude={Number(exifData.latitude ?? exifData.GPSLatitude)}
-                          longitude={Number(exifData.longitude ?? exifData.GPSLongitude)}
-                        />
-                      </View>
-                    ) : null}
-                  </>
-                ) : (
-                  <Text style={styles.noMetadataText}>Nenhum metadado disponível para esta foto.</Text>
+                  </View>
                 )}
+              />
+            </Animated.View>
 
-                <View style={styles.infoActions}>
-                  <ProjectChecklist
-                    assetId={selectedPhoto?.id}
-                    projects={projects}
-                    onProjectsChange={loadKomorebiPhotos}
-                    onCreateProject={(project) => setProjects((previous) => [...previous, project])}
-                    triggerText="Projetos"
-                    triggerStyle={styles.infoActionButton}
-                    triggerTextStyle={styles.infoActionText}
-                  />
+            <Animated.View
+              pointerEvents={infoOpen ? "none" : "auto"}
+              style={[
+                styles.viewerBottom,
+                {
+                  opacity: infoAnimation.interpolate({
+                    inputRange: [0, 0.7],
+                    outputRange: [1, 0],
+                  }),
+                  paddingBottom: Math.max(safeAreaInsets.bottom, 14),
+                  transform: [{ translateY: chromeTranslateY }],
+                },
+              ]}
+            >
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setInfoPanel(true)}
+                style={styles.infoHandleButton}
+              >
+                <View style={styles.infoHandle} />
+                <View style={styles.infoButtonContent}>
+                  <Ionicons name="chevron-up" size={17} color="#ffaa00" />
+                  <Text style={styles.infoButtonText}>Detalhes da foto</Text>
+                </View>
+              </TouchableOpacity>
+              <FlatList
+                ref={thumbnailRef}
+                data={orderedPhotos}
+                horizontal
+                initialScrollIndex={Math.max(selectedIndex, 0)}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.thumbnailList}
+                keyExtractor={(photo) => `thumbnail-${photo.id}`}
+                getItemLayout={(_, index) => ({
+                  length: 58,
+                  offset: 58 * index,
+                  index,
+                })}
+                onScrollToIndexFailed={({ index }) => {
+                  setTimeout(() => {
+                    thumbnailRef.current?.scrollToIndex({
+                      index,
+                      animated: false,
+                      viewPosition: 0.5,
+                    });
+                  }, 100);
+                }}
+                renderItem={({ item, index }) => {
+                  const active = item.id === selectedAssetId;
+                  return (
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      onPress={() => selectThumbnail(index)}
+                      style={[
+                        styles.thumbnailButton,
+                        active && styles.thumbnailButtonActive,
+                      ]}
+                    >
+                      <Image
+                        source={{ uri: item.uri }}
+                        style={styles.thumbnailImage}
+                      />
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </Animated.View>
+
+            <Animated.View
+              pointerEvents={infoOpen ? "auto" : "none"}
+              style={[styles.infoBackdrop, { opacity: infoAnimation }]}
+            >
+              <Pressable
+                accessibilityLabel="Fechar informações"
+                onPress={() => setInfoPanel(false)}
+                style={styles.infoBackdropPressable}
+              />
+            </Animated.View>
+
+            <Animated.View
+              pointerEvents={infoOpen ? "auto" : "none"}
+              style={[
+                styles.infoPanel,
+                {
+                  paddingBottom: Math.max(safeAreaInsets.bottom, 18),
+                  transform: [{ translateY: panelTranslateY }],
+                },
+              ]}
+            >
+              <BlurView intensity={72} tint="dark" style={styles.infoPanelBlur}>
+                <View style={styles.infoPanelHandle} />
+                <View style={styles.infoHeader}>
+                  <View>
+                    <Text style={styles.infoEyebrow}>
+                      FOTO {selectedIndex + 1}
+                    </Text>
+                    <Text style={styles.infoTitle}>Informações</Text>
+                  </View>
                   <TouchableOpacity
-                    style={styles.infoActionButton}
-                    onPress={() => {
-                      const photoUri = selectedPhoto?.uri;
-                      closeViewer();
-                      router.push({ pathname: "components/ExifFrameWithPhoto", params: { photoUri } });
-                    }}
+                    onPress={() => setInfoPanel(false)}
+                    style={styles.infoCloseButton}
                   >
-                    <Text style={styles.infoActionText}>EXIF Frame</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.infoActionDanger} onPress={() => handleDeletePhoto(selectedPhoto?.id)}>
-                    <Ionicons name="trash-outline" size={18} color="#ff6868" />
+                    <Ionicons name="close" size={22} color="#fff" />
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
-            </BlurView>
-          </Animated.View>
+
+                <ScrollView
+                  contentContainerStyle={styles.infoScrollContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  {exifLoading ? (
+                    <View style={styles.photoDataLoading}>
+                      <ActivityIndicator color="#ffaa00" size="small" />
+                      <Text style={styles.loadingText}>Lendo metadados…</Text>
+                    </View>
+                  ) : exifData ? (
+                    <>
+                      {exifData.komorebiBadges?.length ? (
+                        <View style={styles.badgeContainer}>
+                          {exifData.komorebiBadges.map((badge) => (
+                            <View key={badge} style={styles.badge}>
+                              <Text style={styles.badgeText}>{badge}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      {exifData.intelligentTags?.length ? (
+                        <View style={styles.intelligentTagsSection}>
+                          <TouchableOpacity
+                            accessibilityRole="button"
+                            accessibilityState={{
+                              expanded: intelligentTagsOpen,
+                            }}
+                            onPress={() =>
+                              setIntelligentTagsOpen((open) => !open)
+                            }
+                            style={styles.intelligentTagsHeader}
+                          >
+                            <View style={styles.intelligentTagsTitleRow}>
+                              <Ionicons
+                                name="sparkles-outline"
+                                size={17}
+                                color="#ffaa00"
+                              />
+                              <Text style={styles.intelligentTagsTitle}>
+                                Tags inteligentes
+                              </Text>
+                              <View style={styles.intelligentTagsCount}>
+                                <Text style={styles.intelligentTagsCountText}>
+                                  {exifData.intelligentTags.length}
+                                </Text>
+                              </View>
+                            </View>
+                            <Ionicons
+                              name={
+                                intelligentTagsOpen
+                                  ? "chevron-up"
+                                  : "chevron-down"
+                              }
+                              size={18}
+                              color="rgba(255,255,255,0.58)"
+                            />
+                          </TouchableOpacity>
+                          {intelligentTagsOpen ? (
+                            <View style={styles.intelligentTagsChips}>
+                              {exifData.intelligentTags.map((tag) => (
+                                <View
+                                  key={tag}
+                                  style={styles.intelligentTagChip}
+                                >
+                                  <Text style={styles.intelligentTagText}>
+                                    {tag}
+                                  </Text>
+                                </View>
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      <View style={styles.exifContainer}>
+                        {Object.entries(EXIF_SCHEMA).map(([key, config]) => {
+                          const value = exifData[key];
+                          if (
+                            !value ||
+                            key === "latitude" ||
+                            key === "longitude"
+                          )
+                            return null;
+                          return (
+                            <View
+                              key={key}
+                              style={[
+                                styles.exifItemWrapper,
+                                key === "date" && styles.exifItemWide,
+                              ]}
+                            >
+                              <ExifItem
+                                icon={config.icon}
+                                label={config.label}
+                                value={String(value)}
+                              />
+                            </View>
+                          );
+                        })}
+                      </View>
+
+                      {(exifData.latitude ?? exifData.GPSLatitude) != null &&
+                      (exifData.longitude ?? exifData.GPSLongitude) != null ? (
+                        <View pointerEvents="none" style={styles.mapContainer}>
+                          <MapViewWeb
+                            latitude={Number(
+                              exifData.latitude ?? exifData.GPSLatitude,
+                            )}
+                            longitude={Number(
+                              exifData.longitude ?? exifData.GPSLongitude,
+                            )}
+                          />
+                        </View>
+                      ) : null}
+                    </>
+                  ) : (
+                    <Text style={styles.noMetadataText}>
+                      Nenhum metadado disponível para esta foto.
+                    </Text>
+                  )}
+
+                  <View style={styles.infoActions}>
+                    <ProjectChecklist
+                      assetId={selectedPhoto?.id}
+                      projects={projects}
+                      onProjectsChange={loadKomorebiPhotos}
+                      onCreateProject={(project) =>
+                        setProjects((previous) => [...previous, project])
+                      }
+                      triggerText="Projetos"
+                      triggerStyle={styles.infoActionButton}
+                      triggerTextStyle={styles.infoActionText}
+                    />
+                    <TouchableOpacity
+                      style={styles.infoActionButton}
+                      onPress={() => {
+                        const photoUri = selectedPhoto?.uri;
+                        closeViewer();
+                        router.push({
+                          pathname: "components/ExifFrameWithPhoto",
+                          params: { photoUri },
+                        });
+                      }}
+                    >
+                      <Text style={styles.infoActionText}>EXIF Frame</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.infoActionDanger}
+                      onPress={() => handleDeletePhoto(selectedPhoto?.id)}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={18}
+                        color="#ff6868"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </BlurView>
+            </Animated.View>
           </Animated.View>
 
           {transitionRunning && transitionUri && transitionImageStyle ? (

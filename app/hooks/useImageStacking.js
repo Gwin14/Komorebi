@@ -21,8 +21,7 @@ const IDLE_PROGRESS = {
 };
 
 export default function useImageStacking(device) {
-  const nativeAvailable =
-    Platform.OS === "ios" && isImageStackingAvailable();
+  const nativeAvailable = Platform.OS === "ios" && isImageStackingAvailable();
   const [capabilities, setCapabilities] = useState(null);
   const [strategyId, setStrategyId] = useState(null);
   const [progress, setProgress] = useState(IDLE_PROGRESS);
@@ -57,8 +56,8 @@ export default function useImageStacking(device) {
 
   const available = Boolean(
     nativeAvailable &&
-      deviceId &&
-      (capabilities === null || capabilities.available),
+    deviceId &&
+    (capabilities === null || capabilities.available),
   );
 
   const selectStrategy = useCallback(
@@ -81,8 +80,12 @@ export default function useImageStacking(device) {
   );
 
   const start = useCallback(
-    async ({ outputFormat = "heif", exposureCompensationEV = -1.5,
-      previewDoubleExposure = false, previewStacking = false } = {}) => {
+    async ({
+      outputFormat = "heif",
+      exposureCompensationEV = -1.5,
+      previewDoubleExposure = false,
+      previewStacking = false,
+    } = {}) => {
       if (!strategyId || !deviceId || capturing) return null;
       setProgress({ ...IDLE_PROGRESS, strategyId, state: "preparing" });
       setCapturing(true);

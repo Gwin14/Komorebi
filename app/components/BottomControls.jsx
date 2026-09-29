@@ -63,7 +63,10 @@ export default function BottomControls({
   const deviceOrientationStyle = useDeviceOrientation();
   const [lastPhotoUri, setLastPhotoUri] = useState(null);
 
-  const processingCount = Math.max(processingQueueLength, showProcessingFeedback ? 1 : 0);
+  const processingCount = Math.max(
+    processingQueueLength,
+    showProcessingFeedback ? 1 : 0,
+  );
   const lastSoundSignal = useRef(stackingSoundSignal);
 
   useEffect(() => {
@@ -75,9 +78,14 @@ export default function BottomControls({
 
   const handleShutterPress = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const twoTapStacking = imageStackingCapturing &&
-      ["bulb", "motionBlur", "doubleExposure"].includes(imageStackingStrategyId);
-    const finishingTap = twoTapStacking && !imageStackingFinishing &&
+    const twoTapStacking =
+      imageStackingCapturing &&
+      ["bulb", "motionBlur", "doubleExposure"].includes(
+        imageStackingStrategyId,
+      );
+    const finishingTap =
+      twoTapStacking &&
+      !imageStackingFinishing &&
       (imageStackingStrategyId !== "doubleExposure" ||
         imageStackingProgressState === "awaitingSecondExposure");
     if (shutterSound && (!imageStackingStrategyId || finishingTap)) {
@@ -196,9 +204,15 @@ export default function BottomControls({
               )}
             </Reanimated.View>
             {processingCount > 0 && (
-              <View pointerEvents="none" style={styles.processingBadge} accessibilityLabel={`${processingCount} foto${processingCount === 1 ? "" : "s"} em processamento`}>
+              <View
+                pointerEvents="none"
+                style={styles.processingBadge}
+                accessibilityLabel={`${processingCount} foto${processingCount === 1 ? "" : "s"} em processamento`}
+              >
                 <Ionicons name="sync-outline" size={11} color="#111" />
-                <Text style={styles.processingBadgeText}>{processingCount}</Text>
+                <Text style={styles.processingBadgeText}>
+                  {processingCount}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -214,7 +228,8 @@ export default function BottomControls({
           <Shutter
             takePicture={handleShutterPress}
             isProcessing={
-              (isProcessing && !imageStackingContinuousCapturing) || imageStackingFinishing
+              (isProcessing && !imageStackingContinuousCapturing) ||
+              imageStackingFinishing
             }
             capturing={imageStackingCapturing && !imageStackingFinishing}
           />
@@ -270,13 +285,13 @@ export default function BottomControls({
               availableHalations={availableHalations}
               takePicture={handleShutterPress}
               isProcessing={
-                (isProcessing && !imageStackingContinuousCapturing) || imageStackingFinishing
+                (isProcessing && !imageStackingContinuousCapturing) ||
+                imageStackingFinishing
               }
               capturing={imageStackingCapturing && !imageStackingFinishing}
             />
           </View>
         )}
-
       </Animated.View>
     </View>
   );

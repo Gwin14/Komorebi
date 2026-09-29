@@ -54,7 +54,9 @@ export async function makePhotoStylesCompatible(
   options: PhotographicStylesCompatibilityOptions = {},
 ): Promise<PhotographicStylesCompatibilityResult> {
   if (!nativeModule) {
-    throw new Error("Compatibilidade com Estilos Fotográficos indisponível neste dispositivo.");
+    throw new Error(
+      "Compatibilidade com Estilos Fotográficos indisponível neste dispositivo.",
+    );
   }
   return nativeModule.makeCompatible(photoUri, options);
 }

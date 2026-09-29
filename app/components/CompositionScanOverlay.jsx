@@ -1,9 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useEffect, useRef } from "react";
-import { ActivityIndicator, Animated, Easing, Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import Svg, { Circle, Line, Rect } from "react-native-svg";
-import { SCAN_ENTER_DURATION, SCAN_EXIT_DURATION } from "../utils/compositionScanSession";
+import {
+  SCAN_ENTER_DURATION,
+  SCAN_EXIT_DURATION,
+} from "../utils/compositionScanSession";
 import styles from "./CompositionScanOverlay.styles";
 
 export default function CompositionScanOverlay({ scan, layout }) {
@@ -31,10 +41,14 @@ export default function CompositionScanOverlay({ scan, layout }) {
   }, [scan.busy, scanProgress]);
   useEffect(() => {
     opacity.stopAnimation();
-    if (!scan.result || scan.busy) { opacity.setValue(0); return; }
+    if (!scan.result || scan.busy) {
+      opacity.setValue(0);
+      return;
+    }
     const animation = Animated.timing(opacity, {
       toValue: scan.phase === "leaving" ? 0 : 1,
-      duration: scan.phase === "leaving" ? SCAN_EXIT_DURATION : SCAN_ENTER_DURATION,
+      duration:
+        scan.phase === "leaving" ? SCAN_EXIT_DURATION : SCAN_ENTER_DURATION,
       useNativeDriver: true,
     });
     animation.start();
@@ -76,10 +90,12 @@ export default function CompositionScanOverlay({ scan, layout }) {
   };
   const framing = scan.result?.gizmos.find((gizmo) => gizmo.type === "framing");
   const cameraCenter = { x: width / 2, y: height / 2 };
-  const framingCenter = framing ? {
-    x: (framing.rect.x + framing.rect.width / 2) * width,
-    y: (framing.rect.y + framing.rect.height / 2) * height,
-  } : null;
+  const framingCenter = framing
+    ? {
+        x: (framing.rect.x + framing.rect.width / 2) * width,
+        y: (framing.rect.y + framing.rect.height / 2) * height,
+      }
+    : null;
   if (!scan.enabled) return null;
 
   return (
@@ -90,7 +106,11 @@ export default function CompositionScanOverlay({ scan, layout }) {
           style={[styles.scanBeam, { transform: [{ translateY: scanTravel }] }]}
         >
           <LinearGradient
-            colors={["transparent", "rgba(255,170,0,0.04)", "rgba(255,170,0,0.28)"]}
+            colors={[
+              "transparent",
+              "rgba(255,170,0,0.04)",
+              "rgba(255,170,0,0.28)",
+            ]}
             locations={[0, 0.52, 1]}
             style={styles.scanGlow}
           />
@@ -98,7 +118,10 @@ export default function CompositionScanOverlay({ scan, layout }) {
         </Animated.View>
       )}
       {scan.result && (
-        <Animated.View pointerEvents="none" style={[styles.overlay, { opacity }]}>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.overlay, { opacity }]}
+        >
           {scan.result.gizmos.length > 0 && (
             <Svg
               accessibilityElementsHidden
@@ -160,7 +183,11 @@ export default function CompositionScanOverlay({ scan, layout }) {
             style={styles.statusContainer}
           >
             <View style={styles.statusPill}>
-              <Text ellipsizeMode="tail" numberOfLines={1} style={styles.statusText}>
+              <Text
+                ellipsizeMode="tail"
+                numberOfLines={1}
+                style={styles.statusText}
+              >
                 {scan.result.message}
               </Text>
             </View>
@@ -170,8 +197,13 @@ export default function CompositionScanOverlay({ scan, layout }) {
       <Pressable
         accessibilityRole="button"
         accessibilityHint="Mostra um enquadramento sugerido até o alinhamento"
-        accessibilityLabel={scan.preparing ? "Preparando scanner" : "Analisar composição"}
-        accessibilityState={{ disabled: !scan.canScan || scan.busy, busy: scan.busy || scan.preparing }}
+        accessibilityLabel={
+          scan.preparing ? "Preparando scanner" : "Analisar composição"
+        }
+        accessibilityState={{
+          disabled: !scan.canScan || scan.busy,
+          busy: scan.busy || scan.preparing,
+        }}
         disabled={!scan.canScan || scan.busy || scan.preparing}
         onPress={startScan}
         style={({ pressed }) => [

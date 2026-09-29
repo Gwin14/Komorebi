@@ -34,7 +34,11 @@ export const getProjectDisplayName = (albumTitle) =>
 // Move um asset entre álbuns de projeto. O asset permanece no álbum padrão
 // (Komorebi) em todos os casos. targetProject = null significa "nenhum
 // projeto" (apenas remove do álbum de projeto de origem, se houver).
-export const moveAssetToProject = async (assetId, sourceProject, targetProject) => {
+export const moveAssetToProject = async (
+  assetId,
+  sourceProject,
+  targetProject,
+) => {
   try {
     if (!assetId) return;
 
@@ -82,11 +86,7 @@ export const toggleAssetInProject = async (assetId, project, isMember) => {
       (await MediaLibrary.createAlbumAsync(albumName, null, false));
 
     if (isMember) {
-      await MediaLibrary.removeAssetsFromAlbumAsync(
-        [assetId],
-        album,
-        false,
-      );
+      await MediaLibrary.removeAssetsFromAlbumAsync([assetId], album, false);
     } else {
       await MediaLibrary.addAssetsToAlbumAsync([assetId], album, true);
     }

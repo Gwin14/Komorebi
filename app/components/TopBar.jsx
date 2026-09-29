@@ -189,194 +189,204 @@ export default function TopBar({
   return (
     <View style={styles.buttonsContainer}>
       {controlsDisabled ? (
-        <ImageStackingStatus progress={stackingProgress} onCancel={onCancelStacking} />
-      ) : topBarControls.map((controlId) => {
-        if (controlId === "stacking" && !imageStackingAvailable) return null;
-        if (controlId === "manual" && !manualControlsAvailable) return null;
-        const control = controlOptions[controlId];
-        if (!control) return null;
+        <ImageStackingStatus
+          progress={stackingProgress}
+          onCancel={onCancelStacking}
+        />
+      ) : (
+        topBarControls.map((controlId) => {
+          if (controlId === "stacking" && !imageStackingAvailable) return null;
+          if (controlId === "manual" && !manualControlsAvailable) return null;
+          const control = controlOptions[controlId];
+          if (!control) return null;
 
-        const disabled =
-          controlsDisabled ||
-          (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
-          (controlId === "manual" && Boolean(unavailableReasons.manual)) ||
-          (controlId === "rawCapture" && !rawCaptureAvailable) ||
-          (controlId === "stacking" && !imageStackingAvailable) ||
-          (controlId === "livePhoto" && !livePhotoAvailable) ||
-          (controlId === "portrait" && !portraitCaptureAvailable);
-        const unavailableReason = unavailableReasons[controlId];
-        const iconColor = control.active ? "#ffaa00" : "white";
+          const disabled =
+            controlsDisabled ||
+            (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
+            (controlId === "manual" && Boolean(unavailableReasons.manual)) ||
+            (controlId === "rawCapture" && !rawCaptureAvailable) ||
+            (controlId === "stacking" && !imageStackingAvailable) ||
+            (controlId === "livePhoto" && !livePhotoAvailable) ||
+            (controlId === "portrait" && !portraitCaptureAvailable);
+          const unavailableReason = unavailableReasons[controlId];
+          const iconColor = control.active ? "#ffaa00" : "white";
 
-        if (controlId === "weather") {
+          if (controlId === "weather") {
+            return (
+              <View key={controlId}>
+                <Animated.View style={animatedStyle}>
+                  <Popover
+                    isVisible={open}
+                    onRequestClose={() => setOpen(false)}
+                    backgroundStyle={{ backgroundColor: "transparent" }}
+                    popoverStyle={{ backgroundColor: "transparent" }}
+                    from={
+                      <TouchableOpacity
+                        style={styles.controlButton}
+                        onPress={control.onPress}
+                        activeOpacity={0.72}
+                      >
+                        <Ionicons
+                          name={control.icon}
+                          size={26}
+                          color={control.active ? "#ffaa00" : "white"}
+                        />
+                      </TouchableOpacity>
+                    }
+                  >
+                    <PhotoWeather data={data} place={place} />
+                  </Popover>
+                </Animated.View>
+              </View>
+            );
+          }
+
+          if (controlId === "projects") {
+            return (
+              <View
+                key={controlId}
+                style={[
+                  styles.controlButton,
+                  control.active && styles.controlButtonActive,
+                ]}
+              >
+                <Animated.View style={animatedStyle}>
+                  <ProjectSelector
+                    projects={projects}
+                    activeProjectId={activeProjectId}
+                    onChangeProject={onChangeProject}
+                    onCreateProject={onCreateProject}
+                    includeNoneOption
+                    noneOptionLabel="Nenhum projeto"
+                    compact
+                    bare
+                    triggerActive={Boolean(activeProjectId)}
+                    triggerIconSize={26}
+                  />
+                </Animated.View>
+              </View>
+            );
+          }
+
+          if (controlId === "stacking") {
+            return (
+              <View key={controlId}>
+                <Animated.View style={animatedStyle}>
+                  <Popover
+                    isVisible={stackingOpen}
+                    onRequestClose={() => setStackingOpen(false)}
+                    backgroundStyle={{ backgroundColor: "transparent" }}
+                    popoverStyle={{ backgroundColor: "transparent" }}
+                    from={
+                      <TouchableOpacity
+                        style={[
+                          styles.controlButton,
+                          control.active && styles.controlButtonActive,
+                        ]}
+                        onPress={() => {
+                          if (disabled) {
+                            Alert.alert(
+                              "Recurso indisponível",
+                              unavailableReason ||
+                                "Os controles ficam bloqueados durante a captura.",
+                            );
+                            return;
+                          }
+                          setStackingOpen(true);
+                        }}
+                        activeOpacity={0.72}
+                        accessibilityState={{ disabled }}
+                      >
+                        <Ionicons
+                          name={control.icon}
+                          size={26}
+                          color={iconColor}
+                        />
+                      </TouchableOpacity>
+                    }
+                  >
+                    <ImageStackingSelector
+                      value={imageStackingStrategyId}
+                      disabled={disabled}
+                      onChange={(strategyId) => {
+                        setStackingOpen(false);
+                        onSelectImageStackingStrategy(strategyId);
+                      }}
+                    />
+                  </Popover>
+                </Animated.View>
+              </View>
+            );
+          }
+
           return (
-            <View key={controlId}>
-              <Animated.View style={animatedStyle}>
-                <Popover
-                  isVisible={open}
-                  onRequestClose={() => setOpen(false)}
-                  backgroundStyle={{ backgroundColor: "transparent" }}
-                  popoverStyle={{ backgroundColor: "transparent" }}
-                  from={
-                    <TouchableOpacity
-                      style={styles.controlButton}
-                      onPress={control.onPress}
-                      activeOpacity={0.72}
-                    >
-                      <Ionicons
-                        name={control.icon}
-                        size={26}
-                        color={control.active ? "#ffaa00" : "white"}
-                      />
-                    </TouchableOpacity>
-                  }
-                >
-                  <PhotoWeather data={data} place={place} />
-                </Popover>
-              </Animated.View>
-            </View>
-          );
-        }
-
-        if (controlId === "projects") {
-          return (
-            <View
+            <TouchableOpacity
               key={controlId}
               style={[
                 styles.controlButton,
                 control.active && styles.controlButtonActive,
               ]}
+              onPress={() => {
+                if (disabled) {
+                  Alert.alert(
+                    "Recurso indisponível",
+                    unavailableReason ||
+                      (controlsDisabled
+                        ? "Os controles ficam bloqueados durante a captura."
+                        : "Este recurso não é compatível com a lente atual."),
+                  );
+                  return;
+                }
+                control.onPress?.();
+              }}
+              activeOpacity={0.72}
+              accessibilityState={{ disabled }}
             >
-              <Animated.View style={animatedStyle}>
-                <ProjectSelector
-                  projects={projects}
-                  activeProjectId={activeProjectId}
-                  onChangeProject={onChangeProject}
-                  onCreateProject={onCreateProject}
-                  includeNoneOption
-                  noneOptionLabel="Nenhum projeto"
-                  compact
-                  bare
-                  triggerActive={Boolean(activeProjectId)}
-                  triggerIconSize={26}
-                />
-              </Animated.View>
-            </View>
-          );
-        }
-
-        if (controlId === "stacking") {
-          return (
-            <View key={controlId}>
-              <Animated.View style={animatedStyle}>
-                <Popover
-                  isVisible={stackingOpen}
-                  onRequestClose={() => setStackingOpen(false)}
-                  backgroundStyle={{ backgroundColor: "transparent" }}
-                  popoverStyle={{ backgroundColor: "transparent" }}
-                  from={
-                    <TouchableOpacity
+              <Animated.View
+                style={[animatedStyle, disabled && styles.disabledControl]}
+              >
+                {controlId === "rawCapture" ? (
+                  <View style={styles.rawControl}>
+                    <Ionicons name={control.icon} size={26} color={iconColor} />
+                    <Text
                       style={[
-                        styles.controlButton,
-                        control.active && styles.controlButtonActive,
+                        styles.rawLabel,
+                        control.active && styles.rawLabelActive,
                       ]}
-                      onPress={() => {
-                        if (disabled) {
-                          Alert.alert(
-                            "Recurso indisponível",
-                            unavailableReason || "Os controles ficam bloqueados durante a captura.",
-                          );
-                          return;
-                        }
-                        setStackingOpen(true);
-                      }}
-                      activeOpacity={0.72}
-                      accessibilityState={{ disabled }}
                     >
-                      <Ionicons name={control.icon} size={26} color={iconColor} />
-                    </TouchableOpacity>
-                  }
-                >
-                  <ImageStackingSelector
-                    value={imageStackingStrategyId}
-                    disabled={disabled}
-                    onChange={(strategyId) => {
-                      setStackingOpen(false);
-                      onSelectImageStackingStrategy(strategyId);
-                    }}
+                      {control.label}
+                    </Text>
+                  </View>
+                ) : control.symbol ? (
+                  <SymbolView
+                    name={control.symbol}
+                    size={26}
+                    type="monochrome"
+                    tintColor={iconColor}
+                    resizeMode="scaleAspectFit"
+                    style={styles.symbolButton}
+                    fallback={
+                      <Ionicons
+                        name={control.icon}
+                        size={26}
+                        style={styles.button}
+                        color={iconColor}
+                      />
+                    }
                   />
-                </Popover>
+                ) : (
+                  <Ionicons
+                    name={control.icon}
+                    size={26}
+                    style={styles.button}
+                    color={iconColor}
+                  />
+                )}
               </Animated.View>
-            </View>
+            </TouchableOpacity>
           );
-        }
-
-        return (
-          <TouchableOpacity
-            key={controlId}
-            style={[
-              styles.controlButton,
-              control.active && styles.controlButtonActive,
-            ]}
-            onPress={() => {
-              if (disabled) {
-                Alert.alert(
-                  "Recurso indisponível",
-                  unavailableReason ||
-                    (controlsDisabled
-                      ? "Os controles ficam bloqueados durante a captura."
-                      : "Este recurso não é compatível com a lente atual."),
-                );
-                return;
-              }
-              control.onPress?.();
-            }}
-            activeOpacity={0.72}
-            accessibilityState={{ disabled }}
-          >
-            <Animated.View
-              style={[animatedStyle, disabled && styles.disabledControl]}
-            >
-              {controlId === "rawCapture" ? (
-                <View style={styles.rawControl}>
-                  <Ionicons name={control.icon} size={26} color={iconColor} />
-                  <Text
-                    style={[
-                      styles.rawLabel,
-                      control.active && styles.rawLabelActive,
-                    ]}
-                  >
-                    {control.label}
-                  </Text>
-                </View>
-              ) : control.symbol ? (
-                <SymbolView
-                  name={control.symbol}
-                  size={26}
-                  type="monochrome"
-                  tintColor={iconColor}
-                  resizeMode="scaleAspectFit"
-                  style={styles.symbolButton}
-                  fallback={
-                    <Ionicons
-                      name={control.icon}
-                      size={26}
-                      style={styles.button}
-                      color={iconColor}
-                    />
-                  }
-                />
-              ) : (
-                <Ionicons
-                  name={control.icon}
-                  size={26}
-                  style={styles.button}
-                  color={iconColor}
-                />
-              )}
-            </Animated.View>
-          </TouchableOpacity>
-        );
-      })}
+        })
+      )}
     </View>
   );
 }

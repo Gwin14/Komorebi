@@ -1170,8 +1170,8 @@ function updateXcodeProject(projectPath) {
     [extensionTarget, EXTENSION_BUNDLE_ID],
     [widgetTarget, WIDGET_BUNDLE_ID],
   ]) {
-    const configListUuid = section("PBXNativeTarget")[targetUuid]
-      .buildConfigurationList;
+    const configListUuid =
+      section("PBXNativeTarget")[targetUuid].buildConfigurationList;
     const configList = section("XCConfigurationList")[configListUuid];
     for (const configRef of configList.buildConfigurations) {
       const settings = section("XCBuildConfiguration")[configRef.value]
@@ -1253,10 +1253,11 @@ module.exports = function withLockedCameraCapture(config) {
       const bundleId = bundleIds[name];
       if (!bundleId) continue;
 
-      const configList = objects.XCConfigurationList[target.buildConfigurationList];
+      const configList =
+        objects.XCConfigurationList[target.buildConfigurationList];
       for (const configRef of configList.buildConfigurations) {
-        const settings = objects.XCBuildConfiguration[configRef.value]
-          .buildSettings;
+        const settings =
+          objects.XCBuildConfiguration[configRef.value].buildSettings;
         settings.DEVELOPMENT_TEAM = DEVELOPMENT_TEAM;
         settings.PRODUCT_BUNDLE_IDENTIFIER = bundleId;
       }

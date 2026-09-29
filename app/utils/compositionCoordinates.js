@@ -2,7 +2,7 @@
 // rotation is clockwise from the analyzed image to the preview; native v1
 // returns upright device pixels. Mirroring is applied exactly once.
 export function createCompositionTransform(geometry, preview) {
-  const rotation = ((geometry.rotation ?? 0) % 360 + 360) % 360;
+  const rotation = (((geometry.rotation ?? 0) % 360) + 360) % 360;
   const swapped = rotation === 90 || rotation === 270;
   const width = swapped ? geometry.height : geometry.width;
   const height = swapped ? geometry.width : geometry.height;
@@ -34,7 +34,8 @@ export function createCompositionTransform(geometry, preview) {
   };
   const rect = (box) => {
     const corners = [
-      point(box), point({ x: box.x + box.width, y: box.y }),
+      point(box),
+      point({ x: box.x + box.width, y: box.y }),
       point({ x: box.x, y: box.y + box.height }),
       point({ x: box.x + box.width, y: box.y + box.height }),
     ];
@@ -42,7 +43,12 @@ export function createCompositionTransform(geometry, preview) {
     const top = Math.max(0, Math.min(...corners.map((p) => p.y)));
     const right = Math.min(1, Math.max(...corners.map((p) => p.x)));
     const bottom = Math.min(1, Math.max(...corners.map((p) => p.y)));
-    return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+    return {
+      x: left,
+      y: top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    };
   };
   return { point, inversePoint, rect };
 }
@@ -51,7 +57,11 @@ function applyHomography(point, matrix) {
   if (!Array.isArray(matrix) || matrix.length !== 9) return null;
   const [m00, m01, m02, m10, m11, m12, m20, m21, m22] = matrix;
   const denominator = m20 * point.x + m21 * point.y + m22;
-  if (![...matrix, denominator].every(Number.isFinite) || Math.abs(denominator) < 1e-6) return null;
+  if (
+    ![...matrix, denominator].every(Number.isFinite) ||
+    Math.abs(denominator) < 1e-6
+  )
+    return null;
   const next = {
     x: (m00 * point.x + m01 * point.y + m02) / denominator,
     y: (m10 * point.x + m11 * point.y + m12) / denominator,
@@ -91,7 +101,10 @@ export function transformCompositionGizmo(gizmo, geometry, preview, matrix) {
   const bottom = Math.max(...trackedCorners.map((point) => point.y));
   // Homography can introduce perspective. Use it only as a center/scale
   // signal, then rebuild an axis-aligned preview-shaped rectangle.
-  const size = Math.max(0.02, Math.sqrt(Math.max(0, (right - left) * (bottom - top))));
+  const size = Math.max(
+    0.02,
+    Math.sqrt(Math.max(0, (right - left) * (bottom - top))),
+  );
   return {
     ...gizmo,
     rect: {
@@ -108,7 +121,12 @@ export function applyCompositionTracking(result, geometry, preview, tracking) {
   if (!geometry || !tracking?.matrix) return result;
   const framing = result.gizmos.find((gizmo) => gizmo.type === "framing");
   if (!framing) return null;
-  const transformed = transformCompositionGizmo(framing, geometry, preview, tracking.matrix);
+  const transformed = transformCompositionGizmo(
+    framing,
+    geometry,
+    preview,
+    tracking.matrix,
+  );
   return transformed ? { ...result, gizmos: [transformed] } : null;
 }
 
@@ -124,14 +142,25 @@ export function getFramingAlignment(result, preview) {
   return { aligned: distance <= tolerance, distance, tolerance, framing };
 }
 
-export function advanceAlignmentGate(previousCount, aligned, requiredUpdates = 3) {
+export function advanceAlignmentGate(
+  previousCount,
+  aligned,
+  requiredUpdates = 3,
+) {
   const count = aligned ? previousCount + 1 : 0;
   return { count, triggered: count >= requiredUpdates };
 }
 
 export function calculateFramingZoom(rect, currentZoom, minZoom, maxZoom) {
-  if (!rect || ![rect.width, rect.height, currentZoom, minZoom, maxZoom].every(Number.isFinite) ||
-      rect.width <= 0 || rect.height <= 0) return currentZoom;
+  if (
+    !rect ||
+    ![rect.width, rect.height, currentZoom, minZoom, maxZoom].every(
+      Number.isFinite,
+    ) ||
+    rect.width <= 0 ||
+    rect.height <= 0
+  )
+    return currentZoom;
   const scale = Math.min(1 / rect.width, 1 / rect.height);
   return Math.min(maxZoom, Math.max(minZoom, currentZoom * scale));
 }

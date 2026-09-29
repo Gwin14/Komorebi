@@ -1,8 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {
-  getAppleStylesCompatibility,
-} = require("./photographicStylesPolicy");
+const { getAppleStylesCompatibility } = require("./photographicStylesPolicy");
 
 test("enables compatibility for normal photos", () => {
   assert.equal(

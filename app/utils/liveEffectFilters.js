@@ -86,12 +86,16 @@ export function makeLutImage(cube) {
   if (!atlas) return null;
   const data = Skia.Data.fromBytes(atlas.pixels);
   return {
-    image: Skia.Image.MakeImage({
-      width: atlas.width,
-      height: atlas.height,
-      colorType: ColorType.RGBA_8888,
-      alphaType: AlphaType.Opaque,
-    }, data, atlas.width * 4),
+    image: Skia.Image.MakeImage(
+      {
+        width: atlas.width,
+        height: atlas.height,
+        colorType: ColorType.RGBA_8888,
+        alphaType: AlphaType.Opaque,
+      },
+      data,
+      atlas.width * 4,
+    ),
     size: atlas.size,
     domainMin: atlas.domainMin,
     domainScale: atlas.domainScale,

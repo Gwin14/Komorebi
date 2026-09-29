@@ -1,5 +1,6 @@
 function buildLutAtlas(cube) {
-  if (!cube?.size || cube.size < 2 || cube.lut?.length !== cube.size ** 3) return null;
+  if (!cube?.size || cube.size < 2 || cube.lut?.length !== cube.size ** 3)
+    return null;
   const size = cube.size;
   const width = size * (size + 2);
   const pixels = new Uint8Array(width * size * 4);
@@ -27,8 +28,10 @@ function buildLutAtlas(cube) {
     height: size,
     size,
     domainMin: cube.domainMin ?? [0, 0, 0],
-    domainScale: (cube.domainMax ?? [1, 1, 1]).map((max, channel) =>
-      1 / Math.max(0.0001, max - (cube.domainMin?.[channel] ?? 0))),
+    domainScale: (cube.domainMax ?? [1, 1, 1]).map(
+      (max, channel) =>
+        1 / Math.max(0.0001, max - (cube.domainMin?.[channel] ?? 0)),
+    ),
   };
 }
 

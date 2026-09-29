@@ -17,8 +17,7 @@ const getAppleStylesCompatibility = ({
 
   return {
     preferenceEnabled: Boolean(preferenceEnabled),
-    effective:
-      Boolean(preferenceEnabled) && suspensionReason === null,
+    effective: Boolean(preferenceEnabled) && suspensionReason === null,
     suspensionReason: preferenceEnabled ? suspensionReason : null,
   };
 };

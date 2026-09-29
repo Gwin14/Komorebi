@@ -17,10 +17,20 @@ export default function Shutter({
       captureGlow.setValue(0);
       return;
     }
-    const pulse = Animated.loop(Animated.sequence([
-      Animated.timing(captureGlow, { toValue: 1, duration: 1400, useNativeDriver: true }),
-      Animated.timing(captureGlow, { toValue: 0, duration: 1400, useNativeDriver: true }),
-    ]));
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(captureGlow, {
+          toValue: 1,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(captureGlow, {
+          toValue: 0,
+          duration: 1400,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
     pulse.start();
     return () => pulse.stop();
   }, [captureGlow, capturing]);
@@ -81,10 +91,20 @@ export default function Shutter({
         accessibilityLabel={compact ? "Captura rápida" : "Tirar foto"}
         accessibilityState={{ disabled: isProcessing }}
       >
-        {capturing && <Animated.View pointerEvents="none" style={[
-          styles.captureGlow,
-          { opacity: captureGlow.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.58] }) },
-        ]} />}
+        {capturing && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.captureGlow,
+              {
+                opacity: captureGlow.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.08, 0.58],
+                }),
+              },
+            ]}
+          />
+        )}
       </TouchableOpacity>
     </Animated.View>
   );

@@ -3,8 +3,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import {
-  addCompositionTrackingListener, analyze, armCompositionScan, cancel, getCompositionCapturePlugin,
-  isCompositionScanAvailable, isCompositionScanSupported, prepareCompositionScan,
+  addCompositionTrackingListener,
+  analyze,
+  armCompositionScan,
+  cancel,
+  getCompositionCapturePlugin,
+  isCompositionScanAvailable,
+  isCompositionScanSupported,
+  prepareCompositionScan,
 } from "../../modules/composition-scan";
 import { createCompositionAdvisor } from "../utils/compositionAnalysis";
 import {
@@ -35,8 +41,16 @@ export default function useCompositionScan({
   onCancelAutoZoom,
 }) {
   const isFocused = useIsFocused();
-  const [foreground, setForeground] = useState(AppState.currentState === "active");
-  const [snapshot, setSnapshot] = useState({ state: "idle", result: null, scanId: null, trackingScanId: null, phase: null });
+  const [foreground, setForeground] = useState(
+    AppState.currentState === "active",
+  );
+  const [snapshot, setSnapshot] = useState({
+    state: "idle",
+    result: null,
+    scanId: null,
+    trackingScanId: null,
+    phase: null,
+  });
   const [tracking, setTracking] = useState(null);
   const controllerRef = useRef(null);
   const advisorRef = useRef(null);
@@ -54,7 +68,14 @@ export default function useCompositionScan({
   const [preparationState, setPreparationState] = useState("idle");
   const supported = isCompositionScanSupported();
   const preparing = featureEnabled && preparationState !== "ready";
-  const canScan = available && enabled && !preparing && isFocused && foreground && preview.width > 0 && preview.height > 0;
+  const canScan =
+    available &&
+    enabled &&
+    !preparing &&
+    isFocused &&
+    foreground &&
+    preview.width > 0 &&
+    preview.height > 0;
   const log = useCallback((event, details = {}) => {
     console.log(`[CompositionScan] JS ${event}`, details);
   }, []);
@@ -67,7 +88,12 @@ export default function useCompositionScan({
   useEffect(() => {
     if (!supported) return;
     const nextAvailable = isCompositionScanAvailable();
-    log("availability", { supported, available: nextAvailable, enabled, configurationKey });
+    log("availability", {
+      supported,
+      available: nextAvailable,
+      enabled,
+      configurationKey,
+    });
     setAvailable(nextAvailable);
   }, [configurationKey, enabled, log, supported]);
 
@@ -109,9 +135,10 @@ export default function useCompositionScan({
         subjectPoint: subjectPointRef.current,
         previewWidth: preview.width,
         previewHeight: preview.height,
-        frameAspectRatio: preview.width > 0 && preview.height > 0
-          ? preview.width / preview.height
-          : 0.75,
+        frameAspectRatio:
+          preview.width > 0 && preview.height > 0
+            ? preview.width / preview.height
+            : 0.75,
       }),
       generate: (analysis, scanPreview, context) => {
         analysisGeometryRef.current = analysis.geometry;
@@ -120,7 +147,9 @@ export default function useCompositionScan({
       onChange: setSnapshot,
       onError: (error) => {
         if (__DEV__) console.warn("[CompositionScan]", error.message);
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+        void Haptics.notificationAsync(
+          Haptics.NotificationFeedbackType.Warning,
+        ).catch(() => {});
       },
       log,
     });
@@ -165,7 +194,14 @@ export default function useCompositionScan({
     analysisGeometryRef.current = null;
     subjectPointRef.current = null;
     setTracking(null);
-  }, [configurationKey, canScan, cancelScan, preview.width, preview.height, preview.mirrored]);
+  }, [
+    configurationKey,
+    canScan,
+    cancelScan,
+    preview.width,
+    preview.height,
+    preview.mirrored,
+  ]);
 
   const start = useCallback(() => {
     log("button-start", {
@@ -182,16 +218,27 @@ export default function useCompositionScan({
   const onCaptured = useCallback((token, id) => {
     void controllerRef.current?.captured(token, id);
   }, []);
-  const selectSubject = useCallback((point) => {
-    const valid = point && Number.isFinite(point.x) && Number.isFinite(point.y);
-    subjectPointRef.current = valid ? {
-      x: Math.max(0, Math.min(1, point.x)),
-      y: Math.max(0, Math.min(1, point.y)),
-    } : null;
-    log("subject-selected", { subjectPoint: subjectPointRef.current });
-  }, [log]);
+  const selectSubject = useCallback(
+    (point) => {
+      const valid =
+        point && Number.isFinite(point.x) && Number.isFinite(point.y);
+      subjectPointRef.current = valid
+        ? {
+            x: Math.max(0, Math.min(1, point.x)),
+            y: Math.max(0, Math.min(1, point.y)),
+          }
+        : null;
+      log("subject-selected", { subjectPoint: subjectPointRef.current });
+    },
+    [log],
+  );
   const trackedResult = useMemo(() => {
-    return applyCompositionTracking(snapshot.result, analysisGeometryRef.current, preview, tracking);
+    return applyCompositionTracking(
+      snapshot.result,
+      analysisGeometryRef.current,
+      preview,
+      tracking,
+    );
   }, [preview, snapshot.result, tracking]);
 
   useEffect(() => {
@@ -200,15 +247,23 @@ export default function useCompositionScan({
   }, [cancelScan, tracking?.lost]);
 
   useEffect(() => {
-    if (!trackedResult || !tracking || tracking.lost || zoomTriggeredRef.current ||
-        snapshot.state !== "showing-results") {
+    if (
+      !trackedResult ||
+      !tracking ||
+      tracking.lost ||
+      zoomTriggeredRef.current ||
+      snapshot.state !== "showing-results"
+    ) {
       alignedUpdatesRef.current = 0;
       return;
     }
     if (lastCountedTrackingRef.current === tracking) return;
     lastCountedTrackingRef.current = tracking;
     const alignment = getFramingAlignment(trackedResult, preview);
-    const gate = advanceAlignmentGate(alignedUpdatesRef.current, Boolean(alignment?.aligned));
+    const gate = advanceAlignmentGate(
+      alignedUpdatesRef.current,
+      Boolean(alignment?.aligned),
+    );
     alignedUpdatesRef.current = gate.count;
     if (!gate.triggered) return;
 
@@ -220,20 +275,43 @@ export default function useCompositionScan({
       minimum,
       maximum,
     );
-    log("auto-zoom", { targetZoom, distance: alignment.distance, tolerance: alignment.tolerance });
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    const zoomScanId = snapshot.trackingScanId;
-    void Promise.resolve(onAutoZoomRef.current?.(targetZoom, 250)).then((completed) => {
-      if (completed !== false && trackingIdRef.current === zoomScanId) {
-        controllerRef.current?.completeZoom();
-      }
+    log("auto-zoom", {
+      targetZoom,
+      distance: alignment.distance,
+      tolerance: alignment.tolerance,
     });
-  }, [log, preview, snapshot.state, snapshot.trackingScanId, trackedResult, tracking]);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+      () => {},
+    );
+    const zoomScanId = snapshot.trackingScanId;
+    void Promise.resolve(onAutoZoomRef.current?.(targetZoom, 250)).then(
+      (completed) => {
+        if (completed !== false && trackingIdRef.current === zoomScanId) {
+          controllerRef.current?.completeZoom();
+        }
+      },
+    );
+  }, [
+    log,
+    preview,
+    snapshot.state,
+    snapshot.trackingScanId,
+    trackedResult,
+    tracking,
+  ]);
 
   return {
-    ...snapshot, result: trackedResult, supported, available, enabled: featureEnabled,
-    preparing, canScan, start, cancel: cancelScan,
-    onCaptured, selectSubject,
+    ...snapshot,
+    result: trackedResult,
+    supported,
+    available,
+    enabled: featureEnabled,
+    preparing,
+    canScan,
+    start,
+    cancel: cancelScan,
+    onCaptured,
+    selectSubject,
     captureScanId: snapshot.scanId,
     captureRotation: preview.rotation,
     capturePlugin: available ? getCompositionCapturePlugin() : undefined,

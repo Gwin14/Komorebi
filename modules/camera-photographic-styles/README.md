@@ -14,7 +14,7 @@ pipeline próprio e pausam temporariamente a compatibilidade, sem alterar a
 preferência do usuário.
 
 ```ts
-makePhotoStylesCompatible(photoUri, { metadata })
+makePhotoStylesCompatible(photoUri, { metadata });
 ```
 
 `metadata` aceita GPS, ISO, exposição, balanço de branco, datas e identificação

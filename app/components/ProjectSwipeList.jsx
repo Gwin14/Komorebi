@@ -17,12 +17,7 @@ import styles from "./ProjectSelector.styles";
 
 const SWIPE_THRESHOLD = -80;
 
-const SwipeRow = ({
-  project,
-  isActive,
-  onSelect,
-  onDelete,
-}) => {
+const SwipeRow = ({ project, isActive, onSelect, onDelete }) => {
   const [dragX] = useState(new Animated.Value(0));
   const [open, setOpen] = useState(false);
 
@@ -78,10 +73,7 @@ const SwipeRow = ({
 
       <Animated.View
         {...panResponder.panHandlers}
-        style={[
-          styles.swipeRow,
-          { transform: [{ translateX: dragX }] },
-        ]}
+        style={[styles.swipeRow, { transform: [{ translateX: dragX }] }]}
       >
         <TouchableOpacity
           style={styles.row}
@@ -103,9 +95,7 @@ const SwipeRow = ({
               {project.name}
             </Text>
           </View>
-          {isActive && (
-            <Ionicons name="checkmark" size={16} color="#ffaa00" />
-          )}
+          {isActive && <Ionicons name="checkmark" size={16} color="#ffaa00" />}
         </TouchableOpacity>
       </Animated.View>
     </View>
@@ -156,11 +146,7 @@ export default function ProjectSwipeList({
       accessibilityRole="button"
     >
       <View style={styles.trigger}>
-        <Ionicons
-          name={triggerIcon}
-          size={26}
-          color="#ffaa00"
-        />
+        <Ionicons name={triggerIcon} size={26} color="#ffaa00" />
       </View>
     </TouchableOpacity>
   );

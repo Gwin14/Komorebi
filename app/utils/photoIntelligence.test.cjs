@@ -11,10 +11,27 @@ const {
 test("normalizes, deduplicates and limits intelligent tags", () => {
   assert.deepEqual(
     sanitizeIntelligentTags([
-      " Praia ", "praia", "Céu azul", "mar", "pessoa", "verão",
-      "areia", "retrato", "luz natural", "extra",
+      " Praia ",
+      "praia",
+      "Céu azul",
+      "mar",
+      "pessoa",
+      "verão",
+      "areia",
+      "retrato",
+      "luz natural",
+      "extra",
     ]),
-    ["praia", "céu azul", "mar", "pessoa", "verão", "areia", "retrato", "luz natural"],
+    [
+      "praia",
+      "céu azul",
+      "mar",
+      "pessoa",
+      "verão",
+      "areia",
+      "retrato",
+      "luz natural",
+    ],
   );
 });
 
@@ -43,7 +60,10 @@ test("accepts a safe hyphenated model filename suggestion", () => {
 test("truncates a long model filename instead of discarding it", () => {
   assert.equal(
     normalizePhotoIntelligence(
-      { filenameStem: "cachorro pequeno correndo feliz pela praia ao entardecer" },
+      {
+        filenameStem:
+          "cachorro pequeno correndo feliz pela praia ao entardecer",
+      },
       { generateFilename: true },
     ).filenameStem,
     "cachorro-pequeno-correndo-feliz-pela-praia",
@@ -73,15 +93,27 @@ test("honors requested outputs and enriches metadata compatibly", () => {
     { generateTags: true, generateFilename: false },
   );
   assert.deepEqual(intelligence.tags, [
-    "flor", "jardim", "natureza", "amarelo", "luz natural",
+    "flor",
+    "jardim",
+    "natureza",
+    "amarelo",
+    "luz natural",
   ]);
   assert.equal(intelligence.filenameStem, null);
 
-  const oldMetadata = { app: "Komorebi", schemaVersion: 3, captureMode: "standard" };
+  const oldMetadata = {
+    app: "Komorebi",
+    schemaVersion: 3,
+    captureMode: "standard",
+  };
   const enriched = applyPhotoIntelligenceToMetadata(oldMetadata, intelligence);
   assert.equal(enriched.schemaVersion, 4);
   assert.deepEqual(enriched.intelligence.tags, [
-    "flor", "jardim", "natureza", "amarelo", "luz natural",
+    "flor",
+    "jardim",
+    "natureza",
+    "amarelo",
+    "luz natural",
   ]);
   assert.equal(oldMetadata.schemaVersion, 3);
 });
@@ -96,7 +128,10 @@ test("rejects incomplete model outputs independently", () => {
   );
   assert.equal(
     normalizePhotoIntelligence(
-      { tags: ["praia", "mar", "sol", "areia", "verão"], filenameStem: "Cão na praia" },
+      {
+        tags: ["praia", "mar", "sol", "areia", "verão"],
+        filenameStem: "Cão na praia",
+      },
       { generateTags: true, generateFilename: true },
     ).filenameStem,
     "cao-na-praia",

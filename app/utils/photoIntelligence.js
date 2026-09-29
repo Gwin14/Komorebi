@@ -20,7 +20,8 @@ const sanitizeIntelligentTags = (values) => {
         value.length > 40 ||
         /^tag\s*\d+$/i.test(value) ||
         seen.has(value)
-      ) return false;
+      )
+        return false;
       seen.add(value);
       return true;
     })
@@ -28,7 +29,9 @@ const sanitizeIntelligentTags = (values) => {
 };
 
 const normalizeFilenameSuggestion = (value) => {
-  const words = normalizeWhitespace(value).split(/[\s_-]+/).filter(Boolean);
+  const words = normalizeWhitespace(value)
+    .split(/[\s_-]+/)
+    .filter(Boolean);
   if (words.length < 2) return null;
   const suggestion = words.slice(0, 6).join(" ");
   const normalized = suggestion.toLocaleLowerCase("pt-BR");

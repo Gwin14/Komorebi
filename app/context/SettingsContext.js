@@ -47,10 +47,18 @@ export const SettingsProvider = ({ children }) => {
     DEFAULT_SETTINGS.histogramVisible,
   );
   const [previewLut, setPreviewLut] = useState(DEFAULT_SETTINGS.previewLut);
-  const [previewHalation, setPreviewHalation] = useState(DEFAULT_SETTINGS.previewHalation);
-  const [previewGrain, setPreviewGrain] = useState(DEFAULT_SETTINGS.previewGrain);
-  const [previewDoubleExposure, setPreviewDoubleExposure] = useState(DEFAULT_SETTINGS.previewDoubleExposure);
-  const [previewStacking, setPreviewStacking] = useState(DEFAULT_SETTINGS.previewStacking);
+  const [previewHalation, setPreviewHalation] = useState(
+    DEFAULT_SETTINGS.previewHalation,
+  );
+  const [previewGrain, setPreviewGrain] = useState(
+    DEFAULT_SETTINGS.previewGrain,
+  );
+  const [previewDoubleExposure, setPreviewDoubleExposure] = useState(
+    DEFAULT_SETTINGS.previewDoubleExposure,
+  );
+  const [previewStacking, setPreviewStacking] = useState(
+    DEFAULT_SETTINGS.previewStacking,
+  );
   const [zebraHighlightsEnabled, setZebraHighlightsEnabled] = useState(
     DEFAULT_SETTINGS.zebraHighlightsEnabled,
   );
@@ -80,9 +88,9 @@ export const SettingsProvider = ({ children }) => {
   const [firstTime, setFirstTime] = useState(DEFAULT_SETTINGS.firstTime);
   const [customLuts, setCustomLuts] = useState(DEFAULT_SETTINGS.customLuts);
   const [topBarBelow, setTopBarBelow] = useState(DEFAULT_SETTINGS.topBarBelow);
-  const [topBarControls, setTopBarControls] = useState(
-    () => [...DEFAULT_SETTINGS.topBarControls],
-  );
+  const [topBarControls, setTopBarControls] = useState(() => [
+    ...DEFAULT_SETTINGS.topBarControls,
+  ]);
   const [projects, setProjects] = useState(DEFAULT_SETTINGS.projects);
   const [activeProjectId, setActiveProjectId] = useState(
     DEFAULT_SETTINGS.activeProjectId,
@@ -199,7 +207,14 @@ export const SettingsProvider = ({ children }) => {
     values.forEach(([key, enabled]) => {
       void saveStoredSetting(key, String(enabled));
     });
-  }, [loading, previewLut, previewHalation, previewGrain, previewDoubleExposure, previewStacking]);
+  }, [
+    loading,
+    previewLut,
+    previewHalation,
+    previewGrain,
+    previewDoubleExposure,
+    previewStacking,
+  ]);
 
   useEffect(() => {
     if (!loading) {

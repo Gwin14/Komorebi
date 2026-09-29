@@ -64,9 +64,7 @@ const formatKomorebiMetadata = (metadata) => {
 
   return {
     ...(badgeParts.length ? { komorebiBadges: badgeParts } : {}),
-    ...(intelligentTags.length >= 5
-      ? { intelligentTags }
-      : {}),
+    ...(intelligentTags.length >= 5 ? { intelligentTags } : {}),
   };
 };
 
@@ -106,8 +104,9 @@ export const exifHandler = async (assetId, setExifData) => {
     const rawExif = info.exif;
     const assetCoordinates = getAssetCoordinates(info);
     const storedKomorebiMetadata = await readKomorebiAssetMetadata(assetId);
-    const embeddedKomorebiMetadata =
-      await readKomorebiExifMetadataFromUri(info.localUri || info.uri);
+    const embeddedKomorebiMetadata = await readKomorebiExifMetadataFromUri(
+      info.localUri || info.uri,
+    );
     const komorebiMetadata =
       storedKomorebiMetadata ||
       embeddedKomorebiMetadata ||

@@ -5,11 +5,29 @@ import type { FrameProcessorPlugin } from "react-native-vision-camera";
 
 export type ScanState = "idle" | "capturing" | "analyzing" | "showing-results";
 export type NormalizedPoint = { x: number; y: number };
-export type NormalizedRect = NormalizedPoint & { width: number; height: number };
-export type SceneSubject = { rect: NormalizedRect; confidence: number; yaw?: number };
-export type CompositionFrame = { centerX: number; centerY: number; width: number; height: number };
-export type CompositionVisualHint = "framing" | "reframe" | "closer" | "farther" |
-  "look_space" | "center_symmetry" | "level";
+export type NormalizedRect = NormalizedPoint & {
+  width: number;
+  height: number;
+};
+export type SceneSubject = {
+  rect: NormalizedRect;
+  confidence: number;
+  yaw?: number;
+};
+export type CompositionFrame = {
+  centerX: number;
+  centerY: number;
+  width: number;
+  height: number;
+};
+export type CompositionVisualHint =
+  | "framing"
+  | "reframe"
+  | "closer"
+  | "farther"
+  | "look_space"
+  | "center_symmetry"
+  | "level";
 export type CompositionJudgement = {
   source: "minicpm-v-4.6";
   verdict: "keep" | "advice";
@@ -21,7 +39,12 @@ export type CompositionJudgement = {
   frame?: CompositionFrame | null;
 };
 export type CompositionAnalysis = {
-  geometry: { width: number; height: number; mirrored: boolean; rotation: 0 | 90 | 180 | 270 };
+  geometry: {
+    width: number;
+    height: number;
+    mirrored: boolean;
+    rotation: 0 | 90 | 180 | 270;
+  };
   horizon: { angle: number; confidence: number } | null;
   people: SceneSubject[];
   faces: SceneSubject[];
@@ -42,7 +65,11 @@ export type ScanResult = {
   gizmos: CompositionGizmo[];
 };
 export interface CompositionModel {
-  analyze(imageToken: string, scanId: string, context?: CompositionAnalysisContext): Promise<CompositionAnalysis>;
+  analyze(
+    imageToken: string,
+    scanId: string,
+    context?: CompositionAnalysisContext,
+  ): Promise<CompositionAnalysis>;
   cancel(scanId: string): Promise<void>;
 }
 
@@ -77,12 +104,26 @@ type NativeScan = CompositionModel & {
   downloadCompositionModel(): Promise<boolean>;
   cancelCompositionModelDownload(): Promise<void>;
   deleteCompositionModel(): Promise<void>;
-  analyzePhoto(options: PhotoIntelligenceOptions): Promise<PhotoIntelligenceResult>;
-  addListener(eventName: "onCompositionModelStatus", listener: (status: CompositionModelStatus) => void): { remove(): void };
-  addListener(eventName: "onCompositionTrackingUpdate", listener: (update: CompositionTrackingUpdate) => void): { remove(): void };
+  analyzePhoto(
+    options: PhotoIntelligenceOptions,
+  ): Promise<PhotoIntelligenceResult>;
+  addListener(
+    eventName: "onCompositionModelStatus",
+    listener: (status: CompositionModelStatus) => void,
+  ): { remove(): void };
+  addListener(
+    eventName: "onCompositionTrackingUpdate",
+    listener: (update: CompositionTrackingUpdate) => void,
+  ): { remove(): void };
 };
 export type CompositionModelStatus = {
-  state: "runtime-missing" | "unsupported" | "not-downloaded" | "downloading" | "ready" | "error";
+  state:
+    | "runtime-missing"
+    | "unsupported"
+    | "not-downloaded"
+    | "downloading"
+    | "ready"
+    | "error";
   modelName: string;
   isReady: boolean;
   isCompatible: boolean;
@@ -91,14 +132,18 @@ export type CompositionModelStatus = {
   progress?: number;
   error?: string;
 };
-const nativeModule = Platform.OS === "ios"
-  ? requireOptionalNativeModule<NativeScan>("CompositionScan")
-  : null;
+const nativeModule =
+  Platform.OS === "ios"
+    ? requireOptionalNativeModule<NativeScan>("CompositionScan")
+    : null;
 let plugin: FrameProcessorPlugin | undefined;
 export function getCompositionCapturePlugin() {
   if (!plugin && nativeModule) {
     try {
-      plugin = VisionCameraProxy.initFrameProcessorPlugin("captureCompositionFrame", {});
+      plugin = VisionCameraProxy.initFrameProcessorPlugin(
+        "captureCompositionFrame",
+        {},
+      );
     } catch {
       plugin = undefined;
     }
@@ -120,7 +165,11 @@ export async function armCompositionScan(scanId: string) {
 export async function prepareCompositionScan() {
   return nativeModule?.prepare() ?? false;
 }
-export async function analyze(imageToken: string, scanId: string, context: CompositionAnalysisContext = { recentAdvice: [] }): Promise<CompositionAnalysis> {
+export async function analyze(
+  imageToken: string,
+  scanId: string,
+  context: CompositionAnalysisContext = { recentAdvice: [] },
+): Promise<CompositionAnalysis> {
   if (!nativeModule) throw new Error("Composition Scan unavailable");
   return nativeModule.analyze(imageToken, scanId, context);
 }
@@ -147,9 +196,21 @@ export async function analyzePhoto(
   if (!nativeModule) throw new Error("Local photo intelligence unavailable");
   return nativeModule.analyzePhoto(options);
 }
-export function addCompositionModelStatusListener(listener: (status: CompositionModelStatus) => void) {
-  return nativeModule?.addListener("onCompositionModelStatus", listener) ?? { remove() {} };
+export function addCompositionModelStatusListener(
+  listener: (status: CompositionModelStatus) => void,
+) {
+  return (
+    nativeModule?.addListener("onCompositionModelStatus", listener) ?? {
+      remove() {},
+    }
+  );
 }
-export function addCompositionTrackingListener(listener: (update: CompositionTrackingUpdate) => void) {
-  return nativeModule?.addListener("onCompositionTrackingUpdate", listener) ?? { remove() {} };
+export function addCompositionTrackingListener(
+  listener: (update: CompositionTrackingUpdate) => void,
+) {
+  return (
+    nativeModule?.addListener("onCompositionTrackingUpdate", listener) ?? {
+      remove() {},
+    }
+  );
 }

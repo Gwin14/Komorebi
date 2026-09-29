@@ -14,15 +14,31 @@ test("restores intelligent preferences independently of model availability", () 
   assert.deepEqual(
     restoreIntelligentPreferences(
       { compositionScan: "true", tags: "true", filename: "true" },
-      { compositionScanEnabled: false, intelligentTagsEnabled: false, intelligentFilenameEnabled: false },
+      {
+        compositionScanEnabled: false,
+        intelligentTagsEnabled: false,
+        intelligentFilenameEnabled: false,
+      },
     ),
-    { compositionScanEnabled: true, intelligentTagsEnabled: true, intelligentFilenameEnabled: true },
+    {
+      compositionScanEnabled: true,
+      intelligentTagsEnabled: true,
+      intelligentFilenameEnabled: true,
+    },
   );
 });
 
 test("keeps the three intelligent preferences independent", () => {
   assert.deepEqual(
-    restoreIntelligentPreferences({ compositionScan: "true", tags: "false", filename: "true" }),
-    { compositionScanEnabled: true, intelligentTagsEnabled: false, intelligentFilenameEnabled: true },
+    restoreIntelligentPreferences({
+      compositionScan: "true",
+      tags: "false",
+      filename: "true",
+    }),
+    {
+      compositionScanEnabled: true,
+      intelligentTagsEnabled: false,
+      intelligentFilenameEnabled: true,
+    },
   );
 });

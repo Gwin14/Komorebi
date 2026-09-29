@@ -23,7 +23,11 @@ export default function ImageStackingStatus({ progress, onCancel }) {
             ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
             : `${current.acceptedFrames || current.capturedFrames || 0} frames`}
       </Text>
-      <TouchableOpacity onPress={onCancel} style={styles.cancelButton} accessibilityLabel="Cancelar captura">
+      <TouchableOpacity
+        onPress={onCancel}
+        style={styles.cancelButton}
+        accessibilityLabel="Cancelar captura"
+      >
         <Text style={styles.cancelText}>×</Text>
       </TouchableOpacity>
     </View>

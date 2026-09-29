@@ -22,8 +22,22 @@ function makeMaskPaths(mask, viewWidth, viewHeight) {
     return { highlights, shadows };
   }
 
-  const { columns, rows, values, frameWidth, frameHeight, orientation, mirrored } = mask;
-  if (!columns || !rows || !Array.isArray(values) || !frameWidth || !frameHeight) {
+  const {
+    columns,
+    rows,
+    values,
+    frameWidth,
+    frameHeight,
+    orientation,
+    mirrored,
+  } = mask;
+  if (
+    !columns ||
+    !rows ||
+    !Array.isArray(values) ||
+    !frameWidth ||
+    !frameHeight
+  ) {
     return { highlights, shadows };
   }
 
@@ -49,14 +63,18 @@ function makeMaskPaths(mask, viewWidth, viewHeight) {
         orientPoint(x0, y1, frameWidth, frameHeight, orientation),
         orientPoint(x1, y1, frameWidth, frameHeight, orientation),
       ];
-      const xs = corners.map((point) => mirrored ? displayWidth - point.x : point.x);
+      const xs = corners.map((point) =>
+        mirrored ? displayWidth - point.x : point.x,
+      );
       const ys = corners.map((point) => point.y);
       const left = Math.min(...xs) * scale + offsetX;
       const top = Math.min(...ys) * scale + offsetY;
       const right = Math.max(...xs) * scale + offsetX;
       const bottom = Math.max(...ys) * scale + offsetY;
       const path = value === 1 ? highlights : shadows;
-      path.addRect(Skia.XYWHRect(left, top, right - left + 0.5, bottom - top + 0.5));
+      path.addRect(
+        Skia.XYWHRect(left, top, right - left + 0.5, bottom - top + 0.5),
+      );
     }
   }
   return { highlights, shadows };
@@ -83,10 +101,20 @@ export default function ZebraOverlay({ mask, width, height }) {
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Canvas style={StyleSheet.absoluteFill}>
         <Group clip={paths.highlights}>
-          <Path path={stripes} color="rgba(255, 20, 20, 0.88)" style="stroke" strokeWidth={3} />
+          <Path
+            path={stripes}
+            color="rgba(255, 20, 20, 0.88)"
+            style="stroke"
+            strokeWidth={3}
+          />
         </Group>
         <Group clip={paths.shadows}>
-          <Path path={stripes} color="rgba(20, 82, 255, 0.9)" style="stroke" strokeWidth={3} />
+          <Path
+            path={stripes}
+            color="rgba(20, 82, 255, 0.9)"
+            style="stroke"
+            strokeWidth={3}
+          />
         </Group>
       </Canvas>
     </View>

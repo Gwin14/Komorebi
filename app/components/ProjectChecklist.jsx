@@ -170,10 +170,7 @@ export default function ProjectChecklist({
                       color={member ? "#ffaa00" : "rgba(255,255,255,0.62)"}
                     />
                     <Text
-                      style={[
-                        styles.rowLabel,
-                        member && styles.rowLabelActive,
-                      ]}
+                      style={[styles.rowLabel, member && styles.rowLabelActive]}
                       numberOfLines={1}
                     >
                       {item.name}

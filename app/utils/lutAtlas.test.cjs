@@ -12,7 +12,12 @@ test("LUT atlas keeps cube channel order and duplicates slice edges", () => {
     })),
   };
   const atlas = buildLutAtlas(cube);
-  const pixel = (x, y) => [...atlas.pixels.slice((y * atlas.width + x) * 4, (y * atlas.width + x) * 4 + 4)];
+  const pixel = (x, y) => [
+    ...atlas.pixels.slice(
+      (y * atlas.width + x) * 4,
+      (y * atlas.width + x) * 4 + 4,
+    ),
+  ];
 
   assert.equal(atlas.width, 8);
   assert.equal(atlas.height, 2);
