@@ -1,4 +1,8 @@
-const { withDangerousMod, withInfoPlist } = require("expo/config-plugins");
+const {
+  withDangerousMod,
+  withInfoPlist,
+  withXcodeProject,
+} = require("expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 const xcode = require("xcode");
@@ -8,7 +12,7 @@ const WIDGET_TARGET_NAME = "LockedCameraCaptureWidget";
 const MAIN_BUNDLE_ID = "br.dev.fabiosantos.komorebi.app";
 const EXTENSION_BUNDLE_ID = `${MAIN_BUNDLE_ID}.${TARGET_NAME}`;
 const WIDGET_BUNDLE_ID = `${MAIN_BUNDLE_ID}.${WIDGET_TARGET_NAME}`;
-const DEVELOPMENT_TEAM = "67RRF637HK";
+const DEVELOPMENT_TEAM = "ZHVJ9S93V4";
 
 const EXTENSION_MAIN_SWIFT = `import ExtensionKit
 import Foundation
@@ -1160,6 +1164,23 @@ function updateXcodeProject(projectPath) {
   ensureTargetDependency(mainTarget, extensionTarget);
   ensureTargetDependency(mainTarget, widgetTarget);
 
+  // Keep existing targets in sync when prebuild runs without --clean.
+  for (const [targetUuid, bundleId] of [
+    [mainTarget, MAIN_BUNDLE_ID],
+    [extensionTarget, EXTENSION_BUNDLE_ID],
+    [widgetTarget, WIDGET_BUNDLE_ID],
+  ]) {
+    const configListUuid = section("PBXNativeTarget")[targetUuid]
+      .buildConfigurationList;
+    const configList = section("XCConfigurationList")[configListUuid];
+    for (const configRef of configList.buildConfigurations) {
+      const settings = section("XCBuildConfiguration")[configRef.value]
+        .buildSettings;
+      settings.DEVELOPMENT_TEAM = DEVELOPMENT_TEAM;
+      settings.PRODUCT_BUNDLE_IDENTIFIER = bundleId;
+    }
+  }
+
   fs.writeFileSync(projectPath, project.writeSync());
 }
 
@@ -1171,7 +1192,7 @@ module.exports = function withLockedCameraCapture(config) {
     return cfg;
   });
 
-  return withDangerousMod(config, [
+  config = withDangerousMod(config, [
     "ios",
     (cfg) => {
       const iosRoot = cfg.modRequest.platformProjectRoot;
@@ -1217,4 +1238,30 @@ module.exports = function withLockedCameraCapture(config) {
       return cfg;
     },
   ]);
+
+  return withXcodeProject(config, (cfg) => {
+    const objects = cfg.modResults.hash.project.objects;
+    const bundleIds = {
+      Komorebi: MAIN_BUNDLE_ID,
+      [TARGET_NAME]: EXTENSION_BUNDLE_ID,
+      [WIDGET_TARGET_NAME]: WIDGET_BUNDLE_ID,
+    };
+
+    for (const target of Object.values(objects.PBXNativeTarget)) {
+      if (!target || typeof target !== "object") continue;
+      const name = String(target.name || "").replace(/^"|"$/g, "");
+      const bundleId = bundleIds[name];
+      if (!bundleId) continue;
+
+      const configList = objects.XCConfigurationList[target.buildConfigurationList];
+      for (const configRef of configList.buildConfigurations) {
+        const settings = objects.XCBuildConfiguration[configRef.value]
+          .buildSettings;
+        settings.DEVELOPMENT_TEAM = DEVELOPMENT_TEAM;
+        settings.PRODUCT_BUNDLE_IDENTIFIER = bundleId;
+      }
+    }
+
+    return cfg;
+  });
 };

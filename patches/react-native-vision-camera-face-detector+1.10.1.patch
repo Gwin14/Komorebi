@@ -1,8 +1,7 @@
 diff --git a/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx b/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
-index 44ce80c..24991e3 100644
 --- a/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
 +++ b/node_modules/react-native-vision-camera-face-detector/src/Camera.tsx
-@@ -23,7 +23,8 @@ import type {
+@@ -23,7 +23,8 @@
    CameraProps,
    DrawableFrame,
    Frame,
@@ -12,7 +11,7 @@ index 44ce80c..24991e3 100644
  } from 'react-native-vision-camera'
  import type {
    Face,
-@@ -44,10 +45,29 @@ type CallbackType = (
+@@ -44,10 +45,29 @@
    frame: Frame
  ) => void | Promise<void>
  
@@ -42,7 +41,7 @@ index 44ce80c..24991e3 100644
    skiaActions?: (
      faces: Face[],
      frame: DrawableFrame
-@@ -101,6 +120,17 @@ export function Camera( {
+@@ -101,6 +121,17 @@
    ref,
    faceDetectionOptions,
    faceDetectionCallback,
@@ -60,7 +59,7 @@ index 44ce80c..24991e3 100644
    skiaActions,
    ...props
  }: ComponentType ) {
-@@ -109,6 +135,19 @@ export function Camera( {
+@@ -109,6 +140,19 @@
     */
    const isAsyncContextBusy = useSharedValue( false )
    const faces = useSharedValue<string>( '[]' )
@@ -80,8 +79,12 @@ index 44ce80c..24991e3 100644
    const {
      detectFaces,
      stopListeners
-@@ -125,9 +161,9 @@ export function Camera( {
-   const logOnJs = Worklets.createRunOnJS( (
+@@ -121,16 +165,16 @@
+   /** 
+    * Throws logs/errors back on js thread
+    */
+-  const logOnJs = Worklets.createRunOnJS( (
++  const logOnJs = React.useMemo( () => Worklets.createRunOnJS( (
      log: string,
 -    error?: Error
 +    error?: string
@@ -92,18 +95,23 @@ index 44ce80c..24991e3 100644
      } else {
        console.log( log )
      }
-@@ -139,6 +175,10 @@ export function Camera( {
+-  } )
++  } ), [] )
+ 
+   /**
+    * Runs on detection callback on js thread
+@@ -138,6 +182,10 @@
+   const runOnJs = useRunInJS( faceDetectionCallback, [
      faceDetectionCallback
    ] )
- 
++
 +  const runHistogramOnJs = React.useMemo( () => (
 +    Worklets.createRunOnJS( histogramCallback ?? ( () => {} ) )
 +  ), [ histogramCallback ] )
-+
+ 
    /**
     * Async context that will handle face detection
-    */
-@@ -147,6 +187,50 @@ export function Camera( {
+@@ -147,6 +195,50 @@
    ) => {
      'worklet'
      try {
@@ -154,7 +162,7 @@ index 44ce80c..24991e3 100644
        faces.value = JSON.stringify(
          detectFaces( frame )
        )
-@@ -170,6 +254,10 @@ export function Camera( {
+@@ -170,6 +262,10 @@
      }
    }, [
      detectFaces,
@@ -164,10 +172,16 @@ index 44ce80c..24991e3 100644
 +    runHistogramOnJs,
      runOnJs
    ] )
-
-@@ -195,12 +283,71 @@ export function Camera( {
+ 
+@@ -195,14 +291,73 @@
+    */
    const skiaFrameProcessor = useSkiaFrameProcessor( ( frame ) => {
      'worklet'
+-    frame.render()
+-    skiaActions!( JSON.parse(
+-      faces.value
+-    ), frame )
+-    runAsync( frame )
 +    skiaFrameCount.value += 1
 +    const debugNow = performance.now()
 +    const shouldDebug = debugNow - lastSkiaDebugAt.value >= 2000
@@ -200,10 +214,6 @@ index 44ce80c..24991e3 100644
 +        })
 +      } catch {}
 +    }
--    frame.render()
--    skiaActions!( JSON.parse(
--      faces.value
--    ), frame )
 +    try {
 +      skiaActions!( JSON.parse(
 +        faces.value
@@ -223,7 +233,6 @@ index 44ce80c..24991e3 100644
 +      // Nunca deixe o preview sem um frame quando o efeito falhar.
 +      frame.render()
 +    }
--    runAsync( frame )
 +    if (faceDetectionEnabled || histogramEnabled) runAsync( frame )
    }, [
      runOnAsyncContext,
@@ -243,10 +252,13 @@ index 44ce80c..24991e3 100644
 +    logOnJs
    ] )
  
-@@ -210,8 +321,56 @@ export function Camera( {
+   /**
+@@ -210,8 +365,56 @@
     */
    const cameraFrameProcessor = useFrameProcessor( ( frame ) => {
      'worklet'
+-    runAsync( frame )
+-  }, [ runOnAsyncContext ] )
 +    const zebraNow = performance.now()
 +    if (
 +      zebraMaskPlugin && (zebraHighlightsEnabled || zebraShadowsEnabled) &&
@@ -265,8 +277,6 @@ index 44ce80c..24991e3 100644
 +        logOnJs('[ZebraDebug][mask] native sampling failed', message)
 +      }
 +    }
--    runAsync( frame )
--  }, [ runOnAsyncContext ] )
 +    // Consume the request before crossing runtimes. Never retain a Frame in JS.
 +    if (compositionScanId && compositionCapturePlugin && capturedScanId.value !== compositionScanId) {
 +      capturedScanId.value = compositionScanId
@@ -302,7 +312,7 @@ index 44ce80c..24991e3 100644
  
    /**
     * Camera frame processor
-@@ -224,6 +383,8 @@ export function Camera( {
+@@ -224,6 +427,8 @@
        !!skiaActions
      ) return skiaFrameProcessor
  
@@ -311,3 +321,11 @@ index 44ce80c..24991e3 100644
      return cameraFrameProcessor
    } )()
  
+@@ -253,6 +458,6 @@
+     { ...props }
+     ref={ ref }
+     frameProcessor={ frameProcessor }
+-    pixelFormat='yuv'
++    pixelFormat={ skiaActions ? 'rgb' : 'yuv' }
+   />
+ }

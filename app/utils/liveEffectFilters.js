@@ -31,6 +31,19 @@ half4 main(float2 xy) {
   return half4(color, pixel.a);
 }`;
 
+const grainSource = `
+uniform shader source;
+uniform float grainStrength;
+uniform float grainPhase;
+
+half4 main(float2 xy) {
+  half4 pixel = source.eval(xy);
+  float luminance = dot(pixel.rgb, float3(0.2126, 0.7152, 0.0722));
+  float noise = fract(sin(dot(floor(xy) + grainPhase, float2(12.9898, 78.233))) * 43758.5453) - 0.5;
+  float3 color = clamp(pixel.rgb + noise * grainStrength * (1.15 - 0.5 * luminance), 0.0, 1.0);
+  return half4(color, pixel.a);
+}`;
+
 const halationSource = `
 uniform shader source;
 uniform float threshold;
@@ -38,6 +51,7 @@ uniform float softness;
 uniform float contrastRadius;
 uniform float minContrast;
 uniform float contrastSoftness;
+uniform float fringeRadius;
 
 half4 main(float2 xy) {
   float3 color = source.eval(xy).rgb;
@@ -51,10 +65,20 @@ half4 main(float2 xy) {
   ) * 0.25;
   float highlight = smoothstep(threshold - softness, threshold + softness, peak) *
     smoothstep(minContrast - contrastSoftness, minContrast + contrastSoftness, peak - nearby);
-  return half4(float3(1.0, 0.18, 0.055) * highlight, highlight);
+  float2 fringe = float2(fringeRadius, 0.0);
+  float3 spreadColor = max(
+    max(source.eval(xy + fringe).rgb, source.eval(xy - fringe).rgb),
+    max(source.eval(xy + fringe.yx).rgb, source.eval(xy - fringe.yx).rgb)
+  );
+  float spreadPeak = max(max(spreadColor.r, spreadColor.g), spreadColor.b);
+  float spread = smoothstep(threshold - softness, threshold + softness, spreadPeak) *
+    smoothstep(minContrast - contrastSoftness, minContrast + contrastSoftness, spreadPeak - peak);
+  float alpha = max(highlight * 0.35, spread * 0.65);
+  return half4(float3(1.0, 0.18, 0.055) * alpha, alpha);
 }`;
 
 export const colorEffect = Skia.RuntimeEffect.Make(colorSource);
+export const grainEffect = Skia.RuntimeEffect.Make(grainSource);
 export const halationEffect = Skia.RuntimeEffect.Make(halationSource);
 
 export function makeLutImage(cube) {

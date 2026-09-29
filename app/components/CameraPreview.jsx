@@ -3,15 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
-import { Worklets } from "react-native-worklets-core";
+import { Worklets, useSharedValue } from "react-native-worklets-core";
 import { useCameraFormat } from "react-native-vision-camera";
 import { Camera as FaceDetectionCamera } from "react-native-vision-camera-face-detector";
-import { BlendMode, FilterMode, Skia, TileMode } from "@shopify/react-native-skia";
+import { BlendMode, FilterMode, MipmapMode, Skia, TileMode } from "@shopify/react-native-skia";
 import { getZebraMaskPlugin } from "../../modules/composition-scan";
 import { getCachedLUT } from "../utils/lutStore";
 import { getGrainConfig } from "../utils/grainCatalog";
 import { getHalationConfig } from "../utils/halationCatalog";
-import { colorEffect, halationEffect, identityLut, makeLutImage } from "../utils/liveEffectFilters";
+import { colorEffect, grainEffect, halationEffect, identityLut, makeLutImage } from "../utils/liveEffectFilters";
 import CompositionScanOverlay from "./CompositionScanOverlay";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
@@ -52,7 +52,9 @@ export default function CameraPreview({
 }) {
   const isTakingPhoto = useRef(false);
   const smileAllowed = useRef(false);
+  const onSmileDetectedRef = useRef(onSmileDetected);
   smileAllowed.current = smileDetectionEnabled && !compositionScan?.busy;
+  onSmileDetectedRef.current = onSmileDetected;
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
   const [zebraMask, setZebraMask] = useState(null);
@@ -77,6 +79,10 @@ export default function CameraPreview({
     ? getHalationConfig(effectPreview.selectedHalationId) : null;
   const grain = effectPreview?.grainEnabled
     ? getGrainConfig(effectPreview.selectedGrainId) : null;
+  const effectParams = useSharedValue({ grain: null, halation: null });
+  useEffect(() => {
+    effectParams.value = { grain, halation };
+  }, [effectParams, grain, halation]);
   useEffect(() => {
     setSkiaFailed(false);
   }, [device?.id, lut, halation, grain]);
@@ -96,49 +102,66 @@ export default function CameraPreview({
     if (!skiaActive) return undefined;
     return (_faces, frame) => {
       "worklet";
+      const frameResources = [];
       try {
-        if (lut?.image && colorEffect && (grain || lut !== identityLut)) {
-          const builder = Skia.RuntimeShaderBuilder(colorEffect);
-          builder.setUniform("lutSize", [lut.size]);
-          builder.setUniform("domainMin", lut.domainMin);
-          builder.setUniform("domainScale", lut.domainScale);
-          builder.setUniform("grainStrength", [grain ? grain.lumaStrength * 2 / 255 : 0]);
-          builder.setUniform("grainPhase", [grain ? Math.floor(frame.timestamp / 33333333) % 997 : 0]);
-          const filter = Skia.ImageFilter.MakeRuntimeShaderWithChildren(
-            builder, 0, ["source", "lut"],
-            [null, Skia.ImageFilter.MakeImage(lut.image, null, null, FilterMode.Linear)],
+        const { grain: selectedGrain, halation: selectedHalation } = effectParams.value;
+        const source = frame.__skImage.makeShaderOptions(
+          TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None,
+        );
+        frameResources.push(source);
+        let base = source;
+        if (lut !== identityLut && lut?.image && colorEffect) {
+          const lutShader = lut.image.makeShaderOptions(
+            TileMode.Clamp, TileMode.Clamp, FilterMode.Linear, MipmapMode.None,
           );
-          const paint = Skia.Paint();
-          paint.setImageFilter(filter);
-          frame.render(paint);
-        } else {
-          frame.render();
+          frameResources.push(lutShader);
+          base = colorEffect.makeShaderWithChildren([
+            lut.size, ...lut.domainMin, ...lut.domainScale,
+            selectedGrain ? selectedGrain.lumaStrength * 2 / 255 : 0,
+            selectedGrain ? Math.floor(frame.timestamp / 33333333) % 997 : 0,
+          ], [source, lutShader]);
+          frameResources.push(base);
+        } else if (selectedGrain && grainEffect) {
+          base = grainEffect.makeShaderWithChildren([
+            selectedGrain.lumaStrength * 2 / 255,
+            Math.floor(frame.timestamp / 33333333) % 997,
+          ], [source]);
+          frameResources.push(base);
         }
-        if (halation && halationEffect) {
-          const builder = Skia.RuntimeShaderBuilder(halationEffect);
-          builder.setUniform("threshold", [halation.threshold]);
-          builder.setUniform("softness", [halation.softness]);
-          builder.setUniform("contrastRadius", [halation.contrastRadius * 0.15]);
-          builder.setUniform("minContrast", [halation.minContrast]);
-          builder.setUniform("contrastSoftness", [halation.contrastSoftness]);
-          const highlights = Skia.ImageFilter.MakeRuntimeShader(builder, "source", null);
+        const rect = Skia.XYWHRect(0, 0, frame.width, frame.height);
+        const paint = Skia.Paint();
+        frameResources.push(paint);
+        paint.setShader(base);
+        frame.drawRect(rect, paint);
+        if (selectedHalation && halationEffect) {
+          const halo = halationEffect.makeShaderWithChildren([
+            selectedHalation.threshold,
+            selectedHalation.softness,
+            selectedHalation.contrastRadius * 0.15,
+            selectedHalation.minContrast,
+            selectedHalation.contrastSoftness,
+            selectedHalation.fringeRadius * 0.5,
+          ], [source]);
+          frameResources.push(halo);
           const glow = Skia.Paint();
-          glow.setImageFilter(Skia.ImageFilter.MakeBlur(
-            halation.fringeRadius * 0.5,
-            halation.fringeRadius * 0.5,
-            TileMode.Clamp,
-            highlights,
-          ));
+          frameResources.push(glow);
+          glow.setShader(halo);
           glow.setBlendMode(BlendMode.Screen);
-          glow.setAlphaf(halation.targetPeakOpacity);
-          frame.render(glow);
+          glow.setAlphaf(selectedHalation.targetPeakOpacity);
+          frame.drawRect(rect, glow);
         }
       } catch {
         frame.render();
         reportSkiaFailure();
+      } finally {
+        // These shaders reference the current camera buffer. Release their JSI
+        // handles on every frame instead of waiting for worklet GC to run.
+        for (let index = frameResources.length - 1; index >= 0; index -= 1) {
+          frameResources[index].dispose();
+        }
       }
     };
-  }, [grain, halation, lut, reportSkiaFailure, skiaActive]);
+  }, [effectParams, lut, reportSkiaFailure, skiaActive]);
 
   useEffect(() => {
     console.log("[ZebraDebug][preview] mount");
@@ -260,13 +283,13 @@ export default function CameraPreview({
         face.smilingProbability > 0.7
       ) {
         isTakingPhoto.current = true;
-        onSmileDetected?.();
+        onSmileDetectedRef.current?.();
         setTimeout(() => {
           isTakingPhoto.current = false;
         }, 2500);
       }
     },
-    [onSmileDetected],
+    [],
   );
 
   const faceDetectionOptions = useMemo(

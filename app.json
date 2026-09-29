@@ -13,7 +13,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "br.dev.fabiosantos.komorebi",
+      "bundleIdentifier": "br.dev.fabiosantos.komorebi.app",
       "supportsTablet": true,
       "infoPlist": {
         "LSRequiresIPhoneOS": true,
@@ -23,7 +23,7 @@
         "NSCameraUsageDescription": "Precisamos da câmera para tirar fotos.",
         "NSMicrophoneUsageDescription": "Precisamos do microfone para gravar vídeos."
       },
-      "appleTeamId": "67RRF637HK"
+      "appleTeamId": "ZHVJ9S93V4"
     },
     "android": {
       "minSdkVersion": 26,
@@ -92,7 +92,14 @@
       "expo-web-browser",
       "./plugins/withIosDeploymentTarget",
       "./plugins/withLockedCameraCapture",
-      "./plugins/withUiSceneManifest"
+      "./plugins/withUiSceneManifest",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "fabio-company",
+          "project": "komorebi"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
