@@ -30,7 +30,7 @@ export function getPreviewDimensions({
   const maximumWidth = screenWidth * (retroStyle ? 0.9 : 1);
   const fourThreeHeight = maximumWidth / (3 / 4);
   const heightLimit =
-    availableHeight > 0
+    retroStyle && availableHeight > 0
       ? Math.min(fourThreeHeight, availableHeight)
       : fourThreeHeight;
   const width = Math.min(maximumWidth, heightLimit * ratio);

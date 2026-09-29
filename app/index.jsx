@@ -826,8 +826,14 @@ export default function App() {
     toggleDoubleCaptureMode: () => setDoubleCaptureMode((value) => !value),
     toggleFlash: () => setFlash((value) => (value === "off" ? "on" : "off")),
     toggleMode: (mode) => {
+      if (mode === "manual") {
+        const disablingManual = manual.manualMode === "manual";
+        manual.toggleManualMode();
+        setActiveControl(disablingManual ? "none" : "manual");
+        return;
+      }
+
       toggleMode(mode);
-      if (mode === "manual") manual.toggleManualMode();
     },
     toggleRawMode: rawCapture.toggleRawMode,
     toggleLivePhotoEnabled: () => {
@@ -985,21 +991,24 @@ export default function App() {
         </View>
       )}
 
-      {manual.manualMode === "manual" && !imageStacking.enabled ? (
-        <ManualControlsPanel
-          manual={manual}
-          topBarBelow={topBarBelow}
-          exposure={exposure}
-          setExposure={setExposure}
-        />
-      ) : (
-        <ExposureSlider
-          exposure={exposure}
-          setExposure={setExposure}
-          topBarBelow={topBarBelow}
-          activeControl={activeControl}
-        />
-      )}
+      <View style={styles.adjustmentControlsSlot}>
+        {(activeControl === "none" || activeControl === "manual") &&
+          (manual.manualMode === "manual" && !imageStacking.enabled ? (
+            <ManualControlsPanel
+              manual={manual}
+              topBarBelow={topBarBelow}
+              exposure={exposure}
+              setExposure={setExposure}
+            />
+          ) : (
+            <ExposureSlider
+              exposure={exposure}
+              setExposure={setExposure}
+              topBarBelow={topBarBelow}
+              activeControl={activeControl}
+            />
+          ))}
+      </View>
 
       <BottomControls
         controlsAnim={controlsAnim}

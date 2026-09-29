@@ -50,9 +50,16 @@ export default StyleSheet.create({
   },
   processingBadgeText: { color: "#111", fontSize: 11, fontWeight: "700" },
   toolsContainer: {
-    width: "100%",
-
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
     justifyContent: "center",
+  },
+  lensSlot: {
+    width: "100%",
+    height: 34,
   },
   lutSelectorWrapper: {
     flex: 1,

@@ -13,7 +13,7 @@ export default StyleSheet.create({
     flex: 1,
     minHeight: 0,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     overflow: "hidden",
   },
 
@@ -56,6 +56,11 @@ export default StyleSheet.create({
     paddingVertical: 4,
     margin: "auto",
     borderRadius: 14,
+  },
+  adjustmentControlsSlot: {
+    width: "100%",
+    height: 112,
+    justifyContent: "flex-end",
   },
 
   permissionContainer: {

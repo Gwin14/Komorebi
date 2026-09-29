@@ -230,17 +230,26 @@ export default function BottomControls({
         </View>
       </Animated.View>
 
-      {lenses.length > 1 &&
-        !imageStackingCapturing &&
-        (activeControl === "none" || activeControl === "manual") && (
-          <Animated.View style={{ opacity: shutterOpacity }}>
+      {lenses.length > 1 && (
+        <Animated.View
+          style={[styles.lensSlot, { opacity: shutterOpacity }]}
+          pointerEvents={
+            !imageStackingCapturing &&
+            (activeControl === "none" || activeControl === "manual")
+              ? "auto"
+              : "none"
+          }
+        >
+          {!imageStackingCapturing &&
+            (activeControl === "none" || activeControl === "manual") && (
             <LensSelector
               lenses={lenses}
               activeLensId={activeLensId}
               onSelectLens={onSelectLens}
             />
-          </Animated.View>
-        )}
+            )}
+        </Animated.View>
+      )}
 
       <Animated.View
         style={[
@@ -250,7 +259,11 @@ export default function BottomControls({
             opacity: toolsOpacity,
           },
         ]}
-        pointerEvents={activeControl !== "none" ? "auto" : "none"}
+        pointerEvents={
+          activeControl !== "none" && activeControl !== "manual"
+            ? "auto"
+            : "none"
+        }
       >
         {activeControl === "zoom" && (
           <ExposureDialFinal
