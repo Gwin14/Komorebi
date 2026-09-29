@@ -46,6 +46,10 @@ import {
 } from "./utils/lutProcessor";
 import { getProjectById } from "./utils/projects";
 import { getAppleStylesCompatibility } from "./utils/photographicStylesPolicy";
+import {
+  DEFAULT_ASPECT_RATIO,
+  getAspectRatioValue,
+} from "./utils/aspectRatios";
 
 export default function App() {
   const {
@@ -85,7 +89,9 @@ export default function App() {
   const [minZoom, setMinZoom] = useState(1);
   const [maxZoom, setMaxZoom] = useState(5);
   const [doubleCaptureMode, setDoubleCaptureMode] = useState(false);
-  const [verticalMode, setVerticalMode] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState(DEFAULT_ASPECT_RATIO);
+  const [previewAvailableHeight, setPreviewAvailableHeight] = useState(0);
+  const captureAspectRatio = getAspectRatioValue(aspectRatio);
   const zoomSV = useSharedValue(1);
   const lastZoom = useSharedValue(1);
 
@@ -336,7 +342,7 @@ export default function App() {
       cameraPermission === "granted" &&
       !isProcessing &&
       processingQueue.length === 0,
-    configurationKey: `${activeLens?.device?.id}:${nativeCaptureMode}:${rawCapture.rawMode}:${manual.manualMode}:${verticalMode}:${doubleCaptureMode}:${retroStyle}:${scanOrientation}`,
+    configurationKey: `${activeLens?.device?.id}:${nativeCaptureMode}:${rawCapture.rawMode}:${manual.manualMode}:${aspectRatio}:${doubleCaptureMode}:${retroStyle}:${scanOrientation}`,
     preview: {
       ...scanPreviewLayout,
       mirrored: facing === "front",
@@ -457,10 +463,6 @@ export default function App() {
     setActiveControl((current) => (current === mode ? "none" : mode));
   }, []);
 
-  const toggleVerticalMode = useCallback(() => {
-    setVerticalMode((prev) => !prev);
-  }, []);
-
   const handleTakePicture = useCallback(async () => {
     cancelAutoZoomAnimation();
     cancelCompositionScan();
@@ -514,11 +516,11 @@ export default function App() {
             lutsLoaded,
             exifData: {
               ...additionalExif,
-              aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
+              aspectRatio: captureAspectRatio,
             },
             doubleCaptureMode,
             saveOriginalWithoutEffects,
-            aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
+            aspectRatio: captureAspectRatio,
             captureMode: "stacking",
             stackingMetadata: result,
             preserveApplePhotographicStyles: appleStylesCompatibility.effective,
@@ -590,7 +592,7 @@ export default function App() {
         location,
         doubleCaptureMode,
         saveOriginalWithoutEffects,
-        aspectRatio: verticalMode ? 9 / 16 : 3 / 4,
+        aspectRatio: captureAspectRatio,
         manualSettings,
         rawMode: rawCapture.rawMode,
         livePhotoEnabled: livePhoto.enabled,
@@ -641,7 +643,7 @@ export default function App() {
     previewDoubleExposure,
     previewStacking,
     setIsProcessing,
-    verticalMode,
+    captureAspectRatio,
     imageStacking,
     stackingFinishing,
   ]);
@@ -840,9 +842,9 @@ export default function App() {
     },
     toggleSmileDetectionEnabled: () =>
       setSmileDetectionEnabled((value) => !value),
-    toggleVerticalMode,
+    onSelectAspectRatio: setAspectRatio,
     topBarControls,
-    verticalMode,
+    aspectRatio,
     projects,
     activeProjectId,
     onChangeProject: handleChangeProject,
@@ -880,7 +882,12 @@ export default function App() {
 
       {!firstTime && cameraPermission === "granted" && (
         <GestureDetector gesture={composedGestures}>
-          <View style={styles.previewContainer}>
+          <View
+            style={styles.previewContainer}
+            onLayout={(event) =>
+              setPreviewAvailableHeight(event.nativeEvent.layout.height)
+            }
+          >
             {cameraHandoffActive ? null : renderedNativeCaptureMode ? (
               <NativeCapturePreview
                 mode={renderedNativeCaptureMode}
@@ -898,7 +905,8 @@ export default function App() {
                 zebraHighlightsEnabled={zebraHighlightsEnabled}
                 zebraShadowsEnabled={zebraShadowsEnabled}
                 exposure={exposure}
-                verticalMode={verticalMode}
+                aspectRatio={aspectRatio}
+                availableHeight={previewAvailableHeight}
                 doubleCaptureMode={doubleCaptureMode}
                 smileDetectionEnabled={smileDetectionEnabled}
                 onSmileDetected={handleTakePicture}
@@ -928,7 +936,8 @@ export default function App() {
                 onSmileDetected={handleTakePicture}
                 smileDetectionEnabled={smileDetectionEnabled}
                 location={location}
-                verticalMode={verticalMode}
+                aspectRatio={aspectRatio}
+                availableHeight={previewAvailableHeight}
                 doubleCaptureMode={doubleCaptureMode}
                 isActive={!firstTime && !nativeCaptureMode}
                 manualPhotoMode={manual.manualMode === "manual"}
@@ -1020,9 +1029,6 @@ export default function App() {
           isProcessing && (!imageStacking.capturing || stackingFinishing)
         }
         processingQueueLength={processingQueue.length}
-        lenses={lenses}
-        activeLensId={activeLensId}
-        onSelectLens={handleSelectLens}
         galleryRefreshKey={galleryRefreshKey}
         activeProject={activeProject}
         imageStackingCapturing={imageStacking.capturing}
@@ -1036,6 +1042,9 @@ export default function App() {
             imageStacking.strategyId,
           )
         }
+        lenses={lenses}
+        activeLensId={activeLensId}
+        onSelectLens={handleSelectLens}
       />
     </SafeAreaView>
   );

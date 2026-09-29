@@ -81,6 +81,29 @@ const dedupePresets = (presets) => {
   );
 };
 
+const normalizeIOSPresets = (presets) => {
+  const uniquePresets = dedupePresets(presets);
+  const hasNominalWide = uniquePresets.some(
+    (preset) => Math.abs(preset.displayZoom - 1) < 0.05,
+  );
+  const subWidePresets = uniquePresets.filter(
+    (preset) => preset.displayZoom < 0.95,
+  );
+
+  if (!hasNominalWide || subWidePresets.length <= 1) return uniquePresets;
+
+  // AVFoundation can report an intermediate switch-over threshold (for
+  // example 0.9x) between the ultra-wide and the nominal 1x camera. It is
+  // useful to the capture pipeline, but it is not a user-facing native stop.
+  const widestPreset = subWidePresets.reduce((widest, preset) =>
+    preset.displayZoom < widest.displayZoom ? preset : widest,
+  );
+
+  return uniquePresets.filter(
+    (preset) => preset.displayZoom >= 0.95 || preset === widestPreset,
+  );
+};
+
 const buildIOSFallbackPresets = (device) => {
   const neutralZoom = Math.max(device.minZoom, device.neutralZoom || 1);
   const displayMultiplier = 1 / neutralZoom;
@@ -146,7 +169,7 @@ export function usePhysicalCameraDevices(facing = "back") {
           : null;
       const presets =
         nativePresets?.length > 0
-          ? dedupePresets(nativePresets)
+          ? normalizeIOSPresets(nativePresets)
           : buildIOSFallbackPresets(iosDevice);
 
       return presets.map((preset) => makeZoomPreset(iosDevice, preset));

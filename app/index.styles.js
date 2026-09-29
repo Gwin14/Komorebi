@@ -7,6 +7,15 @@ export default StyleSheet.create({
     alignItems: "stretch",
     justifyContent: "space-between",
   },
+  previewContainer: {
+    position: "relative",
+    width: "100%",
+    flex: 1,
+    minHeight: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
 
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,

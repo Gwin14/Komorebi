@@ -12,8 +12,8 @@ import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import useShutterSound from "../utils/useShutterSound";
 import { getProjectAlbumName } from "../utils/projects";
 import ExposureDialFinal from "./ExposureDialFinal";
-import LensSelector from "./LensSelector";
 import LUTSelector from "./LUTSelector";
+import LensSelector from "./LensSelector";
 import Shutter from "./shutter";
 import styles, { BOTTOM_CONTROLS_MARGIN } from "./BottomControls.styles";
 
@@ -43,10 +43,6 @@ export default function BottomControls({
   isProcessing,
   showProcessingFeedback = isProcessing,
   processingQueueLength,
-  // 🆕 Props de lentes
-  lenses,
-  activeLensId,
-  onSelectLens,
   galleryRefreshKey,
   activeProject = null,
   imageStackingCapturing = false,
@@ -55,6 +51,9 @@ export default function BottomControls({
   imageStackingProgressState = "idle",
   stackingSoundSignal = 0,
   imageStackingContinuousCapturing = false,
+  lenses = [],
+  activeLensId,
+  onSelectLens,
 }) {
   const router = useRouter();
   const { bottom: bottomInset } = useSafeAreaInsets();
@@ -149,14 +148,6 @@ export default function BottomControls({
     outputRange: [1, 0],
   });
 
-  // LensSelector só aparece quando há mais de 1 lente e nenhum controle ativo
-  // (modo manual não conta como "controle ativo" para esse efeito)
-  const showLensSelector =
-    lenses &&
-    lenses.length > 1 &&
-    !imageStackingCapturing &&
-    (activeControl === "none" || activeControl === "manual");
-
   return (
     <View
       style={[
@@ -164,15 +155,6 @@ export default function BottomControls({
         { marginBottom: BOTTOM_CONTROLS_MARGIN + bottomInset },
       ]}
     >
-      {/* 🆕 Seletor de lentes — acima da linha do shutter, sempre visível quando inativo */}
-      {showLensSelector && (
-        <LensSelector
-          lenses={lenses}
-          activeLensId={activeLensId}
-          onSelectLens={onSelectLens}
-        />
-      )}
-
       <Animated.View
         style={[
           styles.shutterRow,
@@ -247,6 +229,18 @@ export default function BottomControls({
           </TouchableOpacity>
         </View>
       </Animated.View>
+
+      {lenses.length > 1 &&
+        !imageStackingCapturing &&
+        (activeControl === "none" || activeControl === "manual") && (
+          <Animated.View style={{ opacity: shutterOpacity }}>
+            <LensSelector
+              lenses={lenses}
+              activeLensId={activeLensId}
+              onSelectLens={onSelectLens}
+            />
+          </Animated.View>
+        )}
 
       <Animated.View
         style={[

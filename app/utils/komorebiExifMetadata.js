@@ -118,6 +118,7 @@ const isBuiltInLut = (lutId) =>
 
 const formatAspectRatio = (ratio) => {
   if (!ratio) return null;
+  if (Math.abs(ratio - 1) < 0.01) return "1:1";
   if (Math.abs(ratio - 3 / 4) < 0.01) return "3:4";
   if (Math.abs(ratio - 9 / 16) < 0.01) return "9:16";
   if (Math.abs(ratio - 4 / 3) < 0.01) return "4:3";

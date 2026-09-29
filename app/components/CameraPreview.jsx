@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, StyleSheet, View } from "react-native";
+import { Animated, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 import { Worklets, useSharedValue } from "react-native-worklets-core";
@@ -17,6 +17,11 @@ import { getZebraMaskPlugin } from "../../modules/composition-scan";
 import { getCachedLUT } from "../utils/lutStore";
 import { getGrainConfig } from "../utils/grainCatalog";
 import { getHalationConfig } from "../utils/halationCatalog";
+import {
+  getAspectRatioValue,
+  getPreviewDimensions,
+  getSensorAspectRatio,
+} from "../utils/aspectRatios";
 import {
   colorEffect,
   grainEffect,
@@ -51,7 +56,8 @@ export default function CameraPreview({
   onSmileDetected,
   smileDetectionEnabled,
   location,
-  verticalMode,
+  aspectRatio,
+  availableHeight = 0,
   doubleCaptureMode,
   isActive = true,
   manualPhotoMode = false,
@@ -63,6 +69,7 @@ export default function CameraPreview({
   effectPreview,
   onCameraStopped,
 }) {
+  const { width: screenWidth } = useWindowDimensions();
   const isTakingPhoto = useRef(false);
   const smileAllowed = useRef(false);
   const onSmileDetectedRef = useRef(onSmileDetected);
@@ -77,7 +84,7 @@ export default function CameraPreview({
   const transitionOpacity = useRef(new Animated.Value(0)).current;
   const cameraScale = useRef(new Animated.Value(1)).current;
   const hasCameraDevice = Boolean(device);
-  const cameraConfigKey = `${device?.id ?? "none"}:${rawPhotoMode ? "raw" : "standard"}:${verticalMode ? "vertical" : "horizontal"}`;
+  const cameraConfigKey = `${device?.id ?? "none"}:${rawPhotoMode ? "raw" : "standard"}:${aspectRatio}`;
   const previousCameraConfigKey = useRef(cameraConfigKey);
   const transitionFallbackTimeout = useRef(null);
   const transitionFinishTimeout = useRef(null);
@@ -313,7 +320,9 @@ export default function CameraPreview({
       // RAW precisa permanecer em um formato de sensor 4:3. O 9:16 é um
       // enquadramento/crop derivado; selecionar 3840x2160 elimina rawFormats.
       {
-        photoAspectRatio: rawPhotoMode ? 4 / 3 : verticalMode ? 16 / 9 : 4 / 3,
+        photoAspectRatio: rawPhotoMode
+          ? 4 / 3
+          : getSensorAspectRatio(aspectRatio),
       },
       // O output de frame processor não é compatível com alguns formatos
       // fotográficos de resolução máxima (48 MP nos iPhones recentes).
@@ -327,7 +336,7 @@ export default function CameraPreview({
           : "max",
       },
     ],
-    [frameProcessorActive, manualPhotoMode, rawPhotoMode, verticalMode],
+    [aspectRatio, frameProcessorActive, manualPhotoMode, rawPhotoMode],
   );
   const format = useCameraFormat(device, formatFilters);
 
@@ -508,7 +517,13 @@ export default function CameraPreview({
     return null;
   }
 
-  const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
+  const aspectRatioValue = getAspectRatioValue(aspectRatio);
+  const previewDimensions = getPreviewDimensions({
+    availableHeight,
+    retroStyle,
+    screenWidth,
+    aspectRatio,
+  });
   // O frame processor do detector pode coexistir com o photo output RAW.
   // Manter o mesmo componente evita perder o disparo por sorriso em RAW.
   const CameraComponent = FaceDetectionCamera;
@@ -533,8 +548,8 @@ export default function CameraPreview({
       style={[
         retroStyle ? styles.retroStyle : styles.cameraWrapper,
         {
-          aspectRatio,
-          width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
+          width: previewDimensions.width,
+          height: previewDimensions.height,
           alignSelf: "center",
           borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
           borderWidth: doubleCaptureMode ? 3 : 0,
@@ -628,7 +643,7 @@ export default function CameraPreview({
 
       {doubleCaptureMode &&
         (() => {
-          const marginPct = `${(((1 - aspectRatio * aspectRatio) / 2) * 100).toFixed(4)}%`;
+          const marginPct = `${(((1 - aspectRatioValue * aspectRatioValue) / 2) * 100).toFixed(4)}%`;
           return (
             <View pointerEvents="none" style={StyleSheet.absoluteFill}>
               <View style={[styles.doubleCropZone, { height: marginPct }]}>

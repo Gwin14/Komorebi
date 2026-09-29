@@ -7,6 +7,7 @@ import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
+import AspectRatioSelector from "./AspectRatioSelector";
 import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
 import ImageStackingSelector from "./ImageStackingSelector";
@@ -23,8 +24,8 @@ export default function TopBar({
   toggleSmileDetectionEnabled,
   doubleCaptureMode,
   toggleDoubleCaptureMode,
-  verticalMode,
-  toggleVerticalMode,
+  aspectRatio,
+  onSelectAspectRatio,
   topBarControls = [],
   firstTime,
   manualControlsAvailable,
@@ -54,6 +55,7 @@ export default function TopBar({
   const animatedStyle = useDeviceOrientation();
   const [open, setOpen] = useState(false);
   const [stackingOpen, setStackingOpen] = useState(false);
+  const [aspectRatioOpen, setAspectRatioOpen] = useState(false);
   const [data, setData] = useState(null);
   const [place, setPlace] = useState(null);
   const [coords, setCoords] = useState(null);
@@ -133,11 +135,9 @@ export default function TopBar({
       active: smileDetectionEnabled,
     },
     vertical: {
-      icon: verticalMode
-        ? "phone-portrait-outline"
-        : "tablet-landscape-outline",
-      onPress: toggleVerticalMode,
-      active: verticalMode,
+      icon: "crop-outline",
+      onPress: () => setAspectRatioOpen(true),
+      active: aspectRatio !== "4:3",
     },
     doubleCapture: {
       icon: "layers-outline",
@@ -311,6 +311,51 @@ export default function TopBar({
                       onChange={(strategyId) => {
                         setStackingOpen(false);
                         onSelectImageStackingStrategy(strategyId);
+                      }}
+                    />
+                  </Popover>
+                </Animated.View>
+              </View>
+            );
+          }
+
+          if (controlId === "vertical") {
+            return (
+              <View key={controlId}>
+                <Animated.View style={animatedStyle}>
+                  <Popover
+                    isVisible={aspectRatioOpen}
+                    onRequestClose={() => setAspectRatioOpen(false)}
+                    backgroundStyle={{ backgroundColor: "transparent" }}
+                    popoverStyle={{ backgroundColor: "transparent" }}
+                    from={
+                      <TouchableOpacity
+                        style={[
+                          styles.controlButton,
+                          control.active && styles.controlButtonActive,
+                        ]}
+                        onPress={() => setAspectRatioOpen(true)}
+                        activeOpacity={0.72}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Proporção ${aspectRatio}`}
+                      >
+                        <Text
+                          style={[
+                            styles.aspectRatioLabel,
+                            control.active && styles.aspectRatioLabelActive,
+                          ]}
+                        >
+                          {aspectRatio}
+                        </Text>
+                      </TouchableOpacity>
+                    }
+                  >
+                    <AspectRatioSelector
+                      value={aspectRatio}
+                      disabled={disabled}
+                      onChange={(nextAspectRatio) => {
+                        setAspectRatioOpen(false);
+                        onSelectAspectRatio(nextAspectRatio);
                       }}
                     />
                   </Popover>

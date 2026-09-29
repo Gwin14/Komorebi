@@ -393,13 +393,13 @@ export const takePicture = async ({
         derivativeSourceUri || uri,
         aspectRatio,
       );
-      const isVerticalCrop = Math.abs(aspectRatio - 9 / 16) < 0.01;
+      const needsRatioDerivative = Math.abs(aspectRatio - 3 / 4) >= 0.01;
       const rawDerivativeAspectRatio =
         flash === "on"
           ? null
           : doubleCaptureMode
             ? 1 / captureAspectRatio
-            : isVerticalCrop
+            : needsRatioDerivative
               ? captureAspectRatio
               : null;
       setProcessingData({

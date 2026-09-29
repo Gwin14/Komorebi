@@ -46,6 +46,16 @@ export default StyleSheet.create({
   disabledControl: {
     opacity: 0.35,
   },
+  aspectRatioLabel: {
+    color: "white",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: -0.2,
+    fontVariant: ["tabular-nums"],
+  },
+  aspectRatioLabelActive: {
+    color: "#ffaa00",
+  },
   rawControl: {
     alignItems: "center",
     justifyContent: "center",

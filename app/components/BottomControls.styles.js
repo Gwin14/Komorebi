@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
 
-export const BOTTOM_CONTROLS_MARGIN = 54;
+export const BOTTOM_CONTROLS_MARGIN = 8;
 
 export default StyleSheet.create({
   shutterContainer: {
@@ -13,7 +13,7 @@ export default StyleSheet.create({
     width: "100%",
     justifyContent: "space-between",
     alignItems: "center",
-    height: 100,
+    height: 88,
     paddingHorizontal: 20,
   },
   sideButton: {

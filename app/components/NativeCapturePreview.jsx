@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { Image, StyleSheet, useWindowDimensions, View } from "react-native";
 import { LivePhotoCameraView } from "../../modules/camera-live-photo";
 import { PortraitCameraView } from "../../modules/camera-portrait-capture";
 import { ImageStackingCameraView } from "../../modules/camera-image-stacking";
 import { getCachedLUT } from "../utils/lutStore";
 import { getGrainConfig } from "../utils/grainCatalog";
 import { getHalationConfig } from "../utils/halationCatalog";
+import {
+  getAspectRatioValue,
+  getPreviewDimensions,
+} from "../utils/aspectRatios";
 import CameraLevel from "./CameraLevel";
 import HistogramOverlay from "./HistogramOverlay";
 import styles from "./CameraPreview.styles";
@@ -25,7 +29,8 @@ export default function NativeCapturePreview({
   zebraHighlightsEnabled,
   zebraShadowsEnabled,
   exposure,
-  verticalMode,
+  aspectRatio,
+  availableHeight = 0,
   doubleCaptureMode,
   smileDetectionEnabled,
   onSmileDetected,
@@ -34,6 +39,7 @@ export default function NativeCapturePreview({
   previewDoubleExposure,
   previewStacking,
 }) {
+  const { width: screenWidth } = useWindowDimensions();
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
   const [previewImage, setPreviewImage] = useState(null);
   const previousHistogramBins = useRef(null);
@@ -43,7 +49,28 @@ export default function NativeCapturePreview({
       : mode === "stacking"
         ? ImageStackingCameraView
         : PortraitCameraView;
-  const aspectRatio = verticalMode ? 9 / 16 : 3 / 4;
+  const aspectRatioValue = getAspectRatioValue(aspectRatio);
+  const previewDimensions = getPreviewDimensions({
+    availableHeight,
+    retroStyle,
+    screenWidth,
+    aspectRatio,
+  });
+  // Os módulos nativos mantêm uma superfície 4:3 estável. As outras
+  // proporções são janelas de crop, evitando relayout do preview a cada frame.
+  const nativeSurfaceDimensions = getPreviewDimensions({
+    availableHeight,
+    retroStyle,
+    screenWidth,
+    aspectRatio: "4:3",
+  });
+  const nativeSurfaceStyle = {
+    position: "absolute",
+    width: nativeSurfaceDimensions.width,
+    height: nativeSurfaceDimensions.height,
+    left: (previewDimensions.width - nativeSurfaceDimensions.width) / 2,
+    top: (previewDimensions.height - nativeSurfaceDimensions.height) / 2,
+  };
   const nativeLut = useMemo(() => {
     if (
       !effectPreview?.lutEnabled ||
@@ -118,10 +145,10 @@ export default function NativeCapturePreview({
       deviceId: device.id,
       deviceName: device.name,
       flash,
-      verticalMode,
+      aspectRatio,
       doubleCaptureMode,
     });
-  }, [device, doubleCaptureMode, flash, mode, verticalMode]);
+  }, [aspectRatio, device, doubleCaptureMode, flash, mode]);
 
   const handleInitialized = useCallback(() => {
     console.log("[NativeCapturePreview] initialized", {
@@ -173,8 +200,8 @@ export default function NativeCapturePreview({
       style={[
         retroStyle ? styles.retroStyle : styles.cameraWrapper,
         {
-          aspectRatio,
-          width: verticalMode ? "75%" : retroStyle ? "90%" : "100%",
+          width: previewDimensions.width,
+          height: previewDimensions.height,
           alignSelf: "center",
           borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
           borderWidth: doubleCaptureMode ? 3 : 0,
@@ -182,7 +209,7 @@ export default function NativeCapturePreview({
       ]}
     >
       <NativeCameraView
-        style={StyleSheet.absoluteFill}
+        style={nativeSurfaceStyle}
         deviceId={device.id}
         flashMode={flash === "on" ? "on" : "off"}
         isActive={isActive}
@@ -252,7 +279,7 @@ export default function NativeCapturePreview({
 
       {doubleCaptureMode &&
         (() => {
-          const marginPct = `${(((1 - aspectRatio * aspectRatio) / 2) * 100).toFixed(4)}%`;
+          const marginPct = `${(((1 - aspectRatioValue * aspectRatioValue) / 2) * 100).toFixed(4)}%`;
           return (
             <View pointerEvents="none" style={StyleSheet.absoluteFill}>
               <View style={[styles.doubleCropZone, { height: marginPct }]}>
