@@ -101,10 +101,11 @@ final class LiveEffectPreviewRenderer {
   }
 
   private var isEnabled: Bool {
-    // The video-data output is the canonical preview for the native capture
-    // modes. AVCaptureVideoPreviewLayer can remain black while ownership of
-    // the camera moves from VisionCamera to a new AVCaptureSession.
-    true
+    // Keep the zero-copy AVCaptureVideoPreviewLayer as the canonical preview
+    // when no visual effect is active. Rendering every frame through Core
+    // Image -> CGImage -> UIImage needlessly throttles all native modes and
+    // puts continuous allocation pressure on the main thread.
+    cubeData != nil || grainStrength > 0 || halation.count >= 6
   }
 
   private func updateVisibility(_ enabled: Bool) {
@@ -140,7 +141,10 @@ final class LiveEffectPreviewRenderer {
         var image = CIImage(cvPixelBuffer: pixelBuffer)
         if orientation != 1 { image = image.oriented(forExifOrientation: orientation) }
         if mirrored { image = image.oriented(.upMirrored) }
-        let scale = min(1.0, 1080.0 / max(image.extent.width, image.extent.height))
+        // Effects still need an intermediate bitmap. 720p keeps LUT, grain
+        // and halation previews responsive while the full-resolution photo
+        // output remains untouched.
+        let scale = min(1.0, 720.0 / max(image.extent.width, image.extent.height))
         image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let extent = image.extent
 

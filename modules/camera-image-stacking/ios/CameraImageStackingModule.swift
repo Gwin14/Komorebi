@@ -504,7 +504,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         guard self.session.canAddOutput(self.videoOutput) else { throw StackingError.cannotAddOutput }
         self.videoOutput.alwaysDiscardsLateVideoFrames = true
         self.videoOutput.videoSettings = [
-          kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+          kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
         ]
         self.videoOutput.setSampleBufferDelegate(self, queue: self.videoQueue)
         self.session.addOutput(self.videoOutput)
@@ -1416,22 +1416,41 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     var bins = [Int](repeating: 0, count: binsCount)
     CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
     defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
-    guard let base = CVPixelBufferGetBaseAddress(pixelBuffer) else {
-      return [Double](repeating: 0, count: binsCount)
-    }
-    let width = CVPixelBufferGetWidth(pixelBuffer)
-    let height = CVPixelBufferGetHeight(pixelBuffer)
-    let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
-    let step = max(1, Int(sqrt(Double(width * height) / 4096)))
     var peak = 0
-    for y in stride(from: 0, to: height, by: step) {
-      let row = base.advanced(by: y * bytesPerRow).assumingMemoryBound(to: UInt8.self)
-      for x in stride(from: 0, to: width, by: step) {
-        let offset = x * 4
-        let luma = (29 * Int(row[offset]) + 150 * Int(row[offset + 1]) + 77 * Int(row[offset + 2])) >> 8
-        let bin = min(63, luma >> 2)
-        bins[bin] += 1
-        peak = max(peak, bins[bin])
+
+    if CVPixelBufferIsPlanar(pixelBuffer),
+       CVPixelBufferGetPlaneCount(pixelBuffer) > 0,
+       let lumaBase = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) {
+      let width = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+      let height = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+      let bytesPerRow = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+      let step = max(1, Int(sqrt(Double(width * height) / 4096)))
+
+      for y in stride(from: 0, to: height, by: step) {
+        let row = lumaBase
+          .advanced(by: y * bytesPerRow)
+          .assumingMemoryBound(to: UInt8.self)
+        for x in stride(from: 0, to: width, by: step) {
+          let bin = min(63, Int(row[x]) >> 2)
+          bins[bin] += 1
+          peak = max(peak, bins[bin])
+        }
+      }
+    } else if let base = CVPixelBufferGetBaseAddress(pixelBuffer) {
+      let width = CVPixelBufferGetWidth(pixelBuffer)
+      let height = CVPixelBufferGetHeight(pixelBuffer)
+      let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+      let step = max(1, Int(sqrt(Double(width * height) / 4096)))
+
+      for y in stride(from: 0, to: height, by: step) {
+        let row = base.advanced(by: y * bytesPerRow).assumingMemoryBound(to: UInt8.self)
+        for x in stride(from: 0, to: width, by: step) {
+          let offset = x * 4
+          let luma = (29 * Int(row[offset]) + 150 * Int(row[offset + 1]) + 77 * Int(row[offset + 2])) >> 8
+          let bin = min(63, luma >> 2)
+          bins[bin] += 1
+          peak = max(peak, bins[bin])
+        }
       }
     }
     guard peak > 0 else { return [Double](repeating: 0, count: binsCount) }

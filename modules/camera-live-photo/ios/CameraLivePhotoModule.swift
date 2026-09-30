@@ -691,7 +691,7 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
         if self.session.canAddOutput(self.videoOutput) {
           self.videoOutput.alwaysDiscardsLateVideoFrames = true
           self.videoOutput.videoSettings = [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
           ]
           self.videoOutput.setSampleBufferDelegate(self, queue: self.smileQueue)
           self.session.addOutput(self.videoOutput)
