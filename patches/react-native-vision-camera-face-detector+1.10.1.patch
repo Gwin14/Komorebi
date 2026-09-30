@@ -262,7 +262,7 @@ diff --git a/node_modules/react-native-vision-camera-face-detector/src/Camera.ts
 +    const zebraNow = performance.now()
 +    if (
 +      zebraMaskPlugin && (zebraHighlightsEnabled || zebraShadowsEnabled) &&
-+      zebraNow - lastZebraUpdate.value >= 100
++      zebraNow - lastZebraUpdate.value >= 33
 +    ) {
 +      lastZebraUpdate.value = zebraNow
 +      try {

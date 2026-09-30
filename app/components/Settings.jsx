@@ -402,8 +402,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       {Platform.OS === "ios" && (
         <CustomToggle
           grouped
-          description="Listras vermelhas nas áreas com luminância acima de 98%."
-          label="Zebras — brancos perdidos"
+          label="Indicador de altas luzes"
           value={zebraHighlightsEnabled}
           onValueChange={setZebraHighlightsEnabled}
         />
@@ -411,8 +410,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       {Platform.OS === "ios" && (
         <CustomToggle
           grouped
-          description="Listras azuis nas áreas com luminância abaixo de 2%."
-          label="Zebras — sombras perdidas"
+          label="Indicador de sombras"
           value={zebraShadowsEnabled}
           onValueChange={setZebraShadowsEnabled}
         />

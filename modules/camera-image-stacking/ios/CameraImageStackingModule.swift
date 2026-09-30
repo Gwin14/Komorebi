@@ -1147,7 +1147,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     let now = Date()
 
     if (zebraHighlightsEnabled || zebraShadowsEnabled),
-       now.timeIntervalSince(lastZebraAt) >= 0.1 {
+       now.timeIntervalSince(lastZebraAt) >= 1.0 / 30.0 {
       lastZebraAt = now
       let image = zebraRenderer.makeImage(
         from: pixelBuffer,
