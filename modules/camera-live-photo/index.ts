@@ -14,6 +14,7 @@ export type LivePhotoCaptureOptions = {
 
 export type LivePhotoCameraViewProps = ViewProps & {
   deviceId?: string | null;
+  zoomFactor?: number;
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;

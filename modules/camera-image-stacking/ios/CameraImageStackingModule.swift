@@ -67,6 +67,9 @@ public final class CameraImageStackingModule: Module {
       Prop("deviceId") { (view, deviceId: String?) in
         view.deviceId = deviceId
       }
+      Prop("zoomFactor") { (view, zoomFactor: Double?) in
+        view.zoomFactor = CGFloat(zoomFactor ?? 1)
+      }
       Prop("isActive") { (view, active: Bool?) in
         view.isActive = active ?? true
       }
@@ -168,6 +171,9 @@ public final class ImageStackingCameraView: ExpoView {
 
   var deviceId: String? {
     didSet { updateSession() }
+  }
+  var zoomFactor: CGFloat = 1 {
+    didSet { controller.setZoomFactor(zoomFactor) }
   }
   var isActive = true {
     didSet { updateSession() }
@@ -409,6 +415,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
 
   private var device: AVCaptureDevice?
   private var configuredDeviceID: String?
+  private var requestedZoomFactor: CGFloat = 1
   private var requestedExposureBias: Float = 0
   private var ready = false
   private var busy = false
@@ -503,6 +510,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         self.session.addOutput(self.videoOutput)
 
         self.device = device
+        try self.applyRequestedZoom(to: device)
         self.configuredDeviceID = deviceId
         self.applyExposureBias(to: device)
         // The live renderer expects video buffers in display orientation.
@@ -523,6 +531,25 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         DispatchQueue.main.async { onError(error) }
       }
     }
+  }
+
+  func setZoomFactor(_ zoomFactor: CGFloat) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      self.requestedZoomFactor = zoomFactor
+      guard let device = self.device else { return }
+      try? self.applyRequestedZoom(to: device)
+    }
+  }
+
+  private func applyRequestedZoom(to device: AVCaptureDevice) throws {
+    let zoom = max(
+      device.minAvailableVideoZoomFactor,
+      min(device.maxAvailableVideoZoomFactor, requestedZoomFactor)
+    )
+    try device.lockForConfiguration()
+    defer { device.unlockForConfiguration() }
+    device.videoZoomFactor = zoom
   }
 
   func stopSession() {

@@ -21,6 +21,7 @@ export default function NativeCapturePreview({
   isActive = true,
   retroStyle,
   device,
+  zoomFactor = 1,
   flash,
   onCameraReady,
   gridVisible,
@@ -211,6 +212,7 @@ export default function NativeCapturePreview({
       <NativeCameraView
         style={nativeSurfaceStyle}
         deviceId={device.id}
+        zoomFactor={zoomFactor}
         flashMode={flash === "on" ? "on" : "off"}
         isActive={isActive}
         onInitialized={handleInitialized}

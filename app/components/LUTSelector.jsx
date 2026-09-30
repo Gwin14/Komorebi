@@ -10,6 +10,7 @@ import {
 import React from "react";
 import {
   Animated,
+  Easing,
   ScrollView,
   StyleSheet,
   Text,
@@ -194,6 +195,7 @@ export default function LUTSelector({
     Animated.timing(slideAnim, {
       toValue: visible ? 1 : 0,
       duration: 260,
+      easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, [slideAnim, visible]);

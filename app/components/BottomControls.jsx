@@ -19,6 +19,7 @@ import styles, { BOTTOM_CONTROLS_MARGIN } from "./BottomControls.styles";
 
 export default function BottomControls({
   controlsAnim,
+  displayedControl,
   activeControl,
   takePicture,
   onToggleFacing,
@@ -232,7 +233,13 @@ export default function BottomControls({
 
       {lenses.length > 1 && (
         <Animated.View
-          style={[styles.lensSlot, { opacity: shutterOpacity }]}
+          style={[
+            styles.lensSlot,
+            {
+              opacity: shutterOpacity,
+              transform: [{ translateY: shutterTranslate }],
+            },
+          ]}
           pointerEvents={
             !imageStackingCapturing &&
             (activeControl === "none" || activeControl === "manual")
@@ -240,14 +247,13 @@ export default function BottomControls({
               : "none"
           }
         >
-          {!imageStackingCapturing &&
-            (activeControl === "none" || activeControl === "manual") && (
+          {!imageStackingCapturing && (
             <LensSelector
               lenses={lenses}
               activeLensId={activeLensId}
               onSelectLens={onSelectLens}
             />
-            )}
+          )}
         </Animated.View>
       )}
 
@@ -265,7 +271,7 @@ export default function BottomControls({
             : "none"
         }
       >
-        {activeControl === "zoom" && (
+        {displayedControl === "zoom" && (
           <ExposureDialFinal
             value={zoom}
             onChange={(v) => setZoom(v)}
@@ -277,7 +283,7 @@ export default function BottomControls({
           />
         )}
 
-        {activeControl === "lut" && (
+        {displayedControl === "lut" && (
           <View style={styles.lutSelectorWrapper}>
             <LUTSelector
               selectedLutId={selectedLutId}

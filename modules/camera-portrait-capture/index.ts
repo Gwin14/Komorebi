@@ -16,6 +16,7 @@ export type PortraitCaptureOptions = {
 
 export type PortraitCameraViewProps = ViewProps & {
   deviceId?: string | null;
+  zoomFactor?: number;
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;

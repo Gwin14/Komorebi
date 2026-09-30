@@ -8,25 +8,31 @@ export default function useShutterSound() {
     let mounted = true;
 
     (async () => {
-      await Audio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        allowsRecordingIOS: false,
-      });
+      let sound = null;
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          allowsRecordingIOS: false,
+        });
 
-      const { sound } = await Audio.Sound.createAsync(
-        require("../../assets/sounds/shutter.wav"),
-        {
-          shouldPlay: false,
-          volume: 1.0,
-        },
-      );
+        ({ sound } = await Audio.Sound.createAsync(
+          require("../../assets/sounds/shutter.wav"),
+          {
+            shouldPlay: false,
+            volume: 1.0,
+          },
+        ));
 
-      // 🔥 AQUECE o áudio (remove o delay no primeiro play)
-      await sound.playAsync();
-      await sound.stopAsync();
-
-      if (mounted) {
-        soundRef.current = sound;
+        if (mounted) {
+          soundRef.current = sound;
+        } else {
+          await sound.unloadAsync();
+        }
+      } catch (error) {
+        await sound?.unloadAsync().catch(() => {});
+        if (mounted) {
+          console.warn("Não foi possível preparar o som do shutter", error);
+        }
       }
     })();
 

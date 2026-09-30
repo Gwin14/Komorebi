@@ -43,8 +43,8 @@ public class CameraManualControlsModule: Module {
         "minExposureDurationSeconds": CMTimeGetSeconds(format.minExposureDuration),
         "maxExposureDurationSeconds": CMTimeGetSeconds(format.maxExposureDuration),
         "supportsCustomExposure": device.isExposureModeSupported(.custom),
-        "supportsLockedWhiteBalance": device.isWhiteBalanceModeSupported(.locked),
-        "supportsLockedFocus": device.isFocusModeSupported(.locked),
+        "supportsLockedWhiteBalance": device.isLockingWhiteBalanceWithCustomDeviceGainsSupported,
+        "supportsLockedFocus": device.isLockingFocusWithCustomLensPositionSupported,
         "maxWhiteBalanceGain": Double(device.maxWhiteBalanceGain),
         "minFocusLensPosition": 0.0,
         "maxFocusLensPosition": 1.0,
@@ -99,8 +99,8 @@ public class CameraManualControlsModule: Module {
     AsyncFunction("setManualWhiteBalance") { (deviceId: String, temperatureKelvin: Double, tint: Double) async throws in
       let device = try Self.findDevice(deviceId)
 
-      guard device.isWhiteBalanceModeSupported(.locked) else {
-        throw ManualControlsError.unsupported("Locked white balance not supported on this device")
+      guard device.isLockingWhiteBalanceWithCustomDeviceGainsSupported else {
+        throw ManualControlsError.unsupported("Custom white balance gains are not supported on this device")
       }
 
       let tempAndTint = AVCaptureDevice.WhiteBalanceTemperatureAndTintValues(
@@ -114,12 +114,12 @@ public class CameraManualControlsModule: Module {
       gains.blueGain = max(1.0, min(maxGain, gains.blueGain))
 
       try device.lockForConfiguration()
+      defer { device.unlockForConfiguration() }
       await withCheckedContinuation { continuation in
         device.setWhiteBalanceModeLocked(with: gains) { _ in
           continuation.resume()
         }
       }
-      device.unlockForConfiguration()
     }
 
     AsyncFunction("setAutoWhiteBalance") { (deviceId: String) in
@@ -138,19 +138,19 @@ public class CameraManualControlsModule: Module {
     AsyncFunction("setManualFocus") { (deviceId: String, lensPosition: Double) async throws in
       let device = try Self.findDevice(deviceId)
 
-      guard device.isFocusModeSupported(.locked) else {
-        throw ManualControlsError.unsupported("Locked focus not supported on this device")
+      guard device.isLockingFocusWithCustomLensPositionSupported else {
+        throw ManualControlsError.unsupported("Custom focus lens position is not supported on this device")
       }
 
       let clampedPosition = Float(max(0.0, min(1.0, lensPosition)))
 
       try device.lockForConfiguration()
+      defer { device.unlockForConfiguration() }
       await withCheckedContinuation { continuation in
         device.setFocusModeLocked(lensPosition: clampedPosition) { _ in
           continuation.resume()
         }
       }
-      device.unlockForConfiguration()
     }
 
     AsyncFunction("focusAtPoint") { (deviceId: String, pointX: Double, pointY: Double) in
@@ -243,7 +243,9 @@ public class CameraManualControlsModule: Module {
       guard index < constituentBaseFactors.count else { continue }
       let baseFactor = constituentBaseFactors[index]
       Self.appendZoomPreset(
-        zoomFactor: baseFactor,
+        virtualZoomFactor: baseFactor,
+        deviceZoomFactor: 1.0,
+        deviceId: constituent.uniqueID,
         source: "physical",
         displayMultiplier: displayMultiplier,
         minZoom: minZoom,
@@ -254,7 +256,9 @@ public class CameraManualControlsModule: Module {
       if #available(iOS 16.0, *) {
         for secondaryFactor in constituent.activeFormat.secondaryNativeResolutionZoomFactors {
           Self.appendZoomPreset(
-            zoomFactor: baseFactor * Double(secondaryFactor),
+            virtualZoomFactor: baseFactor * Double(secondaryFactor),
+            deviceZoomFactor: Double(secondaryFactor),
+            deviceId: constituent.uniqueID,
             source: "secondary-native",
             displayMultiplier: displayMultiplier,
             minZoom: minZoom,
@@ -266,7 +270,7 @@ public class CameraManualControlsModule: Module {
     }
 
     presets.sort {
-      (($0["zoomFactor"] as? Double) ?? 0) < (($1["zoomFactor"] as? Double) ?? 0)
+      (($0["displayZoom"] as? Double) ?? 0) < (($1["displayZoom"] as? Double) ?? 0)
     }
 
     return [
@@ -279,25 +283,31 @@ public class CameraManualControlsModule: Module {
   }
 
   private static func appendZoomPreset(
-    zoomFactor: Double,
+    virtualZoomFactor: Double,
+    deviceZoomFactor: Double,
+    deviceId: String,
     source: String,
     displayMultiplier: Double,
     minZoom: Double,
     maxZoom: Double,
     to presets: inout [[String: Any]]
   ) {
-    guard zoomFactor.isFinite,
-          zoomFactor >= minZoom - 0.001,
-          zoomFactor <= maxZoom + 0.001 else { return }
+    guard virtualZoomFactor.isFinite,
+          deviceZoomFactor.isFinite,
+          virtualZoomFactor >= minZoom - 0.001,
+          virtualZoomFactor <= maxZoom + 0.001 else { return }
+
+    let displayZoom = virtualZoomFactor * displayMultiplier
 
     let alreadyPresent = presets.contains {
-      abs((($0["zoomFactor"] as? Double) ?? 0) - zoomFactor) < 0.01
+      abs((($0["displayZoom"] as? Double) ?? 0) - displayZoom) < 0.01
     }
     guard !alreadyPresent else { return }
 
     presets.append([
-      "zoomFactor": zoomFactor,
-      "displayZoom": zoomFactor * displayMultiplier,
+      "deviceId": deviceId,
+      "zoomFactor": deviceZoomFactor,
+      "displayZoom": displayZoom,
       "source": source,
     ])
   }

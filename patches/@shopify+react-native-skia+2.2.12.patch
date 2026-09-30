@@ -13,3 +13,93 @@ diff --git a/node_modules/@shopify/react-native-skia/cpp/api/JsiSkHostObjects.h 
      return jsi::Value::undefined();
    }
  
+diff --git a/node_modules/@shopify/react-native-skia/cpp/rnskia/RNSkJsiViewApi.h b/node_modules/@shopify/react-native-skia/cpp/rnskia/RNSkJsiViewApi.h
+--- a/node_modules/@shopify/react-native-skia/cpp/rnskia/RNSkJsiViewApi.h
++++ b/node_modules/@shopify/react-native-skia/cpp/rnskia/RNSkJsiViewApi.h
+@@ -6,6 +6,7 @@
+ #include <shared_mutex>
+ #include <string>
+ #include <unordered_map>
++#include <unordered_set>
+ #include <utility>
+ #include <vector>
+ 
+@@ -38,20 +39,30 @@
+   void removeViewInfo(size_t id) {
+     std::unique_lock<std::shared_mutex> lock(_mutex);
+     _registry.erase(id);
++    // A worklet can publish one last property update while its Canvas is
++    // unmounting. Keep a tombstone so that late update cannot recreate an
++    // orphaned registry entry or dereference the detached view.
++    _unregistered.insert(id);
+   }
+ 
+-  // Execute a function while holding the registry lock
++  // Execute a function while holding the registry lock. Registration paths
++  // explicitly revive an id; late updates receive a transient empty entry.
+   template <typename F>
+-  auto withViewInfo(size_t id, F &&func)
++  auto withViewInfo(size_t id, F &&func, bool revive = false)
+       -> decltype(func(std::shared_ptr<RNSkViewInfo>())) {
+     std::unique_lock<std::shared_mutex> lock(_mutex);
++    if (revive) {
++      _unregistered.erase(id);
++    }
+     auto it = _registry.find(id);
+     std::shared_ptr<RNSkViewInfo> info;
+     if (it != _registry.end()) {
+       info = it->second;
+     } else {
+       info = std::make_shared<RNSkViewInfo>();
+-      _registry[id] = info;
++      if (_unregistered.find(id) == _unregistered.end()) {
++        _registry[id] = info;
++      }
+     }
+     return func(info);
+   }
+@@ -59,12 +70,14 @@
+   void clear() {
+     std::unique_lock<std::shared_mutex> lock(_mutex);
+     _registry.clear();
++    _unregistered.clear();
+   }
+ 
+ private:
+   ViewRegistry() = default;
+   mutable std::shared_mutex _mutex;
+   std::unordered_map<size_t, std::shared_ptr<RNSkViewInfo>> _registry;
++  std::unordered_set<size_t> _unregistered;
+ };
+ 
+ class RNSkJsiViewApi : public RNJsi::JsiHostObject,
+@@ -103,6 +116,9 @@
+         nativeId, [&](std::shared_ptr<RNSkViewInfo> info) {
+           auto name = arguments[1].asString(runtime).utf8(runtime);
+           if (name == "onSize" && isSharedValue(runtime, arguments[2])) {
++            if (info->view == nullptr) {
++              return nullptr;
++            }
+             jsi::Object size(runtime);
+             auto pd = _platformContext->getPixelDensity();
+             size.setProperty(runtime, "width",
+@@ -309,7 +325,8 @@
+           info->view->setJsiProperties(info->props);
+           info->props.clear();
+           return nullptr;
+-        });
++        },
++        /* revive= */ true);
+   }
+ 
+   /**
+@@ -338,7 +355,8 @@
+             info->view = view; // Set to nullptr
+           }
+           return nullptr;
+-        });
++        },
++        /* revive= */ view != nullptr);
+   }
+ 
+ private:

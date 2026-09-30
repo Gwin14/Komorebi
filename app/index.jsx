@@ -267,7 +267,16 @@ export default function App() {
     ],
   );
 
-  const controlsAnim = useControlsAnimation(activeControl);
+  const { controlsAnim, displayedControl } =
+    useControlsAnimation(activeControl);
+  const normalControlsTranslate = controlsAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 100],
+  });
+  const normalControlsOpacity = controlsAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+  });
   const { animateShutter, shutterAnim } = useShutterAnimation();
   const zoomRef = useRef(zoom);
   const autoZoomAnimationRef = useRef(null);
@@ -903,6 +912,7 @@ export default function App() {
                 }
                 retroStyle={retroStyle}
                 device={activeLens?.device}
+                zoomFactor={activeLens?.zoomFactor}
                 flash={flash}
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
@@ -991,27 +1001,39 @@ export default function App() {
         </View>
       )}
 
-      <View style={styles.adjustmentControlsSlot}>
-        {(activeControl === "none" || activeControl === "manual") &&
-          (manual.manualMode === "manual" && !imageStacking.enabled ? (
-            <ManualControlsPanel
-              manual={manual}
-              topBarBelow={topBarBelow}
-              exposure={exposure}
-              setExposure={setExposure}
-            />
-          ) : (
-            <ExposureSlider
-              exposure={exposure}
-              setExposure={setExposure}
-              topBarBelow={topBarBelow}
-              activeControl={activeControl}
-            />
-          ))}
-      </View>
+      <Animated.View
+        style={[
+          styles.adjustmentControlsSlot,
+          {
+            opacity: normalControlsOpacity,
+            transform: [{ translateY: normalControlsTranslate }],
+          },
+        ]}
+        pointerEvents={
+          activeControl === "none" || activeControl === "manual"
+            ? "auto"
+            : "none"
+        }
+      >
+        {manual.manualMode === "manual" && !imageStacking.enabled ? (
+          <ManualControlsPanel
+            manual={manual}
+            topBarBelow={topBarBelow}
+            exposure={exposure}
+            setExposure={setExposure}
+          />
+        ) : (
+          <ExposureSlider
+            exposure={exposure}
+            setExposure={setExposure}
+            topBarBelow={topBarBelow}
+          />
+        )}
+      </Animated.View>
 
       <BottomControls
         controlsAnim={controlsAnim}
+        displayedControl={displayedControl}
         activeControl={activeControl}
         takePicture={handleTakePicture}
         onToggleFacing={handleToggleFacing}

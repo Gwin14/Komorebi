@@ -106,6 +106,10 @@ public class CameraPortraitCaptureModule: Module {
         view.deviceId = deviceId
       }
 
+      Prop("zoomFactor") { (view, zoomFactor: Double?) in
+        view.zoomFactor = CGFloat(zoomFactor ?? 1)
+      }
+
       Prop("flashMode") { (view, flashMode: String?) in
         view.flashMode = flashMode ?? "off"
       }
@@ -562,6 +566,10 @@ public final class PortraitCameraView: ExpoView {
     }
   }
 
+  var zoomFactor: CGFloat = 1 {
+    didSet { controller.setZoomFactor(zoomFactor) }
+  }
+
   var flashMode: String = "off"
 
   var smileDetectionEnabled: Bool = false {
@@ -786,6 +794,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   private let sessionQueue = DispatchQueue(label: "dev.komorebi.portrait-capture.session")
   private var configuredRequestedDeviceId: String?
   private var activeCaptureDevice: AVCaptureDevice?
+  private var requestedZoomFactor: CGFloat = 1
   private var activeSupport: CameraPortraitCaptureModule.PortraitSupport?
   private var isSessionReady = false
   private var inFlightDelegates: [PortraitPhotoCaptureDelegate] = []
@@ -829,6 +838,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
           throw CameraPortraitCaptureModule.PortraitCaptureError.cannotAddInput
         }
         self.session.addInput(input)
+        self.activeCaptureDevice = selection.device
 
         guard self.session.canAddOutput(self.output) else {
           throw CameraPortraitCaptureModule.PortraitCaptureError.cannotAddOutput
@@ -856,6 +866,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         self.output.isDepthDataDeliveryEnabled = configuredSupport.supportsDepthData
         self.output.isPortraitEffectsMatteDeliveryEnabled = configuredSupport.supportsPortraitEffectsMatte
 
+        try self.applyRequestedZoom(to: selection.device)
         self.configuredRequestedDeviceId = requestedDeviceId
         self.activeCaptureDevice = selection.device
         self.activeSupport = configuredSupport
@@ -879,6 +890,25 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         }
       }
     }
+  }
+
+  func setZoomFactor(_ zoomFactor: CGFloat) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      self.requestedZoomFactor = zoomFactor
+      guard let device = self.activeCaptureDevice else { return }
+      try? self.applyRequestedZoom(to: device)
+    }
+  }
+
+  private func applyRequestedZoom(to device: AVCaptureDevice) throws {
+    let zoom = max(
+      device.minAvailableVideoZoomFactor,
+      min(device.maxAvailableVideoZoomFactor, requestedZoomFactor)
+    )
+    try device.lockForConfiguration()
+    defer { device.unlockForConfiguration() }
+    device.videoZoomFactor = zoom
   }
 
   func stop() {

@@ -14,6 +14,7 @@ export type CameraCapabilities = {
 };
 
 export type CameraZoomPreset = {
+  deviceId: string;
   zoomFactor: number;
   displayZoom: number;
   source: "physical" | "secondary-native";

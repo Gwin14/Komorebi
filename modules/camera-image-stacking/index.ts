@@ -66,6 +66,7 @@ export type ImageStackingResult = {
 
 export type ImageStackingCameraViewProps = ViewProps & {
   deviceId?: string | null;
+  zoomFactor?: number;
   isActive?: boolean;
   histogramEnabled?: boolean;
   zebraHighlightsEnabled?: boolean;

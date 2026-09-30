@@ -57,7 +57,7 @@ const formatZoomLabel = (displayZoom) => {
 };
 
 const makeZoomPreset = (device, preset) => ({
-  id: `zoom:${preset.zoomFactor.toFixed(4)}`,
+  id: `zoom:${device.id}:${preset.displayZoom.toFixed(4)}`,
   label: formatZoomLabel(preset.displayZoom),
   type:
     Math.abs(preset.displayZoom - 1) < 0.05
@@ -66,18 +66,18 @@ const makeZoomPreset = (device, preset) => ({
         ? "ultra-wide"
         : "telephoto",
   device,
-  order: preset.zoomFactor,
+  order: preset.displayZoom,
   zoomFactor: preset.zoomFactor,
   displayZoom: preset.displayZoom,
   source: preset.source,
 });
 
 const dedupePresets = (presets) => {
-  const sorted = [...presets].sort((a, b) => a.zoomFactor - b.zoomFactor);
+  const sorted = [...presets].sort((a, b) => a.displayZoom - b.displayZoom);
   return sorted.filter(
     (preset, index) =>
       index === 0 ||
-      Math.abs(preset.zoomFactor - sorted[index - 1].zoomFactor) >= 0.01,
+      Math.abs(preset.displayZoom - sorted[index - 1].displayZoom) >= 0.01,
   );
 };
 
@@ -101,25 +101,6 @@ const normalizeIOSPresets = (presets) => {
 
   return uniquePresets.filter(
     (preset) => preset.displayZoom >= 0.95 || preset === widestPreset,
-  );
-};
-
-const buildIOSFallbackPresets = (device) => {
-  const neutralZoom = Math.max(device.minZoom, device.neutralZoom || 1);
-  const displayMultiplier = 1 / neutralZoom;
-  const factors = [device.minZoom, neutralZoom];
-
-  return dedupePresets(
-    factors
-      .filter(
-        (zoomFactor) =>
-          Number.isFinite(zoomFactor) && zoomFactor <= device.maxZoom,
-      )
-      .map((zoomFactor) => ({
-        zoomFactor,
-        displayZoom: zoomFactor * displayMultiplier,
-        source: "physical",
-      })),
   );
 };
 
@@ -162,19 +143,6 @@ export function usePhysicalCameraDevices(facing = "back") {
   }, [refreshZoomCapabilities]);
 
   const lenses = useMemo(() => {
-    if (Platform.OS === "ios" && iosDevice) {
-      const nativePresets =
-        iosZoomCapabilities?.deviceId === iosDevice.id
-          ? iosZoomCapabilities.presets
-          : null;
-      const presets =
-        nativePresets?.length > 0
-          ? normalizeIOSPresets(nativePresets)
-          : buildIOSFallbackPresets(iosDevice);
-
-      return presets.map((preset) => makeZoomPreset(iosDevice, preset));
-    }
-
     const lensMap = new Map();
 
     devices
@@ -207,6 +175,25 @@ export function usePhysicalCameraDevices(facing = "back") {
     const physicalLenses = Array.from(lensMap.values())
       .map(({ score, ...lens }) => lens)
       .sort((a, b) => a.order - b.order);
+
+    if (
+      Platform.OS === "ios" &&
+      iosDevice &&
+      iosZoomCapabilities?.deviceId === iosDevice.id &&
+      iosZoomCapabilities.presets?.length > 0
+    ) {
+      const presets = normalizeIOSPresets(iosZoomCapabilities.presets)
+        .map((preset) => {
+          const presetDevice = devices.find(
+            (device) => device.id === preset.deviceId,
+          );
+          if (!presetDevice) return null;
+          return makeZoomPreset(presetDevice, preset);
+        })
+        .filter(Boolean);
+
+      if (presets.length > 0) return presets;
+    }
 
     if (physicalLenses.length > 0) return physicalLenses;
 

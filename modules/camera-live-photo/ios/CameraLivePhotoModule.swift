@@ -100,6 +100,10 @@ public class CameraLivePhotoModule: Module {
         view.deviceId = deviceId
       }
 
+      Prop("zoomFactor") { (view, zoomFactor: Double?) in
+        view.zoomFactor = CGFloat(zoomFactor ?? 1)
+      }
+
       Prop("flashMode") { (view, flashMode: String?) in
         view.flashMode = flashMode ?? "off"
       }
@@ -417,6 +421,10 @@ public final class LivePhotoCameraView: ExpoView {
     }
   }
 
+  var zoomFactor: CGFloat = 1 {
+    didSet { controller.setZoomFactor(zoomFactor) }
+  }
+
   var flashMode: String = "off"
 
   var smileDetectionEnabled: Bool = false {
@@ -634,6 +642,8 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
   private var lastHistogramAt = Date.distantPast
   private let sessionQueue = DispatchQueue(label: "dev.komorebi.live-photo.session")
   private var configuredDeviceId: String?
+  private var activeDevice: AVCaptureDevice?
+  private var requestedZoomFactor: CGFloat = 1
   private var isSessionReady = false
   private var inFlightDelegates: [LivePhotoCaptureDelegate] = []
 
@@ -671,6 +681,7 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
           throw CameraLivePhotoModule.LivePhotoError.cannotAddInput
         }
         self.session.addInput(input)
+        self.activeDevice = device
 
         guard self.session.canAddOutput(self.output) else {
           throw CameraLivePhotoModule.LivePhotoError.cannotAddOutput
@@ -691,6 +702,7 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
         }
 
         self.output.isLivePhotoCaptureEnabled = true
+        try self.applyRequestedZoom(to: device)
         self.configuredDeviceId = deviceId
         self.activeDevicePosition = device.position
         self.isSessionReady = true
@@ -705,12 +717,32 @@ private final class LivePhotoCameraController: NSObject, AVCaptureVideoDataOutpu
         }
         self.isSessionReady = false
         self.configuredDeviceId = nil
+        self.activeDevice = nil
         print("[LivePhotoNative] configure failed deviceId=\(deviceId) error=\(error.localizedDescription)")
         DispatchQueue.main.async {
           onError(error)
         }
       }
     }
+  }
+
+  func setZoomFactor(_ zoomFactor: CGFloat) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      self.requestedZoomFactor = zoomFactor
+      guard let device = self.activeDevice else { return }
+      try? self.applyRequestedZoom(to: device)
+    }
+  }
+
+  private func applyRequestedZoom(to device: AVCaptureDevice) throws {
+    let zoom = max(
+      device.minAvailableVideoZoomFactor,
+      min(device.maxAvailableVideoZoomFactor, requestedZoomFactor)
+    )
+    try device.lockForConfiguration()
+    defer { device.unlockForConfiguration() }
+    device.videoZoomFactor = zoom
   }
 
   func stop() {
