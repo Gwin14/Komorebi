@@ -1,5 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Platform, Text, View } from "react-native";
+import { Alert, Animated, Platform, Pressable, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -82,6 +83,19 @@ export default function App() {
     setProjects,
   } = useSettings();
 
+  const {
+    cameraPermission,
+    hasMediaPermission,
+    mediaPermission,
+    locationPermission,
+    lutsLoaded,
+    requestCameraPermission,
+    requestMediaPermission,
+    requestLocationPermission,
+  } = useCameraBootstrap({ customLuts });
+  const cameraFeaturesEnabled =
+    !firstTime && cameraPermission === "granted";
+
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(1);
@@ -128,13 +142,14 @@ export default function App() {
     activeLensId,
     setActiveLensId,
     refreshZoomCapabilities,
-  } = usePhysicalCameraDevices(facing);
+  } = usePhysicalCameraDevices(facing, cameraFeaturesEnabled);
 
-  const manual = useManualCameraControls(activeLens?.device);
-  const rawCapture = useRawCapture(activeLens?.device);
-  const livePhoto = useLivePhotoCapture(activeLens?.device);
-  const portraitCapture = usePortraitCapture(activeLens?.device);
-  const imageStacking = useImageStacking(activeLens?.device);
+  const captureDevice = cameraFeaturesEnabled ? activeLens?.device : null;
+  const manual = useManualCameraControls(captureDevice);
+  const rawCapture = useRawCapture(captureDevice);
+  const livePhoto = useLivePhotoCapture(captureDevice);
+  const portraitCapture = usePortraitCapture(captureDevice);
+  const imageStacking = useImageStacking(captureDevice);
   const compositionModel = useCompositionModel();
   const intelligentModelReady = compositionModel.status.state === "ready";
   const appleStylesCompatibility = useMemo(
@@ -243,8 +258,18 @@ export default function App() {
     [],
   );
 
-  const { cameraPermission, hasMediaPermission, lutsLoaded } =
-    useCameraBootstrap({ customLuts, firstTime });
+  const handleEssentialPermission = useCallback(async () => {
+    if (cameraPermission !== "granted") {
+      await requestCameraPermission();
+      return;
+    }
+    if (!hasMediaPermission) await requestMediaPermission();
+  }, [
+    cameraPermission,
+    hasMediaPermission,
+    requestCameraPermission,
+    requestMediaPermission,
+  ]);
 
   const effectPreview = useMemo(
     () => ({
@@ -891,7 +916,18 @@ export default function App() {
       </View>
 
       {/* {isProcessing && <View style={styles.processingOverlay} />} */}
-      {firstTime && <Welcome />}
+      {firstTime && (
+        <Welcome
+          permissions={{
+            cameraPermission,
+            mediaPermission,
+            locationPermission,
+            requestCameraPermission,
+            requestMediaPermission,
+            requestLocationPermission,
+          }}
+        />
+      )}
 
       {!topBarBelow && <TopBar {...topBarProps} />}
 
@@ -969,6 +1005,34 @@ export default function App() {
                 onCameraStopped={handleCameraStopped}
               />
             )}
+            {hasMediaPermission === false && (
+              <View style={styles.permissionBanner}>
+                <View style={styles.permissionBannerIcon}>
+                  <Ionicons name="images-outline" size={22} color="#ffb21d" />
+                </View>
+                <View style={styles.permissionBannerCopy}>
+                  <Text style={styles.permissionBannerTitle}>
+                    Permita acesso às fotos
+                  </Text>
+                  <Text style={styles.permissionBannerText}>
+                    O Komorebi precisa salvar as fotos que você fizer.
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Permitir acesso à biblioteca de fotos"
+                  onPress={requestMediaPermission}
+                  style={({ pressed }) => [
+                    styles.permissionButtonCompact,
+                    pressed && styles.permissionButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.permissionButtonCompactText}>
+                    Permitir
+                  </Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         </GestureDetector>
       )}
@@ -990,8 +1054,21 @@ export default function App() {
             </Text>
 
             <Text style={styles.permissionText}>
-              Autorize o acesso à câmera para usar o app.
+              Câmera e biblioteca de fotos são necessárias para fotografar e
+              salvar suas imagens.
             </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Conceder permissões essenciais"
+              onPress={handleEssentialPermission}
+              style={({ pressed }) => [
+                styles.permissionButton,
+                pressed && styles.permissionButtonPressed,
+              ]}
+            >
+              <Ionicons name="shield-checkmark-outline" size={19} color="#111" />
+              <Text style={styles.permissionButtonText}>Conceder acesso</Text>
+            </Pressable>
           </View>
         )}
 

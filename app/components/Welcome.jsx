@@ -65,11 +65,18 @@ const FLOW = [
       "Selecione até 8 atalhos e organize a ordem em que eles aparecem.",
   },
   {
+    id: "permissions",
+    eyebrow: "SUAS PERMISSÕES",
+    title: "Você decide o que compartilhar.",
+    description:
+      "Libere cada recurso quando estiver pronto. Câmera e biblioteca são essenciais para fotografar e salvar.",
+  },
+  {
     id: "ready",
     eyebrow: "FEITO PARA FOTOGRAFAR",
     title: "Tudo pronto para o próximo instante.",
     description:
-      "Ao continuar, pediremos acesso à câmera. Localização e outros recursos continuam sob o seu controle.",
+      "Suas escolhas continuam sob seu controle e podem ser alteradas nos Ajustes do dispositivo.",
   },
 ];
 
@@ -165,6 +172,141 @@ function ReadyVisual() {
         ))}
       </View>
     </View>
+  );
+}
+
+const PERMISSION_ITEMS = [
+  {
+    id: "camera",
+    icon: "camera-outline",
+    title: "Câmera",
+    description: "Essencial para visualizar a cena e fotografar.",
+    essential: true,
+  },
+  {
+    id: "media",
+    icon: "images-outline",
+    title: "Biblioteca de fotos",
+    description: "Essencial para salvar suas fotos e exibi-las na galeria.",
+    essential: true,
+  },
+  {
+    id: "location",
+    icon: "location-outline",
+    title: "Localização",
+    description: "Opcional. Adiciona o local da captura aos dados da foto.",
+    essential: false,
+  },
+];
+
+function PermissionsStep({ permissions }) {
+  const [requesting, setRequesting] = useState(null);
+  const statusById = {
+    camera: permissions.cameraPermission,
+    media: permissions.mediaPermission?.status,
+    location: permissions.locationPermission?.status,
+  };
+  const requestById = {
+    camera: permissions.requestCameraPermission,
+    media: permissions.requestMediaPermission,
+    location: permissions.requestLocationPermission,
+  };
+
+  const handlePermission = async (permissionId) => {
+    if (statusById[permissionId] === "granted" || requesting) return;
+    setRequesting(permissionId);
+    try {
+      await requestById[permissionId]();
+    } finally {
+      setRequesting(null);
+    }
+  };
+
+  return (
+    <ScrollView
+      nestedScrollEnabled
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={styles.permissionsScrollContent}
+      style={styles.customizerScroll}
+    >
+      <View style={styles.permissionList}>
+        {PERMISSION_ITEMS.map((item) => {
+          const status = statusById[item.id];
+          const granted = status === "granted";
+          const denied = status === "denied" || status === "restricted";
+          const isRequesting = requesting === item.id;
+
+          return (
+            <Pressable
+              key={item.id}
+              accessibilityRole="button"
+              accessibilityLabel={
+                granted
+                  ? `${item.title} permitida`
+                  : `Permitir ${item.title.toLowerCase()}`
+              }
+              disabled={granted || Boolean(requesting)}
+              onPress={() => handlePermission(item.id)}
+              style={({ pressed }) => [
+                styles.permissionCard,
+                granted && styles.permissionCardGranted,
+                pressed && styles.buttonPressed,
+              ]}
+            >
+              <View
+                style={[
+                  styles.permissionIcon,
+                  granted && styles.permissionIconGranted,
+                ]}
+              >
+                <Ionicons
+                  name={granted ? "checkmark" : item.icon}
+                  size={22}
+                  color={granted ? "#0b160e" : "#ffb21d"}
+                />
+              </View>
+              <View style={styles.permissionCopy}>
+                <View style={styles.permissionTitleRow}>
+                  <Text style={styles.permissionCardTitle}>{item.title}</Text>
+                  <Text
+                    style={[
+                      styles.permissionBadge,
+                      !item.essential && styles.permissionBadgeOptional,
+                    ]}
+                  >
+                    {item.essential ? "ESSENCIAL" : "OPCIONAL"}
+                  </Text>
+                </View>
+                <Text style={styles.permissionCardDescription}>
+                  {item.description}
+                </Text>
+                <Text
+                  style={[
+                    styles.permissionStatus,
+                    granted && styles.permissionStatusGranted,
+                  ]}
+                >
+                  {isRequesting
+                    ? "Solicitando…"
+                    : granted
+                      ? "Permitido"
+                      : denied
+                        ? "Não permitido · toque para abrir Ajustes"
+                        : "Toque para permitir"}
+                </Text>
+              </View>
+              {!granted && (
+                <Ionicons name="chevron-forward" size={20} color="#777" />
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.permissionsNote}>
+        Você pode continuar sem conceder tudo e alterar essas escolhas depois
+        nos Ajustes do dispositivo.
+      </Text>
+    </ScrollView>
   );
 }
 
@@ -363,8 +505,19 @@ function TopBarCustomizer({ controls, onChange }) {
   );
 }
 
-function Slide({ item, width, draft, onDraftChange, onControlsChange }) {
-  if (item.id === "viewfinder" || item.id === "topbar") {
+function Slide({
+  item,
+  width,
+  draft,
+  onDraftChange,
+  onControlsChange,
+  permissions,
+}) {
+  if (
+    item.id === "viewfinder" ||
+    item.id === "topbar" ||
+    item.id === "permissions"
+  ) {
     return (
       <LinearGradient
         colors={["#1b1208", "#080706", "#000000"]}
@@ -377,11 +530,13 @@ function Slide({ item, width, draft, onDraftChange, onControlsChange }) {
         </View>
         {item.id === "viewfinder" ? (
           <ViewfinderCustomizer draft={draft} onChange={onDraftChange} />
-        ) : (
+        ) : item.id === "topbar" ? (
           <TopBarCustomizer
             controls={draft.topBarControls}
             onChange={onControlsChange}
           />
+        ) : (
+          <PermissionsStep permissions={permissions} />
         )}
       </LinearGradient>
     );
@@ -435,7 +590,7 @@ function Slide({ item, width, draft, onDraftChange, onControlsChange }) {
   );
 }
 
-export default function Welcome() {
+export default function Welcome({ permissions }) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef(null);
@@ -581,6 +736,7 @@ export default function Welcome() {
                 onControlsChange={(controls) =>
                   updateDraft("topBarControls", controls)
                 }
+                permissions={permissions}
               />
             ))}
           </ScrollView>

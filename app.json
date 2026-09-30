@@ -15,8 +15,7 @@
       "infoPlist": {
         "LSRequiresIPhoneOS": true,
         "UIRequiredDeviceCapabilities": ["camera"],
-        "NSCameraUsageDescription": "Precisamos da câmera para tirar fotos.",
-        "NSMicrophoneUsageDescription": "Precisamos do microfone para gravar vídeos."
+        "NSCameraUsageDescription": "Precisamos da câmera para tirar fotos."
       },
       "appleTeamId": "ZHVJ9S93V4"
     },
@@ -32,7 +31,6 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.READ_MEDIA_IMAGES",
@@ -40,8 +38,7 @@
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
-        "android.permission.ACCESS_MEDIA_LOCATION",
-        "android.permission.READ_MEDIA_AUDIO"
+        "android.permission.ACCESS_MEDIA_LOCATION"
       ],
       "package": "br.dev.fabiosantos.komorebi"
     },
@@ -56,13 +53,27 @@
         }
       ],
       ["react-native-vision-camera"],
+      [
+        "expo-camera",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": false
+        }
+      ],
       "expo-asset",
       [
         "expo-media-library",
         {
           "photosPermission": "Permitir que o Komorebi acesse suas fotos.",
           "savePhotosPermission": "Permitir que o Komorebi salve fotos.",
-          "isAccessMediaLocationEnabled": true
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": ["photo", "video"]
         }
       ],
       [

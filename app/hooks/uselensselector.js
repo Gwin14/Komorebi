@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
-import { useCameraDevices } from "react-native-vision-camera";
+import { Camera } from "react-native-vision-camera";
 import { getCameraZoomCapabilities } from "../../modules/camera-manual-controls";
 
 const PHYSICAL_DEVICE_META = {
@@ -104,10 +104,21 @@ const normalizeIOSPresets = (presets) => {
   );
 };
 
-export function usePhysicalCameraDevices(facing = "back") {
-  const devices = useCameraDevices();
+export function usePhysicalCameraDevices(facing = "back", enabled = true) {
+  const [devices, setDevices] = useState([]);
   const [activeLensId, setActiveLensId] = useState(null);
   const [iosZoomCapabilities, setIOSZoomCapabilities] = useState(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      setDevices([]);
+      return undefined;
+    }
+
+    setDevices(Camera.getAvailableCameraDevices());
+    const subscription = Camera.addCameraDevicesChangedListener(setDevices);
+    return () => subscription.remove();
+  }, [enabled]);
 
   const position = facing === "back" ? "back" : "front";
   const iosDevice = useMemo(() => {
@@ -123,7 +134,7 @@ export function usePhysicalCameraDevices(facing = "back") {
   }, [devices, position]);
 
   const refreshZoomCapabilities = useCallback(async () => {
-    if (Platform.OS !== "ios" || !iosDevice?.id) return null;
+    if (!enabled || Platform.OS !== "ios" || !iosDevice?.id) return null;
 
     try {
       const capabilities = await getCameraZoomCapabilities(iosDevice.id);
@@ -135,7 +146,7 @@ export function usePhysicalCameraDevices(facing = "back") {
       console.warn("Não foi possível ler os fatores nativos de zoom:", error);
       return null;
     }
-  }, [iosDevice?.id]);
+  }, [enabled, iosDevice?.id]);
 
   useEffect(() => {
     setIOSZoomCapabilities(null);
