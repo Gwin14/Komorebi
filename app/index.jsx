@@ -1,7 +1,7 @@
 import { getHeifPlusPolicy } from "./utils/heifPlusSettings";
 import { isHeifPlusAvailable } from "../modules/camera-raw-capture";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Animated, Platform, Pressable, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -800,9 +800,11 @@ export default function App() {
     onCameraReady(cameraRef, setPictureSize, setCameraReady);
   }, [nativeCaptureMode, refreshZoomCapabilities]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Reset before native readiness events arrive. RAW is a per-photo option;
+    // toggling it may leave the session unchanged and emit no new ready event.
     setCameraReady(false);
-  }, [activeLens?.device?.id, nativeCaptureMode, rawCapture.rawModeEnabled]);
+  }, [activeLens?.device?.id, nativeCaptureMode]);
 
   useEffect(() => {
     if (!rawCapture.rawModeEnabled) return;

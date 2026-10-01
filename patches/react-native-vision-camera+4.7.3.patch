@@ -54,7 +54,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Conf
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-@@ -39,7 +39,41 @@
+@@ -39,19 +39,81 @@
        VisionLogger.log(level: .info, message: "Capturing photo...")
 
        // Create photo settings
@@ -97,7 +97,22 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Phot
 
        // set photo resolution
        if #available(iOS 16.0, *) {
-@@ -50,8 +84,24 @@
+         photoSettings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
++        if options.rawMode != "off" {
++          // Request a supported 12 MP sensor readout instead of RAW Max.
++          // Keep AVFoundation's default lossless DNG encoding and bit depth.
++          let outputDimensions = photoOutput.maxPhotoDimensions
++          let supported = videoDeviceInput.device.activeFormat.supportedMaxPhotoDimensions
++            .filter { $0.width <= outputDimensions.width && $0.height <= outputDimensions.height }
++            .sorted { Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height) }
++          let normalResolution = supported.last(where: { Int64($0.width) * Int64($0.height) <= 12_200_000 })
++          if let dimensions = normalResolution ?? supported.first {
++            photoSettings.maxPhotoDimensions = dimensions
++          }
++        }
+       } else {
+         photoSettings.isHighResolutionPhotoEnabled = photoOutput.isHighResolutionCaptureEnabled
+       }
 
        // depth data
        photoSettings.isDepthDataDeliveryEnabled = photoOutput.isDepthDataDeliveryEnabled
@@ -122,7 +137,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Phot
        }
 
        // quality prioritization
-@@ -84,11 +134,52 @@
+@@ -84,11 +146,52 @@
                                                        enableShutterSound: options.enableShutterSound,
                                                        metadataProvider: self.metadataProvider,
                                                        path: options.path,
