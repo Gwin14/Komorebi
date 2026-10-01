@@ -77,9 +77,34 @@ import ImageIO
     print("Halation maximum pixel difference:", haloDifference)
     try require(haloDifference > 0.001, "Halation produced no pixel changes")
 
+    let compressionBase = base.clampedToExtent().cropped(to: CGRect(x: 0, y: 0, width: 1024, height: 1024))
+    let textured = try HeifPlusEffects.apply(to: compressionBase, effects: ["grainConfig": grain, "seed": 42])
+    let losslessURL = folder.appendingPathComponent("lossless.heic")
+    let previousQualityURL = folder.appendingPathComponent("quality-09.heic")
+    let compressedURL = folder.appendingPathComponent("compressed.heic")
+    let qualityKey = CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String)
+    try context.writeHEIF10Representation(of: textured, to: losslessURL,
+      colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: [qualityKey: 1.0])
+    try context.writeHEIF10Representation(of: textured, to: previousQualityURL,
+      colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: [qualityKey: 0.9])
+    try context.writeHEIF10Representation(of: textured, to: compressedURL,
+      colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: HeifPlusEngine.exportOptions)
+    let losslessSize = try Data(contentsOf: losslessURL).count
+    let compressedSize = try Data(contentsOf: compressedURL).count
+    let previousQualitySize = try Data(contentsOf: previousQualityURL).count
+    try require(compressedSize < previousQualitySize, "New HEIF compression did not reduce size versus quality 0.9")
+    try require(compressedSize < losslessSize / 2, "HEIF compression did not substantially reduce file size")
+    let compressedSource = CGImageSourceCreateWithURL(compressedURL as CFURL, nil)!
+    let compressedProperties = CGImageSourceCopyPropertiesAtIndex(compressedSource, 0, nil) as! [String: Any]
+    try require((compressedProperties[kCGImagePropertyDepth as String] as? NSNumber)?.intValue == 10, "Compressed HEIF lost ten-bit precision")
+    try require((compressedProperties[kCGImagePropertyPixelWidth as String] as? NSNumber)?.intValue == 1024 &&
+      (compressedProperties[kCGImagePropertyPixelHeight as String] as? NSNumber)?.intValue == 1024, "Compression changed resolution")
+    print("HEIF compression: \(losslessSize) → \(compressedSize) bytes, preserving 1024×1024 and 10-bit")
+    print("Previous quality 0.9: \(previousQualitySize) bytes; current quality \(HeifPlusEngine.exportQuality): \(compressedSize) bytes")
+
     let url = folder.appendingPathComponent("verified.heic")
     try context.writeHEIF10Representation(of: base, to: url,
-      colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: [:])
+      colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: HeifPlusEngine.exportOptions)
     guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
       let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any],
       let depth = properties[kCGImagePropertyDepth as String] as? NSNumber else { throw NSError(domain: "HEIF", code: 1) }
@@ -111,7 +136,7 @@ import ImageIO
     let gpsJob: [String: Any] = ["exifData": ["GPSLatitude": -23.55052, "GPSLongitude": -46.633308, "GPSAltitude": 755.25]]
     let seeded = base.settingProperties(engine.exportProperties(raw: [:], job: gpsJob))
     try context.writeHEIF10Representation(of: seeded, to: gpsURL,
-      colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: [:])
+      colorSpace: CGColorSpace(name: CGColorSpace.displayP3)!, options: HeifPlusEngine.exportOptions)
     try engine.metadata(gpsURL, raw: [:], job: gpsJob, recipe: recipe)
     let gpsSource = CGImageSourceCreateWithURL(gpsURL as CFURL, nil)!
     let gpsProperties = CGImageSourceCopyPropertiesAtIndex(gpsSource, 0, nil) as! [String: Any]

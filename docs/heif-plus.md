@@ -35,7 +35,11 @@ não reproduz a sequência aleatória do Canvas. A equivalência visual dos pres
 precisa ser conferida em fotos reais. Somente a máscara de halation é reduzida;
 a imagem principal permanece na resolução capturada, descontando o recorte.
 
-A exportação tenta HEIF10 em Display P3 com qualidade 1.0. Se o encoder falhar,
+A exportação tenta HEIF10 em Display P3 com qualidade 0.8, preservando resolução
+e profundidade de bits com compressão com perdas. O valor 1.0 pode selecionar
+compressão sem perdas e gerar arquivos muito grandes. A qualidade de compressão
+consta da receita; o tamanho final varia com resolução, detalhes e grain.
+Se o encoder falhar,
 tenta HEIF de 8-bit, exceto em erros de arquivo/armazenamento. A profundidade
 verificada pelo ImageIO consta da receita. Trata-se de saída SDR; 10-bit não é
 uma promessa de HDR. Cópias alternativas e sem efeitos também usam o caminho
@@ -75,6 +79,10 @@ Somente HEIFs são adicionados à biblioteca; salvar RAW junto será uma opção
 - `bash scripts/check-heif-plus-native.sh` (macOS com acesso à GPU): verifica
   checkpoints, limite da fila, bytes RAW intactos, LUT identidade, grain
   determinístico, halation, HEIF10, EXIF, GPS e metadados sem recompressão.
+- Regressão de compressão: imagem sintética com textura de 1024×1024 passou de
+  1.899.192 bytes em qualidade 1.0 para 539.959 bytes em 0.8 (cerca de 72% menor),
+  contra 767.698 bytes em 0.9 (a nova configuração reduziu mais 30%),
+  mantendo dimensões e 10-bit. Não representa uma previsão de tamanho para fotos reais.
 - ExifTool confirmou saída Display P3 com 10-bit de luminância/croma, ISO 200,
   exposição 1/100, lente, data e receita na imagem sintética de teste.
 

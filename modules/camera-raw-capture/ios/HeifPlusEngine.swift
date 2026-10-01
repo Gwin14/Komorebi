@@ -8,6 +8,10 @@ import CoreLocation
 
 // All access is serialized by the module. Only URLs/recipes cross the JS bridge.
 final class HeifPlusEngine {
+  // 1.0 can select lossless HEIF and produce files larger than the source DNG.
+  static let exportQuality = 0.8
+  static let exportOptions: [CIImageRepresentationOption: Any] = [
+    CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): exportQuality]
   private let files = FileManager.default
   private let expirationLock = NSLock()
   private var expired = false
@@ -236,8 +240,7 @@ final class HeifPlusEngine {
       try checkExpiration()
       let image = originalImage.settingProperties(exportProperties(raw: f.properties, job: job))
       let url = dir.appendingPathComponent("\(name).heic")
-      let options: [CIImageRepresentationOption: Any] = [
-        CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 1.0]
+      let options = Self.exportOptions
       do { try context.writeHEIF10Representation(of: image, to: url, colorSpace: colorSpace, options: options) }
       catch {
         let failure = error as NSError
@@ -253,7 +256,7 @@ final class HeifPlusEngine {
       let recipe: [String: Any] = ["decoder": f.decoderVersion.rawValue,
         "appliedSettings": applied, "supportedControls": support(f), "bitDepth": depth,
         "width": image.extent.width, "height": image.extent.height,
-        "effectsApplied": name != "original"]
+        "effectsApplied": name != "original", "compressionQuality": Self.exportQuality]
       try metadata(url, raw: f.properties, job: job, recipe: recipe)
       variants.append(["file": url.lastPathComponent, "photoUri": url.absoluteString,
         "recipe": recipe, "name": name])
