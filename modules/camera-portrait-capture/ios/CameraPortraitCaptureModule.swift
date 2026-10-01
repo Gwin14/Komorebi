@@ -352,7 +352,8 @@ public class CameraPortraitCaptureModule: Module {
     guard
       let sourceURL,
       let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
-      let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
+      let sourceImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
+      let processedImage = PhotoDisplayP3.convert(sourceImage),
       let originalSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil)
     else {
       return (processedURL, false)
@@ -366,6 +367,7 @@ public class CameraPortraitCaptureModule: Module {
       processedSource: processedSource
     ) as NSDictionary as? [String: Any] ?? [:]
     Self.applyGPSMetadata(metadata, to: &properties)
+    PhotoDisplayP3.apply(to: &properties)
 
     guard let destination = CGImageDestinationCreateWithURL(
       destinationURL as CFURL,
@@ -415,7 +417,8 @@ public class CameraPortraitCaptureModule: Module {
   ) throws -> URL {
     guard
       let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
-      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+      let sourceImage = CGImageSourceCreateImageAtIndex(source, 0, nil),
+      let image = PhotoDisplayP3.convert(sourceImage)
     else {
       throw PortraitCaptureError.captureFailed
     }
@@ -445,6 +448,7 @@ public class CameraPortraitCaptureModule: Module {
       properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
     }
     Self.applyGPSMetadata(metadata, to: &properties)
+    PhotoDisplayP3.apply(to: &properties)
     properties[kCGImageDestinationLossyCompressionQuality as String] = 0.92
     CGImageDestinationAddImage(destination, image, properties as CFDictionary)
     guard CGImageDestinationFinalize(destination) else {

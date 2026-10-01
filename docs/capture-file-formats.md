@@ -45,3 +45,28 @@ Em dispositivo físico com RAW, verificar:
 
 Os testes de seleção, lint, TypeScript e verificações Swift não substituem essa
 validação da captura e da apresentação do par no Fotos.
+
+## Perfil de cor no iOS
+
+HEIC e JPEG são exportados com perfil ICC Display P3, incluindo o companion do
+RAW, Live Photos, Retrato e Image Stacking. HEIF+ já usa Display P3. A captura
+solicita P3 D65 quando o formato da câmera oferece suporte. A conversão usa o
+perfil de entrada para transformar os pixels, sem apenas renomear o perfil.
+O EXIF deixa de declarar sRGB; o ICC descreve as cores do arquivo.
+
+Os dados do sensor no DNG permanecem intactos. O thumbnail personalizado do DNG
+usa renderização e attachment de cor P3; a codificação desse thumbnail precisa
+ser conferida no iPhone. LUTs no WebView continuam trabalhando em sRGB; a
+exportação final converte essas imagens para P3, mas não recupera cores que
+já foram limitadas ao gamut sRGB durante o efeito.
+
+Teste local da conversão, perfil gravado e orientação em JPEG/HEIC:
+
+```sh
+swiftc modules/shared/PhotoCatalogMetadata.swift scripts/checkDisplayP3.swift -o /tmp/check-display-p3
+/tmp/check-display-p3
+```
+
+Depois de recompilar o iOS, capturar novas fotos com e sem efeitos e conferir
+`ProfileName = Display P3` no Metapho para HEIC/JPEG. Fotos antigas não são
+alteradas. Validar também cores, orientação, Live Photo e profundidade.

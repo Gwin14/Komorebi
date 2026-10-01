@@ -24,10 +24,21 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Conf
    }
 
    // pragma MARK: Video Stabilization
-@@ -240,6 +245,16 @@
+@@ -234,11 +239,25 @@
+
+     // Configure the PhotoOutput Settings to use the given max-resolution.
+     // We need to run this after device.activeFormat has been set, otherwise the resolution is different.
+-    let format = videoDeviceInput.device.activeFormat
++    let device = videoDeviceInput.device
++    let format = device.activeFormat
++    if format.supportedColorSpaces.contains(.P3_D65) {
++      device.activeColorSpace = .P3_D65
++    }
+     if #available(iOS 16.0, *) {
+       photoOutput.maxPhotoDimensions = format.photoDimensions
      } else {
        photoOutput.isHighResolutionCaptureEnabled = true
-     }
++    }
 +
 +    if #available(iOS 14.3, *) {
 +      if photoOutput.isAppleProRAWSupported && !photoOutput.isAppleProRAWEnabled {
@@ -37,10 +48,9 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Conf
 +      VisionLogger.log(level: .info, message: "Photo RAW support: appleProRAWSupported=\(photoOutput.isAppleProRAWSupported), appleProRAWEnabled=\(photoOutput.isAppleProRAWEnabled), rawFormats=\(photoOutput.availableRawPhotoPixelFormatTypes), rawFileTypes=\(photoOutput.availableRawPhotoFileTypes)")
 +    } else {
 +      VisionLogger.log(level: .info, message: "Photo RAW support: rawFormats=\(photoOutput.availableRawPhotoPixelFormatTypes), rawFileTypes=\(photoOutput.availableRawPhotoFileTypes)")
-+    }
+     }
    }
 
-   // pragma MARK: Side-Props
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
@@ -283,7 +293,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelega
          "path": path.absoluteString,
          "width": width as Any,
          "height": height as Any,
-@@ -72,25 +118,112 @@
+@@ -72,25 +118,114 @@
          "isRawPhoto": photo.isRawPhoto,
          "metadata": photo.metadata,
          "thumbnail": photo.embeddedThumbnailPhotoFormat as Any,
@@ -338,7 +348,9 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelega
 +    let scaledImage = sourceImage.transformed(
 +      by: CGAffineTransform(scaleX: scale, y: scale)
 +    )
-+    CIContext().render(scaledImage, to: pixelBuffer)
++    let colorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
++    CVBufferSetAttachment(pixelBuffer, kCVImageBufferCGColorSpaceKey, colorSpace, .shouldPropagate)
++    CIContext().render(scaledImage, to: pixelBuffer, bounds: scaledImage.extent, colorSpace: colorSpace)
 +    return pixelBuffer
 +  }
 +
@@ -408,7 +420,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelega
      }
    }
 
-@@ -118,3 +251,29 @@
+@@ -118,3 +253,29 @@
      }
    }
  }

@@ -304,10 +304,23 @@ export default function usePhotoProcessingQueue(
           metadataSourceUri = originalUri,
         ) => {
           if (preserveApplePhotographicStyles) {
-            const result = await makePhotoStylesCompatible(uri, {
-              metadata: effectiveExifData,
+            const p3Uri = await convertPhotoFormat({
+              photoUri: uri,
               metadataSourceUri,
+              metadata: effectiveExifData,
+              outputFormat: "heif",
             });
+            let result;
+            try {
+              result = await makePhotoStylesCompatible(p3Uri, {
+                metadata: effectiveExifData,
+                metadataSourceUri,
+              });
+            } finally {
+              if (p3Uri !== uri) {
+                await FileSystem.deleteAsync(p3Uri, { idempotent: true }).catch(console.warn);
+              }
+            }
             if (!result?.verified || !result?.photoUri) {
               await removeStylesTemporaryFile(result?.photoUri);
               throw new Error(
@@ -326,7 +339,7 @@ export default function usePhotoProcessingQueue(
             });
           } catch (error) {
             console.warn("Falha ao converter formato da foto:", error);
-            return uri;
+            throw error;
           }
         };
         const saveRegularPhoto = async (
@@ -371,11 +384,10 @@ export default function usePhotoProcessingQueue(
             return asset;
           } finally {
             if (
-              preserveApplePhotographicStyles &&
               preparedUri &&
               preparedUri !== uri
             ) {
-              await removeStylesTemporaryFile(preparedUri);
+              await FileSystem.deleteAsync(preparedUri, { idempotent: true }).catch(console.warn);
             }
           }
         };
@@ -400,15 +412,14 @@ export default function usePhotoProcessingQueue(
                   pairProcessedUri = croppedWithExifUri;
                 }
                 const expectedExtension = outputFormat === "heif" ? /\.hei[cf]$/i : /\.jpe?g$/i;
+                // Convert even when the extension matches so the companion gets Display P3.
+                convertedUri = await convertPhotoFormat({
+                  photoUri: pairProcessedUri, metadataSourceUri: derivativeSourceUri,
+                  metadata: effectiveExifData, outputFormat,
+                });
+                pairProcessedUri = convertedUri;
                 if (!expectedExtension.test(pairProcessedUri)) {
-                  convertedUri = await convertPhotoFormat({
-                    photoUri: pairProcessedUri, metadataSourceUri: derivativeSourceUri,
-                    metadata: effectiveExifData, outputFormat,
-                  });
-                  pairProcessedUri = convertedUri;
-                  if (!expectedExtension.test(pairProcessedUri)) {
-                    throw new Error("A foto processada do RAW não foi convertida para o formato selecionado");
-                  }
+                  throw new Error("A foto processada do RAW não foi convertida para o formato selecionado");
                 }
                 catalogProcessedUri = await writePhotoCatalogMetadata(pairProcessedUri, catalogMetadata);
                 rawAsset = await saveRawPhotoPair(catalogRawUri, catalogProcessedUri, {

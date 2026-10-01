@@ -29,7 +29,6 @@ import {
   TOP_BAR_MAX_CONTROLS,
 } from "../utils/topBarControls";
 import HeifPlusSettings from "./HeifPlusSettings";
-import heifStyles from "./HeifPlusSettings.styles";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import styles from "./Settings.styles";
@@ -174,7 +173,6 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     location,
     setLocation,
     photoFormat,
-    setPhotoFormat,
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
@@ -499,30 +497,12 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       >
         <CustomToggle
           grouped
-          last={Platform.OS !== "ios"}
+          last
           label="Salvar cópia sem efeitos"
           description="Mantém uma versão sem LUT, grain ou halation."
           value={saveOriginalWithoutEffects}
           onValueChange={setSaveOriginalWithoutEffects}
         />
-        {Platform.OS === "ios" && (
-          <View style={heifStyles.controlRow}>
-            <Text style={styles.rowLabel}>Formato da foto</Text>
-            <View style={heifStyles.formatOptions}>
-              {[["heif", "HEIF"], ["heifPlus", "HEIF+"], ["jpeg", "JPEG"]].map(([value, label]) => (
-                <Pressable key={value} accessibilityRole="button"
-                  accessibilityState={{ selected: photoFormat === value }}
-                  onPress={() => {
-                    setPhotoFormat(value);
-                    if (value === "jpeg") setPreserveApplePhotographicStyles(false);
-                  }} style={[heifStyles.formatButton, photoFormat === value && heifStyles.selectedFormat]}>
-                  <Text style={styles.rowLabel}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.rowDescription}>HEIF+: revelação RAW personalizada, com HEIF final em resolução máxima disponível.</Text>
-          </View>
-        )}
       </Section>
       <Section title="Autoria" description="Incluídos nos metadados das próximas fotos.">
         <View style={styles.metadataField}>

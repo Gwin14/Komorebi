@@ -455,7 +455,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   override init() {
     let workingColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearSRGB)
       ?? CGColorSpaceCreateDeviceRGB()
-    let displayColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+    let displayColorSpace = CGColorSpace(name: CGColorSpace.displayP3)
       ?? CGColorSpaceCreateDeviceRGB()
     let contextOptions: [CIContextOption: Any] = [
       .cacheIntermediates: false,
