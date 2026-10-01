@@ -3,6 +3,8 @@ import { restoreIntelligentPreferences } from "./intelligentSettings";
 import { restoreZebraPreferences } from "./zebraSettings";
 import { normalizeTopBarControls } from "./topBarControls";
 
+import { normalizeHeifPlusSettings, restorePhotoFormat } from "./heifPlusSettings";
+
 export const SETTINGS_STORAGE_KEYS = {
   PHOTO_AUTHOR: "@settings/photoAuthor",
   PHOTO_COPYRIGHT: "@settings/photoCopyright",
@@ -22,6 +24,8 @@ export const SETTINGS_STORAGE_KEYS = {
   INTELLIGENT_FILENAME_ENABLED: "@settings/intelligentFilenameEnabled",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
+  PHOTO_FORMAT: "@settings/photoFormat",
+  HEIF_PLUS_SETTINGS: "@settings/heifPlusSettings",
   SAVE_AS_JPEG: "@settings/saveAsJpeg",
   PRESERVE_APPLE_PHOTOGRAPHIC_STYLES:
     "@settings/preserveApplePhotographicStyles",
@@ -127,7 +131,13 @@ export async function loadStoredSettings(defaults) {
     defaults,
   );
 
+  const [format, rawSettings] = await Promise.all([
+    AsyncStorage.getItem(keys.PHOTO_FORMAT), AsyncStorage.getItem(keys.HEIF_PLUS_SETTINGS),
+  ]);
+
   return {
+    photoFormat: restorePhotoFormat(format, parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg)),
+    heifPlusSettings: normalizeHeifPlusSettings(parseJSON(rawSettings, null)),
     photoAuthor: photoAuthor ?? defaults.photoAuthor,
     photoCopyright: photoCopyright ?? defaults.photoCopyright,
     retroStyle: parseBoolean(savedRetroStyle, defaults.retroStyle),

@@ -28,6 +28,8 @@ import {
   TOP_BAR_CONTROLS,
   TOP_BAR_MAX_CONTROLS,
 } from "../utils/topBarControls";
+import HeifPlusSettings from "./HeifPlusSettings";
+import heifStyles from "./HeifPlusSettings.styles";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import styles from "./Settings.styles";
@@ -171,7 +173,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     setShutterSound,
     location,
     setLocation,
-    saveAsJpeg,
+    photoFormat,
+    setPhotoFormat,
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
@@ -503,19 +506,25 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           onValueChange={setSaveOriginalWithoutEffects}
         />
         {Platform.OS === "ios" && (
-          <CustomToggle
-            grouped
-            last
-            label="Salvar em JPEG"
-            description="Use para maior compatibilidade. O padrão do iPhone é HEIF."
-            value={saveAsJpeg}
-            onValueChange={(enabled) => {
-              setSaveAsJpeg(enabled);
-              if (enabled) setPreserveApplePhotographicStyles(false);
-            }}
-          />
+          <View style={heifStyles.controlRow}>
+            <Text style={styles.rowLabel}>Formato da foto</Text>
+            <View style={heifStyles.formatOptions}>
+              {[["heif", "HEIF"], ["heifPlus", "HEIF+"], ["jpeg", "JPEG"]].map(([value, label]) => (
+                <Pressable key={value} accessibilityRole="button"
+                  accessibilityState={{ selected: photoFormat === value }}
+                  onPress={() => {
+                    setPhotoFormat(value);
+                    if (value === "jpeg") setPreserveApplePhotographicStyles(false);
+                  }} style={[heifStyles.formatButton, photoFormat === value && heifStyles.selectedFormat]}>
+                  <Text style={styles.rowLabel}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.rowDescription}>HEIF+: revelação RAW personalizada, com HEIF final em resolução máxima disponível.</Text>
+          </View>
         )}
       </Section>
+      {Platform.OS === "ios" && <HeifPlusSettings />}
       <Section title="Autoria" description="Incluídos nos metadados das próximas fotos.">
         <Text style={styles.rowLabel}>Autor</Text>
         <TextInput
@@ -553,7 +562,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
             badge="experimental"
             grouped
             last
-            description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato e RAW."
+            description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato, RAW e HEIF+."
+            disabled={photoFormat === "heifPlus"}
             label="Edição no Fotos da Apple"
             value={preserveApplePhotographicStyles}
             onValueChange={(enabled) => {

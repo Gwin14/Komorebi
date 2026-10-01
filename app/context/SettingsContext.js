@@ -7,6 +7,8 @@ import {
 import { getDefaultTopBarControls } from "../utils/topBarControls";
 import { reconcileProjectsWithAlbums } from "../utils/projects";
 
+import { DEFAULT_HEIF_PLUS_SETTINGS, normalizeHeifPlusSettings } from "../utils/heifPlusSettings";
+
 const SettingsContext = createContext(null);
 
 export const DEFAULT_SETTINGS = {
@@ -29,6 +31,8 @@ export const DEFAULT_SETTINGS = {
   shutterSound: false,
   location: true,
   saveAsJpeg: false,
+  photoFormat: "heif",
+  heifPlusSettings: DEFAULT_HEIF_PLUS_SETTINGS,
   preserveApplePhotographicStyles: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
@@ -83,7 +87,12 @@ export const SettingsProvider = ({ children }) => {
     DEFAULT_SETTINGS.shutterSound,
   );
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
-  const [saveAsJpeg, setSaveAsJpeg] = useState(DEFAULT_SETTINGS.saveAsJpeg);
+  const [heifPlusSupport, setHeifPlusSupport] = useState(null);
+  const [photoFormat, setPhotoFormat] = useState(DEFAULT_SETTINGS.photoFormat);
+  const [heifPlusSettings, updateHeifPlusSettings] = useState(DEFAULT_SETTINGS.heifPlusSettings);
+  const setHeifPlusSettings = (value) => updateHeifPlusSettings(normalizeHeifPlusSettings(value));
+  const saveAsJpeg = photoFormat === "jpeg";
+  const setSaveAsJpeg = (enabled) => setPhotoFormat(enabled ? "jpeg" : "heif");
   const [preserveApplePhotographicStyles, setPreserveApplePhotographicStyles] =
     useState(DEFAULT_SETTINGS.preserveApplePhotographicStyles);
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
@@ -123,7 +132,8 @@ export const SettingsProvider = ({ children }) => {
         setPhotoCopyright(savedSettings.photoCopyright);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
-        setSaveAsJpeg(savedSettings.saveAsJpeg);
+        setPhotoFormat(savedSettings.photoFormat);
+        setHeifPlusSettings(savedSettings.heifPlusSettings);
         setPreserveApplePhotographicStyles(
           savedSettings.preserveApplePhotographicStyles,
         );
@@ -379,7 +389,15 @@ export const SettingsProvider = ({ children }) => {
     void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_COPYRIGHT, photoCopyright);
   }, [loading, photoAuthor, photoCopyright]);
 
+  useEffect(() => {
+    if (loading) return;
+    void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_FORMAT, photoFormat);
+    void saveStoredSetting(SETTINGS_STORAGE_KEYS.HEIF_PLUS_SETTINGS, JSON.stringify(heifPlusSettings));
+  }, [loading, photoFormat, heifPlusSettings]);
+
   const value = {
+    photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSettings,
+    heifPlusSupport, setHeifPlusSupport,
     photoAuthor,
     setPhotoAuthor,
     photoCopyright,

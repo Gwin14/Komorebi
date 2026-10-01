@@ -68,6 +68,7 @@ export default function CameraPreview({
   onPreviewLayout,
   effectPreview,
   onCameraStopped,
+  onRawCapabilities,
 }) {
   const { width: screenWidth } = useWindowDimensions();
   const isTakingPhoto = useRef(false);
@@ -429,14 +430,15 @@ export default function CameraPreview({
     }, delay);
   }, [cameraScale, transitionOpacity]);
 
-  const handleCameraInitialized = useCallback(() => {
+  const handleCameraInitialized = useCallback((capabilities) => {
+    onRawCapabilities?.(capabilities);
     console.log("[ZebraDebug][preview] onInitialized", {
       deviceId: device?.id ?? null,
       position: device?.position ?? null,
     });
     onCameraReady?.();
     finishCameraTransition();
-  }, [device?.id, device?.position, finishCameraTransition, onCameraReady]);
+  }, [device?.id, device?.position, finishCameraTransition, onCameraReady, onRawCapabilities]);
 
   const handleCameraError = useCallback(
     (error) => {
