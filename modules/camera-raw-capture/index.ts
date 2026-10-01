@@ -139,3 +139,10 @@ export async function saveHeifPlus(id: string): Promise<HeifPlusJob> {
 }
 export async function retryHeifPlus(id: string): Promise<void> { await heifPlusModule().retryHeifPlus(id); }
 export async function discardHeifPlus(id: string): Promise<void> { await heifPlusModule().discardHeifPlus(id); }
+
+export async function saveRawPhotoPair(rawUri: string, processedUri: string,
+  options: { projectAlbum?: string | null; originalFilename?: string | null; metadata?: Record<string, unknown> } = {},
+): Promise<{ id: string; localIdentifier: string; rawPair: Record<string, unknown> }> {
+  if (!nativeModule?.saveRawPhotoPair) throw new Error("RAW + foto processada requer a versão nativa atualizada do Komorebi");
+  return nativeModule.saveRawPhotoPair(rawUri, processedUri, options);
+}

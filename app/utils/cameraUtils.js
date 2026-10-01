@@ -247,6 +247,7 @@ export const takePicture = async ({
   aspectRatio = 3 / 4,
   manualSettings = null,
   rawMode = "off",
+  rawPairEnabled = false,
   livePhotoEnabled = false,
   livePhotoDeviceId = null,
   portraitModeEnabled = false,
@@ -423,21 +424,18 @@ export const takePicture = async ({
         derivativeSourceUri || uri,
         aspectRatio,
       );
-      const needsRatioDerivative = Math.abs(aspectRatio - 3 / 4) >= 0.01;
       const rawDerivativeAspectRatio =
-        flash === "on"
-          ? null
-          : doubleCaptureMode
-            ? 1 / captureAspectRatio
-            : needsRatioDerivative
-              ? captureAspectRatio
-              : null;
+        rawPairEnabled && flash !== "on" && doubleCaptureMode
+          ? 1 / captureAspectRatio
+          : null;
       setProcessingData({
         needsProcessing: false,
         originalUri: uri,
         imageUri: uri,
         derivativeSourceUri,
         rawDerivativeAspectRatio,
+        rawPairEnabled,
+        outputFormat,
         exifData: {
           ...additionalExif,
           komorebiMetadata: buildKomorebiExifMetadata({

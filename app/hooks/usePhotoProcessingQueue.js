@@ -1,3 +1,4 @@
+import * as FileSystem from "expo-file-system/legacy";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, AppState, DeviceEventEmitter } from "react-native";
 import { analyzePhoto } from "../../modules/composition-scan";
@@ -30,9 +31,10 @@ import {
   deleteCatalogTemporaryPhoto,
 } from "../utils/photoCatalogMetadata";
 
+import { getProjectAlbumName } from "../utils/projects";
 import { completeHeifPlusJob } from "../utils/heifPlusJobs";
 import {
-  listHeifPlusJobs, renderHeifPlus, enrichHeifPlus, saveHeifPlus,
+  listHeifPlusJobs, renderHeifPlus, enrichHeifPlus, saveHeifPlus, saveRawPhotoPair,
   discardHeifPlus, retryHeifPlus,
 } from "../../modules/camera-raw-capture";
 
@@ -129,6 +131,7 @@ export default function usePhotoProcessingQueue(
         portraitEffectsMatteEmbedded = false,
         derivativeSourceUri,
         rawDerivativeAspectRatio,
+        rawPairEnabled = false,
         outputFormat = "jpeg",
         preserveApplePhotographicStyles = false,
       } = item;
@@ -382,7 +385,50 @@ export default function usePhotoProcessingQueue(
           const catalogRawUri = await writePhotoCatalogMetadata(rawUri, catalogMetadata);
           let rawAsset;
           try {
-            rawAsset = await saveToAlbum(project, catalogRawUri, primaryFilename);
+            if (rawPairEnabled) {
+              if (!derivativeSourceUri) throw new Error("Foto processada da captura RAW não foi retornada");
+              let pairProcessedUri = derivativeSourceUri;
+              let croppedUri;
+              let catalogProcessedUri;
+              let convertedUri;
+              let croppedWithExifUri;
+              try {
+                if (Math.abs(Math.min(aspectRatio, 1 / aspectRatio) - 3 / 4) >= 0.01) {
+                  croppedUri = await cropImageToAspect(derivativeSourceUri, aspectRatio);
+                  if (!croppedUri) throw new Error("Falha ao recortar a foto processada do RAW");
+                  croppedWithExifUri = await copyExifFromImage(derivativeSourceUri, croppedUri);
+                  pairProcessedUri = croppedWithExifUri;
+                }
+                const expectedExtension = outputFormat === "heif" ? /\.hei[cf]$/i : /\.jpe?g$/i;
+                if (!expectedExtension.test(pairProcessedUri)) {
+                  convertedUri = await convertPhotoFormat({
+                    photoUri: pairProcessedUri, metadataSourceUri: derivativeSourceUri,
+                    metadata: effectiveExifData, outputFormat,
+                  });
+                  pairProcessedUri = convertedUri;
+                  if (!expectedExtension.test(pairProcessedUri)) {
+                    throw new Error("A foto processada do RAW não foi convertida para o formato selecionado");
+                  }
+                }
+                catalogProcessedUri = await writePhotoCatalogMetadata(pairProcessedUri, catalogMetadata);
+                rawAsset = await saveRawPhotoPair(catalogRawUri, catalogProcessedUri, {
+                  projectAlbum: project ? getProjectAlbumName(project) : null,
+                  originalFilename: primaryFilename,
+                  metadata: { ...effectiveExifData,
+                    createdAt: exifData?.komorebiMetadata?.createdAt || capturedAt.toISOString() },
+                });
+                console.log("[Komorebi RAW pair]", JSON.stringify(rawAsset.rawPair));
+              } finally {
+                if (catalogProcessedUri !== pairProcessedUri) await deleteCatalogTemporaryPhoto(catalogProcessedUri);
+                for (const temporaryUri of new Set([croppedUri, croppedWithExifUri, convertedUri])) {
+                  if (temporaryUri && temporaryUri !== derivativeSourceUri) {
+                    await FileSystem.deleteAsync(temporaryUri, { idempotent: true }).catch(console.warn);
+                  }
+                }
+              }
+            } else {
+              rawAsset = await saveToAlbum(project, catalogRawUri, primaryFilename);
+            }
           } finally {
             if (catalogRawUri !== rawUri) await deleteCatalogTemporaryPhoto(catalogRawUri);
           }

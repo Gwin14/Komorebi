@@ -63,7 +63,7 @@ export const TOP_BAR_CONTROLS = [
   },
   {
     id: "rawCapture",
-    label: "RAW / ProRAW",
+    label: "Formato de arquivo",
     icon: "aperture-outline",
     alwaysEnabled: false,
   },

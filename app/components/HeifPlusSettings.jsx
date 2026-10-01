@@ -46,7 +46,7 @@ export default function HeifPlusSettings() {
       {expanded && <View style={heifStyles.expandedContent}>
       <Text style={styles.sectionDescription}>
         Ajustes aplicados ao RAW antes do HEIF. Automático preserva a calibração Apple de cada foto.
-        LUT, halation e grain são aplicados depois da revelação. Somente o HEIF é salvo.
+        LUT, halation e grain são aplicados depois da revelação. Com RAW selecionado, a revelação é salva como HEIC junto ao DNG no Fotos; sem RAW, somente o HEIF é salvo.
       </Text>
       <Text style={styles.sectionDescription}>
         {heifPlusSupport ? `Última captura: decoder ${heifPlusSupport.decoder} · ${heifPlusSupport.bitDepth}-bit`

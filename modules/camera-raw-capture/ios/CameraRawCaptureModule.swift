@@ -48,6 +48,10 @@ public class CameraRawCaptureModule: Module {
       true
     }
 
+    AsyncFunction("saveRawPhotoPair") { (rawURI: String, processedURI: String, options: [String: Any], promise: Promise) in
+      self.runIO(promise) { try RawPhotoLibrary.save(rawURI: rawURI, processedURI: processedURI, options: options) }
+    }
+
     // Capture capabilities come from VisionCamera's active photo output event.
     AsyncFunction("listHeifPlusJobs") { (promise: Promise) in
       self.runIO(promise) { try self.engine.jobs() }

@@ -44,7 +44,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Conf
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-@@ -39,7 +39,36 @@
+@@ -39,7 +39,41 @@
        VisionLogger.log(level: .info, message: "Capturing photo...")
 
        // Create photo settings
@@ -60,11 +60,16 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Phot
 +          return
 +        }
 +
-+        let processedFormat = [AVVideoCodecKey: AVVideoCodecType.jpeg]
++        let processedCodec: AVVideoCodecType = options.photoCodec == "hevc" ? .hevc : .jpeg
++        guard photoOutput.availablePhotoCodecTypes.contains(processedCodec) else {
++          promise.reject(error: .capture(.unknown(message: "O formato selecionado não está disponível para a captura RAW.")))
++          return
++        }
++        let processedFormat = [AVVideoCodecKey: processedCodec]
 +        photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawPixelFormat,
 +                                               rawFileType: .dng,
 +                                               processedFormat: processedFormat,
-+                                               processedFileType: AVFileType("public.jpeg"))
++                                               processedFileType: processedCodec == .hevc ? .heic : .jpg)
 +        if photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.contains(.jpeg) {
 +          photoSettings.rawEmbeddedThumbnailPhotoFormat = [
 +            AVVideoCodecKey: AVVideoCodecType.jpeg,
@@ -82,7 +87,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Phot
 
        // set photo resolution
        if #available(iOS 16.0, *) {
-@@ -50,8 +79,24 @@
+@@ -50,8 +84,24 @@
 
        // depth data
        photoSettings.isDepthDataDeliveryEnabled = photoOutput.isDepthDataDeliveryEnabled
@@ -107,7 +112,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Phot
        }
 
        // quality prioritization
-@@ -84,11 +129,52 @@
+@@ -84,11 +134,52 @@
                                                        enableShutterSound: options.enableShutterSound,
                                                        metadataProvider: self.metadataProvider,
                                                        path: options.path,
@@ -476,7 +481,7 @@ diff --git a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOpt
 +      path = try FileUtils.getFilePath(fileExtension: fileExtension)
 +    }
 +    if rawMode != "off" {
-+      processedPath = try FileUtils.getFilePath(fileExtension: "jpg")
++      processedPath = try FileUtils.getFilePath(fileExtension: photoCodec == "hevc" ? "heic" : "jpg")
 +    }
 +    if livePhoto {
 +      livePhotoMoviePath = try FileUtils.getFilePath(fileExtension: "mov")
@@ -527,7 +532,7 @@ diff --git a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoF
       * Whether this photo is in RAW format or not.
       */
      isRawPhoto: boolean;
-+    /** Processed JPEG captured alongside a RAW/DNG photo. (iOS only) */
++    /** Processed HEIC or JPEG captured alongside a RAW/DNG photo. (iOS only) */
 +    processedPath?: string;
      /**
       * Display orientation of the photo, relative to the Camera's sensor orientation.
@@ -573,7 +578,7 @@ diff --git a/node_modules/react-native-vision-camera/src/types/PhotoFile.ts b/no
     */
    isRawPhoto: boolean
    /**
-+   * Processed JPEG captured alongside a RAW/DNG photo.
++   * Processed HEIC or JPEG captured alongside a RAW/DNG photo.
 +   *
 +   * @platform iOS
 +   */

@@ -396,6 +396,8 @@ final class HeifPlusEngine {
       let existing = existingID.flatMap { PHAsset.fetchAssets(withLocalIdentifiers: [$0], options: nil).firstObject }
       if existing == nil {
         let url = try directory(id).appendingPathComponent(variants[index]["file"] as! String)
+        let rawURL = try directory(id).appendingPathComponent("original.dng")
+        let paired = job["rawPairEnabled"] as? Bool == true
         var placeholderID: String?
         var journalError: Error?
         try changes {
@@ -403,13 +405,22 @@ final class HeifPlusEngine {
           let resource = PHAssetResourceCreationOptions()
           let suffix = variants[index]["name"] as? String ?? "main"
           let filename = job["filename"] as? String ?? "Komorebi-\(id).heic"
-          resource.originalFilename = suffix == "main" ? filename : URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent + "-\(suffix).heic"
+          let resourceFilename = suffix == "main" ? filename : URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent + "-\(suffix).heic"
+          resource.originalFilename = resourceFilename
           placeholderID = request.placeholderForCreatedAsset?.localIdentifier
           variants[index]["assetId"] = placeholderID
           job["variants"] = variants
           do { try self.write(job, id: id) }
           catch { journalError = error; return } // Empty request cannot commit a photo.
-          request.addResource(with: .photo, fileURL: url, options: resource)
+          if paired {
+            do {
+              try RawPhotoLibrary.addRawOriginal(to: request, raw: rawURL, processed: url,
+                rawFilename: URL(fileURLWithPath: resourceFilename).deletingPathExtension().lastPathComponent + ".dng",
+                processedFilename: resourceFilename)
+            } catch { journalError = error; return }
+          } else {
+            request.addResource(with: .photo, fileURL: url, options: resource)
+          }
           if let date = job["createdAt"] as? String { request.creationDate = Self.captureDate(date) }
           let gps = job["exifData"] as? [String: Any] ?? [:]
           if gps["removeGPS"] as? Bool != true, let lat = gps["GPSLatitude"] as? Double, let lon = gps["GPSLongitude"] as? Double {
@@ -429,6 +440,9 @@ final class HeifPlusEngine {
             let asset = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil).firstObject else {
         throw error("Permita leitura da foto salva para organizar os álbuns HEIF+")
       }
+      if job["rawPairEnabled"] as? Bool == true {
+        variants[index]["rawPair"] = try RawPhotoLibrary.verifyPair(asset)
+      }
       var titles = ["Komorebi"]
       if let project = job["projectAlbum"] as? String, !project.isEmpty, project != "Komorebi" { titles.append(project) }
       for title in titles {
@@ -446,5 +460,140 @@ final class HeifPlusEngine {
     }
     job["state"] = "saved"; try write(job, id: id)
     return job
+  }
+}
+
+// PhotoKit stores the two representations in the same asset.
+enum RawPhotoLibrary {
+  static func failure(_ message: String) -> NSError {
+    NSError(domain: "RawPhotoLibrary", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
+  }
+
+  // Keep both files as original resources. A content-editing output would
+  // instead turn the processed file into an edit of a RAW-only original.
+  static func addRawOriginal(to request: PHAssetCreationRequest, raw: URL, processed: URL,
+                            rawFilename: String, processedFilename: String) throws {
+    guard let rawSource = CGImageSourceCreateWithURL(raw as CFURL, nil),
+          let rawIdentifier = CGImageSourceGetType(rawSource) as String?,
+          let rawType = UTType(rawIdentifier), rawType.conforms(to: .rawImage),
+          let processedSource = CGImageSourceCreateWithURL(processed as CFURL, nil),
+          let processedIdentifier = CGImageSourceGetType(processedSource) as String?,
+          let processedType = UTType(processedIdentifier),
+          processedType == .heic || processedType == .jpeg else {
+      throw failure("Não foi possível identificar os dois originais da captura RAW")
+    }
+    let rawOptions = PHAssetResourceCreationOptions()
+    rawOptions.originalFilename = rawFilename
+    let processedOptions = PHAssetResourceCreationOptions()
+    processedOptions.originalFilename = processedFilename
+    if #available(iOS 26, *) {
+      rawOptions.contentType = rawType
+      processedOptions.contentType = processedType
+    } else {
+      rawOptions.uniformTypeIdentifier = rawIdentifier
+      processedOptions.uniformTypeIdentifier = processedIdentifier
+    }
+    request.addResource(with: .photo, fileURL: raw, options: rawOptions)
+    request.addResource(with: .alternatePhoto, fileURL: processed, options: processedOptions)
+    // Apply the choice after both original resources have been registered.
+    if #available(iOS 27, *) { request.originalResourceChoice = .raw }
+  }
+
+  // Validate what Photos actually imported, rather than assuming that the
+  // resource roles or a badge in another app reflect the two source files.
+  static func verifyPair(_ asset: PHAsset) throws -> [String: Any] {
+    let originals = PHAssetResource.assetResources(for: asset).filter {
+      $0.type == .photo || $0.type == .alternatePhoto
+    }
+    let raw = originals.first { UTType($0.uniformTypeIdentifier)?.conforms(to: .rawImage) == true }
+    let processed = originals.first {
+      let type = UTType($0.uniformTypeIdentifier)
+      return type == .heic || type == .jpeg
+    }
+    guard originals.count == 2, let raw, let processed else {
+      throw failure("O Fotos não preservou o RAW e a foto processada como dois originais associados")
+    }
+    var result: [String: Any] = [
+      "verified": true,
+      "rawResourceType": raw.type.rawValue,
+      "processedResourceType": processed.type.rawValue,
+      "processedContentType": processed.uniformTypeIdentifier,
+      "iosVersion": ProcessInfo.processInfo.operatingSystemVersionString,
+      "resourceOrder": originals.map { resource -> [String: Any] in
+        ["role": resource.type == .photo ? "photo" : "alternatePhoto",
+         "contentType": resource.uniformTypeIdentifier,
+         "isRaw": UTType(resource.uniformTypeIdentifier)?.conforms(to: .rawImage) == true]
+      },
+    ]
+    if #available(iOS 27, *) {
+      result["rawIsOriginal"] = asset.originalResourceChoice == .raw
+    }
+    let diagnostic = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
+    NSLog("[Komorebi RAW pair] %@", String(decoding: diagnostic, as: UTF8.self))
+    if #available(iOS 27, *), asset.originalResourceChoice != .raw {
+      throw failure("O Fotos não selecionou o DNG como original do par; consulte o log [Komorebi RAW pair]")
+    }
+    return result
+  }
+
+  static func applyMetadata(_ metadata: [String: Any], to request: PHAssetCreationRequest) {
+    if let text = metadata["createdAt"] as? String { request.creationDate = HeifPlusEngine.captureDate(text) }
+    if metadata["removeGPS"] as? Bool != true,
+       let lat = metadata["GPSLatitude"] as? Double, let lon = metadata["GPSLongitude"] as? Double {
+      request.location = CLLocation(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+        altitude: (metadata["GPSAltitude"] as? NSNumber)?.doubleValue ?? 0,
+        horizontalAccuracy: -1, verticalAccuracy: -1, timestamp: request.creationDate ?? Date())
+    }
+  }
+
+  static func save(rawURI: String, processedURI: String, options: [String: Any]) throws -> [String: Any] {
+    guard let raw = URL(string: rawURI), raw.isFileURL, raw.pathExtension.lowercased() == "dng",
+          let processed = URL(string: processedURI), processed.isFileURL,
+          FileManager.default.fileExists(atPath: raw.path), FileManager.default.fileExists(atPath: processed.path) else {
+      throw failure("Arquivos RAW + foto processada indisponíveis")
+    }
+    guard let source = CGImageSourceCreateWithURL(processed as CFURL, nil),
+          let type = CGImageSourceGetType(source) as String?,
+          type == UTType.heic.identifier || type == UTType.jpeg.identifier else {
+      throw failure("O companion do RAW deve ser HEIC ou JPEG")
+    }
+    let processedExtension = type == UTType.heic.identifier ? "heic" : "jpg"
+    let filename = options["originalFilename"] as? String ?? "Komorebi-\(UUID().uuidString).dng"
+    var titles = ["Komorebi"]
+    if let project = options["projectAlbum"] as? String, !project.isEmpty, project != "Komorebi" { titles.append(project) }
+    let albums = titles.map { title -> PHAssetCollection? in
+      let query = PHFetchOptions(); query.predicate = NSPredicate(format: "title = %@", title)
+      return PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: query).firstObject
+    }
+    var identifier: String?
+    var saveError: Error?
+    let semaphore = DispatchSemaphore(value: 0)
+    PHPhotoLibrary.shared().performChanges({
+      let request = PHAssetCreationRequest.forAsset()
+      do {
+        try addRawOriginal(to: request, raw: raw, processed: processed, rawFilename: filename,
+          processedFilename: URL(fileURLWithPath: filename).deletingPathExtension().lastPathComponent + "." + processedExtension)
+      } catch { saveError = error; return }
+      applyMetadata(options["metadata"] as? [String: Any] ?? [:], to: request)
+      if let placeholder = request.placeholderForCreatedAsset {
+        identifier = placeholder.localIdentifier
+        for (index, title) in titles.enumerated() {
+          let albumRequest = albums[index].flatMap { PHAssetCollectionChangeRequest(for: $0) }
+            ?? PHAssetCollectionChangeRequest.creationRequestForAssetCollection(withTitle: title)
+          albumRequest.addAssets([placeholder] as NSArray)
+        }
+      }
+    }) { success, error in
+      if !success && saveError == nil { saveError = error ?? failure("Falha ao salvar RAW + foto processada") }
+      semaphore.signal()
+    }
+    semaphore.wait()
+    if let saveError { throw saveError }
+    guard let identifier else { throw failure("O Fotos não retornou a foto RAW + processada") }
+    guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else {
+      throw failure("Permita acesso à foto salva para verificar o par RAW")
+    }
+    let pair = try verifyPair(asset)
+    return ["id": identifier, "localIdentifier": identifier, "rawPair": pair]
   }
 }

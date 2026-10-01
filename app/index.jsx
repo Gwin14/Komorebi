@@ -74,7 +74,8 @@ export default function App() {
     photoCopyright,
     location,
     saveAsJpeg,
-    photoFormat, heifPlusSettings, setHeifPlusSupport,
+    photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSupport,
+    setPreserveApplePhotographicStyles,
     preserveApplePhotographicStyles,
     firstTime,
     loading,
@@ -156,7 +157,7 @@ export default function App() {
   const portraitCapture = usePortraitCapture(captureDevice);
   const imageStacking = useImageStacking(captureDevice);
   const heifPlusPolicy = getHeifPlusPolicy({
-    photoFormat, rawMode: rawCapture.rawMode,
+    photoFormat: rawCapture.processedEnabled ? photoFormat : null, rawMode: rawCapture.rawMode,
     capabilities: isHeifPlusAvailable() ? rawCapture.capabilities : null,
     livePhotoEnabled: livePhoto.enabled, portraitModeEnabled: portraitCapture.enabled,
     stackingEnabled: imageStacking.enabled, platform: Platform.OS,
@@ -648,8 +649,10 @@ export default function App() {
         aspectRatio: captureAspectRatio,
         manualSettings,
         rawMode: heifPlusPolicy.rawMode,
+        rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
         heifPlus: heifPlusPolicy.effective ? {
           settings: heifPlusSettings,
+          rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
           projectAlbum: activeProject ? getProjectAlbumName(activeProject) : null,
           catalogMetadata: { author: photoAuthor, copyright: photoCopyright },
           intelligence: {
@@ -697,6 +700,7 @@ export default function App() {
     livePhoto.enabled,
     portraitCapture.enabled,
     heifPlusPolicy.rawMode, heifPlusPolicy.effective, heifPlusSettings, heifPlusPendingCount,
+    rawCapture.rawModeEnabled, rawCapture.processedEnabled,
     activeProject, photoAuthor, photoCopyright, intelligentModelReady,
     intelligentTagsEnabled, intelligentFilenameEnabled,
     saveAsJpeg,
@@ -730,6 +734,7 @@ export default function App() {
           if (!imageStacking.enabled) {
             stackingRestoreRef.current = {
               rawMode: rawCapture.rawMode,
+              processedEnabled: rawCapture.processedEnabled,
               livePhoto: livePhoto.enabled,
               portrait: portraitCapture.enabled,
               flash,
@@ -748,6 +753,7 @@ export default function App() {
           stackingRestoreRef.current = null;
           if (previous.rawMode !== "off" && rawCapture.available) {
             rawCapture.setRawMode(previous.rawMode);
+            if (!previous.processedEnabled) rawCapture.toggleFormat("processed");
           } else if (previous.livePhoto && livePhoto.available) {
             livePhoto.setEnabled(true);
           } else if (previous.portrait && portraitCapture.available) {
@@ -901,7 +907,16 @@ export default function App() {
 
       toggleMode(mode);
     },
-    toggleRawMode: rawCapture.toggleRawMode,
+    photoFormat,
+    processedEnabled: rawCapture.processedEnabled,
+    supportedRawModes: rawCapture.capabilities?.supportedModes || ["off"],
+    heifPlusAvailable: isHeifPlusAvailable(),
+    onSelectPhotoFormat: (format) => {
+      setPhotoFormat(format);
+      if (format === "jpeg") setPreserveApplePhotographicStyles(false);
+    },
+    onToggleFileFormat: rawCapture.toggleFormat,
+    onSelectRawMode: rawCapture.setRawMode,
     toggleLivePhotoEnabled: () => {
       setCameraReady(false);
       if (!livePhoto.enabled) portraitCapture.setEnabled(false);
