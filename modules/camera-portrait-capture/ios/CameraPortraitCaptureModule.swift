@@ -198,6 +198,7 @@ public class CameraPortraitCaptureModule: Module {
       let prepared = Self.copyPortraitAuxiliaryData(
         from: originalPhotoURL,
         toProcessedPhotoAt: processedPhotoURL,
+        metadata: options["metadata"] as? [String: Any],
         outputFormat: options["outputFormat"] as? String ?? "heif"
       )
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
@@ -227,6 +228,7 @@ public class CameraPortraitCaptureModule: Module {
       let convertedURL = try Self.convertImage(
         at: photoURL,
         metadataSourceURL: metadataSourceURL,
+        metadata: options["metadata"] as? [String: Any],
         outputFormat: options["outputFormat"] as? String ?? "heif"
       )
       return ["photoUri": convertedURL.absoluteString]
@@ -343,11 +345,11 @@ public class CameraPortraitCaptureModule: Module {
   static func copyPortraitAuxiliaryData(
     from sourceURL: URL?,
     toProcessedPhotoAt processedURL: URL,
+    metadata: [String: Any]?,
     outputFormat: String
   ) -> (url: URL, auxiliaryDataPreserved: Bool) {
     guard
       let sourceURL,
-      sourceURL != processedURL,
       let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
       let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
       let originalSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil)
@@ -358,10 +360,11 @@ public class CameraPortraitCaptureModule: Module {
     let isJpeg = outputFormat == "jpeg"
     let destinationURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("komorebi-portrait-processed-\(UUID().uuidString).\(isJpeg ? "jpg" : "heic")")
-    let properties = Self.mergedImageProperties(
+    var properties = Self.mergedImageProperties(
       metadataSource: originalSource,
       processedSource: processedSource
-    )
+    ) as NSDictionary as? [String: Any] ?? [:]
+    Self.applyGPSMetadata(metadata, to: &properties)
 
     guard let destination = CGImageDestinationCreateWithURL(
       destinationURL as CFURL,
@@ -372,7 +375,7 @@ public class CameraPortraitCaptureModule: Module {
       return (processedURL, false)
     }
 
-    CGImageDestinationAddImage(destination, processedImage, properties)
+    CGImageDestinationAddImage(destination, processedImage, properties as CFDictionary)
 
     var auxiliaryDataPreserved = false
     let auxiliaryTypes: [CFString] = [
@@ -406,6 +409,7 @@ public class CameraPortraitCaptureModule: Module {
   static func convertImage(
     at sourceURL: URL,
     metadataSourceURL: URL?,
+    metadata: [String: Any]?,
     outputFormat: String
   ) throws -> URL {
     guard
@@ -439,12 +443,44 @@ public class CameraPortraitCaptureModule: Module {
     } else {
       properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
     }
+    Self.applyGPSMetadata(metadata, to: &properties)
     properties[kCGImageDestinationLossyCompressionQuality as String] = 0.92
     CGImageDestinationAddImage(destination, image, properties as CFDictionary)
     guard CGImageDestinationFinalize(destination) else {
       throw PortraitCaptureError.captureFailed
     }
     return destinationURL
+  }
+
+  static func applyGPSMetadata(
+    _ metadata: [String: Any]?,
+    to properties: inout [String: Any]
+  ) {
+    guard let metadata else { return }
+    let gpsKey = kCGImagePropertyGPSDictionary as String
+
+    if metadata["removeGPS"] as? Bool == true {
+      properties.removeValue(forKey: gpsKey)
+      return
+    }
+
+    guard
+      let latitude = (metadata["GPSLatitude"] as? NSNumber)?.doubleValue,
+      let longitude = (metadata["GPSLongitude"] as? NSNumber)?.doubleValue
+    else { return }
+
+    var gps = properties[gpsKey] as? [String: Any] ?? [:]
+    gps[kCGImagePropertyGPSVersion as String] = [2, 2, 0, 0]
+    gps[kCGImagePropertyGPSLatitude as String] = abs(latitude)
+    gps[kCGImagePropertyGPSLatitudeRef as String] = latitude >= 0 ? "N" : "S"
+    gps[kCGImagePropertyGPSLongitude as String] = abs(longitude)
+    gps[kCGImagePropertyGPSLongitudeRef as String] = longitude >= 0 ? "E" : "W"
+
+    if let altitude = (metadata["GPSAltitude"] as? NSNumber)?.doubleValue {
+      gps[kCGImagePropertyGPSAltitude as String] = abs(altitude)
+      gps[kCGImagePropertyGPSAltitudeRef as String] = altitude >= 0 ? 0 : 1
+    }
+    properties[gpsKey] = gps
   }
 
   static func mergedImageProperties(

@@ -49,6 +49,12 @@ export type SaveLivePhotoOptions = {
   albumTitle?: string;
   outputFormat?: "heif" | "jpeg";
   originalFilename?: string | null;
+  metadata?: {
+    GPSLatitude?: number;
+    GPSLongitude?: number;
+    GPSAltitude?: number | null;
+    removeGPS?: boolean;
+  } | null;
 };
 
 export type SaveLivePhotoResult = {
@@ -127,6 +133,7 @@ export async function saveLivePhotoToLibrary(
     albumTitle: options.albumTitle ?? "Komorebi",
     outputFormat: options.outputFormat ?? "heif",
     originalFilename: options.originalFilename ?? null,
+    metadata: options.metadata ?? null,
   });
 
   return {

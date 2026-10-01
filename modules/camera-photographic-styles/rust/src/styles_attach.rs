@@ -220,6 +220,16 @@ fn upsert_maker_note_in_tiff(exif_payload: &[u8], note: &[u8]) -> Result<Vec<u8>
         u32::from_le_bytes(exif_ptr.3) as usize
     };
     let exif_ifd = read_tiff_ifd(tiff, be, exif_off).ok_or("ExifIFD out of bounds")?;
+    let gps_ifd = if let Some(gps_ptr) = ifd0.entries.iter().find(|e| e.0 == 0x8825) {
+        let gps_off = if be {
+            u32::from_be_bytes(gps_ptr.3) as usize
+        } else {
+            u32::from_le_bytes(gps_ptr.3) as usize
+        };
+        Some(read_tiff_ifd(tiff, be, gps_off).ok_or("GPS IFD out of bounds")?)
+    } else {
+        None
+    };
 
     let mut chain: Vec<TiffIfd> = Vec::new();
     let mut next = ifd0.next;
@@ -250,7 +260,7 @@ fn upsert_maker_note_in_tiff(exif_payload: &[u8], note: &[u8]) -> Result<Vec<u8>
     // drop any additional MakerNote entries (vendors write duplicates)
     exif_entries.retain(|e| e.0 != 0x927c || e.4.is_some());
 
-    // layout: header(8) + IFD0 + chain... + ExifIFD + data
+    // layout: header(8) + IFD0 + chain... + ExifIFD + GPS IFD + data
     let ifd0_block = 2 + ifd0.entries.len() * 12 + 4;
     let mut chain_offs: Vec<u32> = Vec::new();
     let mut cur = 8 + ifd0_block;
@@ -260,6 +270,11 @@ fn upsert_maker_note_in_tiff(exif_payload: &[u8], note: &[u8]) -> Result<Vec<u8>
     }
     let exif_new_off = cur as u32;
     cur += 2 + exif_entries.len() * 12 + 4;
+    let gps_new_off = gps_ifd.as_ref().map(|gps| {
+        let offset = cur as u32;
+        cur += gps.block_len;
+        offset
+    });
     let data_start = cur;
 
     let mut out: Vec<u8> = Vec::new();
@@ -275,6 +290,11 @@ fn upsert_maker_note_in_tiff(exif_payload: &[u8], note: &[u8]) -> Result<Vec<u8>
         wr_u32(&mut rec, be, *c);
         if *t == 0x8769 {
             wr_u32(&mut rec, be, exif_new_off);
+        } else if *t == 0x8825 {
+            let Some(gps_new_off) = gps_new_off else {
+                continue;
+            };
+            wr_u32(&mut rec, be, gps_new_off);
         } else {
             let Some(value) = tiff_entry_value(tiff, be, *ty, *c, vf).map(|s| s.to_vec()) else {
                 continue; // unreadable entry (exotic type / OOB): drop entirely
@@ -361,6 +381,34 @@ fn upsert_maker_note_in_tiff(exif_payload: &[u8], note: &[u8]) -> Result<Vec<u8>
         out.extend_from_slice(&rec);
     }
     out.extend_from_slice(&0u32.to_be_bytes());
+
+    // GPS IFD is referenced from IFD0 rather than through the ordinary IFD
+    // chain, so it must be copied and all of its out-of-line values relocated
+    // explicitly when the TIFF is rebuilt for the Apple MakerNote.
+    if let Some(gps_ifd) = &gps_ifd {
+        wr_u16(&mut out, be, gps_ifd.entries.len() as u16);
+        for (t, ty, c, vf) in &gps_ifd.entries {
+            let mut rec: Vec<u8> = Vec::new();
+            wr_u16(&mut rec, be, *t);
+            wr_u16(&mut rec, be, *ty);
+            wr_u32(&mut rec, be, *c);
+            let value = tiff_entry_value(tiff, be, *ty, *c, vf)
+                .ok_or("GPS entry value out of bounds")?;
+            if value.len() <= 4 {
+                let mut field = [0u8; 4];
+                field[..value.len()].copy_from_slice(value);
+                rec.extend_from_slice(&field);
+            } else {
+                wr_u32(&mut rec, be, (data_start + data_area.len()) as u32);
+                data_area.extend_from_slice(value);
+                if data_area.len() % 2 == 1 {
+                    data_area.push(0);
+                }
+            }
+            out.extend_from_slice(&rec);
+        }
+        out.extend_from_slice(&0u32.to_be_bytes());
+    }
     out.extend_from_slice(&data_area);
 
     let mut payload: Vec<u8> = exif_payload[..prefix].to_vec();

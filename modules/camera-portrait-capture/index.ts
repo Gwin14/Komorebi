@@ -51,11 +51,18 @@ export type SaveProcessedPortraitPhotoOptions = {
   albumTitle?: string;
   outputFormat?: "heif" | "jpeg";
   originalFilename?: string | null;
+  metadata?: ConvertPhotoFormatOptions["metadata"];
 };
 
 export type ConvertPhotoFormatOptions = {
   photoUri: string;
   metadataSourceUri?: string | null;
+  metadata?: {
+    GPSLatitude?: number;
+    GPSLongitude?: number;
+    GPSAltitude?: number | null;
+    removeGPS?: boolean;
+  } | null;
   outputFormat: "heif" | "jpeg";
 };
 
@@ -144,6 +151,7 @@ export async function saveProcessedPortraitPhoto(
     albumTitle: options.albumTitle ?? "Komorebi",
     outputFormat: options.outputFormat ?? "heif",
     originalFilename: options.originalFilename ?? null,
+    metadata: options.metadata ?? null,
   });
 
   return {
@@ -161,6 +169,7 @@ export async function convertPhotoFormat(
   const result = await nativeModule.convertPhotoFormat({
     photoUri: options.photoUri,
     metadataSourceUri: options.metadataSourceUri ?? null,
+    metadata: options.metadata ?? null,
     outputFormat: options.outputFormat,
   });
   return result.photoUri ?? options.photoUri;

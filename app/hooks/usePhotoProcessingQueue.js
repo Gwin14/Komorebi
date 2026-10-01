@@ -206,6 +206,7 @@ export default function usePhotoProcessingQueue(
             return await convertPhotoFormat({
               photoUri: uri,
               metadataSourceUri,
+              metadata: effectiveExifData,
               outputFormat,
             });
           } catch (error) {
@@ -298,6 +299,7 @@ export default function usePhotoProcessingQueue(
             albumTitle: "Komorebi",
             outputFormat,
             originalFilename: primaryFilename,
+            metadata: effectiveExifData,
           });
           mainAssetSaved = true;
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);
@@ -329,6 +331,7 @@ export default function usePhotoProcessingQueue(
             albumTitle: "Komorebi",
             outputFormat,
             originalFilename: primaryFilename,
+            metadata: effectiveExifData,
           });
           mainAssetSaved = true;
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);

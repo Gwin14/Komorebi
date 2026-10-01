@@ -187,6 +187,7 @@ public class CameraLivePhotoModule: Module {
       let preparedPhotoURL = Self.copyImageMetadata(
         from: originalPhotoURL,
         toProcessedPhotoAt: photoURL,
+        metadata: options["metadata"] as? [String: Any],
         outputFormat: options["outputFormat"] as? String ?? "heif"
       ) ?? photoURL
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
@@ -256,11 +257,12 @@ public class CameraLivePhotoModule: Module {
   static func copyImageMetadata(
     from sourceURL: URL?,
     toProcessedPhotoAt processedURL: URL,
+    metadata: [String: Any]?,
     outputFormat: String
   ) -> URL? {
     // Se o frame não foi alterado, preservar o contêiner HEIF inteiro mantém
     // Maker Notes e imagens auxiliares que uma recodificação não sabe recriar.
-    if sourceURL == processedURL {
+    if sourceURL == processedURL && metadata == nil {
       return processedURL
     }
 
@@ -277,9 +279,17 @@ public class CameraLivePhotoModule: Module {
     let metadataSource = sourceURL.flatMap {
       CGImageSourceCreateWithURL($0 as CFURL, nil)
     }
-    let properties = metadataSource.map {
-      Self.mergedImageProperties(metadataSource: $0, processedSource: processedSource)
-    } ?? CGImageSourceCopyPropertiesAtIndex(processedSource, 0, nil)
+    var properties: [String: Any]
+    if let metadataSource {
+      properties = Self.mergedImageProperties(
+        metadataSource: metadataSource,
+        processedSource: processedSource
+      ) as NSDictionary as? [String: Any] ?? [:]
+    } else {
+      properties = CGImageSourceCopyPropertiesAtIndex(processedSource, 0, nil)
+        as? [String: Any] ?? [:]
+    }
+    Self.applyGPSMetadata(metadata, to: &properties)
     guard let destination = CGImageDestinationCreateWithURL(
       destinationURL as CFURL,
       (isJpeg ? UTType.jpeg : UTType.heic).identifier as CFString,
@@ -289,8 +299,35 @@ public class CameraLivePhotoModule: Module {
       return nil
     }
 
-    CGImageDestinationAddImage(destination, processedImage, properties)
+    CGImageDestinationAddImage(destination, processedImage, properties as CFDictionary)
     return CGImageDestinationFinalize(destination) ? destinationURL : nil
+  }
+
+  static func applyGPSMetadata(
+    _ metadata: [String: Any]?,
+    to properties: inout [String: Any]
+  ) {
+    guard let metadata else { return }
+    let gpsKey = kCGImagePropertyGPSDictionary as String
+    if metadata["removeGPS"] as? Bool == true {
+      properties.removeValue(forKey: gpsKey)
+      return
+    }
+    guard
+      let latitude = (metadata["GPSLatitude"] as? NSNumber)?.doubleValue,
+      let longitude = (metadata["GPSLongitude"] as? NSNumber)?.doubleValue
+    else { return }
+    var gps = properties[gpsKey] as? [String: Any] ?? [:]
+    gps[kCGImagePropertyGPSVersion as String] = [2, 2, 0, 0]
+    gps[kCGImagePropertyGPSLatitude as String] = abs(latitude)
+    gps[kCGImagePropertyGPSLatitudeRef as String] = latitude >= 0 ? "N" : "S"
+    gps[kCGImagePropertyGPSLongitude as String] = abs(longitude)
+    gps[kCGImagePropertyGPSLongitudeRef as String] = longitude >= 0 ? "E" : "W"
+    if let altitude = (metadata["GPSAltitude"] as? NSNumber)?.doubleValue {
+      gps[kCGImagePropertyGPSAltitude as String] = abs(altitude)
+      gps[kCGImagePropertyGPSAltitudeRef as String] = altitude >= 0 ? 0 : 1
+    }
+    properties[gpsKey] = gps
   }
 
   static func mergedImageProperties(
