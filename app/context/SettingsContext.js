@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   loadStoredSettings,
   saveStoredSetting,
@@ -90,7 +90,10 @@ export const SettingsProvider = ({ children }) => {
   const [heifPlusSupport, setHeifPlusSupport] = useState(null);
   const [photoFormat, setPhotoFormat] = useState(DEFAULT_SETTINGS.photoFormat);
   const [heifPlusSettings, updateHeifPlusSettings] = useState(DEFAULT_SETTINGS.heifPlusSettings);
-  const setHeifPlusSettings = (value) => updateHeifPlusSettings(normalizeHeifPlusSettings(value));
+  const heifPlusSaveQueue = useRef(Promise.resolve());
+  const setHeifPlusSettings = (value) => updateHeifPlusSettings((current) =>
+    normalizeHeifPlusSettings(typeof value === "function" ? value(current) : value),
+  );
   const saveAsJpeg = photoFormat === "jpeg";
   const setSaveAsJpeg = (enabled) => setPhotoFormat(enabled ? "jpeg" : "heif");
   const [preserveApplePhotographicStyles, setPreserveApplePhotographicStyles] =
@@ -392,8 +395,15 @@ export const SettingsProvider = ({ children }) => {
   useEffect(() => {
     if (loading) return;
     void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_FORMAT, photoFormat);
-    void saveStoredSetting(SETTINGS_STORAGE_KEYS.HEIF_PLUS_SETTINGS, JSON.stringify(heifPlusSettings));
-  }, [loading, photoFormat, heifPlusSettings]);
+  }, [loading, photoFormat]);
+
+  useEffect(() => {
+    if (loading) return;
+    // Keep rapid slider updates ordered so an older write cannot replace the latest value.
+    heifPlusSaveQueue.current = heifPlusSaveQueue.current
+      .then(() => saveStoredSetting(SETTINGS_STORAGE_KEYS.HEIF_PLUS_SETTINGS, JSON.stringify(heifPlusSettings)))
+      .catch((error) => console.error("Erro ao salvar ajustes HEIF+", error));
+  }, [loading, heifPlusSettings]);
 
   const value = {
     photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSettings,

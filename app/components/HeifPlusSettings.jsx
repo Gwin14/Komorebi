@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import { useEffect, useState } from "react";
 import { Alert, DeviceEventEmitter, Pressable, Text, View } from "react-native";
@@ -10,6 +11,7 @@ import heifStyles from "./HeifPlusSettings.styles";
 
 export default function HeifPlusSettings() {
   const { heifPlusSettings, setHeifPlusSettings, heifPlusSupport } = useSettings();
+  const [expanded, setExpanded] = useState(false);
   const [jobs, setJobs] = useState([]);
   useEffect(() => {
     let mounted = true;
@@ -19,7 +21,7 @@ export default function HeifPlusSettings() {
     const updates = DeviceEventEmitter.addListener("heifPlusJobsUpdated", refresh);
     return () => { mounted = false; subscription.remove(); updates.remove(); };
   }, []);
-  const update = (key, value) => setHeifPlusSettings({ ...heifPlusSettings, [key]: value });
+  const update = (key, value) => setHeifPlusSettings((current) => ({ ...current, [key]: value }));
   const supported = (key) => heifPlusSupport?.supportedControls?.[key] !== false;
   const manualDefault = (key, min, max) => ({
     sharpnessAmount: 0.3, luminanceNoiseReductionAmount: 0.3, contrastAmount: 0.15,
@@ -28,7 +30,20 @@ export default function HeifPlusSettings() {
   })[key] ?? (min + max) / 2;
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Revelação HEIF+</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Ajustes de revelação HEIF+"
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((current) => !current)}
+        style={({ pressed }) => [styles.group, styles.actionRow, pressed && styles.rowPressed]}
+      >
+        <View style={styles.menuText}>
+          <Text style={styles.rowLabel}>Revelação HEIF+</Text>
+          <Text style={styles.rowDescription}>Ajustes do RAW · preferências salvas</Text>
+        </View>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#777" />
+      </Pressable>
+      {expanded && <View style={heifStyles.expandedContent}>
       <Text style={styles.sectionDescription}>
         Ajustes aplicados ao RAW antes do HEIF. Automático preserva a calibração Apple de cada foto.
         LUT, halation e grain são aplicados depois da revelação. Somente o HEIF é salvo.
@@ -52,7 +67,7 @@ export default function HeifPlusSettings() {
                 <Slider accessibilityLabel={label} minimumValue={min} maximumValue={max}
                   step={step} value={heifPlusSettings[key]} disabled={!available}
                   minimumTrackTintColor="#ffaa00" thumbTintColor="#ffaa00"
-                  onSlidingComplete={(value) => update(key, value)} />
+                  onValueChange={(value) => update(key, value)} />
               </>}
               {key === "boostShadowAmount" && <Text style={styles.rowDescription}>Sem efeito quando a curva global está em zero.</Text>}
             </View>
@@ -73,6 +88,7 @@ export default function HeifPlusSettings() {
           <Text style={styles.rowLabel}>Restaurar padrões</Text>
         </Pressable>
       </View>
+      </View>}
       {jobs.length > 0 && <>
         <Text style={styles.sectionTitle}>Capturas pendentes ({jobs.length}/3)</Text>
         {jobs.map((job) => <View style={[styles.group, heifStyles.controlRow]} key={job.id}>

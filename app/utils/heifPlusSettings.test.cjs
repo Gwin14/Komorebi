@@ -68,3 +68,11 @@ test('resuming committed jobs does not export or save another Photos asset', asy
   assert.equal(result, job);
   assert.deepEqual(events, ['metadata', 'cleanup']);
 });
+
+test('custom HEIF+ settings preserve automatic values, manual values and disabled toggles after storage restoration', () => {
+  const customized = normalizeHeifPlusSettings({ exposure: null, sharpnessAmount: 0.72,
+    neutralTemperature: 8200, neutralTint: -12, highlightRecoveryEnabled: false,
+    lensCorrectionEnabled: false });
+  const restored = normalizeHeifPlusSettings(JSON.parse(JSON.stringify(customized)));
+  assert.deepEqual(restored, customized);
+});
