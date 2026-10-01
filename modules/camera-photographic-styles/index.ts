@@ -5,7 +5,10 @@ export type PhotographicStylesCompatibilityResult = {
   verified: boolean;
 };
 
+export type CatalogMetadata = { author?: string; copyright?: string; tags?: string[]; rating?: number };
+
 export type PhotographicStylesMetadata = {
+  catalogMetadata?: CatalogMetadata;
   GPSLatitude?: number;
   GPSLongitude?: number;
   GPSAltitude?: number | null;
@@ -74,4 +77,24 @@ export async function deletePhotographicStylesTemporaryPhoto(
 ): Promise<boolean> {
   if (!nativeModule?.deleteTemporaryPhoto) return false;
   return nativeModule.deleteTemporaryPhoto(photoUri);
+}
+
+export async function writeCatalogMetadata(photoUri: string, fields: CatalogMetadata): Promise<string> {
+  if (!nativeModule?.writeCatalogMetadata) throw new Error("Gravação de metadados indisponível. Recompile o app.");
+  return nativeModule.writeCatalogMetadata(photoUri, fields);
+}
+
+export async function readCatalogRating(photoUri: string): Promise<number | null> {
+  if (!nativeModule?.readCatalogRating) return null;
+  return nativeModule.readCatalogRating(photoUri);
+}
+
+export async function setPhotoAssetRating(assetId: string, rating: number): Promise<boolean> {
+  if (!nativeModule?.setAssetRating) throw new Error("Classificação indisponível. Recompile o app.");
+  return nativeModule.setAssetRating(assetId, rating);
+}
+
+export async function readPhotoAssetRating(assetId: string): Promise<number | null> {
+  if (!nativeModule?.readAssetRating) return null;
+  return nativeModule.readAssetRating(assetId);
 }

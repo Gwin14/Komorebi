@@ -25,6 +25,11 @@ import {
   normalizePhotoIntelligence,
 } from "../utils/photoIntelligence";
 
+import {
+  writePhotoCatalogMetadata,
+  deleteCatalogTemporaryPhoto,
+} from "../utils/photoCatalogMetadata";
+
 const PHOTO_INTELLIGENCE_TIMEOUT_MS = 45000;
 
 const withTimeout = (promise, timeoutMs) =>
@@ -151,9 +156,14 @@ export default function usePhotoProcessingQueue(
           intelligence,
           primaryFilename,
         );
-        const effectiveExifData = exifData
-          ? { ...exifData, komorebiMetadata }
-          : exifData;
+        const catalogMetadata = Object.fromEntries(
+          Object.entries({
+            author: intelligenceOptions.author?.trim() || undefined,
+            copyright: intelligenceOptions.copyright?.trim() || undefined,
+            tags: intelligence?.tags?.length ? intelligence.tags : undefined,
+          }).filter(([, value]) => value !== undefined),
+        );
+        const effectiveExifData = { ...exifData, komorebiMetadata, catalogMetadata };
         const filenameFor = (extension, suffix = null) =>
           intelligence?.filenameStem
             ? buildIntelligentFilename(intelligence.filenameStem, {
@@ -163,7 +173,7 @@ export default function usePhotoProcessingQueue(
               })
             : null;
         const shouldApplyExifBeforeSaving =
-          captureMode !== "raw" && Boolean(effectiveExifData);
+          captureMode !== "raw" && Boolean(exifData);
         const uriToSave = shouldApplyExifBeforeSaving
           ? await applyExifDataToImage(
               processedUri,
@@ -222,14 +232,20 @@ export default function usePhotoProcessingQueue(
           let preparedUri = null;
           try {
             preparedUri = await prepareRegularPhoto(uri, metadataSourceUri);
-            const asset = await saveToAlbum(
-              project,
-              preparedUri,
-              filenameFor(
-                outputFormat === "heif" ? "heic" : extensionForUri(preparedUri),
-                filenameSuffix,
-              ),
-            );
+            const catalogUri = await writePhotoCatalogMetadata(preparedUri, catalogMetadata);
+            let asset;
+            try {
+              asset = await saveToAlbum(
+                project,
+                catalogUri,
+                filenameFor(
+                  outputFormat === "heif" ? "heic" : extensionForUri(preparedUri),
+                  filenameSuffix,
+                ),
+              );
+            } finally {
+              if (catalogUri !== preparedUri) await deleteCatalogTemporaryPhoto(catalogUri);
+            }
             mainAssetSaved = true;
             if (preserveApplePhotographicStyles) {
               if (!asset?.id) {
@@ -260,11 +276,14 @@ export default function usePhotoProcessingQueue(
         };
 
         if (captureMode === "raw") {
-          const rawAsset = await saveToAlbum(
-            project,
-            originalUri || processedUri,
-            primaryFilename,
-          );
+          const rawUri = originalUri || processedUri;
+          const catalogRawUri = await writePhotoCatalogMetadata(rawUri, catalogMetadata);
+          let rawAsset;
+          try {
+            rawAsset = await saveToAlbum(project, catalogRawUri, primaryFilename);
+          } finally {
+            if (catalogRawUri !== rawUri) await deleteCatalogTemporaryPhoto(catalogRawUri);
+          }
           mainAssetSaved = true;
           await saveMetadataForAsset(rawAsset?.id);
 
@@ -403,6 +422,8 @@ export default function usePhotoProcessingQueue(
     [
       activeProject,
       hasMediaPermission,
+      intelligenceOptions.author,
+      intelligenceOptions.copyright,
       intelligenceOptions.generateFilename,
       intelligenceOptions.generateTags,
       removeCurrentProcessing,

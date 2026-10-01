@@ -1,6 +1,24 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  ratingBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    flexDirection: "row",
+    gap: 3,
+    alignItems: "center",
+    backgroundColor: "#000b",
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  ratingBadgeText: { color: "#fff", fontSize: 12 },
+  ratingSection: { marginBottom: 20 },
+  ratingLabel: { color: "#fff", fontSize: 16, marginBottom: 8 },
+  ratingControls: { flexDirection: "row", alignItems: "center" },
+  ratingStar: { padding: 7 },
+  ratingClear: { padding: 7, marginRight: 5 },
   container: { flex: 1, backgroundColor: "#000" },
   navigationBar: {
     alignItems: "center",

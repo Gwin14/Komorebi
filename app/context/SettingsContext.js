@@ -10,6 +10,8 @@ import { reconcileProjectsWithAlbums } from "../utils/projects";
 const SettingsContext = createContext(null);
 
 export const DEFAULT_SETTINGS = {
+  photoAuthor: "",
+  photoCopyright: "",
   retroStyle: false,
   gridVisible: false,
   levelVisible: false,
@@ -38,6 +40,8 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const SettingsProvider = ({ children }) => {
+  const [photoAuthor, setPhotoAuthor] = useState(DEFAULT_SETTINGS.photoAuthor);
+  const [photoCopyright, setPhotoCopyright] = useState(DEFAULT_SETTINGS.photoCopyright);
   const [retroStyle, setRetroStyle] = useState(DEFAULT_SETTINGS.retroStyle);
   const [gridVisible, setGridVisible] = useState(DEFAULT_SETTINGS.gridVisible);
   const [levelVisible, setLevelVisible] = useState(
@@ -115,6 +119,8 @@ export const SettingsProvider = ({ children }) => {
         setCompositionScanEnabled(savedSettings.compositionScanEnabled);
         setIntelligentTagsEnabled(savedSettings.intelligentTagsEnabled);
         setIntelligentFilenameEnabled(savedSettings.intelligentFilenameEnabled);
+        setPhotoAuthor(savedSettings.photoAuthor);
+        setPhotoCopyright(savedSettings.photoCopyright);
         setShutterSound(savedSettings.shutterSound);
         setLocation(savedSettings.location);
         setSaveAsJpeg(savedSettings.saveAsJpeg);
@@ -367,7 +373,17 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [activeProjectId, loading]);
 
+  useEffect(() => {
+    if (loading) return;
+    void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_AUTHOR, photoAuthor);
+    void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_COPYRIGHT, photoCopyright);
+  }, [loading, photoAuthor, photoCopyright]);
+
   const value = {
+    photoAuthor,
+    setPhotoAuthor,
+    photoCopyright,
+    setPhotoCopyright,
     retroStyle,
     setRetroStyle,
     gridVisible,

@@ -11,6 +11,7 @@ import {
   Pressable,
   ScrollView,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -133,6 +134,10 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     ? initialPage
     : SETTINGS_PAGES.ROOT;
   const {
+    photoAuthor,
+    setPhotoAuthor,
+    photoCopyright,
+    setPhotoCopyright,
     retroStyle,
     setRetroStyle,
     gridVisible,
@@ -511,6 +516,29 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           />
         )}
       </Section>
+      <Section title="Autoria" description="Incluídos nos metadados das próximas fotos.">
+        <Text style={styles.rowLabel}>Autor</Text>
+        <TextInput
+          accessibilityLabel="Autor das fotos"
+          placeholder="Nome do autor"
+          placeholderTextColor="#777"
+          style={styles.metadataInput}
+          value={photoAuthor}
+          onChangeText={setPhotoAuthor}
+          maxLength={256}
+        />
+        <Text style={styles.rowLabel}>Direitos autorais</Text>
+        <TextInput
+          accessibilityLabel="Direitos autorais das fotos"
+          placeholder="© Seu nome. Todos os direitos reservados."
+          placeholderTextColor="#777"
+          style={styles.metadataInput}
+          value={photoCopyright}
+          onChangeText={setPhotoCopyright}
+          maxLength={1024}
+          multiline
+        />
+      </Section>
       <Section title="Metadados e edição">
         <CustomToggle
           grouped
@@ -555,7 +583,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
         />
         <CustomToggle
           grouped
-          description="Adiciona tags em português aos detalhes da foto."
+          description="Grava palavras-chave em português nos metadados IPTC e XMP da foto."
           disabled={!modelReady}
           label="Tags inteligentes"
           value={intelligentTagsEnabled}

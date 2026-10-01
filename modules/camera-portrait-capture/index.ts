@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { CatalogMetadata } from "../camera-photographic-styles";
 import { Platform, View, type ViewProps } from "react-native";
 
 export type PortraitCaptureCapabilities = {
@@ -58,6 +59,7 @@ export type ConvertPhotoFormatOptions = {
   photoUri: string;
   metadataSourceUri?: string | null;
   metadata?: {
+    catalogMetadata?: CatalogMetadata;
     GPSLatitude?: number;
     GPSLongitude?: number;
     GPSAltitude?: number | null;

@@ -3,6 +3,7 @@ import Foundation
 import ImageIO
 import CoreLocation
 import Photos
+import UniformTypeIdentifiers
 
 public final class CameraPhotographicStylesModule: Module {
   enum CompatibilityError: Error, LocalizedError {
@@ -80,6 +81,95 @@ public final class CameraPhotographicStylesModule: Module {
         metadata: metadata,
         metadataSourceURL: metadataSourceURL
       )
+    }
+
+    AsyncFunction("writeCatalogMetadata") { (photoUri: String, fields: [String: Any]) throws -> String in
+      guard let url = Self.fileURL(from: photoUri) else { throw CompatibilityError.invalidURL }
+      let output = FileManager.default.temporaryDirectory.appendingPathComponent("komorebi-catalog-\(UUID().uuidString).\(url.pathExtension)")
+      try PhotoCatalogMetadata.write(from: url, to: output, fields: fields)
+      return output.absoluteString
+    }
+
+    AsyncFunction("readCatalogRating") { (photoUri: String) -> Int? in
+      guard let url = Self.fileURL(from: photoUri),
+            let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+            let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil),
+            let value = CGImageMetadataCopyStringValueWithPath(metadata, nil, "xmp:Rating" as CFString),
+            let rating = Int(value as String), (0...5).contains(rating) else { return nil }
+      return rating
+    }
+
+    AsyncFunction("readAssetRating") { (localIdentifier: String) -> Int? in
+      guard #available(iOS 27, *) else { return nil }
+      let identifier = localIdentifier.hasPrefix("ph://")
+        ? String(localIdentifier.dropFirst(5)) : localIdentifier
+      guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else { return nil }
+      // The Photos library is authoritative, including unset (0), so clearing
+      // a rating in Photos does not revive a stale rating from the image's XMP.
+      return asset.rating.rawValue
+    }
+
+    AsyncFunction("setAssetRating") { (localIdentifier: String, rating: Int) async throws -> Bool in
+      guard (0...5).contains(rating) else { throw CompatibilityError.metadataWriteFailed }
+      let identifier = localIdentifier.replacingOccurrences(of: "ph://", with: "")
+      guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else { return false }
+      let options = PHContentEditingInputRequestOptions()
+      options.isNetworkAccessAllowed = true
+      // Request the current rendition, including edits made in other apps.
+      options.canHandleAdjustmentData = { _ in false }
+      let input: PHContentEditingInput = try await withCheckedThrowingContinuation { continuation in
+        asset.requestContentEditingInput(with: options) { input, _ in
+          if let input { continuation.resume(returning: input) }
+          else { continuation.resume(throwing: CompatibilityError.invalidImage) }
+        }
+      }
+      let output = PHContentEditingOutput(contentEditingInput: input)
+      if asset.mediaSubtypes.contains(.photoLive) {
+        guard let context = PHLivePhotoEditingContext(livePhotoEditingInput: input) else { throw CompatibilityError.invalidImage }
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+          context.saveLivePhoto(to: output, options: nil) { success, error in
+            if success { continuation.resume(returning: ()) }
+            else { continuation.resume(throwing: error ?? CompatibilityError.metadataWriteFailed) }
+          }
+        }
+        try PhotoCatalogMetadata.apply(to: output.renderedContentURL, metadata: ["catalogMetadata": ["rating": rating]])
+      } else {
+        guard let sourceURL = input.fullSizeImageURL,
+              let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
+              let type = CGImageSourceGetType(source) else { throw CompatibilityError.invalidImage }
+        var destinationURL = output.renderedContentURL
+        if #available(iOS 17, *) {
+          if let contentType = UTType(type as String), output.supportedRenderedContentTypes.contains(contentType) {
+            destinationURL = try output.renderedContentURL(for: contentType)
+          }
+        }
+        if type as String == UTType.jpeg.identifier || destinationURL.pathExtension.lowercased() == "heic" {
+          try PhotoCatalogMetadata.write(from: sourceURL, to: destinationURL, fields: ["rating": rating])
+        } else {
+          // Photos keeps the original RAW resource; rating belongs to its current rendition.
+          guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+                let destination = CGImageDestinationCreateWithURL(destinationURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil) else { throw CompatibilityError.invalidImage }
+          let metadata = try PhotoCatalogMetadata.make(["rating": rating], source: source)
+          let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+          CGImageDestinationAddImageAndMetadata(destination, image, metadata, properties)
+          guard CGImageDestinationFinalize(destination) else { throw CompatibilityError.metadataWriteFailed }
+        }
+      }
+      output.adjustmentData = PHAdjustmentData(formatIdentifier: "app.komorebi.rating", formatVersion: "1", data: Data("\(rating)".utf8))
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        PHPhotoLibrary.shared().performChanges {
+          let request = PHAssetChangeRequest(for: asset)
+          request.contentEditingOutput = output
+          if #available(iOS 27, *), let libraryRating = PHAsset.Rating(rawValue: rating) {
+            // Save the embedded XMP and Photos catalog rating in one transaction.
+            request.rating = libraryRating
+          }
+        } completionHandler: { success, error in
+          if success { continuation.resume(returning: ()) }
+          else { continuation.resume(throwing: error ?? CompatibilityError.metadataWriteFailed) }
+        }
+      }
+      return true
     }
 
     AsyncFunction("deleteTemporaryPhoto") { (photoUri: String) throws -> Bool in

@@ -1,6 +1,15 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  metadataInput: {
+    color: "#fff",
+    backgroundColor: "#222",
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 8,
+    marginBottom: 16,
+    fontSize: 16,
+  },
   container: { flex: 1, backgroundColor: "#000" },
   loadingContainer: {
     flex: 1,

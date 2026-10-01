@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { CatalogMetadata } from "../camera-photographic-styles";
 import { Platform, View, type ViewProps } from "react-native";
 
 export type LivePhotoCapabilities = {
@@ -50,6 +51,7 @@ export type SaveLivePhotoOptions = {
   outputFormat?: "heif" | "jpeg";
   originalFilename?: string | null;
   metadata?: {
+    catalogMetadata?: CatalogMetadata;
     GPSLatitude?: number;
     GPSLongitude?: number;
     GPSAltitude?: number | null;

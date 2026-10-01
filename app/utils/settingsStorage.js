@@ -4,6 +4,8 @@ import { restoreZebraPreferences } from "./zebraSettings";
 import { normalizeTopBarControls } from "./topBarControls";
 
 export const SETTINGS_STORAGE_KEYS = {
+  PHOTO_AUTHOR: "@settings/photoAuthor",
+  PHOTO_COPYRIGHT: "@settings/photoCopyright",
   RETRO_STYLE: "@settings/retroStyle",
   GRID_VISIBLE: "@settings/gridVisible",
   LEVEL_VISIBLE: "@settings/levelVisible",
@@ -104,6 +106,11 @@ export async function loadStoredSettings(defaults) {
     AsyncStorage.getItem(keys.ACTIVE_PROJECT_ID),
   ]);
 
+  const [photoAuthor, photoCopyright] = await Promise.all([
+    AsyncStorage.getItem(keys.PHOTO_AUTHOR),
+    AsyncStorage.getItem(keys.PHOTO_COPYRIGHT),
+  ]);
+
   const intelligentPreferences = restoreIntelligentPreferences(
     {
       compositionScan: savedCompositionScanEnabled,
@@ -121,6 +128,8 @@ export async function loadStoredSettings(defaults) {
   );
 
   return {
+    photoAuthor: photoAuthor ?? defaults.photoAuthor,
+    photoCopyright: photoCopyright ?? defaults.photoCopyright,
     retroStyle: parseBoolean(savedRetroStyle, defaults.retroStyle),
     gridVisible: parseBoolean(savedGridVisible, defaults.gridVisible),
     levelVisible: parseBoolean(savedLevelVisible, defaults.levelVisible),

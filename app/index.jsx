@@ -68,6 +68,8 @@ export default function App() {
     compositionScanEnabled,
     intelligentTagsEnabled,
     intelligentFilenameEnabled,
+    photoAuthor,
+    photoCopyright,
     location,
     saveAsJpeg,
     preserveApplePhotographicStyles,
@@ -321,6 +323,8 @@ export default function App() {
     removeCurrentProcessing,
     setIsProcessing,
   } = usePhotoProcessingQueue(hasMediaPermission, activeProject, {
+    author: photoAuthor,
+    copyright: photoCopyright,
     generateTags: intelligentModelReady && intelligentTagsEnabled,
     generateFilename: intelligentModelReady && intelligentFilenameEnabled,
   });

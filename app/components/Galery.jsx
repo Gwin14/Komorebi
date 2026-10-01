@@ -1,4 +1,4 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
@@ -6,6 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  AppState,
   Animated,
   Easing,
   FlatList,
@@ -35,6 +37,8 @@ import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
 import ProjectChecklist from "./ProjectChecklist";
 import ProjectSwipeList from "./ProjectSwipeList";
+
+import { readPhotoRating, savePhotoRating } from "../utils/photoCatalogMetadata";
 
 const PHOTOS_PER_ROW = 4;
 const INFO_SWIPE_DISTANCE = 56;
@@ -112,6 +116,8 @@ export default function Galery() {
     ? projects.find((project) => project.id === viewProjectId) || null
     : null;
   const [permission, requestPermission] = MediaLibrary.usePermissions();
+  const ratingSavingRef = useRef(false);
+  const [ratingSaving, setRatingSaving] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -135,9 +141,9 @@ export default function Galery() {
   const router = useRouter();
 
   const loadKomorebiPhotos = useCallback(
-    async (project = viewProject) => {
+    async (project = viewProject, showLoading = true) => {
       try {
-        setLoading(true);
+        if (showLoading) setLoading(true);
         const album = await getKomorebiAlbum(project);
         if (!album) {
           setPhotos([]);
@@ -154,10 +160,11 @@ export default function Galery() {
           const batch = await Promise.all(
             assets.assets.slice(index, index + 4).map(async (asset) => {
               if (!asset?.uri || !asset?.id) return null;
-              if (!asset.uri.startsWith("ph://")) return asset;
+              if (!asset.uri.startsWith("ph://")) return { ...asset, rating: await readPhotoRating(asset.uri, asset.id) };
               try {
                 const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-                return { ...asset, uri: info.localUri || asset.uri };
+                const uri = info.localUri || asset.uri;
+                return { ...asset, uri, rating: await readPhotoRating(uri, asset.id) };
               } catch (error) {
                 console.warn(
                   "Não foi possível carregar o asset da galeria:",
@@ -178,7 +185,7 @@ export default function Galery() {
       } catch (error) {
         console.log("Erro ao carregar fotos:", error);
       } finally {
-        setLoading(false);
+        if (showLoading) setLoading(false);
       }
     },
     [viewProject],
@@ -193,6 +200,21 @@ export default function Galery() {
     loadKomorebiPhotos();
   }, [loadKomorebiPhotos, permission, requestPermission]);
 
+  useEffect(() => {
+    if (!permission?.granted) return;
+    let previousState = AppState.currentState;
+    const refresh = () => { void loadKomorebiPhotos(undefined, false); };
+    const appSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active" && previousState !== "active") refresh();
+      previousState = state;
+    });
+    const librarySubscription = MediaLibrary.addListener(refresh);
+    return () => {
+      appSubscription.remove();
+      librarySubscription.remove();
+    };
+  }, [permission?.granted, loadKomorebiPhotos]);
+
   const orderedPhotos = useMemo(
     () => [...photos].sort((a, b) => b.creationTime - a.creationTime),
     [photos],
@@ -206,6 +228,31 @@ export default function Galery() {
     [orderedPhotos, selectedAssetId],
   );
   const selectedPhoto = orderedPhotos[selectedIndex] || null;
+
+  const handleRating = async (rating) => {
+    if (!selectedPhoto || ratingSavingRef.current) return;
+    const assetId = selectedPhoto.id;
+    ratingSavingRef.current = true;
+    setRatingSaving(true);
+    try {
+      await savePhotoRating(assetId, rating);
+      let refreshedUri = null;
+      try {
+        const info = await MediaLibrary.getAssetInfoAsync(assetId);
+        refreshedUri = info.localUri || info.uri;
+      } catch (error) {
+        console.warn("Classificação salva; não foi possível atualizar a prévia", error);
+      }
+      setPhotos((previous) => previous.map((photo) => photo.id === assetId ? { ...photo, rating, uri: refreshedUri || photo.uri } : photo));
+    } catch (error) {
+      console.warn("Falha ao classificar foto", error);
+      Alert.alert("Não foi possível salvar a classificação", "A nota anterior foi mantida. Verifique a permissão para editar fotos e tente novamente.");
+    } finally {
+      ratingSavingRef.current = false;
+      setRatingSaving(false);
+    }
+  };
+
 
   const handleChangeViewProject = useCallback(
     (projectId) => {
@@ -563,6 +610,9 @@ export default function Galery() {
                 onPress={() => openViewer(photo)}
               >
                 <Image source={{ uri: photo.uri }} style={styles.image} />
+                {photo.rating > 0 && (
+                  <View style={styles.ratingBadge}><Ionicons name="star" size={10} color="#ffaa00" /><Text style={styles.ratingBadgeText}>{photo.rating}</Text></View>
+                )}
               </TouchableOpacity>
             ))}
             {Array.from({ length: PHOTOS_PER_ROW - row.length }).map(
@@ -794,6 +844,20 @@ export default function Galery() {
                   contentContainerStyle={styles.infoScrollContent}
                   showsVerticalScrollIndicator={false}
                 >
+                  <View style={styles.ratingSection}>
+                    <Text style={styles.ratingLabel}>Classificação{selectedPhoto?.rating != null ? ` · ${selectedPhoto.rating}/5` : ""}</Text>
+                    <View style={styles.ratingControls}>
+                      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remover classificação" accessibilityState={{ disabled: ratingSaving, selected: selectedPhoto?.rating === 0 }} disabled={ratingSaving} onPress={() => handleRating(0)} style={styles.ratingClear}>
+                        <MaterialCommunityIcons name="star-off-outline" size={28} color={selectedPhoto?.rating === 0 ? "#ffaa00" : "#aaa"} />
+                      </TouchableOpacity>
+                      {[1, 2, 3, 4, 5].map((rating) => (
+                        <TouchableOpacity key={rating} accessibilityRole="button" accessibilityLabel={`Classificar com ${rating} estrelas`} accessibilityState={{ disabled: ratingSaving, selected: selectedPhoto?.rating === rating }} disabled={ratingSaving} onPress={() => handleRating(rating)} style={styles.ratingStar}>
+                          <Ionicons name={(selectedPhoto?.rating ?? 0) >= rating ? "star" : "star-outline"} size={28} color="#ffaa00" />
+                        </TouchableOpacity>
+                      ))}
+                      {ratingSaving && <ActivityIndicator size="small" color="#ffaa00" />}
+                    </View>
+                  </View>
                   {exifLoading ? (
                     <View style={styles.photoDataLoading}>
                       <ActivityIndicator color="#ffaa00" size="small" />

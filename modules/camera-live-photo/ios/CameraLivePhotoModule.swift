@@ -190,6 +190,7 @@ public class CameraLivePhotoModule: Module {
         metadata: options["metadata"] as? [String: Any],
         outputFormat: options["outputFormat"] as? String ?? "heif"
       ) ?? photoURL
+      try PhotoCatalogMetadata.apply(to: preparedPhotoURL, metadata: options["metadata"] as? [String: Any])
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
       let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.saveLivePhotoToLibrary(
