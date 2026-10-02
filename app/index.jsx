@@ -546,7 +546,7 @@ export default function App() {
         return;
 
       if (imageStacking.strategyId === "focusBracketing" && !focusBracketing.valid) {
-        Alert.alert("Focus Bracketing", focusBracketing.error || "Ajuste o foco e marque um limite próximo menor que o distante antes de disparar.");
+        Alert.alert("Focus Bracketing", focusBracketing.error || "Ajuste os dois seletores de foco antes de disparar.");
         return;
       }
       stackingStartInFlightRef.current = true;
@@ -1155,7 +1155,6 @@ export default function App() {
       <Animated.View
         style={[
           styles.adjustmentControlsSlot,
-          imageStacking.strategyId === "focusBracketing" && { height: 165 },
           {
             opacity: normalControlsOpacity,
             transform: [{ translateY: normalControlsTranslate }],
@@ -1168,7 +1167,7 @@ export default function App() {
         }
       >
         {imageStacking.strategyId === "focusBracketing" ? (
-          <FocusBracketingPanel focus={focusBracketing} disabled={!cameraReady || imageStacking.capturing || isProcessing} />
+          <FocusBracketingPanel topBarBelow={topBarBelow} focus={focusBracketing} disabled={!cameraReady || imageStacking.capturing || isProcessing} />
         ) : manual.manualMode === "manual" && !imageStacking.enabled ? (
           <ManualControlsPanel
             manual={manual}

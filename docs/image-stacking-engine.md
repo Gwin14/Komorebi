@@ -95,8 +95,10 @@ O modo aparece somente após confirmar as capacidades da lente física seleciona
 Metal, foco com posição personalizada e bloqueio de exposição/balanço de branco.
 Android, web e câmeras virtuais não oferecem esta estratégia.
 
-No painel, ajuste o slider Perto → Longe, espere o ajuste terminar e use
-**Marcar próximo** e **Marcar distante**. Toque no valor de um limite para revisá-lo.
+No painel, toque e arraste os dois seletores na régua Perto → Longe. Cada
+seletor mostra seu foco no preview; o trecho laranja indica o intervalo. Toque
+nos dois para confirmar os limites na câmera. Arraste o dial de fotos para
+escolher a quantidade, com os valores vizinhos visíveis.
 Escolha de 3 a 20 fotos (padrão 10). A escala é posição de lente normalizada,
 não distância em metros e não abertura f/. Trocar câmera, lente ou zoom invalida
 os limites; a quantidade permanece durante a sessão. Use apoio/tripé e cena parada.

@@ -1,0 +1,22 @@
+import { StyleSheet } from "react-native";
+export default StyleSheet.create({
+  container: { paddingVertical: 10 },
+  containerBelow: { flexDirection: "column-reverse" },
+  labelsBelow: { marginBottom: 0, marginTop: 8 },
+  labels: { flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 2, marginBottom: 8 },
+  label: { color: "#aaa", fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  selectedLabel: { color: "#ffaa00" },
+  ruler: { height: 40, borderRadius: 8, backgroundColor: "transparent" },
+  range: { position: "absolute", top: 8, bottom: 8, backgroundColor: "rgba(255,170,0,0.16)", borderRadius: 3 },
+  ticks: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center" },
+  tick: { position: "absolute", top: 15, height: 10, width: 1, backgroundColor: "rgba(255,255,255,0.25)" },
+  majorTick: { top: 10, height: 20, width: 1.5, backgroundColor: "rgba(255,255,255,0.5)" },
+  rangeTick: { backgroundColor: "rgba(255,170,0,0.65)" },
+  handle: { position: "absolute", top: 2, width: 20, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 5, backgroundColor: "#242424", borderWidth: 1, borderColor: "#777" },
+  activeHandle: { zIndex: 1, borderColor: "#ffaa00", backgroundColor: "#332a18" },
+  handleNeedle: { height: 19, width: 2, borderRadius: 1, backgroundColor: "#ddd" },
+  activeNeedle: { backgroundColor: "#ffaa00" },
+  handleGrip: { marginTop: 3, width: 6, height: 2, borderRadius: 1, backgroundColor: "#777" },
+  activeGrip: { backgroundColor: "#ffaa00" },
+  disabled: { opacity: 0.4 },
+});

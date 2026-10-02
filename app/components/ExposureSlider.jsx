@@ -29,6 +29,7 @@ export default function ExposureSlider({
   isAuto = false,
   onReset,
   activeControl = "none",
+  dialWidth = DIAL_WIDTH,
 }) {
   const displayValue = isAuto ? resetValue : exposure;
 
@@ -150,7 +151,7 @@ export default function ExposureSlider({
   // Cálculo para mover a régua baseado no valor atual do exposure
   const progress = progressFor(displayValue);
   const tickIndex = progress * (TICKS_COUNT - 1);
-  const translateX = DIAL_WIDTH / 2 - (tickIndex + 0.5) * TICK_SPACING;
+  const translateX = dialWidth / 2 - (tickIndex + 0.5) * TICK_SPACING;
 
   const label = isAuto
     ? "AUTO"
@@ -174,7 +175,7 @@ export default function ExposureSlider({
 
       {/* Área sensível ao toque */}
       <View
-        style={[styles.dialContainer, { width: DIAL_WIDTH }]}
+        style={[styles.dialContainer, { width: dialWidth }]}
         {...exposurePanResponder.panHandlers}
       >
         {/* A Régua que se move */}

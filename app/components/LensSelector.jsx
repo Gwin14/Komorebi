@@ -1,6 +1,8 @@
 import * as Haptics from "expo-haptics";
 import React from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { ScrollView, TouchableOpacity, View } from "react-native";
+import Animated from "react-native-reanimated";
+import useDeviceOrientation from "../hooks/useDeviceOrientation";
 import styles from "./LensSelector.styles";
 
 export default function LensSelector({
@@ -8,6 +10,8 @@ export default function LensSelector({
   activeLensId,
   onSelectLens,
 }) {
+  const animatedStyle = useDeviceOrientation();
+
   if (!lenses.length) return null;
 
   return (
@@ -39,9 +43,11 @@ export default function LensSelector({
                 active ? styles.buttonActive : styles.buttonInactive,
               ]}
             >
-              <Text style={[styles.label, active && styles.labelActive]}>
+              <Animated.Text
+                style={[styles.label, active && styles.labelActive, animatedStyle]}
+              >
                 {lens.label}
-              </Text>
+              </Animated.Text>
             </TouchableOpacity>
           );
         })}

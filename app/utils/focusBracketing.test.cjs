@@ -59,3 +59,24 @@ test('focus metadata round-trips and legacy stacking metadata retains its origin
   const result = stackingMetadataFields({ ...legacy, strategyId: 'focusBracketing', focusBracketing });
   assert.deepEqual(JSON.parse(JSON.stringify(result)).focusBracketing, focusBracketing);
 });
+
+test('range handles cannot cross or leave the focus scale', () => {
+  const { clampFocusEndpoint } = require('./focusBracketing');
+  assert.equal(clampFocusEndpoint('near', -0.5, 0.25, 0.75), 0);
+  assert.equal(clampFocusEndpoint('far', 1.5, 0.25, 0.75), 1);
+  assert.equal(clampFocusEndpoint('near', 0.9, 0.25, 0.75), 0.749);
+  assert.equal(clampFocusEndpoint('far', 0.1, 0.25, 0.75), 0.251);
+  assert.equal(clampFocusEndpoint('near', 0.12345, 0.25, 0.75), 0.123);
+});
+
+test('switching handles confirms each endpoint with its own camera readback', async () => {
+  const resolvers = [], confirmations = [];
+  const scheduler = createFocusScheduler(() => new Promise(resolve => resolvers.push(resolve)),
+    (value, endpoint, requested) => confirmations.push({ value, endpoint, requested }), assert.fail, () => {});
+  scheduler.request(0.25, 'near');
+  scheduler.request(0.75, 'far');
+  resolvers.shift()(0.25001); await tick();
+  assert.deepEqual(confirmations, [{ value: 0.25001, endpoint: 'near', requested: 0.25 }]);
+  resolvers.shift()(0.75001); await tick();
+  assert.deepEqual(confirmations.at(-1), { value: 0.75001, endpoint: 'far', requested: 0.75 });
+});

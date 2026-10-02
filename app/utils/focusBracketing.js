@@ -8,6 +8,13 @@ function isFocusRangeValid({ nearLensPosition, farLensPosition, frameCount }) {
     Number.isInteger(frameCount) && frameCount >= MIN_FOCUS_FRAMES && frameCount <= MAX_FOCUS_FRAMES;
 }
 
+function clampFocusEndpoint(endpoint, value, near, far) {
+  const rounded = Math.round(value * 1000) / 1000;
+  return endpoint === 'near'
+    ? Math.max(0, Math.min(far - 0.001, rounded))
+    : Math.min(1, Math.max(near + 0.001, rounded));
+}
+
 function focusPositions(config) {
   if (!isFocusRangeValid(config)) throw new Error('Marque um limite próximo menor que o distante e escolha de 3 a 20 fotos.');
   const { nearLensPosition, farLensPosition, frameCount } = config;
@@ -16,6 +23,7 @@ function focusPositions(config) {
 }
 
 // One native adjustment at a time; dragging replaces only the queued value.
+// Optional context associates confirmations with the selected range handle.
 // Invalidating discards queued work and suppresses callbacks from an old lens.
 function createFocusScheduler(apply, onConfirmed, onError, onPending) {
   let generation = 0;
@@ -29,17 +37,21 @@ function createFocusScheduler(apply, onConfirmed, onError, onPending) {
       pending = null;
       try {
         const position = await apply(request.value);
-        if (request.generation === generation && !pending) onConfirmed(position);
+        // A different handle may already be queued: retain this handle's
+        // confirmation, but suppress superseded movements of the same handle.
+        if (request.generation === generation && (!pending || pending.context !== request.context)) {
+          onConfirmed(position, request.context, request.value);
+        }
       } catch (error) {
-        if (request.generation === generation && !pending) onError(error);
+        if (request.generation === generation && !pending) onError(error, request.context);
       }
     }
     running = false;
     onPending(false);
   }
   return {
-    request(value) {
-      pending = { value, generation };
+    request(value, context) {
+      pending = { value, context, generation };
       onPending(true);
       void drain();
     },
@@ -66,4 +78,4 @@ function stackingMetadataFields(value) {
 }
 
 module.exports = { MIN_FOCUS_FRAMES, MAX_FOCUS_FRAMES, DEFAULT_FOCUS_FRAMES,
-  isFocusRangeValid, focusPositions, createFocusScheduler, stackingMetadataFields };
+  isFocusRangeValid, focusPositions, clampFocusEndpoint, createFocusScheduler, stackingMetadataFields };

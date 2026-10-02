@@ -2,27 +2,19 @@ import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
   container: {
-    alignItems: "center",
-  },
-  tabRow: {
     flexDirection: "row",
-    marginTop: 5,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 2,
   },
-  tab: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 14,
-    marginHorizontal: 4,
+  slider: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  tabActive: {
-    backgroundColor: "rgba(255, 170, 0, 0.2)",
-  },
-  tabLabel: {
-    color: "rgba(255, 255, 255, 0.6)",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-  tabLabelActive: {
-    color: "#ffaa00",
+  labelSpacer: {
+    opacity: 0,
   },
 });
