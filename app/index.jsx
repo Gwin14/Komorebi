@@ -10,6 +10,8 @@ import { consumePendingLockedCameraCaptures } from "../modules/camera-control-bu
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import ExposureSlider from "./components/ExposureSlider";
+import FocusBracketingPanel from "./components/FocusBracketingPanel";
+import useFocusBracketing from "./hooks/useFocusBracketing";
 import ManualControlsPanel from "./components/ManualControlsPanel";
 import NativeCapturePreview from "./components/NativeCapturePreview";
 import TopBar from "./components/TopBar";
@@ -156,6 +158,11 @@ export default function App() {
   const livePhoto = useLivePhotoCapture(captureDevice);
   const portraitCapture = usePortraitCapture(captureDevice);
   const imageStacking = useImageStacking(captureDevice);
+  const focusBracketing = useFocusBracketing({
+    deviceId: captureDevice?.id, zoomFactor: zoom,
+    enabled: imageStacking.strategyId === "focusBracketing",
+    ready: cameraReady, capturing: imageStacking.capturing,
+  });
   const heifPlusPolicy = getHeifPlusPolicy({
     photoFormat: rawCapture.processedEnabled ? photoFormat : null, rawMode: rawCapture.rawMode,
     capabilities: isHeifPlusAvailable() ? rawCapture.capabilities : null,
@@ -410,6 +417,7 @@ export default function App() {
     cancelCompositionScan();
   }, [cancelAutoZoomAnimation, cancelCompositionScan]);
   const composedGestures = useCameraGestures({
+    disabled: imageStacking.capturing,
     lastZoom,
     maxZoom,
     minZoom,
@@ -537,6 +545,10 @@ export default function App() {
       )
         return;
 
+      if (imageStacking.strategyId === "focusBracketing" && !focusBracketing.valid) {
+        Alert.alert("Focus Bracketing", focusBracketing.error || "Ajuste o foco e marque um limite próximo menor que o distante antes de disparar.");
+        return;
+      }
       stackingStartInFlightRef.current = true;
       setIsProcessing(true);
       try {
@@ -544,6 +556,7 @@ export default function App() {
           outputFormat: Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
           previewDoubleExposure,
           previewStacking,
+          focusBracketing: focusBracketing.config,
         });
         if (!result) return;
         if (
@@ -589,7 +602,9 @@ export default function App() {
           console.error("Erro no Image Stacking:", error);
           Alert.alert(
             "Falha no Image Stacking",
-            "Não foi possível concluir a composição dos frames.",
+            imageStacking.strategyId === "focusBracketing"
+              ? `${error?.message || "Não foi possível concluir a sequência."} Mantenha a câmera estável e tente novamente.`
+              : "Não foi possível concluir a composição dos frames.",
           );
         }
       } finally {
@@ -716,6 +731,7 @@ export default function App() {
     captureAspectRatio,
     imageStacking,
     stackingFinishing,
+    focusBracketing,
   ]);
 
   const handleSelectImageStackingStrategy = useCallback(
@@ -788,6 +804,13 @@ export default function App() {
       smileDetectionEnabled,
     ],
   );
+
+  useEffect(() => {
+    if (imageStacking.capabilities && imageStacking.strategyId &&
+        !imageStacking.capabilities.supportedStrategies.includes(imageStacking.strategyId)) {
+      void handleSelectImageStackingStrategy(null);
+    }
+  }, [imageStacking.capabilities, imageStacking.strategyId, handleSelectImageStackingStrategy]);
 
   const handleCameraReady = useCallback(() => {
     void refreshZoomCapabilities();
@@ -894,6 +917,7 @@ export default function App() {
     },
     imageStackingAvailable: imageStacking.available,
     imageStackingStrategyId: imageStacking.strategyId,
+    imageStackingSupportedStrategies: imageStacking.capabilities?.supportedStrategies || [],
     onSelectImageStackingStrategy: handleSelectImageStackingStrategy,
     selectedLutId,
     smileDetectionEnabled,
@@ -997,7 +1021,7 @@ export default function App() {
                 }
                 retroStyle={retroStyle}
                 device={activeLens?.device}
-                zoomFactor={activeLens?.zoomFactor}
+                zoomFactor={renderedNativeCaptureMode === "stacking" ? zoom : activeLens?.zoomFactor}
                 flash={flash}
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
@@ -1131,6 +1155,7 @@ export default function App() {
       <Animated.View
         style={[
           styles.adjustmentControlsSlot,
+          imageStacking.strategyId === "focusBracketing" && { height: 165 },
           {
             opacity: normalControlsOpacity,
             transform: [{ translateY: normalControlsTranslate }],
@@ -1142,7 +1167,9 @@ export default function App() {
             : "none"
         }
       >
-        {manual.manualMode === "manual" && !imageStacking.enabled ? (
+        {imageStacking.strategyId === "focusBracketing" ? (
+          <FocusBracketingPanel focus={focusBracketing} disabled={!cameraReady || imageStacking.capturing || isProcessing} />
+        ) : manual.manualMode === "manual" && !imageStacking.enabled ? (
           <ManualControlsPanel
             manual={manual}
             topBarBelow={topBarBelow}

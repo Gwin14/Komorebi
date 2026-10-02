@@ -1,3 +1,4 @@
+import { stackingMetadataFields } from "./focusBracketing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import * as FileSystem from "expo-file-system/legacy";
@@ -201,17 +202,7 @@ export const buildKomorebiExifMetadata = ({
     aspectRatioLabel: formatAspectRatio(aspectRatio),
     doubleCaptureMode: Boolean(doubleCaptureMode),
     captureMode,
-    stacking: stackingMetadata
-      ? compactObject({
-          engineVersion: 1,
-          strategyId: stackingMetadata.strategyId,
-          capturedFrames: stackingMetadata.capturedFrames,
-          acceptedFrames: stackingMetadata.acceptedFrames,
-          rejectedFrames: stackingMetadata.rejectedFrames,
-          durationSeconds: stackingMetadata.durationSeconds,
-          degraded: stackingMetadata.degraded,
-        })
-      : undefined,
+    stacking: stackingMetadataFields(stackingMetadata),
     manual: Object.keys(manual).length ? manual : undefined,
   });
 };

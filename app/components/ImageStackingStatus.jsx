@@ -5,9 +5,9 @@ const LABELS = {
   preparing: "Preparando",
   capturing: "Capturando",
   awaitingSecondExposure: "Enquadre a segunda foto",
-  analyzing: "Analisando",
+  analyzing: "Alinhando",
   compositing: "Compondo",
-  exporting: "Exportando",
+  exporting: "Salvando",
 };
 
 export default function ImageStackingStatus({ progress, onCancel }) {
@@ -17,7 +17,9 @@ export default function ImageStackingStatus({ progress, onCancel }) {
     <View style={styles.container}>
       <Text style={styles.title}>{LABELS[current.state] || "Preparando"}</Text>
       <Text style={styles.detail}>
-        {current.strategyId === "doubleExposure"
+        {current.strategyId === "focusBracketing"
+          ? `Foto ${current.capturedFrames || 0} de ${current.targetFrames || 0}`
+          : current.strategyId === "doubleExposure"
           ? `${current.capturedFrames || 0}/2`
           : ["bulb", "motionBlur"].includes(current.strategyId)
             ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`

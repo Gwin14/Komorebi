@@ -48,6 +48,7 @@ export default function TopBar({
   togglePortraitModeEnabled,
   imageStackingAvailable,
   imageStackingStrategyId,
+  imageStackingSupportedStrategies,
   onSelectImageStackingStrategy,
   unavailableReasons = {},
   projects = [],
@@ -314,6 +315,7 @@ export default function TopBar({
                   >
                     <ImageStackingSelector
                       value={imageStackingStrategyId}
+                      supportedStrategies={imageStackingSupportedStrategies}
                       disabled={disabled}
                       onChange={(strategyId) => {
                         setStackingOpen(false);

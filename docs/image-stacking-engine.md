@@ -77,7 +77,7 @@ bloqueados; obturador, Cancelar e compensação EV continuam disponíveis. O EV
 atua na exposição automática real do `AVCaptureDevice` antes de cada disparo;
 a compensação interna da soma permanece independente.
 
-Os metadados Komorebi usam schema 3 e incluem versão do engine, estratégia,
+Os metadados Komorebi usam schema 4 e incluem versão do engine, estratégia,
 frames capturados/aceitos/rejeitados, duração e indicação de resultado degradado.
 O fluxo de foto padrão e os controles manuais não passam pelo novo módulo.
 
@@ -88,3 +88,66 @@ computacional exige dispositivo físico. Validar cenas estáticas e móveis,
 baixa luz com highlights, Bulb de 1 s/30 s/5 min, todas as orientações,
 background/interrupção, pouco espaço e pressão de memória. Usar Instruments para
 confirmar memória estável no Bulb e remoção dos diretórios `komorebi-stack-*`.
+
+## Focus Bracketing
+
+O modo aparece somente após confirmar as capacidades da lente física selecionada:
+Metal, foco com posição personalizada e bloqueio de exposição/balanço de branco.
+Android, web e câmeras virtuais não oferecem esta estratégia.
+
+No painel, ajuste o slider Perto → Longe, espere o ajuste terminar e use
+**Marcar próximo** e **Marcar distante**. Toque no valor de um limite para revisá-lo.
+Escolha de 3 a 20 fotos (padrão 10). A escala é posição de lente normalizada,
+não distância em metros e não abertura f/. Trocar câmera, lente ou zoom invalida
+os limites; a quantidade permanece durante a sessão. Use apoio/tripé e cena parada.
+
+Um disparo percorre uniformemente o intervalo, incluindo os dois limites.
+Exposição e balanço de branco estabilizam e são travados; cada foto só é solicitada
+após a confirmação do ajuste de foco. Foco tem timeout de 4 s, captura de 20 s,
+e ambas as esperas observam cancelamento. A orientação é congelada na sequência.
+A sessão serializa pedidos de foco do preview; o hook agrupa movimentos rápidos
+para aplicar apenas o último valor pendente. `setImageStackingFocus(deviceId, null)`
+restaura autofocus. Ao concluir/cancelar, o foco volta à posição do painel;
+ao desativar a sessão, os controles voltam ao automático.
+
+`FocusBracketingStrategy` usa a foto central como referência e compara registros
+homográficos/translacionais em proxies suavizados. Transforms devem ser finitos,
+convexos, manter a região central e ter erro de luminância linear inferior a 0,04.
+O recorte comum usa os polígonos realmente válidos, com margem de interpolação,
+e exige pelo menos 65% da largura/altura de referência. Qualquer foto ausente ou
+sem registro válido falha a sequência inteira; não há resultado degradado.
+
+A composição mede Laplaciano absoluto em luminância suavizada, cria um mapa
+compacto de seleção de foco, regulariza ilhas com mediana e suaviza máscaras.
+As regiões são fundidas em uma pirâmide Laplaciana de cinco níveis no espaço
+linear compartilhado. As fontes ficam em `FrameStore` e são lidas uma por vez;
+o compositor materializa a seleção e os acumuladores para limitar o grafo.
+Não é um algoritmo de compensação de movimento local ou de reconstrução 3D.
+
+O progresso adiciona `targetFrames`. Resultado e metadados acrescentam o campo
+opcional `focusBracketing`, com limites, quantidade e `confirmedLensPositions`.
+Os arquivos intermediários são apagados em todos os caminhos; somente a composição
+segue para a fila de efeitos/salvamento. RAW, Live Photo, retrato, flash e controles
+manuais gerais seguem as restrições de Image Stacking. “Original sem efeitos” é
+a composição antes dos efeitos, não as fotos fonte.
+
+### Verificação automatizada
+
+- `npm run lint`, `npm run typecheck` e `npm test`.
+- `npm run test:focus-native` em macOS com Xcode e acesso a Core Image/Metal.
+  Verifica limites e quantidades, capacidades, watchdog/cancelamento, seleção de
+  detalhes em três planos, registro, escala, recorte sem transparência, 20 fotos,
+  composição de fontes temporárias, exportação JPEG/HEIF, orientação e limpeza.
+- Build iOS sem assinatura: `xcodebuild -workspace ios/Komorebi.xcworkspace
+  -scheme Komorebi -configuration Debug -sdk iphoneos
+  -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`.
+
+### Verificação pendente em iPhone físico
+
+Testar macro/produtos em três planos, quantidades 3/10/20, todas as lentes e
+orientações, JPEG/HEIF, LUT/grain/halation, proporções, projetos, original sem
+efeitos e visualização na galeria. Cancelar durante preparação, foco, captura,
+alinhamento, composição e exportação. Testar background/interrupção, pouco espaço
+e pressão de memória. Confirmar que a próxima captura funciona e que nenhum
+resultado parcial foi salvo. Usar Instruments para verificar memória estável
+entre 3 e 20 fotos e a remoção dos diretórios `komorebi-stack-*`.

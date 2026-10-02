@@ -109,14 +109,14 @@ public final class CameraImageStackingModule: Module {
     }
 
     AsyncFunction("getCapabilities") { (deviceId: String) async throws -> [String: Any] in
-      guard AVCaptureDevice(uniqueID: deviceId) != nil else {
+      guard let device = AVCaptureDevice(uniqueID: deviceId) else {
         throw StackingError.sessionNotReady
       }
       let available = MTLCreateSystemDefaultDevice() != nil
       return [
         "available": available,
         "supportedStrategies": available
-          ? StackingStrategyID.allCases.map(\.rawValue)
+          ? StackingStrategyID.allCases.filter { $0 != .focusBracketing || FocusBracketingConfiguration.supports(device) }.map(\.rawValue)
           : [],
         "maximumBulbDurationSeconds": available ? 300 : 0
       ]
@@ -131,6 +131,11 @@ public final class CameraImageStackingModule: Module {
       else { throw StackingError.sessionNotReady }
 
       return try await view.startCapture(strategyID: strategyID, options: options).dictionary
+    }
+
+    AsyncFunction("setImageStackingFocus") { (deviceId: String, position: Double?) async throws -> Double in
+      guard let view = await ImageStackingCameraView.activeView(for: deviceId) else { throw StackingError.sessionNotReady }
+      return Double(try await view.setPreviewFocus(position, deviceId: deviceId))
     }
 
     AsyncFunction("stopImageStackingCapture") { () async in
@@ -302,6 +307,11 @@ public final class ImageStackingCameraView: ExpoView {
     return try await controller.startCapture(strategyID: strategyID, options: options)
   }
 
+  func setPreviewFocus(_ position: Double?, deviceId: String) async throws -> Float {
+    guard self.deviceId == deviceId else { throw StackingError.sessionNotReady }
+    return try await controller.setPreviewFocus(position, deviceId: deviceId)
+  }
+
   func stopBulbCapture() { controller.stopBulbCapture() }
   func stopMotionBlurCapture() { controller.stopMotionBlurCapture() }
   func stopContinuousCapture() {
@@ -418,6 +428,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   private var requestedZoomFactor: CGFloat = 1
   private var requestedExposureBias: Float = 0
   private var ready = false
+  private var previewFocusBusy = false
+  private var previewFocusRequests: [(position: Double?, deviceId: String, continuation: CheckedContinuation<Float, Error>)] = []
+  private var captureOrientation: AVCaptureVideoOrientation?
+  private var targetFrames = 0
   private var busy = false
   private var cancelled = false
   private var activeStrategyID: StackingStrategyID?
@@ -536,6 +550,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   func setZoomFactor(_ zoomFactor: CGFloat) {
     sessionQueue.async { [weak self] in
       guard let self else { return }
+      self.stateLock.lock()
+      let capturingFocus = self.busy && self.activeStrategyID == .focusBracketing
+      self.stateLock.unlock()
+      guard !capturingFocus else { return }
       self.requestedZoomFactor = zoomFactor
       guard let device = self.device else { return }
       try? self.applyRequestedZoom(to: device)
@@ -557,6 +575,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     sessionQueue.async { [weak self] in
       guard let self, self.session.isRunning else { return }
       self.session.stopRunning()
+      self.restoreCaptureSettings()
     }
   }
 
@@ -564,7 +583,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     cancelCapture()
     await withCheckedContinuation { continuation in
       sessionQueue.async { [weak self] in
-        if let self, self.session.isRunning { self.session.stopRunning() }
+        if let self {
+          if self.session.isRunning { self.session.stopRunning() }
+          self.restoreCaptureSettings()
+        }
         continuation.resume()
       }
     }
@@ -580,6 +602,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   }
 
   private func applyExposureBias(to device: AVCaptureDevice) {
+    stateLock.lock()
+    let capturingFocus = busy && activeStrategyID == .focusBracketing
+    stateLock.unlock()
+    guard !capturingFocus else { return }
     let bias = min(
       device.maxExposureTargetBias,
       max(device.minExposureTargetBias, requestedExposureBias)
@@ -599,7 +625,11 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     strategyID: StackingStrategyID,
     options: [String: Any]
   ) async throws -> StackingResult {
-    if let error = beginOperation(strategyID: strategyID) { throw error }
+    let focusConfig = strategyID == .focusBracketing ? try FocusBracketingConfiguration(options: options) : nil
+    if let error = sessionQueue.sync(execute: { () -> StackingError? in
+      guard self.configuredDeviceID == options["deviceId"] as? String else { return .sessionNotReady }
+      return self.beginOperation(strategyID: strategyID)
+    }) { throw error }
 
     guard let strategy = StackingStrategyRegistry.shared.strategy(for: strategyID) else {
       finishOperation()
@@ -613,6 +643,10 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       return try await startDoubleExposure(strategy: strategy, plan: plan, options: options)
     }
 
+    if let focusConfig {
+      return try await startFocusBracketing(strategy: strategy, config: focusConfig, options: options)
+    }
+
     lockCaptureSettings()
 
     if plan.usesVideoFrames {
@@ -621,7 +655,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         return try await startBulb(plan: plan, options: options)
       case .motionBlur:
         return try await startMotionBlur(plan: plan, options: options)
-      case .doubleExposure:
+      case .doubleExposure, .focusBracketing:
         finishOperation()
         throw StackingError.unsupportedStrategy
       }
@@ -714,6 +748,194 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     } catch {
       emit(error is StackingError && (error as? StackingError) == .cancelled ? .cancelled : .failed,
            strategyID: strategyID)
+      throw error
+    }
+  }
+
+  func setPreviewFocus(_ position: Double?, deviceId: String) async throws -> Float {
+    if let position, (!position.isFinite || position < 0 || position > 1) { throw StackingError.invalidFocusRange }
+    return try await withCheckedThrowingContinuation { continuation in
+      sessionQueue.async {
+        self.stateLock.lock()
+        let busy = self.busy
+        self.stateLock.unlock()
+        guard !busy else { continuation.resume(throwing: StackingError.busy); return }
+        guard self.ready, self.configuredDeviceID == deviceId else {
+          continuation.resume(throwing: StackingError.sessionNotReady); return
+        }
+        self.stateLock.lock()
+        guard !self.busy else {
+          self.stateLock.unlock()
+          continuation.resume(throwing: StackingError.busy)
+          return
+        }
+        let superseded = self.previewFocusRequests
+        self.previewFocusRequests = [(position, deviceId, continuation)]
+        self.stateLock.unlock()
+        for request in superseded { request.continuation.resume(throwing: StackingError.cancelled) }
+        self.processPreviewFocus()
+      }
+    }
+  }
+
+  // Only sessionQueue dequeues preview requests. A configuration change may
+  // leave an old callback in flight; its result cannot reach the new UI.
+  private func processPreviewFocus() {
+    stateLock.lock()
+    guard !previewFocusBusy, !busy, !previewFocusRequests.isEmpty else { stateLock.unlock(); return }
+    previewFocusBusy = true
+    let request = previewFocusRequests.removeFirst()
+    stateLock.unlock()
+    Task {
+      let result: Result<Float, Error>
+      do {
+        guard let device = sessionQueue.sync(execute: { self.configuredDeviceID == request.deviceId ? self.device : nil }) else {
+          throw StackingError.sessionNotReady
+        }
+        if let position = request.position {
+          guard FocusBracketingConfiguration.supports(device) else { throw StackingError.focusUnavailable }
+          result = .success(try await adjustLensFocus(Float(position), device: device, cancellable: false))
+        } else {
+          try sessionQueue.sync {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+            if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+          }
+          result = .success(device.lensPosition)
+        }
+      } catch { result = .failure(error) }
+      sessionQueue.async {
+        self.stateLock.lock()
+        self.previewFocusBusy = false
+        self.stateLock.unlock()
+        request.continuation.resume(with: result)
+        self.processPreviewFocus()
+      }
+    }
+  }
+
+  private func adjustLensFocus(_ position: Float, device: AVCaptureDevice, cancellable: Bool) async throws -> Float {
+    try await withCheckedThrowingContinuation { continuation in
+      let wait = StackingAsyncWait<Float>(continuation, timeout: 4,
+        isCancelled: { [weak self] in cancellable && (self?.isCancelled() ?? true) })
+      sessionQueue.async {
+        do {
+          guard self.ready, self.device === device, self.session.isRunning else { throw StackingError.sessionNotReady }
+          if cancellable && self.isCancelled() { throw StackingError.cancelled }
+          try device.lockForConfiguration()
+          device.setFocusModeLocked(lensPosition: position) { _ in
+            wait.finish(.success(device.lensPosition))
+          }
+          device.unlockForConfiguration()
+        } catch { wait.finish(.failure(error)) }
+      }
+    }
+  }
+
+  private func startFocusBracketing(strategy: any StackingStrategy, config: FocusBracketingConfiguration,
+                                    options: [String: Any]) async throws -> StackingResult {
+    var store: FrameStore?
+    var snapshot: FocusCaptureSettings?
+    var publishedURL: URL?
+    var delivered = false
+    stateLock.lock()
+    targetFrames = config.frameCount
+    stateLock.unlock()
+    defer {
+      store?.cleanup()
+      if !delivered, let publishedURL { try? FileManager.default.removeItem(at: publishedURL) }
+      if let snapshot {
+        sessionQueue.sync {
+          do {
+            guard self.device === snapshot.device else { return }
+            try snapshot.device.lockForConfiguration()
+            defer { snapshot.device.unlockForConfiguration() }
+            snapshot.device.exposureMode = snapshot.exposureMode
+            snapshot.device.whiteBalanceMode = snapshot.whiteBalanceMode
+            if !self.session.isRunning, snapshot.device.isFocusModeSupported(.continuousAutoFocus) {
+              snapshot.device.focusMode = .continuousAutoFocus
+            } else if snapshot.focusMode == .locked {
+              snapshot.device.setFocusModeLocked(lensPosition: snapshot.lensPosition, completionHandler: nil)
+            } else { snapshot.device.focusMode = snapshot.focusMode }
+          } catch { self.logger.error("Could not restore focus capture settings: \(error.localizedDescription, privacy: .public)") }
+        }
+      }
+      finishOperation()
+    }
+    do {
+      let device = try sessionQueue.sync { () throws -> AVCaptureDevice in
+        guard let device = self.device, device.uniqueID == options["deviceId"] as? String,
+              FocusBracketingConfiguration.supports(device) else {
+          throw StackingError.focusUnavailable
+        }
+        snapshot = FocusCaptureSettings(device: device)
+        return device
+      }
+      emit(.preparing, strategyID: .focusBracketing)
+      let deadline = Date().addingTimeInterval(4)
+      while sessionQueue.sync(execute: { device.isAdjustingExposure || device.isAdjustingWhiteBalance }) {
+        if isCancelled() { throw StackingError.cancelled }
+        if Date() > deadline { throw StackingError.adjustmentTimedOut }
+        try await Task.sleep(nanoseconds: 50_000_000)
+      }
+      try sessionQueue.sync {
+        try device.lockForConfiguration()
+        defer { device.unlockForConfiguration() }
+        device.exposureMode = .locked
+        device.whiteBalanceMode = .locked
+        self.applyOutputOrientation()
+      }
+      let frames = try FrameStore()
+      store = frames
+      var confirmed: [Float] = []
+      for (index, position) in config.positions.enumerated() {
+        if isCancelled() { throw StackingError.cancelled }
+        let actual = try await adjustLensFocus(position, device: device, cancellable: true)
+        if isCancelled() { throw StackingError.cancelled }
+        let captured = try await capturePhoto(quality: .quality, bounded: true)
+        if isCancelled() { throw StackingError.cancelled }
+        _ = try frames.append(data: captured.data, metadata: captured.metadata)
+        confirmed.append(actual)
+        emit(.capturing, strategyID: .focusBracketing, captured: index + 1,
+             progress: Double(index + 1) / Double(config.frameCount) * 0.45)
+      }
+      emit(.analyzing, strategyID: .focusBracketing, captured: frames.frames.count, progress: 0.48)
+      let composed = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(image: CIImage, accepted: Int, rejected: Int, reference: StoredFrame), Error>) in
+        analysisQueue.async {
+          do {
+            let result = try strategy.compose(frames: frames.frames, context: self.context, options: options,
+              progress: { accepted, rejected, processed in
+                self.emit(processed <= config.frameCount ? .analyzing : .compositing,
+                  strategyID: .focusBracketing, captured: config.frameCount, accepted: accepted, rejected: rejected,
+                  progress: 0.48 + 0.37 * Double(processed) / Double(config.frameCount * 3))
+              }, isCancelled: self.isCancelled)
+            continuation.resume(returning: result)
+          } catch { continuation.resume(throwing: error) }
+        }
+      }
+      guard composed.accepted == config.frameCount, composed.rejected == 0 else { throw StackingError.insufficientFrames }
+      if isCancelled() { throw StackingError.cancelled }
+      emit(.exporting, strategyID: .focusBracketing, captured: config.frameCount, accepted: config.frameCount, progress: 0.9)
+      let output = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<(URL, Int, Int), Error>) in
+        analysisQueue.async {
+          do {
+            continuation.resume(returning: try StackingExporter(context: self.context).export(image: composed.image,
+              referenceURL: composed.reference.url, outputFormat: options["outputFormat"] as? String ?? "heif",
+              strategyID: .focusBracketing))
+          } catch { continuation.resume(throwing: error) }
+        }
+      }
+      publishedURL = output.0
+      if isCancelled() { throw StackingError.cancelled }
+      let result = StackingResult(photoURL: output.0, strategyID: .focusBracketing, capturedFrames: config.frameCount,
+        acceptedFrames: config.frameCount, rejectedFrames: 0, duration: Date().timeIntervalSince(startedAt),
+        width: output.1, height: output.2, degraded: false, focusBracketing: config.metadata(confirmed: confirmed))
+      emit(.completed, strategyID: .focusBracketing, captured: config.frameCount, accepted: config.frameCount, progress: 1)
+      logResult(result)
+      delivered = true
+      return result
+    } catch {
+      emit((error as? StackingError) == .cancelled ? .cancelled : .failed, strategyID: .focusBracketing)
       throw error
     }
   }
@@ -1263,7 +1485,8 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   }
 
   private func capturePhoto(
-    quality: AVCapturePhotoOutput.QualityPrioritization = .speed
+    quality: AVCapturePhotoOutput.QualityPrioritization = .speed,
+    bounded: Bool = false
   ) async throws -> (data: Data, metadata: [String: Any]) {
     try await withCheckedThrowingContinuation { continuation in
       sessionQueue.async { [weak self] in
@@ -1280,7 +1503,17 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
         settings.photoQualityPrioritization = quality
         self.applyOutputOrientation()
         let delegate = StackingPhotoDelegate(continuation: continuation)
+        let watchdog = bounded ? DispatchSource.makeTimerSource(queue: self.sessionQueue) : nil
+        let deadline = Date().addingTimeInterval(20)
+        watchdog?.setEventHandler { [weak self, weak delegate] in
+          guard let self, let delegate else { return }
+          if self.isCancelled() { delegate.fail(StackingError.cancelled) }
+          else if Date() >= deadline { delegate.fail(StackingError.adjustmentTimedOut) }
+        }
+        watchdog?.schedule(deadline: .now() + 0.05, repeating: 0.05)
+        watchdog?.resume()
         delegate.onFinish = { [weak self, weak delegate] in
+          watchdog?.cancel()
           guard let self, let delegate else { return }
           self.sessionQueue.async {
             self.inFlightDelegates.removeAll { $0 === delegate }
@@ -1306,7 +1539,9 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   }
 
   private func applyOutputOrientation() {
-    let orientation = orientationTracker.outputOrientation
+    stateLock.lock()
+    let orientation = captureOrientation ?? orientationTracker.outputOrientation
+    stateLock.unlock()
     let rotationAngle: CGFloat = switch orientation {
     case .portrait: 90
     case .portraitUpsideDown: 270
@@ -1345,11 +1580,13 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
   private func beginOperation(strategyID: StackingStrategyID) -> StackingError? {
     stateLock.lock()
     defer { stateLock.unlock() }
-    guard !busy else { return .busy }
+    guard !busy, !previewFocusBusy, previewFocusRequests.isEmpty else { return .busy }
     guard ready, session.isRunning else { return .sessionNotReady }
     busy = true
     cancelled = false
     activeStrategyID = strategyID
+    targetFrames = 0
+    captureOrientation = strategyID == .focusBracketing ? orientationTracker.outputOrientation : nil
     stackingPreviewGeneration += 1
     lastStackingPreviewAt = .distantPast
     startedAt = Date()
@@ -1360,14 +1597,18 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
 
   private func finishOperation() {
     stateLock.lock()
+    let restoreOrientation = activeStrategyID == .focusBracketing
     busy = false
     cancelled = false
     bulbAcceptingFrames = false
     motionBlurAcceptingFrames = false
     doubleExposureAdvancing = false
     activeStrategyID = nil
+    captureOrientation = nil
+    targetFrames = 0
     stackingPreviewGeneration += 1
     stateLock.unlock()
+    if restoreOrientation { sessionQueue.async { self.applyOutputOrientation() } }
     onStackingPreview?(nil)
   }
 
@@ -1383,6 +1624,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
     let previousPhase = currentPhase
     let previousDuration = Date().timeIntervalSince(currentPhaseStartedAt)
     let transitioned = previousPhase != phase
+    let totalFrames = targetFrames
     if transitioned {
       currentPhase = phase
       currentPhaseStartedAt = Date()
@@ -1397,6 +1639,7 @@ final class StackingCaptureCoordinator: NSObject, AVCaptureVideoDataOutputSample
       phase: phase,
       strategyID: strategyID,
       capturedFrames: captured,
+      targetFrames: totalFrames,
       acceptedFrames: accepted,
       rejectedFrames: rejected,
       elapsedSeconds: Date().timeIntervalSince(startedAt),
@@ -1504,6 +1747,7 @@ private final class StackingOrientationTracker: @unchecked Sendable {
 }
 
 private final class StackingPhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+  private let lock = NSLock()
   private var continuation: CheckedContinuation<(data: Data, metadata: [String: Any]), Error>?
   var onFinish: (() -> Void)?
 
@@ -1530,11 +1774,17 @@ private final class StackingPhotoDelegate: NSObject, AVCapturePhotoCaptureDelega
     finish(.success((data, metadata)))
   }
 
+  func fail(_ error: Error) { finish(.failure(error)) }
+
   private func finish(_ result: Result<(data: Data, metadata: [String: Any]), Error>) {
-    guard let continuation else { return }
+    lock.lock()
+    let continuation = self.continuation
     self.continuation = nil
+    let onFinish = self.onFinish
+    self.onFinish = nil
+    lock.unlock()
+    guard let continuation else { return }
     onFinish?()
-    onFinish = nil
     switch result {
     case .success(let value): continuation.resume(returning: value)
     case .failure(let error): continuation.resume(throwing: error)

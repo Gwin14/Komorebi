@@ -1,7 +1,14 @@
 import type { ComponentType } from "react";
 import { Platform, View, type ViewProps } from "react-native";
 
-export type ImageStackingStrategyId = "bulb" | "motionBlur" | "doubleExposure";
+export type ImageStackingStrategyId = "bulb" | "motionBlur" | "doubleExposure" | "focusBracketing";
+
+export type FocusBracketingMetadata = {
+  nearLensPosition: number;
+  farLensPosition: number;
+  frameCount: number;
+  confirmedLensPositions: number[];
+};
 
 export type ImageStackingState =
   | "idle"
@@ -23,6 +30,12 @@ type BaseCaptureRequest = {
 };
 
 export type ImageStackingCaptureRequest =
+  | (BaseCaptureRequest & {
+      strategyId: "focusBracketing";
+      nearLensPosition: number;
+      farLensPosition: number;
+      frameCount: number;
+    })
   | (BaseCaptureRequest & {
       strategyId: "bulb";
       maximumDurationSeconds?: number;
@@ -46,6 +59,7 @@ export type ImageStackingProgress = {
   state: ImageStackingState;
   strategyId: ImageStackingStrategyId | null;
   capturedFrames: number;
+  targetFrames?: number;
   acceptedFrames: number;
   rejectedFrames: number;
   elapsedSeconds: number;
@@ -62,6 +76,7 @@ export type ImageStackingResult = {
   width: number;
   height: number;
   degraded: boolean;
+  focusBracketing?: FocusBracketingMetadata;
 };
 
 export type ImageStackingCameraViewProps = ViewProps & {
@@ -148,6 +163,14 @@ export async function startImageStackingCapture(
 
 export async function stopImageStackingCapture(): Promise<void> {
   await nativeModule?.stopImageStackingCapture?.();
+}
+
+export async function setImageStackingFocus(
+  deviceId: string,
+  lensPosition: number | null,
+): Promise<number> {
+  if (!nativeModule) throw new Error("CameraImageStacking native module is not available");
+  return nativeModule.setImageStackingFocus(deviceId, lensPosition);
 }
 
 export async function captureNextImageStackingExposure(): Promise<void> {

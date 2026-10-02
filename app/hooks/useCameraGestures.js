@@ -3,6 +3,7 @@ import { Gesture } from "react-native-gesture-handler";
 import { runOnJS } from "react-native-reanimated";
 
 export default function useCameraGestures({
+  disabled = false,
   lastZoom,
   maxZoom,
   minZoom,
@@ -14,6 +15,7 @@ export default function useCameraGestures({
 }) {
   return useMemo(() => {
     const pinchGesture = Gesture.Pinch()
+      .enabled(!disabled)
       .onBegin(() => {
         lastZoom.value = zoomSV.value;
         if (onZoomStart) runOnJS(onZoomStart)();
@@ -34,6 +36,7 @@ export default function useCameraGestures({
     // Arrastar para cima revela os LUTs, arrastar para baixo esconde — igual
     // tocar no botão de LUTs.
     const panGesture = Gesture.Pan()
+      .enabled(!disabled)
       .minPointers(1)
       .maxPointers(1)
       .activeOffsetY([-20, 20])
@@ -50,6 +53,7 @@ export default function useCameraGestures({
       });
 
     const doubleTapGesture = Gesture.Tap()
+      .enabled(!disabled)
       .numberOfTaps(2)
       .onStart(() => {
         console.log("Double tap detected");
@@ -57,6 +61,7 @@ export default function useCameraGestures({
 
     return Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
   }, [
+    disabled,
     lastZoom,
     maxZoom,
     minZoom,

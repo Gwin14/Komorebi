@@ -12,7 +12,8 @@
     "postinstall": "patch-package",
     "lint": "expo lint",
     "test": "node --test app/utils/*.test.cjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:focus-native": "bash scripts/check-focus-bracketing-native.sh"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

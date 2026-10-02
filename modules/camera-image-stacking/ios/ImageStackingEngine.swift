@@ -9,6 +9,7 @@ enum StackingStrategyID: String, CaseIterable {
   case bulb
   case motionBlur
   case doubleExposure
+  case focusBracketing
 }
 
 enum StackingPhase: String {
@@ -26,6 +27,10 @@ enum StackingError: Error, LocalizedError, Equatable {
   case cannotCreateOutput
   case cannotAddInput
   case cannotAddOutput
+  case invalidFocusRange
+  case focusUnavailable
+  case adjustmentTimedOut
+  case alignmentFailed
 
   var errorDescription: String? {
     switch self {
@@ -38,6 +43,11 @@ enum StackingError: Error, LocalizedError, Equatable {
     case .cannotCreateOutput: return "The stacked image could not be exported"
     case .cannotAddInput: return "Could not add the camera input"
     case .cannotAddOutput: return "Could not add a camera output"
+    case .invalidFocusRange: return "Escolha dois limites de foco válidos e de 3 a 20 fotos."
+    case .focusUnavailable: return "A lente selecionada não permite ajustar o foco."
+    case .adjustmentTimedOut: return "A câmera demorou demais para concluir o ajuste ou a captura."
+    case .alignmentFailed: return "Não foi possível alinhar todas as fotos do intervalo de foco."
+
     }
   }
 }
@@ -74,6 +84,7 @@ struct StackingProgressSnapshot {
   var phase: StackingPhase = .idle
   var strategyID: StackingStrategyID?
   var capturedFrames = 0
+  var targetFrames = 0
   var acceptedFrames = 0
   var rejectedFrames = 0
   var elapsedSeconds: TimeInterval = 0
@@ -84,6 +95,7 @@ struct StackingProgressSnapshot {
       "state": phase.rawValue,
       "strategyId": strategyID?.rawValue ?? NSNull(),
       "capturedFrames": capturedFrames,
+      "targetFrames": targetFrames,
       "acceptedFrames": acceptedFrames,
       "rejectedFrames": rejectedFrames,
       "elapsedSeconds": elapsedSeconds,
@@ -102,9 +114,10 @@ struct StackingResult {
   let width: Int
   let height: Int
   let degraded: Bool
+  var focusBracketing: [String: Any]? = nil
 
   var dictionary: [String: Any] {
-    [
+    var value: [String: Any] = [
       "photoUri": photoURL.absoluteString,
       "strategyId": strategyID.rawValue,
       "capturedFrames": capturedFrames,
@@ -115,6 +128,8 @@ struct StackingResult {
       "height": height,
       "degraded": degraded
     ]
+    if let focusBracketing { value["focusBracketing"] = focusBracketing }
+    return value
   }
 }
 
@@ -249,6 +264,58 @@ final class FrameAligner {
     return nil
   }
 
+  func registration(_ image: CIImage, to reference: CIImage) -> FocusFrameRegistration? {
+    guard let referenceCG = proxyCGImage(reference), let imageCG = proxyCGImage(image) else { return nil }
+    let scale = CGFloat(imageCG.width) / image.extent.width
+    let extent = image.extent
+    let corners = [CGPoint(x: extent.minX, y: extent.minY),
+                   CGPoint(x: extent.maxX, y: extent.minY),
+                   CGPoint(x: extent.maxX, y: extent.maxY),
+                   CGPoint(x: extent.minX, y: extent.maxY)]
+    var candidates: [FocusFrameRegistration] = []
+    if let matrix = homographicTransform(imageCG, referenceCG: referenceCG) {
+      let projected = corners.compactMap { point -> CGPoint? in
+        let v = matrix * SIMD3<Float>(Float(point.x * scale), Float(point.y * scale), 1)
+        guard v.z.isFinite, v.z > 0.0001 else { return nil }
+        return CGPoint(x: CGFloat(v.x / v.z) / scale, y: CGFloat(v.y / v.z) / scale)
+      }
+      if let result = FocusFrameRegistration(corners: projected, referenceExtent: reference.extent) { candidates.append(result) }
+    }
+    if let transform = translationTransform(imageCG, referenceCG: referenceCG) {
+      let full = CGAffineTransform(translationX: transform.tx / scale, y: transform.ty / scale)
+      if let result = FocusFrameRegistration(corners: corners.map { $0.applying(full) }, referenceExtent: reference.extent) { candidates.append(result) }
+    }
+    // Geometry alone cannot detect a plausible but incorrect registration.
+    // Compare blurred proxies so defocus differences do not dominate the score,
+    // and prefer translation when it fits the scene better than homography.
+    let fixed = CIImage(cgImage: referenceCG)
+    let floating = CIImage(cgImage: imageCG)
+    let sx = CGFloat(referenceCG.width) / reference.extent.width
+    let sy = CGFloat(referenceCG.height) / reference.extent.height
+    var best: FocusFrameRegistration?
+    var bestScore = Double.infinity
+    for candidate in candidates {
+      let smallCorners = candidate.corners.map {
+        CGPoint(x: ($0.x - reference.extent.minX) * sx, y: ($0.y - reference.extent.minY) * sy)
+      }
+      guard let small = FocusFrameRegistration(corners: smallCorners, referenceExtent: fixed.extent),
+            let crop = try? FocusFrameRegistration.commonCrop([small], reference: fixed.extent) else { continue }
+      let area = crop.insetBy(dx: 8, dy: 8)
+      guard !area.isEmpty else { continue }
+      let registered = small.apply(to: floating).clampedToExtent()
+        .applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 3]).cropped(to: area)
+      let target = fixed.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 3]).cropped(to: area)
+      let difference = registered.applyingFilter("CIDifferenceBlendMode", parameters: [kCIInputBackgroundImageKey: target])
+        .applyingFilter("CIAreaAverage", parameters: [kCIInputExtentKey: CIVector(cgRect: area)])
+      var mean = [Float](repeating: 0, count: 4)
+      context.render(difference, toBitmap: &mean, rowBytes: 16, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+        format: .RGBAf, colorSpace: CGColorSpace(name: CGColorSpace.extendedLinearSRGB))
+      let score = Double(mean[0] * 0.2126 + mean[1] * 0.7152 + mean[2] * 0.0722)
+      if score.isFinite && score < bestScore { bestScore = score; best = candidate }
+    }
+    return bestScore < 0.04 ? best : nil
+  }
+
   private func proxyCGImage(_ image: CIImage) -> CGImage? {
     let scale = min(1, 640 / max(image.extent.width, image.extent.height))
     let proxy = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
@@ -336,7 +403,8 @@ final class StackingStrategyRegistry {
     let values: [any StackingStrategy] = [
       BulbStrategy(),
       MotionBlurStrategy(),
-      DoubleExposureStrategy()
+      DoubleExposureStrategy(),
+      FocusBracketingStrategy()
     ]
     strategies = Dictionary(uniqueKeysWithValues: values.map { ($0.id, $0) })
   }
@@ -373,6 +441,8 @@ final class StackingExporter {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
       "komorebi-\(strategyID.rawValue)-\(UUID().uuidString).\(heif ? "heic" : "jpg")"
     )
+    var completed = false
+    defer { if !completed { try? FileManager.default.removeItem(at: url) } }
     guard let destination = CGImageDestinationCreateWithURL(
       url as CFURL,
       (heif ? UTType.heic : UTType.jpeg).identifier as CFString,
@@ -400,6 +470,7 @@ final class StackingExporter {
     guard CGImageDestinationFinalize(destination) else {
       throw StackingError.cannotCreateOutput
     }
+    completed = true
     return (url, cgImage.width, cgImage.height)
   }
 }
