@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import Slider from "@react-native-community/slider";
+import HeifPlusSlider from "./HeifPlusSlider";
 import { useEffect, useState } from "react";
 import { Alert, DeviceEventEmitter, Pressable, Text, View } from "react-native";
 import { useSettings } from "../context/SettingsContext";
@@ -13,6 +13,7 @@ export default function HeifPlusSettings() {
   const { heifPlusSettings, setHeifPlusSettings, heifPlusSupport } = useSettings();
   const [expanded, setExpanded] = useState(false);
   const [jobs, setJobs] = useState([]);
+  const [advanced, setAdvanced] = useState(false);
   useEffect(() => {
     let mounted = true;
     const refresh = () => listHeifPlusJobs().then((value) => { if (mounted) setJobs(value); }).catch(console.warn);
@@ -24,8 +25,7 @@ export default function HeifPlusSettings() {
   const update = (key, value) => setHeifPlusSettings((current) => ({ ...current, [key]: value }));
   const supported = (key) => heifPlusSupport?.supportedControls?.[key] !== false;
   const manualDefault = (key, min, max) => ({
-    sharpnessAmount: 0.3, luminanceNoiseReductionAmount: 0.3, contrastAmount: 0.15,
-    localToneMapAmount: 0.5, exposure: 0, boostAmount: 1, boostShadowAmount: 1,
+    ...DEFAULT_HEIF_PLUS_SETTINGS, exposure: 0, boostAmount: 1, boostShadowAmount: 1,
     neutralTemperature: 6500, neutralTint: 0,
   })[key] ?? (min + max) / 2;
   return (
@@ -39,13 +39,13 @@ export default function HeifPlusSettings() {
       >
         <View style={styles.menuText}>
           <Text style={styles.rowLabel}>Revelação HEIF+</Text>
-          <Text style={styles.rowDescription}>Ajustes do RAW · preferências salvas</Text>
+          <Text style={styles.rowDescription}>Perfil suave · ajustes do RAW</Text>
         </View>
         <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color="#777" />
       </Pressable>
       {expanded && <View style={heifStyles.expandedContent}>
       <Text style={styles.sectionDescription}>
-        Ajustes aplicados ao RAW antes do HEIF. Automático preserva a calibração Apple de cada foto.
+        Ajustes aplicados ao RAW antes do HEIF. Automático usa a calibração de cada foto. O perfil padrão reduz nitidez artificial e processamento local, preservando textura.
         LUT, halation e grain são aplicados depois da revelação. Com RAW selecionado, a revelação é salva como HEIC junto ao DNG no Fotos; sem RAW, somente o HEIF é salvo.
       </Text>
       <Text style={styles.sectionDescription}>
@@ -53,39 +53,49 @@ export default function HeifPlusSettings() {
           : "O suporte exato dos controles será verificado no primeiro RAW. Controles indisponíveis serão ignorados e identificados."}
       </Text>
       <View style={styles.group}>
-        {HEIF_PLUS_CONTROLS.map(([key, label, min, max, step]) => {
+        {HEIF_PLUS_CONTROLS.filter(([key]) => [
+          "sharpnessAmount", "luminanceNoiseReductionAmount", "contrastAmount", "localToneMapAmount",
+          ...(advanced ? ["boostShadowAmount", "boostAmount", "exposure", "neutralTemperature", "neutralTint"] : []),
+        ].includes(key)).map(([key, label, min, max, step]) => {
           const automatic = heifPlusSettings[key] == null;
           const available = supported(key);
           return (
             <View key={key} style={heifStyles.controlRow}>
               <Text style={styles.rowLabel}>{label}</Text>
               {!available && <Text style={styles.rowDescription}>Indisponível no RAW/decoder da última captura.</Text>}
-              <CustomToggle grouped label="Automático da Apple" disabled={!available}
+              <CustomToggle grouped label="Automático" disabled={!available}
                 value={automatic} onValueChange={(enabled) => update(key, enabled ? null : manualDefault(key, min, max))} />
               {!automatic && <>
                 <Text style={styles.rowDescription}>{Number(heifPlusSettings[key]).toFixed(step >= 1 ? 0 : 2)}</Text>
-                <Slider accessibilityLabel={label} minimumValue={min} maximumValue={max}
+                <HeifPlusSlider label={label} min={min} max={max}
                   step={step} value={heifPlusSettings[key]} disabled={!available}
-                  minimumTrackTintColor="#ffaa00" thumbTintColor="#ffaa00"
-                  onValueChange={(value) => update(key, value)} />
+                  onChange={(value) => update(key, value)} />
               </>}
               {key === "boostShadowAmount" && <Text style={styles.rowDescription}>Sem efeito quando a curva global está em zero.</Text>}
             </View>
           );
         })}
-        <CustomToggle grouped label="Recuperar highlights" disabled={!supported("highlightRecoveryEnabled")}
-          description="Requer iOS 26 e suporte do RAW/decoder. A API oferece ligar/desligar."
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: advanced }}
+          style={[styles.actionRow, heifStyles.advancedButton]} onPress={() => setAdvanced((value) => !value)}>
+          <Text style={styles.rowLabel}>Avançado</Text>
+          <Ionicons name={advanced ? "chevron-up" : "chevron-down"} size={18} color="#777" />
+        </Pressable>
+        {advanced && <>
+        <Text style={[styles.rowDescription, heifStyles.note]}>Exposição ajusta a revelação, sem alterar a captura. Temperatura e matiz fixas se aplicam às próximas fotos. Correções de ruído cromático, detalhe, moiré e pontos isolados permanecem automáticas.</Text>
+        <CustomToggle grouped label="Recuperar altas luzes" disabled={!supported("highlightRecoveryEnabled")}
+          description="Preserva detalhes nas áreas claras quando disponível."
           value={heifPlusSettings.highlightRecoveryEnabled}
           onValueChange={(value) => update("highlightRecoveryEnabled", value)} />
-        <CustomToggle grouped label="Correção de lente automática" disabled={!supported("lensCorrectionEnabled")}
+        <CustomToggle grouped label="Correção de lente · Automático" disabled={!supported("lensCorrectionEnabled")}
           value={heifPlusSettings.lensCorrectionEnabled == null}
           onValueChange={(value) => update("lensCorrectionEnabled", value ? null : true)} />
         {heifPlusSettings.lensCorrectionEnabled != null && <CustomToggle grouped
           label="Aplicar correção de lente" disabled={!supported("lensCorrectionEnabled")}
           value={heifPlusSettings.lensCorrectionEnabled}
           onValueChange={(value) => update("lensCorrectionEnabled", value)} />}
+        </>}
         <Pressable accessibilityRole="button" style={heifStyles.resetButton} onPress={() => setHeifPlusSettings(DEFAULT_HEIF_PLUS_SETTINGS)}>
-          <Text style={styles.rowLabel}>Restaurar padrões</Text>
+          <Text style={styles.rowLabel}>Restaurar perfil suave</Text>
         </Pressable>
       </View>
       </View>}

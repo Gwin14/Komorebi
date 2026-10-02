@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { restorePhotoFormat, normalizeHeifPlusSettings, getHeifPlusPolicy } = require('./heifPlusSettings');
+const { HEIF_PLUS_CONTROLS, DEFAULT_HEIF_PLUS_SETTINGS, restorePhotoFormat, normalizeHeifPlusSettings, getHeifPlusPolicy } = require('./heifPlusSettings');
 const { completeHeifPlusJob } = require('./heifPlusJobs');
 
 test('format migration retains legacy HEIF/JPEG choices and explicit HEIF+', () => {
@@ -11,7 +11,10 @@ test('format migration retains legacy HEIF/JPEG choices and explicit HEIF+', () 
 });
 test('RAW settings retain calibration and normalize corrupt/out-of-range inputs', () => {
   const defaults = normalizeHeifPlusSettings(null);
-  assert.equal(defaults.sharpnessAmount, null);
+  assert.equal(defaults.sharpnessAmount, 0.15);
+  assert.equal(defaults.luminanceNoiseReductionAmount, 0.15);
+  assert.equal(defaults.contrastAmount, 0.05);
+  assert.equal(defaults.localToneMapAmount, 0.15);
   assert.equal(defaults.exposure, 0);
   assert.equal(defaults.neutralTemperature, null);
   assert.equal(defaults.highlightRecoveryEnabled, true);
@@ -21,7 +24,7 @@ test('RAW settings retain calibration and normalize corrupt/out-of-range inputs'
   assert.equal(settings.exposure, -3);
   assert.equal(settings.neutralTemperature, 2000);
   assert.equal(settings.neutralTint, null);
-  assert.equal(settings.contrastAmount, null);
+  assert.equal(settings.contrastAmount, 0.05);
   assert.equal(settings.unexpected, undefined);
 });
 test('HEIF+ honors selected RAW and prefers ProRAW then Bayer from actual capabilities', () => {
@@ -75,4 +78,12 @@ test('custom HEIF+ settings preserve automatic values, manual values and disable
     lensCorrectionEnabled: false });
   const restored = normalizeHeifPlusSettings(JSON.parse(JSON.stringify(customized)));
   assert.deepEqual(restored, customized);
+});
+
+test('untouched legacy profile upgrades to the soft profile without replacing custom choices', () => {
+  const legacy = { ...Object.fromEntries(HEIF_PLUS_CONTROLS.map(([key]) => [key, null])),
+    exposure: 0, highlightRecoveryEnabled: true, lensCorrectionEnabled: null };
+  assert.deepEqual(normalizeHeifPlusSettings(legacy), DEFAULT_HEIF_PLUS_SETTINGS);
+  assert.equal(normalizeHeifPlusSettings({ ...legacy, exposure: 0.5 }).sharpnessAmount, null);
+  assert.deepEqual(normalizeHeifPlusSettings(DEFAULT_HEIF_PLUS_SETTINGS), DEFAULT_HEIF_PLUS_SETTINGS);
 });

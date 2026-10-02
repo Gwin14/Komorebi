@@ -1,14 +1,14 @@
 // null preserves Apple's per-image calibration. Numeric values are RAW inputs.
 const HEIF_PLUS_CONTROLS = [
   ["sharpnessAmount", "Nitidez", 0, 1, 0.01],
-  ["luminanceNoiseReductionAmount", "Ruído de luminância", 0, 1, 0.01],
-  ["contrastAmount", "Contraste local", 0, 1, 0.01],
-  ["localToneMapAmount", "Tone mapping local", 0, 1, 0.01],
+  ["luminanceNoiseReductionAmount", "Redução de ruído", 0, 1, 0.01],
+  ["contrastAmount", "Clareza", 0, 1, 0.01],
+  ["localToneMapAmount", "Equilíbrio de luz", 0, 1, 0.01],
   ["exposure", "Exposição (EV)", -3, 3, 0.1],
   ["boostAmount", "Curva global", 0, 1, 0.01],
   ["boostShadowAmount", "Sombras", 0, 2, 0.01],
   ["neutralTemperature", "Temperatura (K)", 2000, 50000, 100],
-  ["neutralTint", "Tint", -150, 150, 1],
+  ["neutralTint", "Matiz", -150, 150, 1],
   ["colorNoiseReductionAmount", "Ruído cromático", 0, 1, 0.01],
   ["detailAmount", "Detalhe", 0, 3, 0.01],
   ["moireReductionAmount", "Moiré", 0, 1, 0.01],
@@ -16,12 +16,22 @@ const HEIF_PLUS_CONTROLS = [
 ];
 const DEFAULT_HEIF_PLUS_SETTINGS = Object.freeze({
   ...Object.fromEntries(HEIF_PLUS_CONTROLS.map(([key]) => [key, null])),
+  // Gentle starting profile: retain texture without strong edge/local enhancement.
+  sharpnessAmount: 0.15,
+  luminanceNoiseReductionAmount: 0.15,
+  contrastAmount: 0.05,
+  localToneMapAmount: 0.15,
   exposure: 0,
   highlightRecoveryEnabled: true,
   lensCorrectionEnabled: null,
 });
 function normalizeHeifPlusSettings(value) {
-  const source = value && typeof value === "object" ? value : {};
+  let source = value && typeof value === "object" ? value : {};
+  // Upgrade the untouched legacy profile, while retaining custom/automatic choices.
+  const untouchedLegacy = HEIF_PLUS_CONTROLS.every(([key]) =>
+    source[key] === (key === "exposure" ? 0 : null))
+    && source.highlightRecoveryEnabled === true && source.lensCorrectionEnabled === null;
+  if (untouchedLegacy) source = {};
   const result = { ...DEFAULT_HEIF_PLUS_SETTINGS };
   for (const [key, , min, max] of HEIF_PLUS_CONTROLS) {
     if (source[key] === null) result[key] = null;
