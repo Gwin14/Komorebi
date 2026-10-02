@@ -7,6 +7,7 @@ import { Alert, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
+import FileFormatSelector from "./FileFormatSelector";
 import AspectRatioSelector from "./AspectRatioSelector";
 import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
@@ -32,7 +33,13 @@ export default function TopBar({
   manualMode,
   rawCaptureAvailable,
   rawMode,
-  toggleRawMode,
+  photoFormat,
+  processedEnabled,
+  supportedRawModes,
+  heifPlusAvailable,
+  onSelectPhotoFormat,
+  onToggleFileFormat,
+  onSelectRawMode,
   livePhotoAvailable,
   livePhotoEnabled,
   toggleLivePhotoEnabled,
@@ -53,6 +60,7 @@ export default function TopBar({
 }) {
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
+  const [formatOpen, setFormatOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [stackingOpen, setStackingOpen] = useState(false);
   const [aspectRatioOpen, setAspectRatioOpen] = useState(false);
@@ -156,8 +164,8 @@ export default function TopBar({
     },
     rawCapture: {
       icon: rawMode === "off" ? "aperture-outline" : "aperture",
-      label: rawMode === "proRaw" ? "PRO" : rawMode === "raw" ? "RAW" : "OFF",
-      onPress: toggleRawMode,
+      label: rawMode !== "off" ? processedEnabled ? photoFormat === "jpeg" ? "RAW+J" : "RAW+H" : "RAW" : photoFormat === "heifPlus" ? "HEIF+" : photoFormat === "heif" ? "HEIF" : "JPEG",
+      onPress: () => setFormatOpen(true),
       active: rawMode !== "off",
     },
     livePhoto: {
@@ -204,7 +212,6 @@ export default function TopBar({
             controlsDisabled ||
             (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
             (controlId === "manual" && Boolean(unavailableReasons.manual)) ||
-            (controlId === "rawCapture" && !rawCaptureAvailable) ||
             (controlId === "stacking" && !imageStackingAvailable) ||
             (controlId === "livePhoto" && !livePhotoAvailable) ||
             (controlId === "portrait" && !portraitCaptureAvailable);
@@ -364,6 +371,31 @@ export default function TopBar({
             );
           }
 
+          if (controlId === "rawCapture") {
+            return (
+              <Animated.View key={controlId} style={animatedStyle}>
+                <Popover isVisible={formatOpen} onRequestClose={() => setFormatOpen(false)}
+                  backgroundStyle={{ backgroundColor: "transparent" }}
+                  popoverStyle={{ backgroundColor: "transparent" }}
+                  from={<TouchableOpacity style={[styles.controlButton, control.active && styles.controlButtonActive]}
+                    accessibilityRole="button" accessibilityLabel={`Formato de arquivo: ${control.label}`}
+                    onPress={() => setFormatOpen(true)}>
+                    <View style={styles.rawControl}>
+                      <Ionicons name={control.icon} size={26} color={iconColor} />
+                      <Text style={[styles.rawLabel, control.active && styles.rawLabelActive]}>{control.label}</Text>
+                    </View>
+                  </TouchableOpacity>}>
+                  <FileFormatSelector rawMode={rawMode} processedEnabled={processedEnabled}
+                    photoFormat={photoFormat} rawAvailable={rawCaptureAvailable}
+                    supportedRawModes={supportedRawModes} heifPlusAvailable={heifPlusAvailable}
+                    unavailableReason={unavailableReasons.rawCapture}
+                    onToggle={onToggleFileFormat} onSelectPhotoFormat={onSelectPhotoFormat}
+                    onSelectRawMode={onSelectRawMode} />
+                </Popover>
+              </Animated.View>
+            );
+          }
+
           return (
             <TouchableOpacity
               key={controlId}
@@ -390,19 +422,7 @@ export default function TopBar({
               <Animated.View
                 style={[animatedStyle, disabled && styles.disabledControl]}
               >
-                {controlId === "rawCapture" ? (
-                  <View style={styles.rawControl}>
-                    <Ionicons name={control.icon} size={26} color={iconColor} />
-                    <Text
-                      style={[
-                        styles.rawLabel,
-                        control.active && styles.rawLabelActive,
-                      ]}
-                    >
-                      {control.label}
-                    </Text>
-                  </View>
-                ) : control.symbol ? (
+                {control.symbol ? (
                   <SymbolView
                     name={control.symbol}
                     size={26}

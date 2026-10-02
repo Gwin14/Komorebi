@@ -1,24 +1,44 @@
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
-index ecd2a94..0d17b37 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Configuration.swift
-@@ -89,6 +89,12 @@ extension CameraSession {
+@@ -88,6 +88,12 @@
+       }
        if photoOutput.isPortraitEffectsMatteDeliverySupported {
          photoOutput.isPortraitEffectsMatteDeliveryEnabled = photo.enablePortraitEffectsMatte
-       }
++      }
 +      if photoOutput.isLivePhotoCaptureSupported {
 +        photoOutput.isLivePhotoCaptureEnabled = true
 +      }
 +      if #available(iOS 14.3, *), photoOutput.isAppleProRAWSupported {
 +        photoOutput.isAppleProRAWEnabled = true
-+      }
+       }
        photoOutput.isMirrored = configuration.isMirrored
        // TODO: Enable isResponsiveCaptureEnabled? (iOS 17+)
-       // TODO: Enable isFastCapturePrioritizationEnabled? (iOS 17+)
-@@ -240,6 +246,16 @@ extension CameraSession {
+@@ -159,8 +165,7 @@
+     // Done!
+     VisionLogger.log(level: .info, message: "Successfully configured all outputs!")
+
+-    // Notify delegate
+-    delegate?.onSessionInitialized()
++    // Initialization is reported after formats and outputs are committed.
+   }
+
+   // pragma MARK: Video Stabilization
+@@ -234,11 +239,25 @@
+
+     // Configure the PhotoOutput Settings to use the given max-resolution.
+     // We need to run this after device.activeFormat has been set, otherwise the resolution is different.
+-    let format = videoDeviceInput.device.activeFormat
++    let device = videoDeviceInput.device
++    let format = device.activeFormat
++    if format.supportedColorSpaces.contains(.P3_D65) {
++      device.activeColorSpace = .P3_D65
++    }
+     if #available(iOS 16.0, *) {
+       photoOutput.maxPhotoDimensions = format.photoDimensions
      } else {
        photoOutput.isHighResolutionCaptureEnabled = true
-     }
++    }
 +
 +    if #available(iOS 14.3, *) {
 +      if photoOutput.isAppleProRAWSupported && !photoOutput.isAppleProRAWEnabled {
@@ -28,15 +48,13 @@ index ecd2a94..0d17b37 100644
 +      VisionLogger.log(level: .info, message: "Photo RAW support: appleProRAWSupported=\(photoOutput.isAppleProRAWSupported), appleProRAWEnabled=\(photoOutput.isAppleProRAWEnabled), rawFormats=\(photoOutput.availableRawPhotoPixelFormatTypes), rawFileTypes=\(photoOutput.availableRawPhotoFileTypes)")
 +    } else {
 +      VisionLogger.log(level: .info, message: "Photo RAW support: rawFormats=\(photoOutput.availableRawPhotoPixelFormatTypes), rawFileTypes=\(photoOutput.availableRawPhotoFileTypes)")
-+    }
+     }
    }
 
-   // pragma MARK: Side-Props
 diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-index 12f5c07..f359ed0 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession+Photo.swift
-@@ -39,7 +39,36 @@ extension CameraSession {
+@@ -39,19 +39,81 @@
        VisionLogger.log(level: .info, message: "Capturing photo...")
 
        // Create photo settings
@@ -52,11 +70,16 @@ index 12f5c07..f359ed0 100644
 +          return
 +        }
 +
-+        let processedFormat = [AVVideoCodecKey: AVVideoCodecType.jpeg]
++        let processedCodec: AVVideoCodecType = options.photoCodec == "hevc" ? .hevc : .jpeg
++        guard photoOutput.availablePhotoCodecTypes.contains(processedCodec) else {
++          promise.reject(error: .capture(.unknown(message: "O formato selecionado não está disponível para a captura RAW.")))
++          return
++        }
++        let processedFormat = [AVVideoCodecKey: processedCodec]
 +        photoSettings = AVCapturePhotoSettings(rawPixelFormatType: rawPixelFormat,
 +                                               rawFileType: .dng,
 +                                               processedFormat: processedFormat,
-+                                               processedFileType: AVFileType("public.jpeg"))
++                                               processedFileType: processedCodec == .hevc ? .heic : .jpg)
 +        if photoSettings.availableRawEmbeddedThumbnailPhotoCodecTypes.contains(.jpeg) {
 +          photoSettings.rawEmbeddedThumbnailPhotoFormat = [
 +            AVVideoCodecKey: AVVideoCodecType.jpeg,
@@ -74,7 +97,22 @@ index 12f5c07..f359ed0 100644
 
        // set photo resolution
        if #available(iOS 16.0, *) {
-@@ -50,8 +79,24 @@ extension CameraSession {
+         photoSettings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
++        if options.rawMode != "off" {
++          // Request a supported 12 MP sensor readout instead of RAW Max.
++          // Keep AVFoundation's default lossless DNG encoding and bit depth.
++          let outputDimensions = photoOutput.maxPhotoDimensions
++          let supported = videoDeviceInput.device.activeFormat.supportedMaxPhotoDimensions
++            .filter { $0.width <= outputDimensions.width && $0.height <= outputDimensions.height }
++            .sorted { Int64($0.width) * Int64($0.height) < Int64($1.width) * Int64($1.height) }
++          let normalResolution = supported.last(where: { Int64($0.width) * Int64($0.height) <= 12_200_000 })
++          if let dimensions = normalResolution ?? supported.first {
++            photoSettings.maxPhotoDimensions = dimensions
++          }
++        }
+       } else {
+         photoSettings.isHighResolutionPhotoEnabled = photoOutput.isHighResolutionCaptureEnabled
+       }
 
        // depth data
        photoSettings.isDepthDataDeliveryEnabled = photoOutput.isDepthDataDeliveryEnabled
@@ -99,7 +137,7 @@ index 12f5c07..f359ed0 100644
        }
 
        // quality prioritization
-@@ -84,11 +129,52 @@ extension CameraSession {
+@@ -84,11 +146,52 @@
                                                        enableShutterSound: options.enableShutterSound,
                                                        metadataProvider: self.metadataProvider,
                                                        path: options.path,
@@ -114,8 +152,8 @@ index 12f5c07..f359ed0 100644
 +      if !options.livePhoto {
 +        photoOutput.setPreparedPhotoSettingsArray([photoSettings], completionHandler: nil)
 +      }
-+    }
-+  }
+     }
+   }
 +
 +  private func getRawPixelFormat(for rawMode: String, availableFormats: [OSType]) -> OSType? {
 +    guard !availableFormats.isEmpty else {
@@ -128,7 +166,7 @@ index 12f5c07..f359ed0 100644
 +      }
 +
 +      return availableFormats.first(where: { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) })
-     }
++    }
 +
 +    return rawMode == "raw" ? availableFormats.first : nil
 +  }
@@ -151,13 +189,12 @@ index 12f5c07..f359ed0 100644
 +    }
 +
 +    return "\(rawMode) capture is not supported by this camera configuration."
-   }
++  }
  }
 diff --git a/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift b/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift
-index 4d8bc38..09b528b 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/Extensions/AVCaptureDevice+toDictionary.swift
-@@ -26,7 +26,7 @@ extension AVCaptureDevice {
+@@ -26,7 +26,7 @@
        "minExposure": minExposureTargetBias,
        "maxExposure": maxExposureTargetBias,
        "isMultiCam": isMultiCam,
@@ -167,7 +204,6 @@ index 4d8bc38..09b528b 100644
        "supportsFocus": isFocusPointOfInterestSupported,
        "hardwareLevel": HardwareLevel.full.jsValue,
 diff --git a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
-index e845b38..f15ae14 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/PhotoCaptureDelegate.swift
 @@ -7,6 +7,7 @@
@@ -178,7 +214,7 @@ index e845b38..f15ae14 100644
 
  // MARK: - PhotoCaptureDelegate
 
-@@ -16,16 +17,27 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -16,16 +17,27 @@
    private let cameraSessionDelegate: CameraSessionDelegate?
    private let metadataProvider: MetadataProvider
    private let path: URL
@@ -206,7 +242,7 @@ index e845b38..f15ae14 100644
      self.cameraSessionDelegate = cameraSessionDelegate
      super.init()
      makeGlobal()
-@@ -42,17 +54,51 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -42,17 +54,51 @@
    }
 
    func photoOutput(_: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
@@ -263,7 +299,7 @@ index e845b38..f15ae14 100644
                                       file: path)
 
        let exif = photo.metadata["{Exif}"] as? [String: Any]
-@@ -63,7 +109,7 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -63,7 +109,7 @@
        let orientation = getOrientation(forExifOrientation: cgOrientation)
        let isMirrored = getIsMirrored(forExifOrientation: cgOrientation)
 
@@ -272,7 +308,7 @@ index e845b38..f15ae14 100644
          "path": path.absoluteString,
          "width": width as Any,
          "height": height as Any,
-@@ -72,26 +118,113 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -72,25 +118,114 @@
          "isRawPhoto": photo.isRawPhoto,
          "metadata": photo.metadata,
          "thumbnail": photo.embeddedThumbnailPhotoFormat as Any,
@@ -327,7 +363,9 @@ index e845b38..f15ae14 100644
 +    let scaledImage = sourceImage.transformed(
 +      by: CGAffineTransform(scaleX: scale, y: scale)
 +    )
-+    CIContext().render(scaledImage, to: pixelBuffer)
++    let colorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
++    CVBufferSetAttachment(pixelBuffer, kCVImageBufferCGColorSpaceKey, colorSpace, .shouldPropagate)
++    CIContext().render(scaledImage, to: pixelBuffer, bounds: scaledImage.extent, colorSpace: colorSpace)
 +    return pixelBuffer
 +  }
 +
@@ -352,10 +390,12 @@ index e845b38..f15ae14 100644
 +        finish(with: .failure(CameraError.capture(.insufficientStorage)))
        } else {
 -        promise.reject(error: .capture(.unknown(message: error.description)), cause: error)
+-      }
+-      return
 +        finish(with: .failure(error))
-       }
-       return
-     }
++      }
++      return
++    }
 +
 +    if let rawPhotoResult {
 +      finish(with: .success(rawPhotoResult))
@@ -392,11 +432,10 @@ index e845b38..f15ae14 100644
 +      promise.reject(error: .capture(.unknown(message: error.description)), cause: error)
 +    case .failure(let error):
 +      promise.reject(error: .capture(.unknown(message: error.localizedDescription)), cause: error as NSError)
-+    }
+     }
    }
 
-   private func getOrientation(forExifOrientation exifOrientation: CGImagePropertyOrientation) -> String {
-@@ -118,3 +251,29 @@ class PhotoCaptureDelegate: GlobalReferenceHolder, AVCapturePhotoCaptureDelegate
+@@ -118,3 +253,29 @@
      }
    }
  }
@@ -427,10 +466,9 @@ index e845b38..f15ae14 100644
 +  }
 +}
 diff --git a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
-index c569e88..6f3e211 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/Types/TakePhotoOptions.swift
-@@ -11,9 +11,14 @@ import Foundation
+@@ -11,9 +11,14 @@
  struct TakePhotoOptions {
    var flash: Flash = .off
    var path: URL
@@ -445,7 +483,7 @@ index c569e88..6f3e211 100644
 
    init(fromJSValue dictionary: NSDictionary) throws {
      // Flash
-@@ -32,11 +37,29 @@ struct TakePhotoOptions {
+@@ -32,11 +37,29 @@
      if let enable = dictionary["enableShutterSound"] as? Bool {
        enableShutterSound = enable
      }
@@ -470,7 +508,7 @@ index c569e88..6f3e211 100644
 +      path = try FileUtils.getFilePath(fileExtension: fileExtension)
 +    }
 +    if rawMode != "off" {
-+      processedPath = try FileUtils.getFilePath(fileExtension: "jpg")
++      processedPath = try FileUtils.getFilePath(fileExtension: photoCodec == "hevc" ? "heic" : "jpg")
 +    }
 +    if livePhoto {
 +      livePhotoMoviePath = try FileUtils.getFilePath(fileExtension: "mov")
@@ -478,10 +516,9 @@ index c569e88..6f3e211 100644
    }
  }
 diff --git a/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift b/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
-index 489d905..855f8fc 100644
 --- a/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
 +++ b/node_modules/react-native-vision-camera/ios/Core/Utils/FileUtils.swift
-@@ -30,7 +30,11 @@ enum FileUtils {
+@@ -30,7 +30,11 @@
      }
    }
 
@@ -495,10 +532,9 @@ index 489d905..855f8fc 100644
        throw CameraError.capture(.imageDataAccessError)
      }
 diff --git a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts b/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
-index 2e4c2f2..5f39c85 100644
 --- a/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
 +++ b/node_modules/react-native-vision-camera/lib/typescript/types/PhotoFile.d.ts
-@@ -37,6 +37,20 @@ export interface TakePhotoOptions {
+@@ -37,6 +37,20 @@
       * @default true
       */
      enableShutterSound?: boolean;
@@ -519,16 +555,16 @@ index 2e4c2f2..5f39c85 100644
  }
  /**
   * Represents a Photo taken by the Camera written to the local filesystem.
-@@ -56,6 +70,8 @@ export interface PhotoFile extends TemporaryFile {
+@@ -56,6 +70,8 @@
       * Whether this photo is in RAW format or not.
       */
      isRawPhoto: boolean;
-+    /** Processed JPEG captured alongside a RAW/DNG photo. (iOS only) */
++    /** Processed HEIC or JPEG captured alongside a RAW/DNG photo. (iOS only) */
 +    processedPath?: string;
      /**
       * Display orientation of the photo, relative to the Camera's sensor orientation.
       *
-@@ -67,6 +83,12 @@ export interface PhotoFile extends TemporaryFile {
+@@ -67,6 +83,12 @@
       */
      isMirrored: boolean;
      thumbnail?: Record<string, unknown>;
@@ -542,10 +578,9 @@ index 2e4c2f2..5f39c85 100644
       * Metadata information describing the captured image. (iOS only)
       *
 diff --git a/node_modules/react-native-vision-camera/src/types/PhotoFile.ts b/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
-index 85098d6..04872ba 100644
 --- a/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
 +++ b/node_modules/react-native-vision-camera/src/types/PhotoFile.ts
-@@ -38,6 +38,20 @@ export interface TakePhotoOptions {
+@@ -38,6 +38,20 @@
     * @default true
     */
    enableShutterSound?: boolean
@@ -566,20 +601,20 @@ index 85098d6..04872ba 100644
  }
 
  /**
-@@ -58,6 +72,12 @@ export interface PhotoFile extends TemporaryFile {
-    * Whether this photo is in RAW format or not.
+@@ -59,6 +73,12 @@
     */
    isRawPhoto: boolean
-+  /**
-+   * Processed JPEG captured alongside a RAW/DNG photo.
+   /**
++   * Processed HEIC or JPEG captured alongside a RAW/DNG photo.
 +   *
 +   * @platform iOS
 +   */
 +  processedPath?: string
-   /**
++  /**
     * Display orientation of the photo, relative to the Camera's sensor orientation.
     *
-@@ -69,6 +89,12 @@ export interface PhotoFile extends TemporaryFile {
+    * Note that Camera sensors are landscape, so e.g. "portrait" photos will have a value of "landscape-left", etc.
+@@ -69,6 +89,12 @@
     */
    isMirrored: boolean
    thumbnail?: Record<string, unknown>
@@ -595,21 +630,21 @@ index 85098d6..04872ba 100644
 diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts b/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
 --- a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
 +++ b/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProcessor.ts
-@@ -28,6 +28,11 @@ export interface DrawableFrame extends Frame, SkCanvas {
-    * @internal
+@@ -28,6 +28,11 @@
     */
    readonly __skImage: SkImage
-+  /**
+   /**
 +   * Keeps a Skia resource alive until this frame has been submitted to the GPU.
 +   * @internal
 +   */
 +  deferDisposal(resource: { dispose(): void }): void
-   /**
++  /**
     * A private method to dispose the internally created Texture after rendering has completed.
     * @internal
-@@ -87,6 +87,10 @@
+    */
+@@ -87,6 +92,10 @@
    canvas.save()
- 
+
    try {
 +    // Keep this calculation inside the worklet. A captured helper is not
 +    // available in every VisionCamera frame processor runtime.
@@ -618,7 +653,7 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
      // 2. properly rotate canvas so Frame is rendered up-right.
      const orientation = relativeTo(frame.orientation, previewOrientation)
      switch (orientation) {
-@@ -131,13 +135,14 @@
+@@ -131,13 +140,14 @@
   */
  function getSurfaceSize(frame: Frame): Size {
    'worklet'
@@ -634,8 +669,8 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
 +      return { width: Math.round(frame.height * previewScale), height: Math.round(frame.width * previewScale) }
    }
  }
- 
-@@ -174,6 +179,10 @@
+
+@@ -174,6 +184,10 @@
  ): DrawableFrameProcessor {
    const Skia = SkiaProxy.Skia
    const Worklets = WorkletsProxy.Worklets
@@ -643,18 +678,18 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
 +  const logStage = Worklets.createRunOnJS((stage: string, frameNumber: number) => {
 +    console.log(`[SkiaPipeline] frame=${frameNumber} ${stage}`)
 +  })
- 
+
    const getSkiaSurface = (frame: Frame): SkSurface => {
      'worklet'
-@@ -225,6 +239,7 @@ export function createSkiaFrameProcessor(
+@@ -222,6 +236,7 @@
      const nativeBuffer = (frame as FrameInternal).getNativeBuffer()
      const image = Skia.Image.MakeImageFromNativeBuffer(nativeBuffer.pointer)
      if (image == null) throw new Error('Failed to create a Skia image from the camera frame')
 +    const deferredResources: Array<{ dispose(): void }> = []
- 
+
      // Creates a `Proxy` that holds the SkCanvas, but also adds additional methods such as render() and dispose().
      const canvasProxy = new Proxy(canvas as DrawableCanvas, {
-@@ -233,6 +248,11 @@ export function createSkiaFrameProcessor(
+@@ -229,6 +244,11 @@
          switch (property) {
            case '__skImage':
              return image
@@ -666,7 +701,7 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
            case 'render':
              return (paint?: SkPaint) => {
                'worklet'
-@@ -242,7 +262,11 @@ export function createSkiaFrameProcessor(
+@@ -238,7 +258,11 @@
            case 'dispose':
              return () => {
                'worklet'
@@ -679,31 +714,31 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
                image.dispose()
                nativeBuffer.delete()
              }
-@@ -253,13 +278,18 @@
+@@ -253,13 +277,18 @@
    return {
      frameProcessor: withFrameRefCounting((frame) => {
        'worklet'
 +      const frameNumber = ++debugFrameCount.value
 +      const trace = frameNumber <= 25
 +      if (trace) logStage('surface-start', frameNumber)
- 
+
        // 1. Set up Skia Surface with size of Frame
        const surface = getSkiaSurface(frame)
 +      if (trace) logStage('surface-done', frameNumber)
- 
+
        // 2. Create DrawableFrame proxy which internally creates an SkImage/Texture
        const canvas = surface.getCanvas()
        const drawableFrame = createDrawableProxy(frame, canvas)
 +      if (trace) logStage('drawable-done', frameNumber)
- 
+
        try {
          // 3. Clear the current Canvas
-@@ -271,19 +286,31 @@
+@@ -271,19 +300,31 @@
            // 5. Run any user drawing operations
            frameProcessor(drawableFrame)
          })
 +        if (trace) logStage('draw-done', frameNumber)
- 
+
          // 6. Flush draw operations and submit to GPU
 +        if (trace) logStage('flush-start', frameNumber)
          surface.flush()
@@ -713,7 +748,7 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
          drawableFrame.dispose()
        }
 +      if (trace) logStage('drawable-disposed', frameNumber)
- 
+
        // 8. Capture rendered results as a Texture/SkImage to later render to screen
        const snapshot = surface.makeImageSnapshot()
 -      const snapshotCopy = snapshot.makeNonTextureImage()
@@ -729,10 +764,10 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
 +      }
        offscreenTextures.value.push(snapshotCopy)
 +      if (trace) logStage('queued', frameNumber)
- 
+
        // 9. Close old textures that are still in the queue.
        while (offscreenTextures.value.length > 1) {
-@@ -292,6 +319,7 @@
+@@ -292,6 +333,7 @@
          if (texture == null) break
          texture.dispose()
        }
@@ -740,3 +775,126 @@ diff --git a/node_modules/react-native-vision-camera/src/skia/useSkiaFrameProces
      }),
      type: 'drawable-skia',
      offscreenTextures: offscreenTextures,
+diff --git a/node_modules/react-native-vision-camera/ios/Core/CameraSession.swift b/node_modules/react-native-vision-camera/ios/Core/CameraSession.swift
+--- a/node_modules/react-native-vision-camera/ios/Core/CameraSession.swift
++++ b/node_modules/react-native-vision-camera/ios/Core/CameraSession.swift
+@@ -195,6 +195,10 @@
+           self.captureSession.commitConfiguration()
+         }
+
++        if difference.outputsChanged || difference.formatChanged || difference.inputChanged {
++          self.delegate?.onSessionInitialized()
++        }
++
+         // 10. Start or stop the session if needed
+         self.checkIsActive(configuration: config)
+
+diff --git a/node_modules/react-native-vision-camera/ios/React/CameraView.swift b/node_modules/react-native-vision-camera/ios/React/CameraView.swift
+--- a/node_modules/react-native-vision-camera/ios/React/CameraView.swift
++++ b/node_modules/react-native-vision-camera/ios/React/CameraView.swift
+@@ -325,7 +325,14 @@
+   }
+
+   func onSessionInitialized() {
+-    onInitializedEvent?([:])
++    let output = cameraSession.photoOutput
++    let formats = output?.availableRawPhotoPixelFormatTypes ?? []
++    let proRaw = formats.contains { AVCapturePhotoOutput.isAppleProRAWPixelFormat($0) }
++    let bayer = formats.contains { AVCapturePhotoOutput.isBayerRAWPixelFormat($0) }
++    onInitializedEvent?(["deviceId": cameraSession.videoDeviceInput?.device.uniqueID ?? "",
++      "supportedModes": ["off"] + (proRaw ? ["proRaw"] : []) + (bayer ? ["raw"] : []),
++      "supportsRawCapture": proRaw || bayer, "supportsProRawCapture": proRaw,
++      "supportsBayerRawCapture": bayer])
+   }
+
+   func onCameraStarted() {
+diff --git a/node_modules/react-native-vision-camera/src/types/CameraProps.ts b/node_modules/react-native-vision-camera/src/types/CameraProps.ts
+--- a/node_modules/react-native-vision-camera/src/types/CameraProps.ts
++++ b/node_modules/react-native-vision-camera/src/types/CameraProps.ts
+@@ -333,7 +333,7 @@
+    *
+    * This is called everytime the {@linkcode device} or one of the outputs changes.
+    */
+-  onInitialized?: () => void
++  onInitialized?: (capabilities?: { deviceId: string; supportedModes: string[]; supportsRawCapture: boolean; supportsProRawCapture: boolean; supportsBayerRawCapture: boolean }) => void
+   /**
+    * Called when the camera started the session. (`isActive={true}`)
+    *
+diff --git a/node_modules/react-native-vision-camera/src/NativeCameraView.ts b/node_modules/react-native-vision-camera/src/NativeCameraView.ts
+--- a/node_modules/react-native-vision-camera/src/NativeCameraView.ts
++++ b/node_modules/react-native-vision-camera/src/NativeCameraView.ts
+@@ -48,7 +48,7 @@
+   onViewReady: (event: NativeSyntheticEvent<void>) => void
+   onAverageFpsChanged?: (event: NativeSyntheticEvent<AverageFpsChangedEvent>) => void
+   // public events wrapped with NativeSyntheticEvent<T>
+-  onInitialized?: (event: NativeSyntheticEvent<void>) => void
++  onInitialized?: (event: NativeSyntheticEvent<Parameters<NonNullable<CameraProps['onInitialized']>>[0]>) => void
+   onError?: (event: NativeSyntheticEvent<OnErrorEvent>) => void
+   onCodeScanned?: (event: NativeSyntheticEvent<OnCodeScannedEvent>) => void
+   onStarted?: (event: NativeSyntheticEvent<void>) => void
+diff --git a/node_modules/react-native-vision-camera/src/Camera.tsx b/node_modules/react-native-vision-camera/src/Camera.tsx
+--- a/node_modules/react-native-vision-camera/src/Camera.tsx
++++ b/node_modules/react-native-vision-camera/src/Camera.tsx
+@@ -509,8 +509,8 @@
+     }
+   }
+
+-  private onInitialized(): void {
+-    this.props.onInitialized?.()
++  private onInitialized(event: NativeSyntheticEvent<Parameters<NonNullable<CameraProps['onInitialized']>>[0]>): void {
++    this.props.onInitialized?.(event.nativeEvent)
+   }
+
+   private onStarted(): void {
+diff --git a/node_modules/react-native-vision-camera/lib/module/Camera.js b/node_modules/react-native-vision-camera/lib/module/Camera.js
+--- a/node_modules/react-native-vision-camera/lib/module/Camera.js
++++ b/node_modules/react-native-vision-camera/lib/module/Camera.js
+@@ -472,8 +472,8 @@
+       console.error(cameraError);
+     }
+   }
+-  onInitialized() {
+-    this.props.onInitialized?.();
++  onInitialized(event) {
++    this.props.onInitialized?.(event.nativeEvent);
+   }
+   onStarted() {
+     this.props.onStarted?.();
+diff --git a/node_modules/react-native-vision-camera/lib/commonjs/Camera.js b/node_modules/react-native-vision-camera/lib/commonjs/Camera.js
+--- a/node_modules/react-native-vision-camera/lib/commonjs/Camera.js
++++ b/node_modules/react-native-vision-camera/lib/commonjs/Camera.js
+@@ -478,8 +478,8 @@
+       console.error(cameraError);
+     }
+   }
+-  onInitialized() {
+-    this.props.onInitialized?.();
++  onInitialized(event) {
++    this.props.onInitialized?.(event.nativeEvent);
+   }
+   onStarted() {
+     this.props.onStarted?.();
+diff --git a/node_modules/react-native-vision-camera/lib/typescript/types/CameraProps.d.ts b/node_modules/react-native-vision-camera/lib/typescript/types/CameraProps.d.ts
+--- a/node_modules/react-native-vision-camera/lib/typescript/types/CameraProps.d.ts
++++ b/node_modules/react-native-vision-camera/lib/typescript/types/CameraProps.d.ts
+@@ -311,7 +311,7 @@
+      *
+      * This is called everytime the {@linkcode device} or one of the outputs changes.
+      */
+-    onInitialized?: () => void;
++    onInitialized?: (capabilities?: { deviceId: string; supportedModes: string[]; supportsRawCapture: boolean; supportsProRawCapture: boolean; supportsBayerRawCapture: boolean }) => void;
+     /**
+      * Called when the camera started the session. (`isActive={true}`)
+      *
+diff --git a/node_modules/react-native-vision-camera/lib/typescript/NativeCameraView.d.ts b/node_modules/react-native-vision-camera/lib/typescript/NativeCameraView.d.ts
+--- a/node_modules/react-native-vision-camera/lib/typescript/NativeCameraView.d.ts
++++ b/node_modules/react-native-vision-camera/lib/typescript/NativeCameraView.d.ts
+@@ -31,7 +31,7 @@
+     videoBitRateMultiplier?: number;
+     onViewReady: (event: NativeSyntheticEvent<void>) => void;
+     onAverageFpsChanged?: (event: NativeSyntheticEvent<AverageFpsChangedEvent>) => void;
+-    onInitialized?: (event: NativeSyntheticEvent<void>) => void;
++    onInitialized?: (event: NativeSyntheticEvent<Parameters<NonNullable<CameraProps['onInitialized']>>[0]>) => void;
+     onError?: (event: NativeSyntheticEvent<OnErrorEvent>) => void;
+     onCodeScanned?: (event: NativeSyntheticEvent<OnCodeScannedEvent>) => void;
+     onStarted?: (event: NativeSyntheticEvent<void>) => void;

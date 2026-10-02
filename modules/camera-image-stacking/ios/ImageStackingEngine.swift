@@ -358,7 +358,7 @@ final class StackingExporter {
     strategyID: StackingStrategyID
   ) throws -> (URL, Int, Int) {
     let extent = image.extent.integral
-    let displayColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+    let displayColorSpace = CGColorSpace(name: CGColorSpace.displayP3)
       ?? CGColorSpaceCreateDeviceRGB()
     guard !extent.isEmpty,
           let cgImage = context.createCGImage(
@@ -390,6 +390,10 @@ final class StackingExporter {
     // As estratégias carregam o frame com `applyOrientationProperty`, portanto
     // os pixels exportados já estão na orientação final. Reutilizar a tag EXIF
     // original faria Photos aplicar a rotação uma segunda vez.
+    properties.removeValue(forKey: kCGImagePropertyProfileName)
+    var exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:]
+    exif[kCGImagePropertyExifColorSpace] = 65535
+    properties[kCGImagePropertyExifDictionary] = exif
     properties[kCGImagePropertyOrientation] = 1
     properties[kCGImageDestinationLossyCompressionQuality] = 0.94
     CGImageDestinationAddImage(destination, cgImage, properties as CFDictionary)

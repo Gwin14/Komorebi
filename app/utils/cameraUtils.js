@@ -6,7 +6,8 @@ import * as piexif from "piexifjs";
 import { Image } from "react-native";
 import { captureLivePhoto } from "../../modules/camera-live-photo";
 import { capturePortraitPhoto } from "../../modules/camera-portrait-capture";
-import { toVisionCameraRawMode } from "../../modules/camera-raw-capture";
+import { enqueueHeifPlus, listHeifPlusJobs, toVisionCameraRawMode } from "../../modules/camera-raw-capture";
+import { getCachedLUT } from "./lutStore";
 import {
   applyKomorebiMetadataToExifObj,
   buildKomorebiExifMetadata,
@@ -246,12 +247,14 @@ export const takePicture = async ({
   aspectRatio = 3 / 4,
   manualSettings = null,
   rawMode = "off",
+  rawPairEnabled = false,
   livePhotoEnabled = false,
   livePhotoDeviceId = null,
   portraitModeEnabled = false,
   portraitDeviceId = null,
   outputFormat = "jpeg",
   preserveApplePhotographicStyles = false,
+  heifPlus = null,
 }) => {
   const normalizedRawMode = toVisionCameraRawMode(rawMode);
   const rawModeEnabled = normalizedRawMode !== "off";
@@ -375,6 +378,9 @@ export const takePicture = async ({
       return;
     }
 
+    if (heifPlus && (await listHeifPlusJobs()).length >= 3) {
+      throw new Error("A fila HEIF+ está cheia. Aguarde ou descarte uma captura pendente.");
+    }
     const additionalExif = await getLocationExif(location);
     const photo = await cameraRef.current.takePhoto({
       flash: flash === "on" ? "on" : "off",
@@ -385,6 +391,31 @@ export const takePicture = async ({
     // Normaliza a URI logo na origem — resolve FileSystem, ImageManipulator e MediaLibrary no Android
     const uri = normalizeUri(photo?.path || photo?.filePath || photo?.uri);
 
+    if (heifPlus) {
+      const komorebiMetadata = buildKomorebiExifMetadata({
+        selectedLutId, selectedLut, grainId: selectedGrainId,
+        grainConfig: selectedGrainConfig, halationId: selectedHalationId,
+        halationConfig: selectedHalationConfig, aspectRatio,
+        doubleCaptureMode, captureMode: "heifPlus", manualSettings,
+      });
+      const job = await enqueueHeifPlus(uri, {
+        ...heifPlus,
+        settings: heifPlus.settings,
+        effects: {
+          cube: selectedLutId !== "none" ? getCachedLUT(selectedLutId) : null,
+          grainConfig: selectedGrainConfig, halationConfig: selectedHalationConfig,
+          seed: Math.floor(Math.random() * 100000),
+        },
+        exifData: additionalExif, komorebiMetadata,
+        createdAt: komorebiMetadata.createdAt,
+        aspectRatio, doubleCaptureMode: doubleCaptureMode && flash !== "on",
+        saveOriginalWithoutEffects,
+        companionUri: normalizeUri(photo.processedPath || photo.processedPhotoPath) || null,
+      });
+      setProcessingData({ captureMode: "heifPlus", needsProcessing: false, heifPlusJob: job });
+      return;
+    }
+
     if (rawModeEnabled) {
       const derivativeSourceUri = normalizeUri(
         photo?.processedPath || photo?.processedPhotoPath,
@@ -393,21 +424,18 @@ export const takePicture = async ({
         derivativeSourceUri || uri,
         aspectRatio,
       );
-      const needsRatioDerivative = Math.abs(aspectRatio - 3 / 4) >= 0.01;
       const rawDerivativeAspectRatio =
-        flash === "on"
-          ? null
-          : doubleCaptureMode
-            ? 1 / captureAspectRatio
-            : needsRatioDerivative
-              ? captureAspectRatio
-              : null;
+        rawPairEnabled && flash !== "on" && doubleCaptureMode
+          ? 1 / captureAspectRatio
+          : null;
       setProcessingData({
         needsProcessing: false,
         originalUri: uri,
         imageUri: uri,
         derivativeSourceUri,
         rawDerivativeAspectRatio,
+        rawPairEnabled,
+        outputFormat,
         exifData: {
           ...additionalExif,
           komorebiMetadata: buildKomorebiExifMetadata({
@@ -470,6 +498,7 @@ export const takePicture = async ({
     );
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
+    if (heifPlus) throw error;
   } finally {
     setIsProcessing(false);
   }

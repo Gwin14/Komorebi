@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import CoreImage
 
 // Compiled into each image-writing module so all capture modes use the same schema.
 enum PhotoCatalogMetadata {
@@ -57,5 +58,31 @@ enum PhotoCatalogMetadata {
     defer { try? FileManager.default.removeItem(at: temporary) }
     try write(from: url, to: temporary, fields: fields)
     _ = try FileManager.default.replaceItemAt(url, withItemAt: temporary)
+  }
+}
+
+// Convert pixel values using the input ICC profile; assigning a profile alone
+// would change the appearance of sRGB captures instead of converting them.
+enum PhotoDisplayP3 {
+  static let colorSpace = CGColorSpace(name: CGColorSpace.displayP3)!
+  private static let context = CIContext(options: [
+    .workingColorSpace: CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)!,
+    .workingFormat: CIFormat.RGBAh.rawValue,
+    .cacheIntermediates: false
+  ])
+
+  static func convert(_ image: CGImage) -> CGImage? {
+    if image.colorSpace?.name == CGColorSpace.displayP3 { return image }
+    let input = CIImage(cgImage: image)
+    return context.createCGImage(input, from: input.extent, format: .RGBA8, colorSpace: colorSpace)
+  }
+
+  static func apply(to properties: inout [String: Any]) {
+    // P3 is described by the image's ICC profile, not EXIF's sRGB (1) flag.
+    properties.removeValue(forKey: kCGImagePropertyProfileName as String)
+    let key = kCGImagePropertyExifDictionary as String
+    var exif = properties[key] as? [String: Any] ?? [:]
+    exif[kCGImagePropertyExifColorSpace as String] = 65535
+    properties[key] = exif
   }
 }

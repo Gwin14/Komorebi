@@ -16,6 +16,7 @@ import {
 import { getZebraMaskPlugin } from "../../modules/composition-scan";
 import { getCachedLUT } from "../utils/lutStore";
 import { getGrainConfig } from "../utils/grainCatalog";
+import { getCameraFormatFilters } from "../utils/cameraFormatFilters";
 import { getHalationConfig } from "../utils/halationCatalog";
 import {
   getAspectRatioValue,
@@ -68,6 +69,7 @@ export default function CameraPreview({
   onPreviewLayout,
   effectPreview,
   onCameraStopped,
+  onRawCapabilities,
 }) {
   const { width: screenWidth } = useWindowDimensions();
   const isTakingPhoto = useRef(false);
@@ -310,32 +312,18 @@ export default function CameraPreview({
     [focusOnPoint],
   );
 
-  // Em modo manual, evita resolução máxima de foto: nos sensores Quad-Bayer
+  // Em fotos processadas no modo manual, evita resolução máxima: nos sensores Quad-Bayer
   // (ex: iPhone 17 Pro 48MP) a captura em full-res usa um pipeline de
   // leitura/binning próprio com sua própria exposição, que ignora o ISO/
   // obturador travado no AVCaptureDevice — só a captura "binned" (resolução
   // normal) respeita o lock manual de forma confiável.
   const formatFilters = useMemo(
-    () => [
-      // RAW precisa permanecer em um formato de sensor 4:3. O 9:16 é um
-      // enquadramento/crop derivado; selecionar 3840x2160 elimina rawFormats.
-      {
-        photoAspectRatio: rawPhotoMode
-          ? 4 / 3
-          : getSensorAspectRatio(aspectRatio),
-      },
-      // O output de frame processor não é compatível com alguns formatos
-      // fotográficos de resolução máxima (48 MP nos iPhones recentes).
-      // Durante análise, use o formato leve recomendado pela VisionCamera.
-      ...(!manualPhotoMode && !frameProcessorActive
-        ? [{ photoResolution: "max" }]
-        : []),
-      {
-        videoResolution: frameProcessorActive
-          ? { width: 1080, height: 720 }
-          : "max",
-      },
-    ],
+    () => getCameraFormatFilters({
+      sensorAspectRatio: getSensorAspectRatio(aspectRatio),
+      rawPhotoMode,
+      manualPhotoMode,
+      frameProcessorActive,
+    }),
     [aspectRatio, frameProcessorActive, manualPhotoMode, rawPhotoMode],
   );
   const format = useCameraFormat(device, formatFilters);
@@ -429,14 +417,15 @@ export default function CameraPreview({
     }, delay);
   }, [cameraScale, transitionOpacity]);
 
-  const handleCameraInitialized = useCallback(() => {
+  const handleCameraInitialized = useCallback((capabilities) => {
+    onRawCapabilities?.(capabilities);
     console.log("[ZebraDebug][preview] onInitialized", {
       deviceId: device?.id ?? null,
       position: device?.position ?? null,
     });
     onCameraReady?.();
     finishCameraTransition();
-  }, [device?.id, device?.position, finishCameraTransition, onCameraReady]);
+  }, [device?.id, device?.position, finishCameraTransition, onCameraReady, onRawCapabilities]);
 
   const handleCameraError = useCallback(
     (error) => {
@@ -583,6 +572,7 @@ export default function CameraPreview({
             zoom={zoom}
             exposure={exposure}
             onInitialized={handleCameraInitialized}
+            onStarted={onCameraReady}
             onStopped={onCameraStopped}
             onError={handleCameraError}
             histogramCallback={

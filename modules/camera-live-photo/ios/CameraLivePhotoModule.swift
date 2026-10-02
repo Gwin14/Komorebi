@@ -263,13 +263,17 @@ public class CameraLivePhotoModule: Module {
   ) -> URL? {
     // Se o frame não foi alterado, preservar o contêiner HEIF inteiro mantém
     // Maker Notes e imagens auxiliares que uma recodificação não sabe recriar.
-    if sourceURL == processedURL && metadata == nil {
+    if sourceURL == processedURL && metadata == nil,
+       let source = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
+       let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+       image.colorSpace?.name == CGColorSpace.displayP3 {
       return processedURL
     }
 
     guard
       let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
-      let processedImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil)
+      let sourceImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
+      let processedImage = PhotoDisplayP3.convert(sourceImage)
     else {
       return nil
     }
@@ -291,6 +295,7 @@ public class CameraLivePhotoModule: Module {
         as? [String: Any] ?? [:]
     }
     Self.applyGPSMetadata(metadata, to: &properties)
+    PhotoDisplayP3.apply(to: &properties)
     guard let destination = CGImageDestinationCreateWithURL(
       destinationURL as CFURL,
       (isJpeg ? UTType.jpeg : UTType.heic).identifier as CFString,

@@ -1,20 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import {
-  getNextRawCaptureMode,
-  getRawCaptureCapabilities,
   isRawCaptureAvailable,
   isRawCaptureModeSupported,
 } from "../../modules/camera-raw-capture";
 
+import { toggleFileFormat } from "../utils/fileFormatSelection";
+
 export default function useRawCapture(device) {
   const nativeAvailable = Platform.OS === "ios" && isRawCaptureAvailable();
-  const [rawMode, setRawMode] = useState("off");
+  const [selection, setSelection] = useState({ rawMode: "off", processedEnabled: true });
+  const { rawMode, processedEnabled } = selection;
+  const setRawMode = useCallback((mode) => {
+    setSelection((current) => ({ rawMode: mode,
+      processedEnabled: mode === "off" || current.processedEnabled }));
+  }, []);
   const [capabilities, setCapabilities] = useState(null);
 
   const deviceId = device?.id;
   const isBackCamera = device?.position === "back";
-  const visionCameraAllowsRaw = Boolean(device?.supportsRawCapture);
   const nativeModesAllowRaw = Boolean(
     capabilities?.supportedModes?.some((mode) => mode !== "off"),
   );
@@ -22,54 +26,40 @@ export default function useRawCapture(device) {
   const available =
     canCheckCapabilities &&
     isBackCamera &&
-    (capabilities === null || visionCameraAllowsRaw || nativeModesAllowRaw);
+    nativeModesAllowRaw;
 
   useEffect(() => {
-    if (!canCheckCapabilities || !isBackCamera) {
-      setCapabilities(null);
-      setRawMode("off");
-      return;
-    }
+    setCapabilities(null);
+    setRawMode("off");
+  }, [deviceId, setRawMode]);
 
-    let cancelled = false;
-
-    getRawCaptureCapabilities(deviceId)
-      .then((caps) => {
-        if (!cancelled) setCapabilities(caps);
-      })
-      .catch(() => {
-        if (!cancelled) setCapabilities(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [canCheckCapabilities, deviceId, isBackCamera]);
+  const updateCapabilities = useCallback((caps) => {
+    if (!caps || caps.deviceId !== deviceId) return;
+    setCapabilities(caps);
+  }, [deviceId]);
 
   useEffect(() => {
     if (!isRawCaptureModeSupported(rawMode, capabilities)) {
       setRawMode("off");
     }
-  }, [capabilities, rawMode]);
+  }, [capabilities, rawMode, setRawMode]);
 
-  const toggleRawMode = useCallback(() => {
-    if (!available) {
-      setRawMode("off");
-      return;
-    }
-
-    setRawMode((current) => getNextRawCaptureMode(current, capabilities));
+  const toggleFormat = useCallback((target) => {
+    setSelection((current) => toggleFileFormat(current, target,
+      available ? capabilities.supportedModes : ["off"]));
   }, [available, capabilities]);
 
   return useMemo(
     () => ({
       available,
+      updateCapabilities,
       capabilities,
       rawMode,
       setRawMode,
       rawModeEnabled: rawMode !== "off",
-      toggleRawMode,
+      processedEnabled,
+      toggleFormat,
     }),
-    [available, capabilities, rawMode, toggleRawMode],
+    [available, capabilities, rawMode, processedEnabled, toggleFormat, updateCapabilities, setRawMode],
   );
 }

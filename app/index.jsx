@@ -1,5 +1,7 @@
+import { getHeifPlusPolicy } from "./utils/heifPlusSettings";
+import { isHeifPlusAvailable } from "../modules/camera-raw-capture";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Animated, Platform, Pressable, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -45,7 +47,7 @@ import {
   getHalationConfig,
   LUTProcessor,
 } from "./utils/lutProcessor";
-import { getProjectById } from "./utils/projects";
+import { getProjectById, getProjectAlbumName } from "./utils/projects";
 import { getAppleStylesCompatibility } from "./utils/photographicStylesPolicy";
 import {
   DEFAULT_ASPECT_RATIO,
@@ -72,6 +74,8 @@ export default function App() {
     photoCopyright,
     location,
     saveAsJpeg,
+    photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSupport,
+    setPreserveApplePhotographicStyles,
     preserveApplePhotographicStyles,
     firstTime,
     loading,
@@ -152,6 +156,12 @@ export default function App() {
   const livePhoto = useLivePhotoCapture(captureDevice);
   const portraitCapture = usePortraitCapture(captureDevice);
   const imageStacking = useImageStacking(captureDevice);
+  const heifPlusPolicy = getHeifPlusPolicy({
+    photoFormat: rawCapture.processedEnabled ? photoFormat : null, rawMode: rawCapture.rawMode,
+    capabilities: isHeifPlusAvailable() ? rawCapture.capabilities : null,
+    livePhotoEnabled: livePhoto.enabled, portraitModeEnabled: portraitCapture.enabled,
+    stackingEnabled: imageStacking.enabled, platform: Platform.OS,
+  });
   const compositionModel = useCompositionModel();
   const intelligentModelReady = compositionModel.status.state === "ready";
   const appleStylesCompatibility = useMemo(
@@ -161,13 +171,13 @@ export default function App() {
           Platform.OS === "ios" && preserveApplePhotographicStyles,
         livePhotoEnabled: livePhoto.enabled,
         portraitModeEnabled: portraitCapture.enabled,
-        rawMode: rawCapture.rawMode,
+        rawMode: heifPlusPolicy.effective ? heifPlusPolicy.rawMode : rawCapture.rawMode,
       }),
     [
       livePhoto.enabled,
       portraitCapture.enabled,
       preserveApplePhotographicStyles,
-      rawCapture.rawMode,
+      rawCapture.rawMode, heifPlusPolicy.effective, heifPlusPolicy.rawMode,
     ],
   );
   const nativeCaptureMode = imageStacking.enabled
@@ -316,6 +326,7 @@ export default function App() {
 
   const {
     enqueueProcessing,
+    heifPlusPendingCount,
     galleryRefreshKey,
     handleProcessed,
     isProcessing,
@@ -327,6 +338,7 @@ export default function App() {
     copyright: photoCopyright,
     generateTags: intelligentModelReady && intelligentTagsEnabled,
     generateFilename: intelligentModelReady && intelligentFilenameEnabled,
+    onHeifPlusInspection: setHeifPlusSupport,
   });
 
   const cancelAutoZoomAnimation = useCallback(() => {
@@ -596,6 +608,10 @@ export default function App() {
       return;
     }
 
+    if (heifPlusPolicy.effective && heifPlusPendingCount >= 3) {
+      Alert.alert("Fila HEIF+ cheia", "Aguarde o processamento ou gerencie as capturas pendentes nas configurações.");
+      return;
+    }
     if (captureInFlightRef.current || isProcessing || !cameraReady) return;
     captureInFlightRef.current = true;
     animateShutter();
@@ -632,7 +648,18 @@ export default function App() {
         saveOriginalWithoutEffects,
         aspectRatio: captureAspectRatio,
         manualSettings,
-        rawMode: rawCapture.rawMode,
+        rawMode: heifPlusPolicy.rawMode,
+        rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
+        heifPlus: heifPlusPolicy.effective ? {
+          settings: heifPlusSettings,
+          rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
+          projectAlbum: activeProject ? getProjectAlbumName(activeProject) : null,
+          catalogMetadata: { author: photoAuthor, copyright: photoCopyright },
+          intelligence: {
+            generateTags: intelligentModelReady && intelligentTagsEnabled,
+            generateFilename: intelligentModelReady && intelligentFilenameEnabled,
+          },
+        } : null,
         livePhotoEnabled: livePhoto.enabled,
         livePhotoDeviceId: activeLens?.device?.id,
         portraitModeEnabled: portraitCapture.enabled,
@@ -644,6 +671,8 @@ export default function App() {
             : "jpeg",
         preserveApplePhotographicStyles: appleStylesCompatibility.effective,
       });
+    } catch (error) {
+      Alert.alert("Falha na captura HEIF+", String(error.message || error));
     } finally {
       captureInFlightRef.current = false;
     }
@@ -670,7 +699,10 @@ export default function App() {
     manual.wbAuto,
     livePhoto.enabled,
     portraitCapture.enabled,
-    rawCapture.rawMode,
+    heifPlusPolicy.rawMode, heifPlusPolicy.effective, heifPlusSettings, heifPlusPendingCount,
+    rawCapture.rawModeEnabled, rawCapture.processedEnabled,
+    activeProject, photoAuthor, photoCopyright, intelligentModelReady,
+    intelligentTagsEnabled, intelligentFilenameEnabled,
     saveAsJpeg,
     preserveApplePhotographicStyles,
     appleStylesCompatibility.effective,
@@ -702,6 +734,7 @@ export default function App() {
           if (!imageStacking.enabled) {
             stackingRestoreRef.current = {
               rawMode: rawCapture.rawMode,
+              processedEnabled: rawCapture.processedEnabled,
               livePhoto: livePhoto.enabled,
               portrait: portraitCapture.enabled,
               flash,
@@ -720,6 +753,7 @@ export default function App() {
           stackingRestoreRef.current = null;
           if (previous.rawMode !== "off" && rawCapture.available) {
             rawCapture.setRawMode(previous.rawMode);
+            if (!previous.processedEnabled) rawCapture.toggleFormat("processed");
           } else if (previous.livePhoto && livePhoto.available) {
             livePhoto.setEnabled(true);
           } else if (previous.portrait && portraitCapture.available) {
@@ -766,9 +800,11 @@ export default function App() {
     onCameraReady(cameraRef, setPictureSize, setCameraReady);
   }, [nativeCaptureMode, refreshZoomCapabilities]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    // Reset before native readiness events arrive. RAW is a per-photo option;
+    // toggling it may leave the session unchanged and emit no new ready event.
     setCameraReady(false);
-  }, [activeLens?.device?.id, nativeCaptureMode, rawCapture.rawModeEnabled]);
+  }, [activeLens?.device?.id, nativeCaptureMode]);
 
   useEffect(() => {
     if (!rawCapture.rawModeEnabled) return;
@@ -873,7 +909,16 @@ export default function App() {
 
       toggleMode(mode);
     },
-    toggleRawMode: rawCapture.toggleRawMode,
+    photoFormat,
+    processedEnabled: rawCapture.processedEnabled,
+    supportedRawModes: rawCapture.capabilities?.supportedModes || ["off"],
+    heifPlusAvailable: isHeifPlusAvailable(),
+    onSelectPhotoFormat: (format) => {
+      setPhotoFormat(format);
+      if (format === "jpeg") setPreserveApplePhotographicStyles(false);
+    },
+    onToggleFileFormat: rawCapture.toggleFormat,
+    onSelectRawMode: rawCapture.setRawMode,
     toggleLivePhotoEnabled: () => {
       setCameraReady(false);
       if (!livePhoto.enabled) portraitCapture.setEnabled(false);
@@ -1001,7 +1046,8 @@ export default function App() {
                   manual.manualMode === "manual" &&
                   (!manual.isoAuto || !manual.shutterAuto)
                 }
-                rawPhotoMode={rawCapture.rawModeEnabled}
+                rawPhotoMode={rawCapture.rawModeEnabled || heifPlusPolicy.effective}
+                onRawCapabilities={rawCapture.updateCapabilities}
                 onFocusAtPoint={manual.focusAtPoint}
                 compositionScan={compositionScan}
                 onPreviewLayout={setScanPreviewLayout}
@@ -1136,11 +1182,11 @@ export default function App() {
         availableLuts={availableLuts}
         availableGrains={AVAILABLE_GRAINS}
         availableHalations={AVAILABLE_HALATIONS}
-        isProcessing={isProcessing}
+        isProcessing={isProcessing || (heifPlusPolicy.effective && heifPlusPendingCount >= 3)}
         showProcessingFeedback={
           isProcessing && (!imageStacking.capturing || stackingFinishing)
         }
-        processingQueueLength={processingQueue.length}
+        processingQueueLength={Math.max(processingQueue.length, heifPlusPendingCount)}
         galleryRefreshKey={galleryRefreshKey}
         activeProject={activeProject}
         imageStackingCapturing={imageStacking.capturing}

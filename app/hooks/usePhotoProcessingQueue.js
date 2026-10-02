@@ -1,5 +1,6 @@
+import * as FileSystem from "expo-file-system/legacy";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert } from "react-native";
+import { Alert, AppState, DeviceEventEmitter } from "react-native";
 import { analyzePhoto } from "../../modules/composition-scan";
 import { saveLivePhotoToLibrary } from "../../modules/camera-live-photo";
 import {
@@ -29,6 +30,13 @@ import {
   writePhotoCatalogMetadata,
   deleteCatalogTemporaryPhoto,
 } from "../utils/photoCatalogMetadata";
+
+import { getProjectAlbumName } from "../utils/projects";
+import { completeHeifPlusJob } from "../utils/heifPlusJobs";
+import {
+  listHeifPlusJobs, renderHeifPlus, enrichHeifPlus, saveHeifPlus, saveRawPhotoPair,
+  discardHeifPlus, retryHeifPlus,
+} from "../../modules/camera-raw-capture";
 
 const PHOTO_INTELLIGENCE_TIMEOUT_MS = 45000;
 
@@ -62,18 +70,47 @@ export default function usePhotoProcessingQueue(
   activeProject = null,
   intelligenceOptions = {},
 ) {
+  const { onHeifPlusInspection } = intelligenceOptions;
+  const [heifPlusPendingCount, setHeifPlusPendingCount] = useState(0);
   const [processingQueue, setProcessingQueue] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [galleryRefreshKey, setGalleryRefreshKey] = useState(0);
   const savingItemRef = useRef(null);
+  const nativeJobsRef = useRef(new Set());
 
   const enqueueProcessing = useCallback((data) => {
+    if (data.heifPlusJob) {
+      if (nativeJobsRef.current.has(data.heifPlusJob.id)) return;
+      nativeJobsRef.current.add(data.heifPlusJob.id);
+    }
     setProcessingQueue((prev) => [...prev, data]);
+    if (data.heifPlusJob) DeviceEventEmitter.emit("heifPlusJobsUpdated");
   }, []);
 
   const removeCurrentProcessing = useCallback(() => {
     setProcessingQueue((prev) => prev.slice(1));
   }, []);
+
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const jobs = await listHeifPlusJobs();
+        setHeifPlusPendingCount(jobs.length);
+        for (const job of jobs) {
+          enqueueProcessing({ captureMode: "heifPlus", needsProcessing: false, heifPlusJob: job });
+        }
+      } catch (error) { console.warn("Falha ao recuperar HEIF+", error); }
+    };
+    void restore();
+    const jobsSubscription = DeviceEventEmitter.addListener("heifPlusJobsChanged", restore);
+    const updates = DeviceEventEmitter.addListener("heifPlusJobsUpdated", () => {
+      listHeifPlusJobs().then((jobs) => setHeifPlusPendingCount(jobs.length)).catch(console.warn);
+    });
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void restore();
+    });
+    return () => { subscription.remove(); jobsSubscription.remove(); updates.remove(); };
+  }, [enqueueProcessing]);
 
   const handleProcessed = useCallback(
     async (processedUri, item = {}, project = activeProject) => {
@@ -94,12 +131,80 @@ export default function usePhotoProcessingQueue(
         portraitEffectsMatteEmbedded = false,
         derivativeSourceUri,
         rawDerivativeAspectRatio,
+        rawPairEnabled = false,
         outputFormat = "jpeg",
         preserveApplePhotographicStyles = false,
       } = item;
 
       try {
         if (!hasMediaPermission) return;
+
+        if (captureMode === "heifPlus") {
+          const job = item.heifPlusJob;
+          const requeue = async () => {
+            try {
+              await retryHeifPlus(job.id);
+              nativeJobsRef.current.delete(job.id);
+              enqueueProcessing({ ...item, heifPlusJob: { ...job, state: "pending" } });
+            } catch (error) { Alert.alert("HEIF+", String(error.message || error)); }
+          };
+          const offerRecovery = (message) => Alert.alert("HEIF+ pendente", message, [
+            { text: "Depois", style: "cancel" },
+            { text: "Descartar", style: "destructive", onPress: async () => {
+              await discardHeifPlus(job.id);
+              nativeJobsRef.current.delete(job.id);
+            } },
+            { text: "Tentar novamente", onPress: requeue },
+          ]);
+          if (job.state === "failed") {
+            offerRecovery(job.error || "A captura foi preservada para uma nova tentativa.");
+            return;
+          }
+          try {
+            let metadata = job.komorebiMetadata;
+            await completeHeifPlusJob(job, {
+              render: renderHeifPlus, save: saveHeifPlus, discard: discardHeifPlus,
+              onRendered: async (rendered) => {
+                onHeifPlusInspection?.(rendered.variants?.[0]?.recipe);
+                const intelligence = job.intelligence || {};
+                metadata = rendered.komorebiMetadata;
+                if (!rendered.intelligenceCompleted && (intelligence.generateTags || intelligence.generateFilename)) {
+                  try {
+                    const result = normalizePhotoIntelligence(await withTimeout(analyzePhoto({
+                      imageUri: rendered.variants[0].photoUri, ...intelligence,
+                    }), PHOTO_INTELLIGENCE_TIMEOUT_MS), intelligence);
+                    const filename = result.filenameStem ? buildIntelligentFilename(result.filenameStem, {
+                      date: new Date(job.createdAt), extension: "heic",
+                    }) : null;
+                    const enrichedMetadata = applyPhotoIntelligenceToMetadata(metadata, result, filename);
+                    await enrichHeifPlus(job.id, {
+                      komorebiMetadata: enrichedMetadata,
+                      catalogMetadata: { ...job.catalogMetadata, tags: result.tags },
+                      ...(filename ? { filename } : {}),
+                    });
+                    metadata = enrichedMetadata;
+                  } catch (error) { console.warn("Classificação HEIF+ ignorada", error); }
+                }
+              },
+              onSaved: async (saved) => {
+                for (const variant of saved.variants || []) {
+                  await saveKomorebiAssetMetadata(variant.assetId, {
+                    ...(saved.komorebiMetadata || metadata), app: "Komorebi", captureMode: "heifPlus", schemaVersion: 5,
+                    heifPlus: variant.recipe,
+                    ...(variant.name === "original" ? {
+                      filter: null, grain: { enabled: false, id: "none" }, halation: { enabled: false, id: "none" },
+                    } : {}),
+                  });
+                }
+              },
+            });
+            nativeJobsRef.current.delete(job.id);
+            DeviceEventEmitter.emit("heifPlusJobsUpdated");
+          } catch (error) {
+            offerRecovery(`${error.message || error}\nO RAW temporário permanece intacto.`);
+          }
+          return;
+        }
 
         if (alreadySaved) {
           return;
@@ -199,10 +304,23 @@ export default function usePhotoProcessingQueue(
           metadataSourceUri = originalUri,
         ) => {
           if (preserveApplePhotographicStyles) {
-            const result = await makePhotoStylesCompatible(uri, {
-              metadata: effectiveExifData,
+            const p3Uri = await convertPhotoFormat({
+              photoUri: uri,
               metadataSourceUri,
+              metadata: effectiveExifData,
+              outputFormat: "heif",
             });
+            let result;
+            try {
+              result = await makePhotoStylesCompatible(p3Uri, {
+                metadata: effectiveExifData,
+                metadataSourceUri,
+              });
+            } finally {
+              if (p3Uri !== uri) {
+                await FileSystem.deleteAsync(p3Uri, { idempotent: true }).catch(console.warn);
+              }
+            }
             if (!result?.verified || !result?.photoUri) {
               await removeStylesTemporaryFile(result?.photoUri);
               throw new Error(
@@ -221,7 +339,7 @@ export default function usePhotoProcessingQueue(
             });
           } catch (error) {
             console.warn("Falha ao converter formato da foto:", error);
-            return uri;
+            throw error;
           }
         };
         const saveRegularPhoto = async (
@@ -266,11 +384,10 @@ export default function usePhotoProcessingQueue(
             return asset;
           } finally {
             if (
-              preserveApplePhotographicStyles &&
               preparedUri &&
               preparedUri !== uri
             ) {
-              await removeStylesTemporaryFile(preparedUri);
+              await FileSystem.deleteAsync(preparedUri, { idempotent: true }).catch(console.warn);
             }
           }
         };
@@ -280,7 +397,49 @@ export default function usePhotoProcessingQueue(
           const catalogRawUri = await writePhotoCatalogMetadata(rawUri, catalogMetadata);
           let rawAsset;
           try {
-            rawAsset = await saveToAlbum(project, catalogRawUri, primaryFilename);
+            if (rawPairEnabled) {
+              if (!derivativeSourceUri) throw new Error("Foto processada da captura RAW não foi retornada");
+              let pairProcessedUri = derivativeSourceUri;
+              let croppedUri;
+              let catalogProcessedUri;
+              let convertedUri;
+              let croppedWithExifUri;
+              try {
+                if (Math.abs(Math.min(aspectRatio, 1 / aspectRatio) - 3 / 4) >= 0.01) {
+                  croppedUri = await cropImageToAspect(derivativeSourceUri, aspectRatio);
+                  if (!croppedUri) throw new Error("Falha ao recortar a foto processada do RAW");
+                  croppedWithExifUri = await copyExifFromImage(derivativeSourceUri, croppedUri);
+                  pairProcessedUri = croppedWithExifUri;
+                }
+                const expectedExtension = outputFormat === "heif" ? /\.hei[cf]$/i : /\.jpe?g$/i;
+                // Convert even when the extension matches so the companion gets Display P3.
+                convertedUri = await convertPhotoFormat({
+                  photoUri: pairProcessedUri, metadataSourceUri: derivativeSourceUri,
+                  metadata: effectiveExifData, outputFormat,
+                });
+                pairProcessedUri = convertedUri;
+                if (!expectedExtension.test(pairProcessedUri)) {
+                  throw new Error("A foto processada do RAW não foi convertida para o formato selecionado");
+                }
+                catalogProcessedUri = await writePhotoCatalogMetadata(pairProcessedUri, catalogMetadata);
+                rawAsset = await saveRawPhotoPair(catalogRawUri, catalogProcessedUri, {
+                  projectAlbum: project ? getProjectAlbumName(project) : null,
+                  originalFilename: primaryFilename,
+                  metadata: { ...effectiveExifData,
+                    createdAt: exifData?.komorebiMetadata?.createdAt || capturedAt.toISOString() },
+                });
+                console.log("[Komorebi RAW pair]", JSON.stringify(rawAsset.rawPair));
+              } finally {
+                if (catalogProcessedUri !== pairProcessedUri) await deleteCatalogTemporaryPhoto(catalogProcessedUri);
+                for (const temporaryUri of new Set([croppedUri, croppedWithExifUri, convertedUri])) {
+                  if (temporaryUri && temporaryUri !== derivativeSourceUri) {
+                    await FileSystem.deleteAsync(temporaryUri, { idempotent: true }).catch(console.warn);
+                  }
+                }
+              }
+            } else {
+              rawAsset = await saveToAlbum(project, catalogRawUri, primaryFilename);
+            }
           } finally {
             if (catalogRawUri !== rawUri) await deleteCatalogTemporaryPhoto(catalogRawUri);
           }
@@ -415,13 +574,20 @@ export default function usePhotoProcessingQueue(
             : "Não foi possível salvar o arquivo principal desta captura.",
         );
       } finally {
-        removeCurrentProcessing();
+        if (captureMode === "heifPlus") {
+          nativeJobsRef.current.delete(item.heifPlusJob.id);
+          DeviceEventEmitter.emit("heifPlusJobsUpdated");
+        }
+        if (captureMode !== "heifPlus" || hasMediaPermission) removeCurrentProcessing();
+        else savingItemRef.current = null;
         setGalleryRefreshKey((value) => value + 1);
       }
     },
     [
       activeProject,
+      enqueueProcessing,
       hasMediaPermission,
+      onHeifPlusInspection,
       intelligenceOptions.author,
       intelligenceOptions.copyright,
       intelligenceOptions.generateFilename,
@@ -439,6 +605,7 @@ export default function usePhotoProcessingQueue(
 
   return {
     enqueueProcessing,
+    heifPlusPendingCount,
     galleryRefreshKey,
     handleProcessed,
     isProcessing,

@@ -28,6 +28,7 @@ import {
   TOP_BAR_CONTROLS,
   TOP_BAR_MAX_CONTROLS,
 } from "../utils/topBarControls";
+import HeifPlusSettings from "./HeifPlusSettings";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import styles from "./Settings.styles";
@@ -171,7 +172,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     setShutterSound,
     location,
     setLocation,
-    saveAsJpeg,
+    photoFormat,
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
@@ -496,48 +497,39 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       >
         <CustomToggle
           grouped
-          last={Platform.OS !== "ios"}
+          last
           label="Salvar cópia sem efeitos"
           description="Mantém uma versão sem LUT, grain ou halation."
           value={saveOriginalWithoutEffects}
           onValueChange={setSaveOriginalWithoutEffects}
         />
-        {Platform.OS === "ios" && (
-          <CustomToggle
-            grouped
-            last
-            label="Salvar em JPEG"
-            description="Use para maior compatibilidade. O padrão do iPhone é HEIF."
-            value={saveAsJpeg}
-            onValueChange={(enabled) => {
-              setSaveAsJpeg(enabled);
-              if (enabled) setPreserveApplePhotographicStyles(false);
-            }}
-          />
-        )}
       </Section>
       <Section title="Autoria" description="Incluídos nos metadados das próximas fotos.">
-        <Text style={styles.rowLabel}>Autor</Text>
-        <TextInput
-          accessibilityLabel="Autor das fotos"
-          placeholder="Nome do autor"
-          placeholderTextColor="#777"
-          style={styles.metadataInput}
-          value={photoAuthor}
-          onChangeText={setPhotoAuthor}
-          maxLength={256}
-        />
-        <Text style={styles.rowLabel}>Direitos autorais</Text>
-        <TextInput
-          accessibilityLabel="Direitos autorais das fotos"
-          placeholder="© Seu nome. Todos os direitos reservados."
-          placeholderTextColor="#777"
-          style={styles.metadataInput}
-          value={photoCopyright}
-          onChangeText={setPhotoCopyright}
-          maxLength={1024}
-          multiline
-        />
+        <View style={styles.metadataField}>
+          <Text style={styles.rowLabel}>Autor</Text>
+          <TextInput
+            accessibilityLabel="Autor das fotos"
+            placeholder="Nome do autor"
+            placeholderTextColor="#777"
+            style={styles.metadataInput}
+            value={photoAuthor}
+            onChangeText={setPhotoAuthor}
+            maxLength={256}
+          />
+        </View>
+        <View style={[styles.metadataField, styles.metadataFieldLast]}>
+          <Text style={styles.rowLabel}>Direitos autorais</Text>
+          <TextInput
+            accessibilityLabel="Direitos autorais das fotos"
+            placeholder="© Seu nome. Todos os direitos reservados."
+            placeholderTextColor="#777"
+            style={styles.metadataInput}
+            value={photoCopyright}
+            onChangeText={setPhotoCopyright}
+            maxLength={1024}
+            multiline
+          />
+        </View>
       </Section>
       <Section title="Metadados e edição">
         <CustomToggle
@@ -553,7 +545,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
             badge="experimental"
             grouped
             last
-            description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato e RAW."
+            description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato, RAW e HEIF+."
+            disabled={photoFormat === "heifPlus"}
             label="Edição no Fotos da Apple"
             value={preserveApplePhotographicStyles}
             onValueChange={(enabled) => {
@@ -563,6 +556,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           />
         )}
       </Section>
+      {Platform.OS === "ios" && <HeifPlusSettings />}
     </>
   );
 
