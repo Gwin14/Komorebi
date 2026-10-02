@@ -1055,14 +1055,6 @@ export default function App() {
                 onCameraStopped={handleCameraStopped}
               />
             )}
-            {heifPlusPolicy.requested && (
-              <View pointerEvents="none" style={styles.permissionBanner}>
-                <Text style={styles.permissionBannerText}>
-                  {heifPlusPolicy.effective ? "HEIF+ · Revelação RAW personalizada"
-                    : `HEIF+ pausado: ${heifPlusPolicy.suspensionReason}`}
-                </Text>
-              </View>
-            )}
             {hasMediaPermission === false && (
               <View style={styles.permissionBanner}>
                 <View style={styles.permissionBannerIcon}>
