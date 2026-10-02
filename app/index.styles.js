@@ -61,6 +61,7 @@ export default StyleSheet.create({
     width: "100%",
     height: 112,
     justifyContent: "flex-end",
+    marginBottom: 8,
   },
 
   permissionContainer: {
