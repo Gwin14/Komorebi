@@ -1,4 +1,5 @@
-import { DeviceMotion } from "expo-sensors";
+import { useIsFocused } from "@react-navigation/native";
+import { subscribeDeviceMotion } from "../utils/deviceMotion";
 import { useEffect, useRef, useState } from "react";
 import { Animated, View } from "react-native";
 import styles from "./CameraLevel.styles";
@@ -22,6 +23,7 @@ const gravityInScreenCoordinates = ({ x, y }, orientation) => {
 };
 
 export default function CameraLevel() {
+  const focused = useIsFocused();
   const rotate = useRef(new Animated.Value(0)).current;
   const orientationRotate = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -31,9 +33,9 @@ export default function CameraLevel() {
   const [aligned, setAligned] = useState(false);
 
   useEffect(() => {
-    DeviceMotion.setUpdateInterval(UPDATE_INTERVAL);
-
-    const subscription = DeviceMotion.addListener((measurement) => {
+    if (!focused) return;
+    filteredGravity.current = null;
+    return subscribeDeviceMotion((measurement) => {
       const gravity = measurement.accelerationIncludingGravity;
       if (!gravity) return;
 
@@ -87,13 +89,8 @@ export default function CameraLevel() {
         alignedRef.current = nextAligned;
         setAligned(nextAligned);
       }
-    });
-
-    return () => {
-      subscription.remove();
-      DeviceMotion.setUpdateInterval(200);
-    };
-  }, [opacity, orientationRotate, rotate]);
+    }, UPDATE_INTERVAL);
+  }, [focused, opacity, orientationRotate, rotate]);
 
   const lineStyle = aligned ? styles.lineAligned : styles.line;
   const rotation = rotate.interpolate({

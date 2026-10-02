@@ -17,6 +17,7 @@ import NativeCapturePreview from "./components/NativeCapturePreview";
 import TopBar from "./components/TopBar";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
+import useCameraActivity from "./hooks/useCameraActivity";
 import useCameraBootstrap from "./hooks/useCameraBootstrap";
 import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
@@ -57,6 +58,7 @@ import {
 } from "./utils/aspectRatios";
 
 export default function App() {
+  const cameraScreenActive = useCameraActivity();
   const {
     retroStyle,
     gridVisible,
@@ -522,6 +524,7 @@ export default function App() {
   }, []);
 
   const handleTakePicture = useCallback(async () => {
+    if (!cameraScreenActive) return;
     cancelAutoZoomAnimation();
     cancelCompositionScan();
     if (imageStacking.enabled) {
@@ -693,6 +696,7 @@ export default function App() {
     }
   }, [
     activeLens,
+    cameraScreenActive,
     cancelAutoZoomAnimation,
     cancelCompositionScan,
     animateShutter,
@@ -813,6 +817,7 @@ export default function App() {
   }, [imageStacking.capabilities, imageStacking.strategyId, handleSelectImageStackingStrategy]);
 
   const handleCameraReady = useCallback(() => {
+    if (!cameraScreenActive) return;
     void refreshZoomCapabilities();
     if (nativeCaptureMode) {
       setPictureSize(null);
@@ -821,7 +826,7 @@ export default function App() {
     }
 
     onCameraReady(cameraRef, setPictureSize, setCameraReady);
-  }, [nativeCaptureMode, refreshZoomCapabilities]);
+  }, [cameraScreenActive, nativeCaptureMode, refreshZoomCapabilities]);
 
   useLayoutEffect(() => {
     // Reset before native readiness events arrive. RAW is a per-photo option;
@@ -835,13 +840,17 @@ export default function App() {
     portraitCapture.setEnabled(false);
   }, [livePhoto, portraitCapture, rawCapture.rawModeEnabled]);
 
+  useEffect(() => {
+    if (!cameraScreenActive) setCameraReady(false);
+  }, [cameraScreenActive]);
+
   useVolumeShutter({
-    enabled: !firstTime && cameraPermission === "granted" && cameraReady,
+    enabled: cameraScreenActive && !firstTime && cameraPermission === "granted" && cameraReady,
     onVolumeChange: handleTakePicture,
   });
 
   useCameraControlButton({
-    enabled: !firstTime && cameraPermission === "granted" && cameraReady,
+    enabled: cameraScreenActive && !firstTime && cameraPermission === "granted" && cameraReady,
     onPress: handleTakePicture,
   });
 
@@ -1016,7 +1025,7 @@ export default function App() {
               <NativeCapturePreview
                 mode={renderedNativeCaptureMode}
                 isActive={
-                  nativeCaptureMode === renderedNativeCaptureMode &&
+                  cameraScreenActive && nativeCaptureMode === renderedNativeCaptureMode &&
                   !cameraHandoffActive
                 }
                 retroStyle={retroStyle}
@@ -1064,7 +1073,7 @@ export default function App() {
                 aspectRatio={aspectRatio}
                 availableHeight={previewAvailableHeight}
                 doubleCaptureMode={doubleCaptureMode}
-                isActive={!firstTime && !nativeCaptureMode}
+                isActive={cameraScreenActive && !firstTime && !nativeCaptureMode}
                 manualPhotoMode={manual.manualMode === "manual"}
                 manualExposureActive={
                   manual.manualMode === "manual" &&

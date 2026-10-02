@@ -72,10 +72,10 @@ export default function CameraPreview({
   onRawCapabilities,
 }) {
   const { width: screenWidth } = useWindowDimensions();
-  const isTakingPhoto = useRef(false);
+  const lastSmileAt = useRef(-Infinity);
   const smileAllowed = useRef(false);
   const onSmileDetectedRef = useRef(onSmileDetected);
-  smileAllowed.current = smileDetectionEnabled && !compositionScan?.busy;
+  smileAllowed.current = isActive && smileDetectionEnabled && !compositionScan?.busy;
   onSmileDetectedRef.current = onSmileDetected;
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
@@ -330,7 +330,8 @@ export default function CameraPreview({
 
   const handleFacesDetection = useCallback((faces) => {
     if (!smileAllowed.current) return;
-    if (!faces.length || isTakingPhoto.current) return;
+    const now = Date.now();
+    if (!faces.length || now - lastSmileAt.current < 2500) return;
 
     const face = faces[0];
 
@@ -338,11 +339,9 @@ export default function CameraPreview({
       face.smilingProbability !== undefined &&
       face.smilingProbability > 0.7
     ) {
-      isTakingPhoto.current = true;
+      lastSmileAt.current = now;
       onSmileDetectedRef.current?.();
-      setTimeout(() => {
-        isTakingPhoto.current = false;
-      }, 2500);
+
     }
   }, []);
 

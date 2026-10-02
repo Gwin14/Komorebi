@@ -13,17 +13,22 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const webViewRef = useRef(null);
   const [ready, setReady] = useState(false);
   const pendingRef = useRef(null);
-  const originalExifRef = useRef(null);
   const requestCounterRef = useRef(0);
   const activeRequestRef = useRef(null);
-  const dispatchedDataRef = useRef(null);
+  const dispatchedDataRef = useRef(new WeakSet());
+
+  useEffect(() => () => {
+    activeRequestRef.current = null;
+    pendingRef.current = null;
+  }, []);
 
   const sendToWebView = useCallback(
     async (data) => {
-      if (dispatchedDataRef.current === data) return;
-      dispatchedDataRef.current = data;
+      if (dispatchedDataRef.current.has(data)) return;
+      dispatchedDataRef.current.add(data);
       const requestId = ++requestCounterRef.current;
-      activeRequestRef.current = { id: requestId, data };
+      const request = { id: requestId, data, originalExif: null, settling: false };
+      activeRequestRef.current = request;
       try {
         let base64 = data.base64;
         if (!base64 && data.imageUri) {
@@ -31,18 +36,21 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
             encoding: FileSystem.EncodingType.Base64,
           });
         }
+        if (activeRequestRef.current !== request) return;
         try {
-          const exifSourceBase64 = data.originalUri
+          const exifSourceBase64 = data.originalUri && data.originalUri !== data.imageUri
             ? await FileSystem.readAsStringAsync(data.originalUri, {
                 encoding: FileSystem.EncodingType.Base64,
               })
             : base64;
-          originalExifRef.current = piexif.load(
+          if (activeRequestRef.current !== request) return;
+          request.originalExif = piexif.load(
             "data:image/jpeg;base64," + exifSourceBase64,
           );
         } catch {
-          originalExifRef.current = null;
+          request.originalExif = null;
         }
+        if (activeRequestRef.current !== request) return;
         const payload = JSON.stringify({
           requestId,
           base64,
@@ -72,7 +80,10 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
 
   // Reagir a novo imageData
   useEffect(() => {
-    if (!imageData?.needsProcessing) return;
+    if (!imageData?.needsProcessing) {
+      pendingRef.current = null;
+      return;
+    }
     if (!ready) {
       pendingRef.current = imageData;
       return;
@@ -82,15 +93,16 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
 
   const handleMessage = useCallback(
     async (event) => {
+      const request = activeRequestRef.current;
       try {
         const message = JSON.parse(event.nativeEvent.data);
-        const request = activeRequestRef.current;
-        if (!request || message.requestId !== request.id) return;
+        if (!request || message.requestId !== request.id || request.settling) return;
         if (message.type === "success") {
+          request.settling = true;
           const savedUri = await saveProcessedImage(
             message.data,
             request.data.exifData,
-            originalExifRef.current,
+            request.originalExif,
           );
           if (activeRequestRef.current?.id !== request.id) return;
           activeRequestRef.current = null;
@@ -101,7 +113,7 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
           onError?.(new Error(message.message));
         }
       } catch (error) {
-        if (activeRequestRef.current) {
+        if (request && activeRequestRef.current === request) {
           activeRequestRef.current = null;
           onError?.(error);
         }

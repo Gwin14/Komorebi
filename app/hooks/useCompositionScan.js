@@ -77,7 +77,7 @@ export default function useCompositionScan({
     preview.width > 0 &&
     preview.height > 0;
   const log = useCallback((event, details = {}) => {
-    console.log(`[CompositionScan] JS ${event}`, details);
+    if (__DEV__) console.log(`[CompositionScan] JS ${event}`, details);
   }, []);
 
   zoomRef.current = zoom;
@@ -98,7 +98,7 @@ export default function useCompositionScan({
   }, [configurationKey, enabled, log, supported]);
 
   useEffect(() => {
-    if (!featureEnabled || !supported) return;
+    if (!featureEnabled || !supported || !isFocused || !foreground) return;
     if (scannerPrepared) {
       setPreparationState("ready");
       return;
@@ -123,7 +123,7 @@ export default function useCompositionScan({
     return () => {
       active = false;
     };
-  }, [featureEnabled, log, supported]);
+  }, [featureEnabled, foreground, isFocused, log, supported]);
 
   useEffect(() => {
     const advisor = createCompositionAdvisor();

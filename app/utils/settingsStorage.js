@@ -56,64 +56,38 @@ const parseJSON = (value, fallback) => {
 
 export async function loadStoredSettings(defaults) {
   const keys = SETTINGS_STORAGE_KEYS;
-  const [
-    savedRetroStyle,
-    savedGridVisible,
-    savedLevelVisible,
-    savedHistogramVisible,
-    savedPreviewLut,
-    savedPreviewHalation,
-    savedPreviewGrain,
-    savedPreviewDoubleExposure,
-    savedPreviewStacking,
-    savedZebraHighlightsEnabled,
-    savedZebraShadowsEnabled,
-    savedCompositionScanEnabled,
-    savedIntelligentTagsEnabled,
-    savedIntelligentFilenameEnabled,
-    savedShutterSound,
-    savedLocation,
-    savedSaveAsJpeg,
-    savedPreserveApplePhotographicStyles,
-    savedSaveOriginalWithLUT,
-    savedFirstTime,
-    savedCustomLuts,
-    savedTopBarBelow,
-    savedTopBarControls,
-    savedProjects,
-    savedActiveProjectId,
-  ] = await Promise.all([
-    AsyncStorage.getItem(keys.RETRO_STYLE),
-    AsyncStorage.getItem(keys.GRID_VISIBLE),
-    AsyncStorage.getItem(keys.LEVEL_VISIBLE),
-    AsyncStorage.getItem(keys.HISTOGRAM_VISIBLE),
-    AsyncStorage.getItem(keys.PREVIEW_LUT),
-    AsyncStorage.getItem(keys.PREVIEW_HALATION),
-    AsyncStorage.getItem(keys.PREVIEW_GRAIN),
-    AsyncStorage.getItem(keys.PREVIEW_DOUBLE_EXPOSURE),
-    AsyncStorage.getItem(keys.PREVIEW_STACKING),
-    AsyncStorage.getItem(keys.ZEBRA_HIGHLIGHTS_ENABLED),
-    AsyncStorage.getItem(keys.ZEBRA_SHADOWS_ENABLED),
-    AsyncStorage.getItem(keys.COMPOSITION_SCAN_ENABLED),
-    AsyncStorage.getItem(keys.INTELLIGENT_TAGS_ENABLED),
-    AsyncStorage.getItem(keys.INTELLIGENT_FILENAME_ENABLED),
-    AsyncStorage.getItem(keys.SHUTTER_SOUND),
-    AsyncStorage.getItem(keys.LOCATION),
-    AsyncStorage.getItem(keys.SAVE_AS_JPEG),
-    AsyncStorage.getItem(keys.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES),
-    AsyncStorage.getItem(keys.SAVE_ORIGINAL_WITH_LUT),
-    AsyncStorage.getItem(keys.FIRSTTIME),
-    AsyncStorage.getItem(keys.CUSTOM_LUTS),
-    AsyncStorage.getItem(keys.TOP_BAR_BELOW),
-    AsyncStorage.getItem(keys.TOP_BAR_CONTROLS),
-    AsyncStorage.getItem(keys.PROJECTS),
-    AsyncStorage.getItem(keys.ACTIVE_PROJECT_ID),
-  ]);
-
-  const [photoAuthor, photoCopyright] = await Promise.all([
-    AsyncStorage.getItem(keys.PHOTO_AUTHOR),
-    AsyncStorage.getItem(keys.PHOTO_COPYRIGHT),
-  ]);
+  const stored = Object.fromEntries(
+    await AsyncStorage.multiGet(Object.values(keys)),
+  );
+  const savedRetroStyle = stored[keys.RETRO_STYLE] ?? null;
+  const savedGridVisible = stored[keys.GRID_VISIBLE] ?? null;
+  const savedLevelVisible = stored[keys.LEVEL_VISIBLE] ?? null;
+  const savedHistogramVisible = stored[keys.HISTOGRAM_VISIBLE] ?? null;
+  const savedPreviewLut = stored[keys.PREVIEW_LUT] ?? null;
+  const savedPreviewHalation = stored[keys.PREVIEW_HALATION] ?? null;
+  const savedPreviewGrain = stored[keys.PREVIEW_GRAIN] ?? null;
+  const savedPreviewDoubleExposure = stored[keys.PREVIEW_DOUBLE_EXPOSURE] ?? null;
+  const savedPreviewStacking = stored[keys.PREVIEW_STACKING] ?? null;
+  const savedZebraHighlightsEnabled = stored[keys.ZEBRA_HIGHLIGHTS_ENABLED] ?? null;
+  const savedZebraShadowsEnabled = stored[keys.ZEBRA_SHADOWS_ENABLED] ?? null;
+  const savedCompositionScanEnabled = stored[keys.COMPOSITION_SCAN_ENABLED] ?? null;
+  const savedIntelligentTagsEnabled = stored[keys.INTELLIGENT_TAGS_ENABLED] ?? null;
+  const savedIntelligentFilenameEnabled = stored[keys.INTELLIGENT_FILENAME_ENABLED] ?? null;
+  const savedShutterSound = stored[keys.SHUTTER_SOUND] ?? null;
+  const savedLocation = stored[keys.LOCATION] ?? null;
+  const savedSaveAsJpeg = stored[keys.SAVE_AS_JPEG] ?? null;
+  const savedPreserveApplePhotographicStyles = stored[keys.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES] ?? null;
+  const savedSaveOriginalWithLUT = stored[keys.SAVE_ORIGINAL_WITH_LUT] ?? null;
+  const savedFirstTime = stored[keys.FIRSTTIME] ?? null;
+  const savedCustomLuts = stored[keys.CUSTOM_LUTS] ?? null;
+  const savedTopBarBelow = stored[keys.TOP_BAR_BELOW] ?? null;
+  const savedTopBarControls = stored[keys.TOP_BAR_CONTROLS] ?? null;
+  const savedProjects = stored[keys.PROJECTS] ?? null;
+  const savedActiveProjectId = stored[keys.ACTIVE_PROJECT_ID] ?? null;
+  const photoAuthor = stored[keys.PHOTO_AUTHOR] ?? null;
+  const photoCopyright = stored[keys.PHOTO_COPYRIGHT] ?? null;
+  const format = stored[keys.PHOTO_FORMAT] ?? null;
+  const rawSettings = stored[keys.HEIF_PLUS_SETTINGS] ?? null;
 
   const intelligentPreferences = restoreIntelligentPreferences(
     {
@@ -130,10 +104,6 @@ export async function loadStoredSettings(defaults) {
     },
     defaults,
   );
-
-  const [format, rawSettings] = await Promise.all([
-    AsyncStorage.getItem(keys.PHOTO_FORMAT), AsyncStorage.getItem(keys.HEIF_PLUS_SETTINGS),
-  ]);
 
   return {
     photoFormat: restorePhotoFormat(format, parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg)),
