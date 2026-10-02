@@ -1,6 +1,7 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  reorderHint: { color: "#98989f", fontSize: 13, marginBottom: 12 },
   container: {
     flex: 1,
     backgroundColor: "#000",
