@@ -113,7 +113,7 @@ O app integra serviços externos para funções específicas:
 
 - **Open-Meteo:** clima.
 - **BigDataCloud:** nome aproximado de localidade.
-- **Leaflet, Carto basemaps e unpkg:** exibição de mapa.
+- **Leaflet, OpenStreetMap e unpkg:** exibição de mapa.
 - **Gerador de EXIF Frame:** criação de molduras em WebView.
 - **Notion:** formulário de feedback.
 - **GitHub, Instagram, Threads, YouTube e site Foto Essência:** links externos.

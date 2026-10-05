@@ -27,6 +27,7 @@ import {
 } from "../utils/topBarControls";
 import CustomToggle from "./CustoToggle";
 import styles from "./Welcome.styles";
+import TopBarControlList from "./TopBarControlList";
 
 const FLOW = [
   {
@@ -392,18 +393,7 @@ function TopBarCustomizer({ controls, onChange }) {
   const available = TOP_BAR_CONTROLS.filter(
     (control) => !selected.includes(control.id),
   );
-  const controlsById = Object.fromEntries(
-    TOP_BAR_CONTROLS.map((control) => [control.id, control]),
-  );
-
-  const move = (index, offset) => {
-    const destination = index + offset;
-    if (destination < 0 || destination >= selected.length) return;
-    const next = [...selected];
-    const [moved] = next.splice(index, 1);
-    next.splice(destination, 0, moved);
-    onChange(next);
-  };
+  const [draggingControl, setDraggingControl] = useState(false);
 
   const remove = (controlId) => {
     if (controlId === "settings") return;
@@ -417,6 +407,7 @@ function TopBarCustomizer({ controls, onChange }) {
 
   return (
     <ScrollView
+      scrollEnabled={!draggingControl}
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.topBarScrollContent}
@@ -429,48 +420,15 @@ function TopBarCustomizer({ controls, onChange }) {
         </Text>
       </View>
 
-      <View style={styles.selectedControlList}>
-        {selected.map((controlId, index) => {
-          const control = controlsById[controlId];
-          return (
-            <View key={controlId} style={styles.selectedControlRow}>
-              <Ionicons name={control.icon} size={19} color="#ffb21d" />
-              <Text numberOfLines={1} style={styles.selectedControlLabel}>
-                {control.label}
-              </Text>
-              <Pressable
-                accessibilityLabel={`Mover ${control.label} para cima`}
-                disabled={index === 0}
-                hitSlop={8}
-                onPress={() => move(index, -1)}
-                style={index === 0 && styles.controlActionDisabled}
-              >
-                <Ionicons name="chevron-up" size={20} color="#fff" />
-              </Pressable>
-              <Pressable
-                accessibilityLabel={`Mover ${control.label} para baixo`}
-                disabled={index === selected.length - 1}
-                hitSlop={8}
-                onPress={() => move(index, 1)}
-                style={
-                  index === selected.length - 1 && styles.controlActionDisabled
-                }
-              >
-                <Ionicons name="chevron-down" size={20} color="#fff" />
-              </Pressable>
-              <Pressable
-                accessibilityLabel={`Remover ${control.label}`}
-                disabled={controlId === "settings"}
-                hitSlop={8}
-                onPress={() => remove(controlId)}
-                style={controlId === "settings" && styles.controlActionDisabled}
-              >
-                <Ionicons name="close" size={21} color="#ff7373" />
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
+      <Text style={styles.reorderHint}>
+        Arraste pela alça à direita para mudar a ordem.
+      </Text>
+      <TopBarControlList
+        controls={selected}
+        onChange={onChange}
+        onRemove={remove}
+        onDragStateChange={setDraggingControl}
+      />
 
       {available.length > 0 && (
         <>

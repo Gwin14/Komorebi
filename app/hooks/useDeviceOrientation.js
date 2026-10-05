@@ -1,4 +1,5 @@
-import { DeviceMotion } from "expo-sensors";
+import { useIsFocused } from "@react-navigation/native";
+import { subscribeDeviceMotion } from "../utils/deviceMotion";
 import { useEffect, useRef, useState } from "react";
 import {
   useAnimatedStyle,
@@ -11,6 +12,7 @@ import {
  * @returns {object} Animated rotation style and normalized device orientation.
  */
 export function useDeviceOrientationState() {
+  const focused = useIsFocused();
   const rotation = useSharedValue("0deg");
   const orientationRef = useRef(0);
   const [orientation, setOrientation] = useState(0);
@@ -20,36 +22,30 @@ export function useDeviceOrientationState() {
   }));
 
   useEffect(() => {
-    DeviceMotion.setUpdateInterval(200);
-    const subscription = DeviceMotion.addListener((data) => {
+    if (!focused) return;
+    return subscribeDeviceMotion((data) => {
       const { orientation } = data;
       let nextOrientation = 0;
 
       if (orientation === 90) {
-        rotation.value = "-90deg";
         nextOrientation = -90;
       } else if (orientation === -90 || orientation === 270) {
-        rotation.value = "90deg";
         nextOrientation = 90;
       } else if (orientation === 0) {
-        rotation.value = "0deg";
+        nextOrientation = 0;
       } else if (orientation === 180 || orientation === -180) {
-        rotation.value = "180deg";
         nextOrientation = 180;
       } else {
         return;
       }
 
       if (nextOrientation !== orientationRef.current) {
+        rotation.value = `${nextOrientation}deg`;
         orientationRef.current = nextOrientation;
         setOrientation(nextOrientation);
       }
-    });
-
-    return () => {
-      subscription.remove();
-    };
-  }, [rotation]);
+    }, 200);
+  }, [focused, rotation]);
 
   return { animatedStyle, orientation };
 }

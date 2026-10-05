@@ -20,7 +20,6 @@ final class LiveEffectPreviewRenderer {
   private var generation = 0
   private var frameNumber = 0
   private var lutSize = 0
-  private var lutValues: [Double] = []
   private var cubeData: Data?
   private var lutDomain: [Double] = [0, 0, 0, 1, 1, 1]
   private var grainStrength = 0.0
@@ -67,7 +66,6 @@ final class LiveEffectPreviewRenderer {
   func setLut(size: Int, values: [Double]) {
     lock.lock()
     lutSize = size
-    lutValues = values
     cubeData = Self.makeCubeData(size: size, values: values)
     generation += 1
     let enabled = isEnabled
@@ -190,13 +188,16 @@ final class LiveEffectPreviewRenderer {
         let output = self.context.createCGImage(image.cropped(to: extent), from: extent)
         self.lock.lock()
         let current = self.generation == currentGeneration && self.isEnabled
-        self.inFlight = false
+        if !current || output == nil { self.inFlight = false }
         self.lock.unlock()
         if current, let output {
           DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.lock.lock()
             let valid = self.generation == currentGeneration && self.isEnabled
+            // Keep backpressure until the main queue consumes this image.
+            // Otherwise a busy UI can accumulate rendered frames and buffers.
+            self.inFlight = false
             self.lock.unlock()
             if valid {
               if let container = self.imageView.superview {

@@ -22,11 +22,13 @@ const IDLE_PROGRESS = {
 
 export default function useImageStacking(device) {
   const nativeAvailable = Platform.OS === "ios" && isImageStackingAvailable();
-  const [capabilities, setCapabilities] = useState(null);
+  const [capabilitiesState, setCapabilities] = useState(null);
   const [strategyId, setStrategyId] = useState(null);
   const [progress, setProgress] = useState(IDLE_PROGRESS);
   const [capturing, setCapturing] = useState(false);
   const deviceId = device?.id;
+  const capabilities = capabilitiesState?.deviceId === deviceId && capabilitiesState
+    ? capabilitiesState.value : null;
 
   useEffect(() => {
     if (!nativeAvailable || !deviceId) {
@@ -34,10 +36,11 @@ export default function useImageStacking(device) {
       setStrategyId(null);
       return;
     }
+    setCapabilities(null);
     let cancelled = false;
     getImageStackingCapabilities(deviceId)
       .then((value) => {
-        if (!cancelled) setCapabilities(value);
+        if (!cancelled) setCapabilities({ deviceId, value });
       })
       .catch(() => {
         if (!cancelled) setCapabilities(null);
@@ -56,8 +59,7 @@ export default function useImageStacking(device) {
 
   const available = Boolean(
     nativeAvailable &&
-    deviceId &&
-    (capabilities === null || capabilities.available),
+    deviceId && capabilities?.available,
   );
 
   const selectStrategy = useCallback(
@@ -70,8 +72,7 @@ export default function useImageStacking(device) {
       }
       if (
         available &&
-        (capabilities === null ||
-          capabilities.supportedStrategies.includes(nextStrategyId))
+        capabilities?.supportedStrategies.includes(nextStrategyId)
       ) {
         setStrategyId(nextStrategyId);
       }
@@ -85,8 +86,9 @@ export default function useImageStacking(device) {
       exposureCompensationEV = -1.5,
       previewDoubleExposure = false,
       previewStacking = false,
+      focusBracketing,
     } = {}) => {
-      if (!strategyId || !deviceId || capturing) return null;
+      if (!strategyId || !deviceId || capturing || !capabilities?.supportedStrategies.includes(strategyId)) return null;
       setProgress({ ...IDLE_PROGRESS, strategyId, state: "preparing" });
       setCapturing(true);
       try {
@@ -96,6 +98,7 @@ export default function useImageStacking(device) {
           outputFormat,
           previewDoubleExposure,
           previewStacking,
+          ...(strategyId === "focusBracketing" ? focusBracketing : {}),
           ...(["bulb", "motionBlur"].includes(strategyId)
             ? { maximumDurationSeconds: 300 }
             : {}),
@@ -107,7 +110,7 @@ export default function useImageStacking(device) {
         setCapturing(false);
       }
     },
-    [capturing, deviceId, strategyId],
+    [capabilities, capturing, deviceId, strategyId],
   );
 
   const stop = useCallback(async () => {

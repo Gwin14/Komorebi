@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "@react-native-documents/picker";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useMemo } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -32,6 +32,7 @@ import HeifPlusSettings from "./HeifPlusSettings";
 import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import styles from "./Settings.styles";
+import TopBarControlList from "./TopBarControlList";
 
 const ACCENT = "#ffaa00";
 export const SETTINGS_PAGES = {
@@ -187,13 +188,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     setFirstTime,
   } = useSettings();
 
-  const controlsMap = useMemo(
-    () =>
-      Object.fromEntries(
-        TOP_BAR_CONTROLS.map((control) => [control.id, control]),
-      ),
-    [],
-  );
+  const [draggingControl, setDraggingControl] = useState(false);
 
   const openPage = (nextPage) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -265,22 +260,6 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     }
     setTopBarControls((previous) => [...previous, controlId]);
   };
-  const moveControlInOrder = (fromIndex, toIndex) => {
-    if (
-      fromIndex === toIndex ||
-      fromIndex < 0 ||
-      toIndex < 0 ||
-      fromIndex >= topBarControls.length ||
-      toIndex >= topBarControls.length
-    )
-      return;
-    const nextControls = [...topBarControls];
-    const [moved] = nextControls.splice(fromIndex, 1);
-    nextControls.splice(toIndex, 0, moved);
-    setTopBarControls(nextControls);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  };
-
   const modelStatus = compositionModel.status;
   const modelReady = modelStatus.state === "ready";
   const modelProgress = Math.round((modelStatus.progress ?? 0) * 100);
@@ -689,54 +668,16 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
         A barra aceita até {TOP_BAR_MAX_CONTROLS} itens. Configurações permanece
         sempre disponível.
       </Text>
-      <Section title="Na barra">
-        {topBarControls.map((controlId, index) => (
-          <View key={controlId} style={styles.controlRow}>
-            <View style={styles.controlIndex}>
-              <Text style={styles.controlIndexText}>{index + 1}</Text>
-            </View>
-            <Text numberOfLines={1} style={styles.controlName}>
-              {controlsMap[controlId]?.label}
-            </Text>
-            <TouchableOpacity
-              accessibilityLabel={`Mover ${controlsMap[controlId]?.label} para cima`}
-              disabled={index === 0}
-              onPress={() => moveControlInOrder(index, index - 1)}
-              style={styles.iconButton}
-            >
-              <Ionicons
-                name="chevron-up"
-                size={18}
-                color={index === 0 ? "#444" : ACCENT}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityLabel={`Mover ${controlsMap[controlId]?.label} para baixo`}
-              disabled={index === topBarControls.length - 1}
-              onPress={() => moveControlInOrder(index, index + 1)}
-              style={styles.iconButton}
-            >
-              <Ionicons
-                name="chevron-down"
-                size={18}
-                color={index === topBarControls.length - 1 ? "#444" : ACCENT}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityLabel={`Remover ${controlsMap[controlId]?.label}`}
-              disabled={controlId === "settings"}
-              onPress={() => handleRemoveControl(controlId)}
-              style={styles.iconButton}
-            >
-              <Ionicons
-                name="close"
-                size={19}
-                color={controlId === "settings" ? "#444" : "#ff7474"}
-              />
-            </TouchableOpacity>
-          </View>
-        ))}
-      </Section>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Na barra</Text>
+        <Text style={styles.sectionDescription}>Arraste pela alça à direita para mudar a ordem.</Text>
+        <TopBarControlList
+          controls={topBarControls}
+          onChange={setTopBarControls}
+          onRemove={handleRemoveControl}
+          onDragStateChange={setDraggingControl}
+        />
+      </View>
       {unselectedControls.length > 0 && (
         <Section title="Disponíveis">
           {unselectedControls.map((control) => (
@@ -915,6 +856,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <SettingsHeader onBack={goBack} title={pageTitles[page]} />
       <ScrollView
+        scrollEnabled={!draggingControl}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         style={styles.scrollView}

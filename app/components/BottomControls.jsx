@@ -94,40 +94,34 @@ export default function BottomControls({
     await takePicture();
   };
 
+  const albumName = activeProject ? getProjectAlbumName(activeProject) : "Komorebi";
   useEffect(() => {
-    loadLastPhoto();
-  }, [galleryRefreshKey, activeProject]);
-
-  const loadLastPhoto = async () => {
-    try {
-      const albums = await MediaLibrary.getAlbumsAsync();
-
-      // Sem projeto: mostra a última foto do álbum padrão (Komorebi).
-      // Com projeto: mostra a última foto do álbum do projeto.
-      const albumName = activeProject
-        ? getProjectAlbumName(activeProject)
-        : "Komorebi";
-
-      const targetAlbum = albums.find(
-        (a) => a.title.toLowerCase() === albumName.toLowerCase(),
-      );
-
-      if (!targetAlbum) return;
-
-      const photos = await MediaLibrary.getAssetsAsync({
-        album: targetAlbum,
-        mediaType: "photo",
-        first: 1,
-        sortBy: [["creationTime", false]],
-      });
-
-      if (photos.assets.length > 0) {
-        setLastPhotoUri(photos.assets[0].uri);
+    let active = true;
+    const loadLastPhoto = async () => {
+      try {
+        const albums = await MediaLibrary.getAlbumsAsync();
+        if (!active) return;
+        const targetAlbum = albums.find(
+          (album) => album.title.toLowerCase() === albumName.toLowerCase(),
+        );
+        if (!targetAlbum) {
+          setLastPhotoUri(null);
+          return;
+        }
+        const photos = await MediaLibrary.getAssetsAsync({
+          album: targetAlbum,
+          mediaType: "photo",
+          first: 1,
+          sortBy: [["creationTime", false]],
+        });
+        if (active) setLastPhotoUri(photos.assets[0]?.uri ?? null);
+      } catch (error) {
+        console.error("Erro ao carregar última foto:", error);
       }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+    };
+    void loadLastPhoto();
+    return () => { active = false; };
+  }, [galleryRefreshKey, albumName]);
 
   const shutterTranslate = controlsAnim.interpolate({
     inputRange: [0, 1],
