@@ -23,7 +23,16 @@ import ImageIO
     let wholeDate = HeifPlusEngine.captureDate("2026-10-01T12:00:00Z")!
     let fractionalDate = HeifPlusEngine.captureDate("2026-10-01T12:00:00.123Z")!
     try require(abs(fractionalDate.timeIntervalSince(wholeDate) - 0.123) < 0.000001, "Capture timestamp lost milliseconds")
-    let engine = HeifPlusEngine(root: folder.appendingPathComponent("jobs"))
+    var styleCalls = 0
+    let engine = HeifPlusEngine(root: folder.appendingPathComponent("jobs"), stylesWriter: { source, options in
+      styleCalls += 1
+      try require(options["enableStyles3"] as? Bool == true, "Styles 3 preference lost")
+      try require(options["cameraPosition"] as? String == "front", "Camera position lost")
+      try require(options["inputPrepared"] as? Bool == true, "HEIF+ would be encoded twice")
+      let output = folder.appendingPathComponent("styles-\(styleCalls).heic")
+      try Data(contentsOf: source).write(to: output)
+      return output
+    })
     let bytes = Data((0..<1024).map { UInt8($0 % 256) })
     var jobs: [[String: Any]] = []
     for index in 0..<3 {
@@ -46,6 +55,32 @@ import ImageIO
     try require(try engine.jobs().first { $0["id"] as? String == id }?["state"] as? String == "failed", "Failure checkpoint missing")
     try engine.retry(id)
     try require(try engine.jobs().first { $0["id"] as? String == id }?["state"] as? String == "pending", "Retry did not restore pending state")
+
+    // Exercise the durable Styles checkpoint without depending on PhotoKit authorization.
+    let jobFolder = folder.appendingPathComponent("jobs/\(id)")
+    let rendered = jobFolder.appendingPathComponent("main.heic")
+    try bytes.write(to: rendered)
+    let journal = jobFolder.appendingPathComponent("job.json")
+    var styledJob = try JSONSerialization.jsonObject(with: Data(contentsOf: journal)) as! [String: Any]
+    styledJob["preserveApplePhotographicStyles"] = true
+    styledJob["photographicStyles3Enabled"] = true
+    styledJob["cameraPosition"] = "front"
+    styledJob["variants"] = [["file": "main.heic", "name": "main", "photoUri": rendered.absoluteString]]
+    try JSONSerialization.data(withJSONObject: styledJob).write(to: journal, options: .atomic)
+    let prepared = try engine.prepareStyles(id)
+    let variant = (prepared["variants"] as! [[String: Any]])[0]
+    try require(variant["stylesPrepared"] as? Bool == true, "Missing Styles checkpoint")
+    let durable = URL(string: variant["photoUri"] as! String)!
+    try require(durable.deletingLastPathComponent() == jobFolder, "Styles output was not durable")
+    try require(try Data(contentsOf: durable) == bytes, "Styles checkpoint changed bytes")
+    _ = try engine.prepareStyles(id)
+    try require(styleCalls == 1, "Retry applied Styles twice")
+    let restoredEngine = HeifPlusEngine(root: folder.appendingPathComponent("jobs"), stylesWriter: { _, _ in
+      throw NSError(domain: "test", code: 1) // A restored checkpoint needs no writer.
+    })
+    _ = try restoredEngine.prepareStyles(id)
+    try require(try Data(contentsOf: jobFolder.appendingPathComponent("original.dng")) == bytes, "Styles changed the RAW")
+    try require(!FileManager.default.fileExists(atPath: folder.appendingPathComponent("styles-1.heic").path), "Styles temporary file leaked")
 
     let context = CIContext(options: [.cacheIntermediates: false])
     let base = CIImage(color: CIColor(red: 0.43, green: 0.31, blue: 0.22))

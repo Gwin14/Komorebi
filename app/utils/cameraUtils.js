@@ -425,6 +425,9 @@ export const takePicture = async ({
       const job = await enqueueHeifPlus(uri, {
         ...heifPlus,
         settings: heifPlus.settings,
+        preserveApplePhotographicStyles,
+        photographicStyles3Enabled,
+        cameraPosition,
         effects: {
           cube: selectedLutId !== "none" ? getCachedLUT(selectedLutId) : null,
           grainConfig: selectedGrainConfig,
@@ -481,6 +484,10 @@ export const takePicture = async ({
         saveOriginalWithoutEffects: false,
         aspectRatio: captureAspectRatio,
         captureMode: "raw",
+        preserveApplePhotographicStyles:
+          normalizedRawMode === "proRaw" && preserveApplePhotographicStyles,
+        photographicStyles3Enabled,
+        cameraPosition,
         cube: null,
         halationConfig: null,
         grainConfig: null,

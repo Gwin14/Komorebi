@@ -112,12 +112,16 @@ export type HeifPlusVariant = {
   recipe: HeifPlusRecipe;
   assetId?: string;
   organized?: boolean;
+  stylesPrepared?: boolean;
 };
 export type HeifPlusJob = {
   id: string;
   state: "pending" | "rendered" | "saved" | "failed";
   createdAt: string;
   intelligenceCompleted?: boolean;
+  preserveApplePhotographicStyles?: boolean;
+  photographicStyles3Enabled?: boolean;
+  cameraPosition?: "back" | "front";
   error?: string;
   variants?: HeifPlusVariant[];
   komorebiMetadata?: Record<string, unknown>;

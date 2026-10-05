@@ -194,15 +194,12 @@ export default function App() {
         preferenceEnabled:
           Platform.OS === "ios" && preserveApplePhotographicStyles,
         styles3PreferenceEnabled: photographicStyles3Enabled,
-        livePhotoEnabled: livePhoto.enabled,
-        portraitModeEnabled: portraitCapture.enabled,
+        heifPlusEnabled: heifPlusPolicy.effective,
         rawMode: heifPlusPolicy.effective
           ? heifPlusPolicy.rawMode
           : rawCapture.rawMode,
       }),
     [
-      livePhoto.enabled,
-      portraitCapture.enabled,
       preserveApplePhotographicStyles,
       photographicStyles3Enabled,
       rawCapture.rawMode,
@@ -584,7 +581,11 @@ export default function App() {
       setIsProcessing(true);
       try {
         const result = await imageStacking.start({
-          outputFormat: Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
+          outputFormat:
+            Platform.OS === "ios" &&
+            (appleStylesCompatibility.effective || !saveAsJpeg)
+              ? "heif"
+              : "jpeg",
           previewDoubleExposure,
           previewStacking,
           focusBracketing: focusBracketing.config,
@@ -623,7 +624,10 @@ export default function App() {
             cameraPosition: activeLens?.device?.position,
             extraData: {
               outputFormat:
-                Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
+                Platform.OS === "ios" &&
+                (appleStylesCompatibility.effective || !saveAsJpeg)
+                  ? "heif"
+                  : "jpeg",
             },
           }),
         );

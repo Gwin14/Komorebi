@@ -511,22 +511,22 @@ export default function usePhotoProcessingQueue(
                 const expectedExtension =
                   outputFormat === "heif" ? /\.hei[cf]$/i : /\.jpe?g$/i;
                 // Convert even when the extension matches so the companion gets Display P3.
-                convertedUri = await convertPhotoFormat({
-                  photoUri: pairProcessedUri,
-                  metadataSourceUri: derivativeSourceUri,
-                  metadata: effectiveExifData,
-                  outputFormat,
-                });
+                convertedUri = await prepareRegularPhoto(
+                  pairProcessedUri,
+                  derivativeSourceUri,
+                );
                 pairProcessedUri = convertedUri;
                 if (!expectedExtension.test(pairProcessedUri)) {
                   throw new Error(
                     "A foto processada do RAW não foi convertida para o formato selecionado",
                   );
                 }
-                catalogProcessedUri = await writePhotoCatalogMetadata(
-                  pairProcessedUri,
-                  catalogMetadata,
-                );
+                catalogProcessedUri = preserveApplePhotographicStyles
+                  ? pairProcessedUri
+                  : await writePhotoCatalogMetadata(
+                      pairProcessedUri,
+                      catalogMetadata,
+                    );
                 rawAsset = await saveRawPhotoPair(
                   catalogRawUri,
                   catalogProcessedUri,
@@ -554,9 +554,16 @@ export default function usePhotoProcessingQueue(
                   convertedUri,
                 ])) {
                   if (temporaryUri && temporaryUri !== derivativeSourceUri) {
-                    await FileSystem.deleteAsync(temporaryUri, {
-                      idempotent: true,
-                    }).catch(console.warn);
+                    if (
+                      preserveApplePhotographicStyles &&
+                      temporaryUri === convertedUri
+                    ) {
+                      await removeStylesTemporaryFile(temporaryUri);
+                    } else {
+                      await FileSystem.deleteAsync(temporaryUri, {
+                        idempotent: true,
+                      }).catch(console.warn);
+                    }
                   }
                 }
               }
@@ -606,6 +613,9 @@ export default function usePhotoProcessingQueue(
             outputFormat,
             originalFilename: primaryFilename,
             metadata: effectiveExifData,
+            preserveApplePhotographicStyles,
+            photographicStyles3Enabled,
+            cameraPosition,
           });
           mainAssetSaved = true;
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);
@@ -638,6 +648,9 @@ export default function usePhotoProcessingQueue(
             outputFormat,
             originalFilename: primaryFilename,
             metadata: effectiveExifData,
+            preserveApplePhotographicStyles,
+            photographicStyles3Enabled,
+            cameraPosition,
           });
           mainAssetSaved = true;
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);

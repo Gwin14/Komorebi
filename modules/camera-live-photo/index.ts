@@ -44,6 +44,9 @@ export type LivePhotoCaptureResult = {
 };
 
 export type SaveLivePhotoOptions = {
+  preserveApplePhotographicStyles?: boolean;
+  photographicStyles3Enabled?: boolean;
+  cameraPosition?: "back" | "front";
   photoUri: string;
   movieUri: string;
   originalPhotoUri?: string | null;
@@ -129,6 +132,9 @@ export async function saveLivePhotoToLibrary(
   }
 
   const result = await nativeModule.saveLivePhotoToLibrary({
+    preserveApplePhotographicStyles: options.preserveApplePhotographicStyles ?? false,
+    photographicStyles3Enabled: options.photographicStyles3Enabled ?? false,
+    cameraPosition: options.cameraPosition ?? "back",
     photoUri: options.photoUri,
     movieUri: options.movieUri,
     originalPhotoUri: options.originalPhotoUri ?? null,

@@ -53,6 +53,9 @@ test("capture jobs retain Styles 3 and camera identity with and without effects"
     ["none", "standard"],
     ["lut", "standard"],
     ["none", "stacking"],
+    ["lut", "stacking"],
+    ["none", "live"],
+    ["lut", "portrait"],
   ]) {
     const job = await buildPhotoProcessingData({
       uri: "file:///capture.jpg",
@@ -180,3 +183,148 @@ for (const [enabled, styles3Verified, shouldSave] of [
     hooks.dispose();
   });
 }
+
+for (const captureMode of ["live", "portrait"]) {
+  test(`${captureMode} passes captured Styles preferences to the native saver`, async () => {
+    const hooks = createHooks();
+    const calls = [];
+    const { default: useQueue } = loadModule("app/hooks/usePhotoProcessingQueue.js", {
+      react: hooks.react,
+      "react-native": {
+        Alert: { alert: (...args) => assert.fail(JSON.stringify(args)) },
+        AppState: { addEventListener: () => ({ remove() {} }) },
+        DeviceEventEmitter: { addListener: () => ({ remove() {} }), emit() {} },
+      },
+      "expo-file-system/legacy": {},
+      "../../modules/composition-scan": {},
+      "../../modules/camera-raw-capture": { listHeifPlusJobs: async () => [] },
+      "../../modules/camera-photographic-styles": {},
+      "../../modules/camera-live-photo": {
+        saveLivePhotoToLibrary: async (options) => { calls.push(options); return { localIdentifier: "live" }; },
+      },
+      "../../modules/camera-portrait-capture": {
+        saveProcessedPortraitPhoto: async (options) => { calls.push(options); return { localIdentifier: "portrait" }; },
+      },
+      "../utils/cameraUtils": { applyExifDataToImage: async (uri) => uri },
+      "../utils/komorebiExifMetadata": { saveKomorebiAssetMetadata: async () => {} },
+      "../utils/photoIntelligence": { applyPhotoIntelligenceToMetadata: () => ({}) },
+      "../utils/projects": {},
+      "../utils/photoCatalogMetadata": {},
+    });
+    const queue = hooks.render(() => useQueue(true));
+    await queue.handleProcessed("file:///effect.jpg", {
+      captureMode,
+      originalUri: "file:///original.heic",
+      ...(captureMode === "live" ? { livePhotoMovieUri: "file:///paired.mov" } : { depthDataEmbedded: true }),
+      outputFormat: "heif",
+      preserveApplePhotographicStyles: true,
+      photographicStyles3Enabled: true,
+      cameraPosition: "front",
+    });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].preserveApplePhotographicStyles, true);
+    assert.equal(calls[0].photographicStyles3Enabled, true);
+    assert.equal(calls[0].cameraPosition, "front");
+    assert.equal(calls[0].originalPhotoUri, "file:///original.heic");
+    if (captureMode === "live") assert.equal(calls[0].movieUri, "file:///paired.mov");
+    hooks.dispose();
+  });
+}
+
+for (const rawMode of ["raw", "proRaw"]) {
+  test(`HEIF+ snapshots Styles preferences when captured from ${rawMode}`, async () => {
+    const jobs = [];
+    const queued = [];
+    const { takePicture } = loadModule("app/utils/cameraUtils.js", {
+      "expo-file-system/legacy": {},
+      "expo-location": {},
+      "expo-media-library": {},
+      "expo-image-manipulator": {},
+      "react-native": {},
+      "../../modules/camera-live-photo": {},
+      "../../modules/camera-portrait-capture": {},
+      "../../modules/camera-raw-capture": {
+        toVisionCameraRawMode: (mode) => mode,
+        listHeifPlusJobs: async () => [],
+        enqueueHeifPlus: async (uri, options) => {
+          jobs.push({ uri, ...options });
+          return { id: "durable", ...options };
+        },
+      },
+      "./lutStore": {},
+      "./projects": {},
+      "./komorebiExifMetadata": { buildKomorebiExifMetadata: () => ({ createdAt: "2026-10-05T12:00:00Z" }) },
+      "./lutProcessor": {},
+    });
+    await takePicture({
+      cameraRef: { current: { takePhoto: async () => ({ path: "/capture.dng" }) } },
+      cameraReady: true,
+      isProcessing: false,
+      setIsProcessing() {},
+      setProcessingData: (data) => queued.push(data),
+      selectedLutId: "none",
+      rawMode,
+      heifPlus: { settings: { exposure: 0 }, rawPairEnabled: true },
+      preserveApplePhotographicStyles: true,
+      photographicStyles3Enabled: true,
+      cameraPosition: "front",
+    });
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0].uri, "file:///capture.dng");
+    assert.equal(queued[0].heifPlusJob.preserveApplePhotographicStyles, true);
+    assert.equal(queued[0].heifPlusJob.photographicStyles3Enabled, true);
+    assert.equal(queued[0].heifPlusJob.cameraPosition, "front");
+  });
+}
+
+test("ProRAW styles the processed companion while preserving the DNG", async () => {
+  const hooks = createHooks();
+  const stylesInputs = [], catalogInputs = [], pairs = [], cleaned = [];
+  const { default: useQueue } = loadModule("app/hooks/usePhotoProcessingQueue.js", {
+    react: hooks.react,
+    "react-native": {
+      Alert: { alert: (...args) => assert.fail(JSON.stringify(args)) },
+      AppState: { addEventListener: () => ({ remove() {} }) },
+      DeviceEventEmitter: { addListener: () => ({ remove() {} }), emit() {} },
+    },
+    "expo-file-system/legacy": { deleteAsync: async () => assert.fail("Styles cleanup must use native file permissions") },
+    "../../modules/composition-scan": {},
+    "../../modules/camera-live-photo": {},
+    "../../modules/camera-raw-capture": {
+      listHeifPlusJobs: async () => [],
+      saveRawPhotoPair: async (...args) => { pairs.push(args); return { id: "pair" }; },
+    },
+    "../../modules/camera-photographic-styles": {
+      makePhotoStylesCompatible: async (uri) => {
+        stylesInputs.push(uri);
+        return { photoUri: "file:///styles.heic", verified: true, styles3Verified: true };
+      },
+      deletePhotographicStylesTemporaryPhoto: async (uri) => cleaned.push(uri),
+    },
+    "../../modules/camera-portrait-capture": {},
+    "../utils/cameraUtils": {},
+    "../utils/komorebiExifMetadata": { saveKomorebiAssetMetadata: async () => {} },
+    "../utils/photoIntelligence": { applyPhotoIntelligenceToMetadata: () => ({}) },
+    "../utils/projects": {},
+    "../utils/photoCatalogMetadata": {
+      writePhotoCatalogMetadata: async (uri) => { catalogInputs.push(uri); return uri; },
+      deleteCatalogTemporaryPhoto: async () => {},
+    },
+  });
+  const queue = hooks.render(() => useQueue(true));
+  await queue.handleProcessed("file:///original.dng", {
+    captureMode: "raw",
+    originalUri: "file:///original.dng",
+    derivativeSourceUri: "file:///companion.heic",
+    rawPairEnabled: true,
+    outputFormat: "heif",
+    preserveApplePhotographicStyles: true,
+    photographicStyles3Enabled: true,
+  });
+  assert.deepEqual(stylesInputs, ["file:///companion.heic"]);
+  assert.deepEqual(catalogInputs, ["file:///original.dng"]);
+  assert.equal(pairs[0][0], "file:///original.dng");
+  assert.equal(pairs[0][1], "file:///styles.heic");
+  assert.deepEqual(cleaned, ["file:///styles.heic"]);
+  hooks.dispose();
+});

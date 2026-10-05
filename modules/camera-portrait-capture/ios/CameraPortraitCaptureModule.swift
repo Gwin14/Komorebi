@@ -1,3 +1,4 @@
+import CameraPhotographicStyles
 import ExpoModulesCore
 import AVFoundation
 import CoreMotion
@@ -201,11 +202,35 @@ public class CameraPortraitCaptureModule: Module {
         metadata: options["metadata"] as? [String: Any],
         outputFormat: options["outputFormat"] as? String ?? "heif"
       )
+      defer {
+        if prepared.url != processedPhotoURL { try? FileManager.default.removeItem(at: prepared.url) }
+      }
       try PhotoCatalogMetadata.apply(to: prepared.url, metadata: options["metadata"] as? [String: Any])
+      let stylesEnabled = options["preserveApplePhotographicStyles"] as? Bool == true
+      let finalPhotoURL: URL
+      if stylesEnabled {
+        let result = try await Task.detached(priority: .userInitiated) {
+          try CameraPhotographicStylesModule.makeCompatible(photoUri: prepared.url.absoluteString, options: [
+            "inputPrepared": true,
+            "enableStyles3": options["photographicStyles3Enabled"] as? Bool ?? false,
+            "cameraPosition": options["cameraPosition"] as? String ?? "back",
+            "metadata": options["metadata"] as? [String: Any] ?? [:],
+            "metadataSourceUri": prepared.url.absoluteString
+          ])
+        }.value
+        guard let uri = result["photoUri"] as? String, let output = URL(string: uri),
+              result["verified"] as? Bool == true else { throw PortraitCaptureError.captureFailed }
+        finalPhotoURL = output
+      } else {
+        finalPhotoURL = prepared.url
+      }
+      defer {
+        if finalPhotoURL != prepared.url { try? FileManager.default.removeItem(at: finalPhotoURL) }
+      }
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
       let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.savePhotoToLibrary(
-        photoURL: prepared.url,
+        photoURL: finalPhotoURL,
         albumTitle: albumTitle,
         originalFilename: originalFilename
       )

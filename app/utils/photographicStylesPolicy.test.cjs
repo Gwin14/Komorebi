@@ -19,22 +19,37 @@ test("keeps compatibility enabled for image stacking", () => {
   );
 });
 
-for (const [name, modes, reason] of [
-  ["Live Photo", { livePhotoEnabled: true }, "Live Photo"],
-  ["portrait", { portraitModeEnabled: true }, "Retrato"],
-  ["ProRAW", { rawMode: "proRaw" }, "RAW"],
-  ["RAW", { rawMode: "raw" }, "RAW"],
+for (const [name, modes] of [
+  ["Live Photo", { livePhotoEnabled: true }],
+  ["Retrato", { portraitModeEnabled: true }],
+  ["ProRAW", { rawMode: "proRaw" }],
+  ["HEIF+ com ProRAW", { rawMode: "proRaw", heifPlusEnabled: true }],
+  ["HEIF+ com Bayer", { rawMode: "raw", heifPlusEnabled: true }],
+  ["Stacking", { imageStackingEnabled: true }],
 ]) {
-  test(`suspends compatibility for ${name}`, () => {
+  test(`keeps both Styles modes enabled for ${name}`, () => {
     const result = getAppleStylesCompatibility({
       preferenceEnabled: true,
+      styles3PreferenceEnabled: true,
       ...modes,
     });
-    assert.equal(result.effective, false);
-    assert.equal(result.preferenceEnabled, true);
-    assert.equal(result.suspensionReason, reason);
+    assert.equal(result.effective, true);
+    assert.equal(result.styles3Effective, true);
+    assert.equal(result.suspensionReason, null);
   });
 }
+
+test("suspends both Styles modes only for ordinary RAW", () => {
+  const result = getAppleStylesCompatibility({
+    preferenceEnabled: true,
+    styles3PreferenceEnabled: true,
+    rawMode: "raw",
+  });
+  assert.equal(result.effective, false);
+  assert.equal(result.styles3Effective, false);
+  assert.equal(result.preferenceEnabled, true);
+  assert.equal(result.suspensionReason, "RAW");
+});
 
 test("restores compatibility without changing the preference", () => {
   const suspended = getAppleStylesCompatibility({
@@ -66,18 +81,10 @@ test("Styles 3 requires both preferences and follows capture suspensions", () =>
     styles3PreferenceEnabled: true,
   };
   assert.equal(getAppleStylesCompatibility(preferences).styles3Effective, true);
-  for (const modes of [
-    { livePhotoEnabled: true },
-    { portraitModeEnabled: true },
-    { rawMode: "raw" },
-    { rawMode: "proRaw" },
-  ]) {
-    assert.equal(
-      getAppleStylesCompatibility({ ...preferences, ...modes })
-        .styles3Effective,
-      false,
-    );
-  }
+  assert.equal(
+    getAppleStylesCompatibility({ ...preferences, rawMode: "raw" }).styles3Effective,
+    false,
+  );
   assert.equal(
     getAppleStylesCompatibility({ ...preferences, imageStackingEnabled: true })
       .styles3Effective,

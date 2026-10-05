@@ -173,7 +173,6 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     setShutterSound,
     location,
     setLocation,
-    photoFormat,
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
@@ -530,8 +529,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
               badge="experimental"
               grouped
               last={!preserveApplePhotographicStyles}
-              description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato, RAW e HEIF+."
-              disabled={photoFormat === "heifPlus"}
+              description="Prepara o HEIF para edição no Fotos, inclusive em Stacking, Live Photo, Retrato e HEIF+. Pausa apenas no RAW comum."
               label="Edição no Fotos da Apple"
               value={preserveApplePhotographicStyles}
               onValueChange={(enabled) => {
@@ -546,7 +544,6 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
                 last
                 label="Compatibilidade com Estilos Fotográficos 3"
                 description="Prepara o HEIF para textura e grão no Fotos. Disponibilidade depende do iPhone e do iOS."
-                disabled={photoFormat === "heifPlus"}
                 value={photographicStyles3Enabled}
                 onValueChange={setPhotographicStyles3Enabled}
               />

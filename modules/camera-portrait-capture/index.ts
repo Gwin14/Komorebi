@@ -47,6 +47,9 @@ export type PortraitCaptureResult = {
 };
 
 export type SaveProcessedPortraitPhotoOptions = {
+  preserveApplePhotographicStyles?: boolean;
+  photographicStyles3Enabled?: boolean;
+  cameraPosition?: "back" | "front";
   processedPhotoUri: string;
   originalPhotoUri?: string | null;
   albumTitle?: string;
@@ -148,6 +151,9 @@ export async function saveProcessedPortraitPhoto(
   }
 
   const result = await nativeModule.saveProcessedPortraitPhoto({
+    preserveApplePhotographicStyles: options.preserveApplePhotographicStyles ?? false,
+    photographicStyles3Enabled: options.photographicStyles3Enabled ?? false,
+    cameraPosition: options.cameraPosition ?? "back",
     processedPhotoUri: options.processedPhotoUri,
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",

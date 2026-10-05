@@ -85,3 +85,22 @@ swiftc modules/shared/PhotoCatalogMetadata.swift scripts/checkDisplayP3.swift -o
 Depois de recompilar o iOS, capturar novas fotos com e sem efeitos e conferir
 `ProfileName = Display P3` no Metapho para HEIC/JPEG. Fotos antigas não são
 alteradas. Validar também cores, orientação, Live Photo e profundidade.
+
+## Estilos Fotográficos
+
+A preferência de edição no Fotos é aplicada após os efeitos à saída HEIF de
+captura comum, todos os modos de Image Stacking, Live Photo, Retrato e HEIF+.
+Styles 3 acompanha a mesma regra. RAW Bayer comum suspende as opções sem
+alterar a preferência; no HEIF+, a origem Bayer é revelada antes dos estilos.
+ProRAW aplica os estilos somente ao companion/derivado processado selecionado.
+O DNG permanece intacto e não recebe estilos.
+
+As preferências e a posição da câmera ficam registradas na captura, inclusive
+no job HEIF+ persistido. O HEIF final não passa por outra gravação de catálogo
+ou conversão, pois isso descartaria o grafo Styles. Recompilar a biblioteca
+Rust e o app iOS para usar a preservação do contêiner HEIF com dados nativos.
+Validar em iPhone os estilos no Fotos, o vídeo vinculado da Live Photo,
+profundidade/matte do Retrato, todas as estratégias de stacking, as variantes
+HEIF+ e recuperação após fechar o app, com e sem efeitos e Styles 3.
+A disponibilidade dos controles no Fotos continua experimental e depende do
+aparelho e iOS, além da validação estrutural do arquivo.
