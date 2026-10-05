@@ -1,4 +1,3 @@
-import CameraPhotographicStyles
 import ExpoModulesCore
 import AVFoundation
 import CoreMotion
@@ -195,31 +194,13 @@ public class CameraLivePhotoModule: Module {
         if preparedPhotoURL != photoURL { try? FileManager.default.removeItem(at: preparedPhotoURL) }
       }
       try PhotoCatalogMetadata.apply(to: preparedPhotoURL, metadata: options["metadata"] as? [String: Any])
-      let stylesEnabled = options["preserveApplePhotographicStyles"] as? Bool == true
-      let finalPhotoURL: URL
-      if stylesEnabled {
-        let result = try await Task.detached(priority: .userInitiated) {
-          try CameraPhotographicStylesModule.makeCompatible(photoUri: preparedPhotoURL.absoluteString, options: [
-            "inputPrepared": true,
-            "enableStyles3": options["photographicStyles3Enabled"] as? Bool ?? false,
-            "cameraPosition": options["cameraPosition"] as? String ?? "back",
-            "metadata": options["metadata"] as? [String: Any] ?? [:],
-            "metadataSourceUri": preparedPhotoURL.absoluteString
-          ])
-        }.value
-        guard let uri = result["photoUri"] as? String, let output = URL(string: uri),
-              result["verified"] as? Bool == true else { throw LivePhotoError.captureFailed }
-        finalPhotoURL = output
-      } else {
-        finalPhotoURL = preparedPhotoURL
-      }
-      defer {
-        if finalPhotoURL != preparedPhotoURL { try? FileManager.default.removeItem(at: finalPhotoURL) }
-      }
+      // Save the prepared native photo/video pair without a synthetic Styles
+      // graph. Such graphs currently fail in Photos' Live Photo editor even
+      // when the still and its pairing identifier pass structural validation.
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
       let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.saveLivePhotoToLibrary(
-        photoURL: finalPhotoURL,
+        photoURL: preparedPhotoURL,
         movieURL: movieURL,
         albumTitle: albumTitle,
         originalFilename: originalFilename

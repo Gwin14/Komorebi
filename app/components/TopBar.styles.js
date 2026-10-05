@@ -1,6 +1,22 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  container: {
+    width: "100%",
+    minHeight: 50,
+  },
+  notice: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  noticeText: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   buttonsContainer: {
     flexDirection: "row",
     width: "100%",

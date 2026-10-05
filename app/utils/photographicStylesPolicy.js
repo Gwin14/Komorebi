@@ -1,8 +1,13 @@
 // Styles belong to the rendered HEIF, never to the sensor data in a DNG.
 const getAppleStylesSuspensionReason = ({
+  livePhotoEnabled = false,
   rawMode = "off",
   heifPlusEnabled = false,
-} = {}) => rawMode === "raw" && !heifPlusEnabled ? "RAW" : null;
+} = {}) => {
+  // The still Styles graph does not yet provide a working Live Photo editor.
+  if (livePhotoEnabled) return "Live Photo";
+  return rawMode === "raw" && !heifPlusEnabled ? "RAW" : null;
+};
 
 const getAppleStylesCompatibility = ({
   preferenceEnabled = false,

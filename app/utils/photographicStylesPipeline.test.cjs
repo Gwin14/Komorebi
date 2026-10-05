@@ -185,9 +185,10 @@ for (const [enabled, styles3Verified, shouldSave] of [
 }
 
 for (const captureMode of ["live", "portrait"]) {
-  test(`${captureMode} passes captured Styles preferences to the native saver`, async () => {
+  test(`${captureMode} uses the correct Styles policy at save time`, async () => {
     const hooks = createHooks();
     const calls = [];
+    const stills = [];
     const { default: useQueue } = loadModule("app/hooks/usePhotoProcessingQueue.js", {
       react: hooks.react,
       "react-native": {
@@ -203,30 +204,45 @@ for (const captureMode of ["live", "portrait"]) {
         saveLivePhotoToLibrary: async (options) => { calls.push(options); return { localIdentifier: "live" }; },
       },
       "../../modules/camera-portrait-capture": {
+        convertPhotoFormat: async ({ photoUri }) => photoUri,
         saveProcessedPortraitPhoto: async (options) => { calls.push(options); return { localIdentifier: "portrait" }; },
       },
-      "../utils/cameraUtils": { applyExifDataToImage: async (uri) => uri },
+      "../utils/cameraUtils": {
+        applyExifDataToImage: async (uri) => uri,
+        cropImageToInverseAspect: async () => "file:///inverse.jpg",
+        copyExifFromImage: async (_, uri) => uri,
+        saveToAlbum: async (_, uri) => { stills.push(uri); return { id: "still" }; },
+      },
       "../utils/komorebiExifMetadata": { saveKomorebiAssetMetadata: async () => {} },
       "../utils/photoIntelligence": { applyPhotoIntelligenceToMetadata: () => ({}) },
       "../utils/projects": {},
-      "../utils/photoCatalogMetadata": {},
+      "../utils/photoCatalogMetadata": {
+        writePhotoCatalogMetadata: async (uri) => uri,
+        deleteCatalogTemporaryPhoto: async () => {},
+      },
     });
     const queue = hooks.render(() => useQueue(true));
     await queue.handleProcessed("file:///effect.jpg", {
       captureMode,
       originalUri: "file:///original.heic",
       ...(captureMode === "live" ? { livePhotoMovieUri: "file:///paired.mov" } : { depthDataEmbedded: true }),
+      // Simulate a Live Photo queued before styles were paused.
+      doubleCaptureMode: captureMode === "live",
+      saveOriginalWithoutEffects: captureMode === "live",
       outputFormat: "heif",
       preserveApplePhotographicStyles: true,
       photographicStyles3Enabled: true,
       cameraPosition: "front",
     });
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].preserveApplePhotographicStyles, true);
-    assert.equal(calls[0].photographicStyles3Enabled, true);
-    assert.equal(calls[0].cameraPosition, "front");
+    assert.equal(calls[0].preserveApplePhotographicStyles, captureMode === "live" ? undefined : true);
+    assert.equal(calls[0].photographicStyles3Enabled, captureMode === "live" ? undefined : true);
+    assert.equal(calls[0].cameraPosition, captureMode === "live" ? undefined : "front");
     assert.equal(calls[0].originalPhotoUri, "file:///original.heic");
-    if (captureMode === "live") assert.equal(calls[0].movieUri, "file:///paired.mov");
+    if (captureMode === "live") {
+      assert.equal(calls[0].movieUri, "file:///paired.mov");
+      assert.deepEqual(stills, ["file:///inverse.jpg", "file:///original.heic"]);
+    }
     hooks.dispose();
   });
 }

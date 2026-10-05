@@ -19,6 +19,10 @@ Use physical devices when validating camera, RAW capture, haptics, media library
 
 Follow the existing JavaScript/React style: functional components, hooks for device/app behavior, and separate `*.styles.js` files for component styles. Use PascalCase for components (`CameraPreview.jsx`), `useCamelCase` for hooks (`useRawCapture.js`), and camelCase for utility modules. Keep native module public APIs in each module's `index.ts`; keep iOS implementation details in `modules/*/ios/`. Run `npm run lint` before handing off changes.
 
+## Camera Notices
+
+Use `useTopBarNotice` and the TopBar notice slot for brief informational messages and warnings on the camera screen. Keep text short and on one line. Notices temporarily replace controls with a fade, then restore them without changing the TopBar height. Keep capture progress and cancellation accessible; actionable permission prompts and dialogs can retain their dedicated UI.
+
 ## Testing Guidelines
 
 There is no dedicated automated test suite yet. For now, combine `npm run lint` with focused manual testing on iOS/Android. Validate the exact feature touched: capture flow, manual controls, LUT processing, EXIF preservation, gallery display, permissions, and error states. If adding tests later, place them near the feature as `*.test.js` or in a local `__tests__/` folder.

@@ -3,7 +3,7 @@ import * as Location from "expo-location";
 import { SymbolView } from "expo-symbols";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Animated as FadeAnimated, Text, TouchableOpacity, View } from "react-native";
 import Popover from "react-native-popover-view";
 import Animated from "react-native-reanimated";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
@@ -58,7 +58,9 @@ export default function TopBar({
   controlsDisabled = false,
   stackingProgress,
   onCancelStacking,
+  notice,
 }) {
+  const noticeVisible = Boolean(notice?.message) && !controlsDisabled;
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
   const [formatOpen, setFormatOpen] = useState(false);
@@ -228,291 +230,316 @@ export default function TopBar({
   };
 
   return (
-    <View style={styles.buttonsContainer}>
-      {controlsDisabled ? (
-        <ImageStackingStatus
-          progress={stackingProgress}
-          onCancel={onCancelStacking}
-        />
-      ) : (
-        topBarControls.map((controlId) => {
-          if (controlId === "stacking" && !imageStackingAvailable) return null;
-          if (controlId === "manual" && !manualControlsAvailable) return null;
-          const control = controlOptions[controlId];
-          if (!control) return null;
+    <View style={styles.container}>
+      <FadeAnimated.View
+        style={[
+          styles.buttonsContainer,
+          noticeVisible && {
+            opacity: notice.opacity.interpolate({
+              inputRange: [0, 1],
+              outputRange: [1, 0],
+            }),
+          },
+        ]}
+        pointerEvents={noticeVisible ? "none" : "auto"}
+        accessibilityElementsHidden={noticeVisible}
+        importantForAccessibility={noticeVisible ? "no-hide-descendants" : "auto"}
+      >
+        {controlsDisabled ? (
+          <ImageStackingStatus
+            progress={stackingProgress}
+            onCancel={onCancelStacking}
+          />
+        ) : (
+          topBarControls.map((controlId) => {
+            if (controlId === "stacking" && !imageStackingAvailable) return null;
+            if (controlId === "manual" && !manualControlsAvailable) return null;
+            const control = controlOptions[controlId];
+            if (!control) return null;
 
-          const disabled =
-            controlsDisabled ||
-            (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
-            (controlId === "manual" && Boolean(unavailableReasons.manual)) ||
-            (controlId === "stacking" && !imageStackingAvailable) ||
-            (controlId === "livePhoto" && !livePhotoAvailable) ||
-            (controlId === "portrait" && !portraitCaptureAvailable);
-          const unavailableReason = unavailableReasons[controlId];
-          const iconColor = control.active ? "#ffaa00" : "white";
+            const disabled =
+              controlsDisabled ||
+              (controlId === "flash" && Boolean(unavailableReasons.flash)) ||
+              (controlId === "manual" && Boolean(unavailableReasons.manual)) ||
+              (controlId === "stacking" && !imageStackingAvailable) ||
+              (controlId === "livePhoto" && !livePhotoAvailable) ||
+              (controlId === "portrait" && !portraitCaptureAvailable);
+            const unavailableReason = unavailableReasons[controlId];
+            const iconColor = control.active ? "#ffaa00" : "white";
 
-          if (controlId === "weather") {
-            return (
-              <View key={controlId}>
-                <Animated.View style={animatedStyle}>
+            if (controlId === "weather") {
+              return (
+                <View key={controlId}>
+                  <Animated.View style={animatedStyle}>
+                    <Popover
+                      isVisible={open}
+                      onRequestClose={() => setOpen(false)}
+                      backgroundStyle={{ backgroundColor: "transparent" }}
+                      popoverStyle={{ backgroundColor: "transparent" }}
+                      from={
+                        <TouchableOpacity
+                          style={styles.controlButton}
+                          onPress={control.onPress}
+                          activeOpacity={0.72}
+                        >
+                          <Ionicons
+                            name={control.icon}
+                            size={26}
+                            color={control.active ? "#ffaa00" : "white"}
+                          />
+                        </TouchableOpacity>
+                      }
+                    >
+                      <PhotoWeather data={data} place={place} />
+                    </Popover>
+                  </Animated.View>
+                </View>
+              );
+            }
+
+            if (controlId === "projects") {
+              return (
+                <View
+                  key={controlId}
+                  style={[
+                    styles.controlButton,
+                    control.active && styles.controlButtonActive,
+                  ]}
+                >
+                  <Animated.View style={animatedStyle}>
+                    <ProjectSelector
+                      projects={projects}
+                      activeProjectId={activeProjectId}
+                      onChangeProject={onChangeProject}
+                      onCreateProject={onCreateProject}
+                      includeNoneOption
+                      noneOptionLabel="Nenhum projeto"
+                      compact
+                      bare
+                      triggerActive={Boolean(activeProjectId)}
+                      triggerIconSize={26}
+                    />
+                  </Animated.View>
+                </View>
+              );
+            }
+
+            if (controlId === "stacking") {
+              return (
+                <View key={controlId}>
+                  <Animated.View style={animatedStyle}>
+                    <Popover
+                      isVisible={stackingOpen}
+                      onRequestClose={() => setStackingOpen(false)}
+                      backgroundStyle={{ backgroundColor: "transparent" }}
+                      popoverStyle={{ backgroundColor: "transparent" }}
+                      from={
+                        <TouchableOpacity
+                          style={[
+                            styles.controlButton,
+                            control.active && styles.controlButtonActive,
+                          ]}
+                          onPress={() => {
+                            if (disabled) {
+                              Alert.alert(
+                                "Recurso indisponível",
+                                unavailableReason ||
+                                  "Os controles ficam bloqueados durante a captura.",
+                              );
+                              return;
+                            }
+                            setStackingOpen(true);
+                          }}
+                          activeOpacity={0.72}
+                          accessibilityState={{ disabled }}
+                        >
+                          <Ionicons
+                            name={control.icon}
+                            size={26}
+                            color={iconColor}
+                          />
+                        </TouchableOpacity>
+                      }
+                    >
+                      <ImageStackingSelector
+                        value={imageStackingStrategyId}
+                        supportedStrategies={imageStackingSupportedStrategies}
+                        disabled={disabled}
+                        onChange={(strategyId) => {
+                          setStackingOpen(false);
+                          onSelectImageStackingStrategy(strategyId);
+                        }}
+                      />
+                    </Popover>
+                  </Animated.View>
+                </View>
+              );
+            }
+
+            if (controlId === "vertical") {
+              return (
+                <View key={controlId}>
+                  <Animated.View style={animatedStyle}>
+                    <Popover
+                      isVisible={aspectRatioOpen}
+                      onRequestClose={() => setAspectRatioOpen(false)}
+                      backgroundStyle={{ backgroundColor: "transparent" }}
+                      popoverStyle={{ backgroundColor: "transparent" }}
+                      from={
+                        <TouchableOpacity
+                          style={[
+                            styles.controlButton,
+                            control.active && styles.controlButtonActive,
+                          ]}
+                          onPress={() => setAspectRatioOpen(true)}
+                          activeOpacity={0.72}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Proporção ${aspectRatio}`}
+                        >
+                          <Text
+                            style={[
+                              styles.aspectRatioLabel,
+                              control.active && styles.aspectRatioLabelActive,
+                            ]}
+                          >
+                            {aspectRatio}
+                          </Text>
+                        </TouchableOpacity>
+                      }
+                    >
+                      <AspectRatioSelector
+                        value={aspectRatio}
+                        disabled={disabled}
+                        onChange={(nextAspectRatio) => {
+                          setAspectRatioOpen(false);
+                          onSelectAspectRatio(nextAspectRatio);
+                        }}
+                      />
+                    </Popover>
+                  </Animated.View>
+                </View>
+              );
+            }
+
+            if (controlId === "rawCapture") {
+              return (
+                <Animated.View key={controlId} style={animatedStyle}>
                   <Popover
-                    isVisible={open}
-                    onRequestClose={() => setOpen(false)}
+                    isVisible={formatOpen}
+                    onRequestClose={() => setFormatOpen(false)}
                     backgroundStyle={{ backgroundColor: "transparent" }}
                     popoverStyle={{ backgroundColor: "transparent" }}
                     from={
                       <TouchableOpacity
-                        style={styles.controlButton}
-                        onPress={control.onPress}
-                        activeOpacity={0.72}
+                        style={[
+                          styles.controlButton,
+                          control.active && styles.controlButtonActive,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Formato de arquivo: ${control.label}`}
+                        onPress={() => setFormatOpen(true)}
                       >
-                        <Ionicons
-                          name={control.icon}
-                          size={26}
-                          color={control.active ? "#ffaa00" : "white"}
-                        />
+                        <View style={styles.rawControl}>
+                          <Ionicons
+                            name={control.icon}
+                            size={26}
+                            color={iconColor}
+                          />
+                          <Text
+                            style={[
+                              styles.rawLabel,
+                              control.active && styles.rawLabelActive,
+                            ]}
+                          >
+                            {control.label}
+                          </Text>
+                        </View>
                       </TouchableOpacity>
                     }
                   >
-                    <PhotoWeather data={data} place={place} />
+                    <FileFormatSelector
+                      rawMode={rawMode}
+                      processedEnabled={processedEnabled}
+                      photoFormat={photoFormat}
+                      rawAvailable={rawCaptureAvailable}
+                      supportedRawModes={supportedRawModes}
+                      heifPlusAvailable={heifPlusAvailable}
+                      unavailableReason={unavailableReasons.rawCapture}
+                      onToggle={onToggleFileFormat}
+                      onSelectPhotoFormat={onSelectPhotoFormat}
+                      onSelectRawMode={onSelectRawMode}
+                    />
                   </Popover>
                 </Animated.View>
-              </View>
-            );
-          }
+              );
+            }
 
-          if (controlId === "projects") {
             return (
-              <View
+              <TouchableOpacity
                 key={controlId}
                 style={[
                   styles.controlButton,
                   control.active && styles.controlButtonActive,
                 ]}
-              >
-                <Animated.View style={animatedStyle}>
-                  <ProjectSelector
-                    projects={projects}
-                    activeProjectId={activeProjectId}
-                    onChangeProject={onChangeProject}
-                    onCreateProject={onCreateProject}
-                    includeNoneOption
-                    noneOptionLabel="Nenhum projeto"
-                    compact
-                    bare
-                    triggerActive={Boolean(activeProjectId)}
-                    triggerIconSize={26}
-                  />
-                </Animated.View>
-              </View>
-            );
-          }
-
-          if (controlId === "stacking") {
-            return (
-              <View key={controlId}>
-                <Animated.View style={animatedStyle}>
-                  <Popover
-                    isVisible={stackingOpen}
-                    onRequestClose={() => setStackingOpen(false)}
-                    backgroundStyle={{ backgroundColor: "transparent" }}
-                    popoverStyle={{ backgroundColor: "transparent" }}
-                    from={
-                      <TouchableOpacity
-                        style={[
-                          styles.controlButton,
-                          control.active && styles.controlButtonActive,
-                        ]}
-                        onPress={() => {
-                          if (disabled) {
-                            Alert.alert(
-                              "Recurso indisponível",
-                              unavailableReason ||
-                                "Os controles ficam bloqueados durante a captura.",
-                            );
-                            return;
-                          }
-                          setStackingOpen(true);
-                        }}
-                        activeOpacity={0.72}
-                        accessibilityState={{ disabled }}
-                      >
-                        <Ionicons
-                          name={control.icon}
-                          size={26}
-                          color={iconColor}
-                        />
-                      </TouchableOpacity>
-                    }
-                  >
-                    <ImageStackingSelector
-                      value={imageStackingStrategyId}
-                      supportedStrategies={imageStackingSupportedStrategies}
-                      disabled={disabled}
-                      onChange={(strategyId) => {
-                        setStackingOpen(false);
-                        onSelectImageStackingStrategy(strategyId);
-                      }}
-                    />
-                  </Popover>
-                </Animated.View>
-              </View>
-            );
-          }
-
-          if (controlId === "vertical") {
-            return (
-              <View key={controlId}>
-                <Animated.View style={animatedStyle}>
-                  <Popover
-                    isVisible={aspectRatioOpen}
-                    onRequestClose={() => setAspectRatioOpen(false)}
-                    backgroundStyle={{ backgroundColor: "transparent" }}
-                    popoverStyle={{ backgroundColor: "transparent" }}
-                    from={
-                      <TouchableOpacity
-                        style={[
-                          styles.controlButton,
-                          control.active && styles.controlButtonActive,
-                        ]}
-                        onPress={() => setAspectRatioOpen(true)}
-                        activeOpacity={0.72}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Proporção ${aspectRatio}`}
-                      >
-                        <Text
-                          style={[
-                            styles.aspectRatioLabel,
-                            control.active && styles.aspectRatioLabelActive,
-                          ]}
-                        >
-                          {aspectRatio}
-                        </Text>
-                      </TouchableOpacity>
-                    }
-                  >
-                    <AspectRatioSelector
-                      value={aspectRatio}
-                      disabled={disabled}
-                      onChange={(nextAspectRatio) => {
-                        setAspectRatioOpen(false);
-                        onSelectAspectRatio(nextAspectRatio);
-                      }}
-                    />
-                  </Popover>
-                </Animated.View>
-              </View>
-            );
-          }
-
-          if (controlId === "rawCapture") {
-            return (
-              <Animated.View key={controlId} style={animatedStyle}>
-                <Popover
-                  isVisible={formatOpen}
-                  onRequestClose={() => setFormatOpen(false)}
-                  backgroundStyle={{ backgroundColor: "transparent" }}
-                  popoverStyle={{ backgroundColor: "transparent" }}
-                  from={
-                    <TouchableOpacity
-                      style={[
-                        styles.controlButton,
-                        control.active && styles.controlButtonActive,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Formato de arquivo: ${control.label}`}
-                      onPress={() => setFormatOpen(true)}
-                    >
-                      <View style={styles.rawControl}>
-                        <Ionicons
-                          name={control.icon}
-                          size={26}
-                          color={iconColor}
-                        />
-                        <Text
-                          style={[
-                            styles.rawLabel,
-                            control.active && styles.rawLabelActive,
-                          ]}
-                        >
-                          {control.label}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
+                onPress={() => {
+                  if (disabled) {
+                    Alert.alert(
+                      "Recurso indisponível",
+                      unavailableReason ||
+                        (controlsDisabled
+                          ? "Os controles ficam bloqueados durante a captura."
+                          : "Este recurso não é compatível com a lente atual."),
+                    );
+                    return;
                   }
-                >
-                  <FileFormatSelector
-                    rawMode={rawMode}
-                    processedEnabled={processedEnabled}
-                    photoFormat={photoFormat}
-                    rawAvailable={rawCaptureAvailable}
-                    supportedRawModes={supportedRawModes}
-                    heifPlusAvailable={heifPlusAvailable}
-                    unavailableReason={unavailableReasons.rawCapture}
-                    onToggle={onToggleFileFormat}
-                    onSelectPhotoFormat={onSelectPhotoFormat}
-                    onSelectRawMode={onSelectRawMode}
-                  />
-                </Popover>
-              </Animated.View>
-            );
-          }
-
-          return (
-            <TouchableOpacity
-              key={controlId}
-              style={[
-                styles.controlButton,
-                control.active && styles.controlButtonActive,
-              ]}
-              onPress={() => {
-                if (disabled) {
-                  Alert.alert(
-                    "Recurso indisponível",
-                    unavailableReason ||
-                      (controlsDisabled
-                        ? "Os controles ficam bloqueados durante a captura."
-                        : "Este recurso não é compatível com a lente atual."),
-                  );
-                  return;
-                }
-                control.onPress?.();
-              }}
-              activeOpacity={0.72}
-              accessibilityState={{ disabled }}
-            >
-              <Animated.View
-                style={[animatedStyle, disabled && styles.disabledControl]}
+                  control.onPress?.();
+                }}
+                activeOpacity={0.72}
+                accessibilityState={{ disabled }}
               >
-                {control.symbol ? (
-                  <SymbolView
-                    name={control.symbol}
-                    size={26}
-                    type="monochrome"
-                    tintColor={iconColor}
-                    resizeMode="scaleAspectFit"
-                    style={styles.symbolButton}
-                    fallback={
-                      <Ionicons
-                        name={control.icon}
-                        size={26}
-                        style={styles.button}
-                        color={iconColor}
-                      />
-                    }
-                  />
-                ) : (
-                  <Ionicons
-                    name={control.icon}
-                    size={26}
-                    style={styles.button}
-                    color={iconColor}
-                  />
-                )}
-              </Animated.View>
-            </TouchableOpacity>
-          );
-        })
+                <Animated.View
+                  style={[animatedStyle, disabled && styles.disabledControl]}
+                >
+                  {control.symbol ? (
+                    <SymbolView
+                      name={control.symbol}
+                      size={26}
+                      type="monochrome"
+                      tintColor={iconColor}
+                      resizeMode="scaleAspectFit"
+                      style={styles.symbolButton}
+                      fallback={
+                        <Ionicons
+                          name={control.icon}
+                          size={26}
+                          style={styles.button}
+                          color={iconColor}
+                        />
+                      }
+                    />
+                  ) : (
+                    <Ionicons
+                      name={control.icon}
+                      size={26}
+                      style={styles.button}
+                      color={iconColor}
+                    />
+                  )}
+                </Animated.View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </FadeAnimated.View>
+      {noticeVisible && (
+        <FadeAnimated.View
+          style={[styles.notice, { opacity: notice.opacity }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.noticeText} numberOfLines={1} ellipsizeMode="tail">
+            {notice.message}
+          </Text>
+        </FadeAnimated.View>
       )}
     </View>
   );

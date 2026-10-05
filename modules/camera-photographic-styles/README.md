@@ -9,13 +9,13 @@ O escritor de contêiner é derivado do `xdremux-core` 0.4.2, do projeto
 VideoToolbox público; Komorebi não incorpora x265 nem APIs privadas da Apple.
 
 A integração é aplicada depois de crop, LUT, grain, halation e EXIF em fotos
-normais, em todos os resultados de Image Stacking, Live Photo, Retrato e HEIF+.
-Apenas RAW Bayer comum suspende a compatibilidade. ProRAW aplica os estilos à
+normais, em todos os resultados de Image Stacking, Retrato e HEIF+.
+Live Photo e RAW Bayer comum suspendem a compatibilidade. ProRAW aplica os estilos à
 foto processada do par ou derivado, quando selecionada; o DNG permanece intacto.
 HEIF+ aplica os estilos à revelação HEIF, inclusive quando usa RAW Bayer como
 fonte. Nenhum DNG recebe um grafo Styles.
 
-Live Photo e Retrato finalizam cor, catálogo e dados de captura antes de
+Retrato finaliza cor, catálogo e dados de captura antes de
 acrescentar Styles e salvar, sem reescrever o HEIF depois. O caminho SDR para
 HEIF orientado em grid preserva os bitstreams e os itens originais, incluindo
 ICC, XMP, MakerNote, vínculo com vídeo e profundidade/matte. HEIF+ registra as
@@ -100,3 +100,14 @@ do Fotos, testar textura e grão, câmera frontal/traseira, LUT e Image Stacking
 autor/tags, dupla captura e original sem efeitos. Confirmar também o vídeo da Live Photo, profundidade/matte do Retrato,
 variantes HEIF+ com recuperação de fila e o companion HEIF de ProRAW. RAW
 comum deve pausar ambas as opções e restaurá-las ao voltar a um modo compatível. O reconhecimento de textura/grão permanece experimental até esse teste.
+
+## Suspensão em Live Photo
+
+A validação estrutural do HEIF e do identificador compartilhado com o MOV não
+comprova compatibilidade com o editor de Live Photos do Fotos. Em teste no
+aparelho, Styles 2 impediu a abertura do editor e Styles 3 causou crash do Fotos.
+Por isso, ambos são suspensos em Live Photo sem mudar as preferências salvas.
+A fila protege também capturas anteriores à suspensão e suas versões
+alternativas/originais. O salvador nativo não injeta Styles no par foto/vídeo.
+A causa precisa ser investigada com os originais HEIC + MOV e o relatório do
+crash; a compatibilidade de edição dentro da Live Photo continua sem suporte.

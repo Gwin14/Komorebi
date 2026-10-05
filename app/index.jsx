@@ -22,6 +22,7 @@ import useFocusBracketing from "./hooks/useFocusBracketing";
 import ManualControlsPanel from "./components/ManualControlsPanel";
 import NativeCapturePreview from "./components/NativeCapturePreview";
 import TopBar from "./components/TopBar";
+import useTopBarNotice from "./hooks/useTopBarNotice";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
 import useCameraActivity from "./hooks/useCameraActivity";
@@ -194,12 +195,14 @@ export default function App() {
         preferenceEnabled:
           Platform.OS === "ios" && preserveApplePhotographicStyles,
         styles3PreferenceEnabled: photographicStyles3Enabled,
+        livePhotoEnabled: livePhoto.enabled,
         heifPlusEnabled: heifPlusPolicy.effective,
         rawMode: heifPlusPolicy.effective
           ? heifPlusPolicy.rawMode
           : rawCapture.rawMode,
       }),
     [
+      livePhoto.enabled,
       preserveApplePhotographicStyles,
       photographicStyles3Enabled,
       rawCapture.rawMode,
@@ -207,6 +210,14 @@ export default function App() {
       heifPlusPolicy.rawMode,
     ],
   );
+  const topBarNotice = useTopBarNotice();
+  const { showNotice: showTopBarNotice } = topBarNotice;
+  useEffect(() => {
+    if (appleStylesCompatibility.suspensionReason) {
+      showTopBarNotice("Estilos Apple pausados");
+    }
+  }, [appleStylesCompatibility.suspensionReason, showTopBarNotice]);
+
   const nativeCaptureMode = imageStacking.enabled
     ? "stacking"
     : livePhoto.enabled
@@ -948,6 +959,7 @@ export default function App() {
   );
 
   const topBarProps = {
+    notice: topBarNotice,
     activeControl,
     doubleCaptureMode,
     firstTime,
@@ -1205,14 +1217,6 @@ export default function App() {
             )}
           </View>
         </GestureDetector>
-      )}
-
-      {appleStylesCompatibility.suspensionReason && (
-        <View style={styles.appleStylesPaused} pointerEvents="none">
-          <Text style={styles.appleStylesPausedText}>
-            Estilos Apple pausados: {appleStylesCompatibility.suspensionReason}
-          </Text>
-        </View>
       )}
 
       {!firstTime &&

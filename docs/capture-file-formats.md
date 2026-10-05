@@ -89,8 +89,8 @@ alteradas. Validar também cores, orientação, Live Photo e profundidade.
 ## Estilos Fotográficos
 
 A preferência de edição no Fotos é aplicada após os efeitos à saída HEIF de
-captura comum, todos os modos de Image Stacking, Live Photo, Retrato e HEIF+.
-Styles 3 acompanha a mesma regra. RAW Bayer comum suspende as opções sem
+captura comum, todos os modos de Image Stacking, Retrato e HEIF+.
+Styles 3 acompanha a mesma regra. Live Photo e RAW Bayer comum suspendem as opções sem
 alterar a preferência; no HEIF+, a origem Bayer é revelada antes dos estilos.
 ProRAW aplica os estilos somente ao companion/derivado processado selecionado.
 O DNG permanece intacto e não recebe estilos.
@@ -104,3 +104,10 @@ profundidade/matte do Retrato, todas as estratégias de stacking, as variantes
 HEIF+ e recuperação após fechar o app, com e sem efeitos e Styles 3.
 A disponibilidade dos controles no Fotos continua experimental e depende do
 aparelho e iOS, além da validação estrutural do arquivo.
+
+Live Photo preserva o par nativo sem Styles. A combinação experimental com
+Styles 2 impediu a edição no Fotos e Styles 3 causou crash em teste no iPhone.
+A suspensão protege novas capturas e jobs em memória, incluindo fotos
+alternativas e originais. Ao sair de Live Photo, os estilos são restaurados
+conforme as preferências salvas. Arquivos já importados com a combinação
+problemática não são alterados por essa correção.

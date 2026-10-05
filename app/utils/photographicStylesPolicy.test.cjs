@@ -20,7 +20,6 @@ test("keeps compatibility enabled for image stacking", () => {
 });
 
 for (const [name, modes] of [
-  ["Live Photo", { livePhotoEnabled: true }],
   ["Retrato", { portraitModeEnabled: true }],
   ["ProRAW", { rawMode: "proRaw" }],
   ["HEIF+ com ProRAW", { rawMode: "proRaw", heifPlusEnabled: true }],
@@ -39,7 +38,7 @@ for (const [name, modes] of [
   });
 }
 
-test("suspends both Styles modes only for ordinary RAW", () => {
+test("suspends both Styles modes for ordinary RAW", () => {
   const result = getAppleStylesCompatibility({
     preferenceEnabled: true,
     styles3PreferenceEnabled: true,
@@ -90,4 +89,17 @@ test("Styles 3 requires both preferences and follows capture suspensions", () =>
       .styles3Effective,
     true,
   );
+});
+
+test("pauses both Styles modes for Live Photo and restores both preferences", () => {
+  const preferences = { preferenceEnabled: true, styles3PreferenceEnabled: true };
+  const paused = getAppleStylesCompatibility({ ...preferences, livePhotoEnabled: true });
+  assert.equal(paused.effective, false);
+  assert.equal(paused.styles3Effective, false);
+  assert.equal(paused.suspensionReason, "Live Photo");
+  assert.equal(paused.preferenceEnabled, true);
+  const restored = getAppleStylesCompatibility({ ...preferences, livePhotoEnabled: false });
+  assert.equal(restored.effective, true);
+  assert.equal(restored.styles3Effective, true);
+  assert.equal(restored.suspensionReason, null);
 });

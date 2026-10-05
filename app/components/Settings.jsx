@@ -529,7 +529,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
               badge="experimental"
               grouped
               last={!preserveApplePhotographicStyles}
-              description="Prepara o HEIF para edição no Fotos, inclusive em Stacking, Live Photo, Retrato e HEIF+. Pausa apenas no RAW comum."
+              description="Prepara o HEIF para edição no Fotos, inclusive em Stacking, Retrato e HEIF+. Pausa em Live Photo e RAW comum."
               label="Edição no Fotos da Apple"
               value={preserveApplePhotographicStyles}
               onValueChange={(enabled) => {

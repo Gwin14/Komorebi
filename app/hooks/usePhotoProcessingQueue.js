@@ -156,10 +156,16 @@ export default function usePhotoProcessingQueue(
         rawDerivativeAspectRatio,
         rawPairEnabled = false,
         outputFormat = "jpeg",
-        preserveApplePhotographicStyles = false,
-        photographicStyles3Enabled = false,
+        preserveApplePhotographicStyles: requestedAppleStyles = false,
+        photographicStyles3Enabled: requestedStyles3 = false,
         cameraPosition = "back",
       } = item;
+      // Guard jobs captured before the Live Photo suspension as well as new
+      // captures, including their alternative/original still variants.
+      const preserveApplePhotographicStyles =
+        requestedAppleStyles && captureMode !== "live" && !livePhotoMovieUri;
+      const photographicStyles3Enabled =
+        preserveApplePhotographicStyles && requestedStyles3;
 
       try {
         if (!hasMediaPermission) return;
@@ -613,9 +619,6 @@ export default function usePhotoProcessingQueue(
             outputFormat,
             originalFilename: primaryFilename,
             metadata: effectiveExifData,
-            preserveApplePhotographicStyles,
-            photographicStyles3Enabled,
-            cameraPosition,
           });
           mainAssetSaved = true;
           await saveMetadataForAsset(result.localIdentifier || localIdentifier);
