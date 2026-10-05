@@ -134,6 +134,8 @@ export default function usePhotoProcessingQueue(
         rawPairEnabled = false,
         outputFormat = "jpeg",
         preserveApplePhotographicStyles = false,
+        photographicStyles3Enabled = false,
+        cameraPosition = "back",
       } = item;
 
       try {
@@ -313,15 +315,21 @@ export default function usePhotoProcessingQueue(
             let result;
             try {
               result = await makePhotoStylesCompatible(p3Uri, {
+                enableStyles3: photographicStyles3Enabled,
+                cameraPosition,
                 metadata: effectiveExifData,
                 metadataSourceUri,
               });
             } finally {
               if (p3Uri !== uri) {
-                await FileSystem.deleteAsync(p3Uri, { idempotent: true }).catch(console.warn);
+                await removeStylesTemporaryFile(p3Uri);
               }
             }
-            if (!result?.verified || !result?.photoUri) {
+            if (
+              !result?.verified ||
+              !result?.photoUri ||
+              (photographicStyles3Enabled && !result.styles3Verified)
+            ) {
               await removeStylesTemporaryFile(result?.photoUri);
               throw new Error(
                 "O HEIF gerado não passou na validação dos Estilos Fotográficos",
@@ -350,7 +358,11 @@ export default function usePhotoProcessingQueue(
           let preparedUri = null;
           try {
             preparedUri = await prepareRegularPhoto(uri, metadataSourceUri);
-            const catalogUri = await writePhotoCatalogMetadata(preparedUri, catalogMetadata);
+            // Both Styles modes write the catalog natively without rewriting
+            // the finished HEIF graph through ImageIO.
+            const catalogUri = preserveApplePhotographicStyles
+              ? preparedUri
+              : await writePhotoCatalogMetadata(preparedUri, catalogMetadata);
             let asset;
             try {
               asset = await saveToAlbum(
@@ -387,7 +399,11 @@ export default function usePhotoProcessingQueue(
               preparedUri &&
               preparedUri !== uri
             ) {
-              await FileSystem.deleteAsync(preparedUri, { idempotent: true }).catch(console.warn);
+              if (preserveApplePhotographicStyles) {
+                await removeStylesTemporaryFile(preparedUri);
+              } else {
+                await FileSystem.deleteAsync(preparedUri, { idempotent: true }).catch(console.warn);
+              }
             }
           }
         };

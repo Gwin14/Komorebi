@@ -11,6 +11,7 @@ const getAppleStylesSuspensionReason = ({
 
 const getAppleStylesCompatibility = ({
   preferenceEnabled = false,
+  styles3PreferenceEnabled = false,
   ...captureModes
 } = {}) => {
   const suspensionReason = getAppleStylesSuspensionReason(captureModes);
@@ -18,6 +19,10 @@ const getAppleStylesCompatibility = ({
   return {
     preferenceEnabled: Boolean(preferenceEnabled),
     effective: Boolean(preferenceEnabled) && suspensionReason === null,
+    styles3Effective:
+      Boolean(preferenceEnabled) &&
+      Boolean(styles3PreferenceEnabled) &&
+      suspensionReason === null,
     suspensionReason: preferenceEnabled ? suspensionReason : null,
   };
 };

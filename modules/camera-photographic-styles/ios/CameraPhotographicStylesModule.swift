@@ -43,6 +43,8 @@ public final class CameraPhotographicStylesModule: Module {
       let metadata = options?["metadata"] as? [String: Any]
       let metadataSourceURL = (options?["metadataSourceUri"] as? String)
         .flatMap { Self.fileURL(from: $0) }
+      let enableStyles3 = options?["enableStyles3"] as? Bool ?? false
+      let cameraPosition = options?["cameraPosition"] as? String ?? "back"
 
       return try await Task.detached(priority: .userInitiated) {
         let preparedInputURL = try Self.prepareInput(
@@ -61,7 +63,29 @@ public final class CameraPhotographicStylesModule: Module {
             from: preparedInputURL.path,
             to: outputURL.path
           )
-          return ["photoUri": outputURL.absoluteString, "verified": true]
+          // Serialize catalog changes into the original HDR XMP, then patch
+          // only its HEIF item. ImageIO must never rewrite this Styles file.
+          if let fields = metadata?["catalogMetadata"] as? [String: Any], !fields.isEmpty {
+            let originalXMP = try XDRemuxBridge.readStylesXMP(from: outputURL.path)
+            guard let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil) else {
+              throw CompatibilityError.metadataWriteFailed
+            }
+            let xmp = try TextureStylesMetadata.catalogPayload(
+              fields: fields, source: source, originalXMP: originalXMP
+            )
+            try XDRemuxBridge.writeStylesXMP(xmp, toFile: outputURL.path)
+          }
+          if enableStyles3 {
+            try XDRemuxBridge.addTextureStylesMetadata(
+              TextureStylesMetadata.make(cameraPosition: cameraPosition),
+              toFile: outputURL.path
+            )
+          }
+          return [
+            "photoUri": outputURL.absoluteString,
+            "verified": true,
+            "styles3Verified": enableStyles3,
+          ]
         } catch {
           try? FileManager.default.removeItem(at: outputURL)
           throw error
@@ -178,9 +202,7 @@ public final class CameraPhotographicStylesModule: Module {
       }
       let candidate = fileURL.standardizedFileURL
       let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
-      guard candidate.deletingLastPathComponent() == temporaryDirectory,
-            candidate.lastPathComponent.hasPrefix("komorebi-styles-"),
-            candidate.pathExtension.lowercased() == "heic" else {
+      guard PhotographicStylesTemporaryFiles.canDelete(candidate, in: temporaryDirectory) else {
         throw CompatibilityError.invalidURL
       }
       guard FileManager.default.fileExists(atPath: candidate.path) else {

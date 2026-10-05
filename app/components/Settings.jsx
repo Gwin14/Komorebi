@@ -177,6 +177,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    setPhotographicStyles3Enabled,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     customLuts,
@@ -520,19 +522,33 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           onValueChange={setLocation}
         />
         {Platform.OS === "ios" && (
-          <CustomToggle
-            badge="experimental"
-            grouped
-            last
-            description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato, RAW e HEIF+."
-            disabled={photoFormat === "heifPlus"}
-            label="Edição no Fotos da Apple"
-            value={preserveApplePhotographicStyles}
-            onValueChange={(enabled) => {
-              setPreserveApplePhotographicStyles(enabled);
-              if (enabled) setSaveAsJpeg(false);
-            }}
-          />
+          <>
+            <CustomToggle
+              badge="experimental"
+              grouped
+              last={!preserveApplePhotographicStyles}
+              description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato, RAW e HEIF+."
+              disabled={photoFormat === "heifPlus"}
+              label="Edição no Fotos da Apple"
+              value={preserveApplePhotographicStyles}
+              onValueChange={(enabled) => {
+                setPreserveApplePhotographicStyles(enabled);
+                if (enabled) setSaveAsJpeg(false);
+              }}
+            />
+            {preserveApplePhotographicStyles && (
+              <CustomToggle
+                badge="experimental"
+                grouped
+                last
+                label="Compatibilidade com Estilos Fotográficos 3"
+                description="Prepara o HEIF para textura e grão no Fotos. Disponibilidade depende do iPhone e do iOS."
+                disabled={photoFormat === "heifPlus"}
+                value={photographicStyles3Enabled}
+                onValueChange={setPhotographicStyles3Enabled}
+              />
+            )}
+          </>
         )}
       </Section>
       {Platform.OS === "ios" && <HeifPlusSettings />}

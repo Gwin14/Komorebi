@@ -29,6 +29,7 @@ export const SETTINGS_STORAGE_KEYS = {
   SAVE_AS_JPEG: "@settings/saveAsJpeg",
   PRESERVE_APPLE_PHOTOGRAPHIC_STYLES:
     "@settings/preserveApplePhotographicStyles",
+  PHOTOGRAPHIC_STYLES_3_ENABLED: "@settings/photographicStyles3Enabled",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
   CUSTOM_LUTS: "@settings/customLuts",
@@ -139,6 +140,10 @@ export async function loadStoredSettings(defaults) {
     preserveApplePhotographicStyles: parseBoolean(
       savedPreserveApplePhotographicStyles,
       defaults.preserveApplePhotographicStyles,
+    ),
+    photographicStyles3Enabled: parseBoolean(
+      stored[keys.PHOTOGRAPHIC_STYLES_3_ENABLED] ?? null,
+      defaults.photographicStyles3Enabled,
     ),
     saveOriginalWithoutEffects: parseBoolean(
       savedSaveOriginalWithLUT,

@@ -3,6 +3,8 @@ import { Platform } from "react-native";
 export type PhotographicStylesCompatibilityResult = {
   photoUri: string;
   verified: boolean;
+  /** Structural verification of texture_styles; Photos decides edit availability. */
+  styles3Verified?: boolean;
 };
 
 export type CatalogMetadata = { author?: string; copyright?: string; tags?: string[]; rating?: number };
@@ -34,6 +36,8 @@ export type PhotographicStylesMetadata = {
 };
 
 export type PhotographicStylesCompatibilityOptions = {
+  enableStyles3?: boolean;
+  cameraPosition?: "back" | "front";
   metadata?: PhotographicStylesMetadata | null;
   metadataSourceUri?: string | null;
 };

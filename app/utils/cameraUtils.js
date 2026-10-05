@@ -141,6 +141,8 @@ export const buildPhotoProcessingData = async ({
   manualSettings = null,
   stackingMetadata = null,
   preserveApplePhotographicStyles = false,
+  photographicStyles3Enabled = false,
+  cameraPosition = "back",
   extraData = {},
 }) => {
   const captureAspectRatio = await resolveCaptureAspectRatio(uri, aspectRatio);
@@ -171,6 +173,8 @@ export const buildPhotoProcessingData = async ({
     aspectRatio: captureAspectRatio,
     captureMode,
     preserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    cameraPosition,
     cube: null,
     halationConfig: null,
     grainConfig: null,
@@ -223,6 +227,8 @@ export const buildPhotoProcessingData = async ({
     aspectRatio: captureAspectRatio,
     captureMode,
     preserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    cameraPosition,
   };
 };
 
@@ -254,6 +260,8 @@ export const takePicture = async ({
   portraitDeviceId = null,
   outputFormat = "jpeg",
   preserveApplePhotographicStyles = false,
+  photographicStyles3Enabled = false,
+  cameraPosition = "back",
   heifPlus = null,
 }) => {
   const normalizedRawMode = toVisionCameraRawMode(rawMode);
@@ -317,6 +325,8 @@ export const takePicture = async ({
           aspectRatio,
           captureMode: "live",
           preserveApplePhotographicStyles,
+          photographicStyles3Enabled,
+          cameraPosition,
           extraData: {
             outputFormat,
             livePhotoMovieUri: livePhoto.movieUri,
@@ -365,6 +375,8 @@ export const takePicture = async ({
           aspectRatio,
           captureMode: "portrait",
           preserveApplePhotographicStyles,
+          photographicStyles3Enabled,
+          cameraPosition,
           extraData: {
             outputFormat,
             localIdentifier: portraitPhoto.localIdentifier,
@@ -493,6 +505,8 @@ export const takePicture = async ({
         captureMode: "standard",
         manualSettings,
         preserveApplePhotographicStyles,
+        photographicStyles3Enabled,
+        cameraPosition,
         extraData: { outputFormat },
       }),
     );

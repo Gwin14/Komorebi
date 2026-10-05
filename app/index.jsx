@@ -81,6 +81,7 @@ export default function App() {
     photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSupport,
     setPreserveApplePhotographicStyles,
     preserveApplePhotographicStyles,
+    photographicStyles3Enabled,
     firstTime,
     loading,
     saveOriginalWithoutEffects,
@@ -178,6 +179,7 @@ export default function App() {
       getAppleStylesCompatibility({
         preferenceEnabled:
           Platform.OS === "ios" && preserveApplePhotographicStyles,
+        styles3PreferenceEnabled: photographicStyles3Enabled,
         livePhotoEnabled: livePhoto.enabled,
         portraitModeEnabled: portraitCapture.enabled,
         rawMode: heifPlusPolicy.effective ? heifPlusPolicy.rawMode : rawCapture.rawMode,
@@ -186,6 +188,7 @@ export default function App() {
       livePhoto.enabled,
       portraitCapture.enabled,
       preserveApplePhotographicStyles,
+      photographicStyles3Enabled,
       rawCapture.rawMode, heifPlusPolicy.effective, heifPlusPolicy.rawMode,
     ],
   );
@@ -590,6 +593,8 @@ export default function App() {
             captureMode: "stacking",
             stackingMetadata: result,
             preserveApplePhotographicStyles: appleStylesCompatibility.effective,
+            photographicStyles3Enabled: appleStylesCompatibility.styles3Effective,
+            cameraPosition: activeLens?.device?.position,
             extraData: {
               outputFormat:
                 Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
@@ -688,6 +693,8 @@ export default function App() {
             ? "heif"
             : "jpeg",
         preserveApplePhotographicStyles: appleStylesCompatibility.effective,
+        photographicStyles3Enabled: appleStylesCompatibility.styles3Effective,
+        cameraPosition: activeLens?.device?.position,
       });
     } catch (error) {
       Alert.alert("Falha na captura HEIF+", String(error.message || error));
@@ -725,6 +732,7 @@ export default function App() {
     saveAsJpeg,
     preserveApplePhotographicStyles,
     appleStylesCompatibility.effective,
+    appleStylesCompatibility.styles3Effective,
     saveOriginalWithoutEffects,
     selectedGrainId,
     selectedHalationId,

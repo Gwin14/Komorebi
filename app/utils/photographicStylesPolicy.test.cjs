@@ -50,3 +50,17 @@ test("restores compatibility without changing the preference", () => {
   assert.equal(restored.effective, true);
   assert.equal(restored.suspensionReason, null);
 });
+
+test("Styles 3 requires both preferences and follows capture suspensions", () => {
+  assert.equal(getAppleStylesCompatibility({ preferenceEnabled: true }).styles3Effective, false);
+  assert.equal(getAppleStylesCompatibility({ styles3PreferenceEnabled: true }).styles3Effective, false);
+  const preferences = { preferenceEnabled: true, styles3PreferenceEnabled: true };
+  assert.equal(getAppleStylesCompatibility(preferences).styles3Effective, true);
+  for (const modes of [
+    { livePhotoEnabled: true }, { portraitModeEnabled: true },
+    { rawMode: "raw" }, { rawMode: "proRaw" },
+  ]) {
+    assert.equal(getAppleStylesCompatibility({ ...preferences, ...modes }).styles3Effective, false);
+  }
+  assert.equal(getAppleStylesCompatibility({ ...preferences, imageStackingEnabled: true }).styles3Effective, true);
+});

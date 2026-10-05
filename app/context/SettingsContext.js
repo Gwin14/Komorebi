@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS = {
   photoFormat: "heif",
   heifPlusSettings: DEFAULT_HEIF_PLUS_SETTINGS,
   preserveApplePhotographicStyles: false,
+  photographicStyles3Enabled: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
   customLuts: [],
@@ -98,6 +99,8 @@ export const SettingsProvider = ({ children }) => {
   const setSaveAsJpeg = (enabled) => setPhotoFormat(enabled ? "jpeg" : "heif");
   const [preserveApplePhotographicStyles, setPreserveApplePhotographicStyles] =
     useState(DEFAULT_SETTINGS.preserveApplePhotographicStyles);
+  const [photographicStyles3Enabled, setPhotographicStyles3Enabled] =
+    useState(DEFAULT_SETTINGS.photographicStyles3Enabled);
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
@@ -140,6 +143,7 @@ export const SettingsProvider = ({ children }) => {
         setPreserveApplePhotographicStyles(
           savedSettings.preserveApplePhotographicStyles,
         );
+        setPhotographicStyles3Enabled(savedSettings.photographicStyles3Enabled);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
@@ -339,6 +343,15 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [preserveApplePhotographicStyles, loading]);
 
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.PHOTOGRAPHIC_STYLES_3_ENABLED,
+        photographicStyles3Enabled.toString(),
+      );
+    }
+  }, [photographicStyles3Enabled, loading]);
+
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
     if (!loading) {
@@ -449,6 +462,8 @@ export const SettingsProvider = ({ children }) => {
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    setPhotographicStyles3Enabled,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     firstTime,
