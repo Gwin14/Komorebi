@@ -623,10 +623,23 @@ export const generateRuntimeHTML = () => `
 
     function processImage({ requestId, base64, cube, halationConfig, grainConfig }) {
       const img = new Image();
-      img.onerror = () => {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', requestId, message: 'Erro ao carregar imagem' }));
+      let settled = false;
+      const finish = (message) => {
+        if (settled) return;
+        settled = true;
+        img.onload = null;
+        img.onerror = null;
+        img.src = '';
+        // The JPEG has been encoded before success. Release the persistent
+        // canvas backing store while the next photo is not being processed.
+        canvas.width = 1;
+        canvas.height = 1;
+        window.ReactNativeWebView.postMessage(JSON.stringify({ ...message, requestId }));
       };
+      const fail = (error) => finish({ type: 'error', message: String(error?.message || error) });
+      img.onerror = () => fail('Erro ao carregar imagem');
       img.onload = () => {
+        try {
         const MAX_DIMENSION = 3000;
         let drawWidth = img.width, drawHeight = img.height;
         if (drawWidth > MAX_DIMENSION || drawHeight > MAX_DIMENSION) {
@@ -638,10 +651,9 @@ export const generateRuntimeHTML = () => `
         canvas.height = drawHeight;
         ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, drawWidth, drawHeight);
 
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-
         if (cube) {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const data = imageData.data;
           const { size, domainMin, domainMax, lut } = cube;
           for (let i = 0; i < data.length; i += 4) {
             const alpha = data[i + 3] / 255;
@@ -670,17 +682,22 @@ export const generateRuntimeHTML = () => `
         }
 
         canvas.toBlob((blob) => {
-          if (!blob) {
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', requestId, message: 'Falha ao processar imagem' }));
-            return;
-          }
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const b64 = reader.result.split(',')[1];
-            window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'success', requestId, data: b64 }));
-          };
-          reader.readAsDataURL(blob);
+          try {
+            if (!blob) { fail('Falha ao processar imagem'); return; }
+            const reader = new FileReader();
+            reader.onerror = () => fail('Falha ao ler imagem processada');
+            reader.onabort = () => fail('Leitura da imagem interrompida');
+            reader.onload = () => {
+              try {
+                const b64 = reader.result.split(',')[1];
+                if (!b64) throw new Error('Imagem processada vazia');
+                finish({ type: 'success', data: b64 });
+              } catch (error) { fail(error); }
+            };
+            reader.readAsDataURL(blob);
+          } catch (error) { fail(error); }
         }, 'image/jpeg', 0.86);
+        } catch (error) { fail(error); }
       };
       img.src = 'data:image/jpeg;base64,' + base64;
     }

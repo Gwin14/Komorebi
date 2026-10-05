@@ -417,7 +417,16 @@ final class MotionBlurAccumulator {
         ])
 
       if reference == nil {
-        guard let first = try? collapse(incoming, context: context) else {
+        // Keep whole pixels inside the source. collapse rounds outward, which
+        // would otherwise add a partially transparent row at fractional edges.
+        let canvas = CGRect(
+          x: ceil(incoming.extent.minX),
+          y: ceil(incoming.extent.minY),
+          width: floor(incoming.extent.maxX) - ceil(incoming.extent.minX),
+          height: floor(incoming.extent.maxY) - ceil(incoming.extent.minY)
+        )
+        guard !canvas.isEmpty,
+              let first = try? collapse(incoming.cropped(to: canvas), context: context) else {
           rejected += 1
           return
         }
@@ -436,30 +445,33 @@ final class MotionBlurAccumulator {
       let alignedExtent = aligned.extent
       let alignedWidthRatio = alignedExtent.width / max(referenceExtent.width, 1)
       let alignedHeightRatio = alignedExtent.height / max(referenceExtent.height, 1)
-      let extent = accumulated.extent
-        .intersection(alignedExtent)
-        .intersection(referenceExtent)
-      guard !extent.isNull,
+      let overlap = alignedExtent.intersection(referenceExtent)
+      guard !overlap.isNull,
             alignedWidthRatio >= 0.65,
             alignedWidthRatio <= 1.5,
             alignedHeightRatio >= 0.65,
             alignedHeightRatio <= 1.5,
-            extent.width >= referenceExtent.width * 0.72,
-            extent.height >= referenceExtent.height * 0.72 else {
+            overlap.width >= referenceExtent.width * 0.72,
+            overlap.height >= referenceExtent.height * 0.72 else {
         rejected += 1
         return
       }
 
       let incomingWeight = 1 / Double(accepted + 1)
-      let average = accumulated.cropped(to: extent)
+      // A transformed frame's bounding box includes transparent corners.
+      // Preserve the previous pixels there and keep the first frame's canvas
+      // fixed so preview updates never change their crop or aspect ratio.
+      let covered = aligned.composited(over: accumulated).cropped(to: referenceExtent)
+      let average = accumulated
         .applyingFilter("CIDissolveTransition", parameters: [
-          "inputTargetImage": aligned.cropped(to: extent),
+          "inputTargetImage": covered,
           "inputTime": incomingWeight
         ])
         .applyingFilter("CIColorClamp", parameters: [
           "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
           "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1)
         ])
+        .cropped(to: referenceExtent)
       guard let collapsed = try? collapse(average, context: context) else {
         rejected += 1
         return

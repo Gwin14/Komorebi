@@ -31,14 +31,15 @@ import { MapViewWeb } from "./MapViewWeb";
 import { useSettings } from "../context/SettingsContext";
 import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
-import { DEFAULT_ALBUM_NAME, getProjectAlbumName } from "../utils/projects";
+import { getProjectAlbumName } from "../utils/projects";
+import { loadGalleryPhotos } from "../utils/galleryPhotos";
 import BackButton from "./BackButton";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
 import ProjectChecklist from "./ProjectChecklist";
 import ProjectSwipeList from "./ProjectSwipeList";
 
-import { readPhotoRating, savePhotoRating } from "../utils/photoCatalogMetadata";
+import { savePhotoRating } from "../utils/photoCatalogMetadata";
 
 const PHOTOS_PER_ROW = 4;
 const INFO_SWIPE_DISTANCE = 56;
@@ -103,12 +104,6 @@ const groupPhotosByDate = (photos) => {
   });
 };
 
-const getKomorebiAlbum = async (project = null) => {
-  const albums = await MediaLibrary.getAlbumsAsync();
-  const albumName = project ? getProjectAlbumName(project) : DEFAULT_ALBUM_NAME;
-  return albums.find((album) => album.title === albumName) || null;
-};
-
 export default function Galery() {
   const { projects, activeProjectId, setProjects } = useSettings();
   const [viewProjectId, setViewProjectId] = useState(activeProjectId);
@@ -117,6 +112,7 @@ export default function Galery() {
     : null;
   const [permission, requestPermission] = MediaLibrary.usePermissions();
   const ratingSavingRef = useRef(false);
+  const photoLoadGeneration = useRef(0);
   const [ratingSaving, setRatingSaving] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,50 +138,16 @@ export default function Galery() {
 
   const loadKomorebiPhotos = useCallback(
     async (project = viewProject, showLoading = true) => {
+      const generation = ++photoLoadGeneration.current;
+      const current = () => generation === photoLoadGeneration.current;
       try {
         if (showLoading) setLoading(true);
-        const album = await getKomorebiAlbum(project);
-        if (!album) {
-          setPhotos([]);
-          return;
-        }
-        const assets = await MediaLibrary.getAssetsAsync({
-          album,
-          mediaType: "photo",
-          sortBy: MediaLibrary.SortBy.creationTime,
-          first: 100,
-        });
-        const resolvedAssets = [];
-        for (let index = 0; index < assets.assets.length; index += 4) {
-          const batch = await Promise.all(
-            assets.assets.slice(index, index + 4).map(async (asset) => {
-              if (!asset?.uri || !asset?.id) return null;
-              if (!asset.uri.startsWith("ph://")) return { ...asset, rating: await readPhotoRating(asset.uri, asset.id) };
-              try {
-                const info = await MediaLibrary.getAssetInfoAsync(asset.id);
-                const uri = info.localUri || asset.uri;
-                return { ...asset, uri, rating: await readPhotoRating(uri, asset.id) };
-              } catch (error) {
-                console.warn(
-                  "Não foi possível carregar o asset da galeria:",
-                  asset.id,
-                  error,
-                );
-                return null;
-              }
-            }),
-          );
-          resolvedAssets.push(
-            ...batch.filter(
-              (asset) => asset && Number.isFinite(asset.creationTime),
-            ),
-          );
-        }
-        setPhotos(resolvedAssets);
+        const resolved = await loadGalleryPhotos(project, current);
+        if (current() && resolved) setPhotos(resolved);
       } catch (error) {
         console.log("Erro ao carregar fotos:", error);
       } finally {
-        if (showLoading) setLoading(false);
+        if (current()) setLoading(false);
       }
     },
     [viewProject],
@@ -197,7 +159,8 @@ export default function Galery() {
       requestPermission();
       return;
     }
-    loadKomorebiPhotos();
+    void loadKomorebiPhotos();
+    return () => { photoLoadGeneration.current += 1; };
   }, [loadKomorebiPhotos, permission, requestPermission]);
 
   useEffect(() => {

@@ -4,6 +4,7 @@ import { parseCubeFile } from "./cubeParser";
 import { AVAILABLE_LUTS } from "./lutCatalog";
 
 const cachedLUTs = {};
+let loadingLUTs = null;
 
 export const addCustomLUT = (id, name, cubeData) => {
   cachedLUTs[id] = cubeData;
@@ -26,7 +27,7 @@ export const loadCustomLUTs = async (customLuts) => {
       const cubeData = parseCubeFile(customLut.content);
       if (cubeData && cubeData.size > 0) {
         cachedLUTs[customLut.id] = cubeData;
-        console.log(`Custom LUT "${customLut.name}" carregado com sucesso`);
+        if (__DEV__) console.log(`Custom LUT "${customLut.name}" carregado com sucesso`);
       } else {
         console.warn(`Custom LUT "${customLut.name}" não pôde ser parseado`);
       }
@@ -44,7 +45,7 @@ export const loadCubeLUT = async (cubeFilePath) => {
     const cubeContent = await FileSystem.readAsStringAsync(asset.localUri);
     const lutData = parseCubeFile(cubeContent);
 
-    console.log(`LUT carregado: ${lutData.size}³ entries`);
+    if (__DEV__) console.log(`LUT carregado: ${lutData.size}³ entries`);
     return lutData;
   } catch (error) {
     console.error("Erro ao carregar LUT:", error);
@@ -52,20 +53,20 @@ export const loadCubeLUT = async (cubeFilePath) => {
   }
 };
 
-export const loadAllLUTs = async () => {
-  console.log("Carregando todos os LUTs...");
-
-  for (const lut of AVAILABLE_LUTS) {
-    if (lut.file && !cachedLUTs[lut.id]) {
-      const lutData = await loadCubeLUT(lut.file);
-      if (lutData) {
-        cachedLUTs[lut.id] = lutData;
-        console.log(`LUT "${lut.name}" carregado com sucesso`);
+export const loadAllLUTs = () => {
+  if (loadingLUTs) return loadingLUTs;
+  // Keep reads sequential to bound parsing memory; share concurrent bootstrap calls.
+  loadingLUTs = (async () => {
+    for (const lut of AVAILABLE_LUTS) {
+      if (lut.file && !cachedLUTs[lut.id]) {
+        const lutData = await loadCubeLUT(lut.file);
+        if (lutData) cachedLUTs[lut.id] = lutData;
       }
     }
-  }
-
-  console.log(`Total de LUTs carregados: ${Object.keys(cachedLUTs).length}`);
+  })().finally(() => {
+    loadingLUTs = null;
+  });
+  return loadingLUTs;
 };
 
 export const getCachedLUT = (lutId) => {

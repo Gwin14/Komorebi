@@ -68,54 +68,66 @@ export default function TopBar({
   const [data, setData] = useState(null);
   const [place, setPlace] = useState(null);
   const [coords, setCoords] = useState(null);
+  const weatherEnabled = !firstTime && topBarControls.includes("weather");
 
   useEffect(() => {
-    if (firstTime) return;
+    if (!weatherEnabled) return;
+    let active = true;
 
-    (async () => {
+    const loadLocation = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
+      if (!active) return;
       if (status !== "granted") {
         console.warn("Permissão de localização negada");
         return;
       }
 
       const loc = await Location.getCurrentPositionAsync({});
+      if (!active) return;
       setCoords({
         lat: loc.coords.latitude,
         lon: loc.coords.longitude,
       });
 
-      console.log("Coords obtidas:", coords);
-    })();
-  }, [firstTime]);
+    };
+    void loadLocation().catch((error) => console.error("Falha ao obter localização do clima:", error));
+    return () => { active = false; };
+  }, [weatherEnabled]);
 
   useEffect(() => {
-    if (!coords) return;
+    if (!coords || !weatherEnabled) return;
+    const controller = new AbortController();
 
     fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat}&longitude=${coords.lon}&current=temperature_2m,cloud_cover,wind_speed_10m,precipitation&daily=sunrise,sunset&timezone=auto`,
+      { signal: controller.signal },
     )
       .then((res) => res.json())
-      .then(setData)
-      .catch(console.error);
-  }, [coords]);
+      .then((json) => { if (!controller.signal.aborted) setData(json); })
+      .catch((error) => { if (!controller.signal.aborted) console.error(error); });
+    return () => controller.abort();
+  }, [coords, weatherEnabled]);
 
   useEffect(() => {
-    if (!coords) return;
+    if (!coords || !weatherEnabled) return;
+    const controller = new AbortController();
 
     fetch(
       `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${coords.lat}&longitude=${coords.lon}&localityLanguage=pt`,
+      { signal: controller.signal },
     )
       .then((res) => res.json())
       .then((json) => {
+        if (controller.signal.aborted) return;
         setPlace({
           city: json.city || json.locality || "Localização desconhecida",
           region: json.principalSubdivision || "",
           country: json.countryName || "",
         });
       })
-      .catch(console.error);
-  }, [coords]);
+      .catch((error) => { if (!controller.signal.aborted) console.error(error); });
+    return () => controller.abort();
+  }, [coords, weatherEnabled]);
 
   const controlOptions = {
     aspectRatio: {

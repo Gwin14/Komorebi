@@ -2,7 +2,12 @@ import { WebView } from "react-native-webview";
 import styles from "./MapViewWeb.styles";
 
 export function MapViewWeb({ latitude, longitude }) {
-  if (typeof latitude !== "number" || typeof longitude !== "number") {
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    Math.abs(latitude) > 90 ||
+    Math.abs(longitude) > 180
+  ) {
     return null;
   }
 
@@ -26,22 +31,41 @@ export function MapViewWeb({ latitude, longitude }) {
             height: 100%;
             margin: 0;
             padding: 0;
-            background: transparent;
+            background: #080808;
           }
 
-          #map{
+          #map {
             border-radius: 12px;
-            }
+          }
 
-            
+          .leaflet-tile-pane {
+            filter: grayscale(1) invert(1) brightness(0.65) contrast(0.9);
+          }
+
+          .photo-location {
+            box-sizing: border-box;
+            border: 2px solid #ffaa00;
+            border-radius: 50%;
+            background: #ffaa00;
+            box-shadow: 0 0 0 6px rgba(255, 170, 0, 0.12), 0 2px 8px #000;
+          }
+
+          .leaflet-control-attribution {
+            background: rgba(8, 8, 8, 0.85) !important;
+            color: #999;
+            font-size: 9px;
+          }
+          .leaflet-control-attribution a {
+            color: #aaa;
+          }
 
           .leaflet-popup-content-wrapper {
-            background: #020617;
-            color: #e5e7eb;
+            background: #111111;
+            color: #e5e5e5;
             border-radius: 12px;
           }
           .leaflet-popup-tip {
-            background: #020617;
+            background: #111111;
           }
         </style>
       </head>
@@ -53,31 +77,31 @@ export function MapViewWeb({ latitude, longitude }) {
 
         <script>
           document.addEventListener("DOMContentLoaded", function () {
-            const map = L.map("map", { zoomControl: false }).setView(
+            const map = L.map("map", { zoomControl: false, attributionControl: true }).setView(
               [${latitude}, ${longitude}],
               15
             );
 
             L.tileLayer(
-              "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+              "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
               {
-                maxZoom: 20,
-                attribution: ""
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
               }
             ).addTo(map);
 
-            const yellowIcon = L.icon({
-              iconUrl: 'data:image/svg+xml;base64,' + btoa('<svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg"><path d="M12.5 0C5.596 0 0 5.596 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.596 19.404 0 12.5 0ZM12.5 18.75C9.048 18.75 6.25 15.952 6.25 12.5C6.25 9.048 9.048 6.25 12.5 6.25C15.952 6.25 18.75 9.048 18.75 12.5C18.75 15.952 15.952 18.75 12.5 18.75Z" fill="#ffaa00"/></svg>'),
-              iconSize: [25, 41],
-              iconAnchor: [12, 41],
-              popupAnchor: [1, -34]
+            const locationIcon = L.divIcon({
+              className: "photo-location",
+              iconSize: [12, 12],
+              iconAnchor: [6, 6],
+              popupAnchor: [0, -12]
             });
 
             L.marker([${latitude}, ${longitude}], {
-              icon: yellowIcon
+              icon: locationIcon
             })
               .addTo(map)
-              .bindPopup("<b>📍 Local da foto</b>");
+              .bindPopup("Local da foto");
           });
         </script>
       </body>
@@ -88,6 +112,8 @@ export function MapViewWeb({ latitude, longitude }) {
     <WebView
       originWhitelist={["*"]}
       source={{ html }}
+      applicationNameForUserAgent="Komorebi (+https://github.com/Gwin14/Komorebi)"
+      cacheEnabled
       javaScriptEnabled
       domStorageEnabled
       style={styles.webView}
