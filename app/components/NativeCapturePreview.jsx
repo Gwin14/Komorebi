@@ -232,7 +232,9 @@ export default function NativeCapturePreview({
         {...(mode === "stacking"
           ? { previewDoubleExposure, previewStacking }
           : {})}
-        {...(mode === "stacking" ? { exposureBias: exposure } : {})}
+        {...(mode === "stacking" || mode === "portrait"
+          ? { exposureBias: exposure }
+          : {})}
         onHistogramUpdated={
           histogramVisible ? handleHistogramUpdated : undefined
         }

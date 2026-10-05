@@ -130,6 +130,7 @@ export const getLocationExif = async (locationEnabled) => {
 
 export const buildPhotoProcessingData = async ({
   uri,
+  originalUri = uri,
   selectedLutId,
   selectedLut,
   selectedGrainId,
@@ -169,7 +170,7 @@ export const buildPhotoProcessingData = async ({
   const noLutData = {
     ...extraData,
     needsProcessing: false,
-    originalUri: uri,
+    originalUri,
     imageUri: croppedUri,
     exifData: baseExifData,
     doubleCaptureMode,
@@ -227,7 +228,7 @@ export const buildPhotoProcessingData = async ({
     exifData: lutExifData,
     doubleCaptureMode,
     saveOriginalWithoutEffects,
-    originalUri: uri,
+    originalUri,
     aspectRatio: captureAspectRatio,
     captureMode,
     preserveApplePhotographicStyles,
@@ -262,6 +263,7 @@ export const takePicture = async ({
   livePhotoDeviceId = null,
   portraitModeEnabled = false,
   portraitDeviceId = null,
+  portraitAperture = 4.5,
   outputFormat = "jpeg",
   preserveApplePhotographicStyles = false,
   photographicStyles3Enabled = false,
@@ -349,6 +351,7 @@ export const takePicture = async ({
       });
       const portraitPhoto = await capturePortraitPhoto({
         deviceId: portraitDeviceId,
+        aperture: portraitAperture,
         flashMode: flash === "on" ? "on" : "off",
         outputFormat,
       });
@@ -378,6 +381,7 @@ export const takePicture = async ({
           saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "portrait",
+          originalUri: normalizeUri(portraitPhoto.originalPhotoUri),
           preserveApplePhotographicStyles,
           photographicStyles3Enabled,
           cameraPosition,
@@ -539,7 +543,7 @@ export const takePicture = async ({
     );
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
-    if (heifPlus) throw error;
+    if (heifPlus || portraitModeEnabled) throw error;
   } finally {
     setIsProcessing(false);
   }

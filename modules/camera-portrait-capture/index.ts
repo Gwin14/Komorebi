@@ -10,6 +10,7 @@ export type PortraitCaptureCapabilities = {
 };
 
 export type PortraitCaptureOptions = {
+  aperture?: number;
   deviceId: string;
   flashMode?: "off" | "on" | "auto";
   outputFormat?: "heif" | "jpeg";
@@ -18,6 +19,7 @@ export type PortraitCaptureOptions = {
 export type PortraitCameraViewProps = ViewProps & {
   deviceId?: string | null;
   zoomFactor?: number;
+  exposureBias?: number;
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
@@ -40,6 +42,7 @@ export type PortraitCameraViewProps = ViewProps & {
 
 export type PortraitCaptureResult = {
   photoUri: string;
+  originalPhotoUri: string;
   localIdentifier: string | null;
   savedToLibrary: boolean;
   depthDataEmbedded: boolean;
@@ -130,12 +133,14 @@ export async function capturePortraitPhoto(
 
   const result = await nativeModule.capturePortraitPhoto({
     deviceId: options.deviceId,
+    aperture: options.aperture ?? 4.5,
     flashMode: options.flashMode ?? "off",
     outputFormat: options.outputFormat ?? "heif",
   });
 
   return {
     photoUri: result.photoUri,
+    originalPhotoUri: result.originalPhotoUri ?? result.photoUri,
     localIdentifier: result.localIdentifier ?? null,
     savedToLibrary: Boolean(result.savedToLibrary),
     depthDataEmbedded: Boolean(result.depthDataEmbedded),

@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { consumePendingLockedCameraCaptures } from "../modules/camera-control-button";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
-import ExposureSlider from "./components/ExposureSlider";
+import PortraitAdjustmentSlider from "./components/PortraitAdjustmentSlider";
 import FocusBracketingPanel from "./components/FocusBracketingPanel";
 import useFocusBracketing from "./hooks/useFocusBracketing";
 import ManualControlsPanel from "./components/ManualControlsPanel";
@@ -741,6 +741,7 @@ export default function App() {
         livePhotoDeviceId: activeLens?.device?.id,
         portraitModeEnabled: portraitCapture.enabled,
         portraitDeviceId: activeLens?.device?.id,
+        portraitAperture: portraitCapture.aperture,
         outputFormat:
           Platform.OS === "ios" &&
           (preserveApplePhotographicStyles || !saveAsJpeg)
@@ -751,7 +752,11 @@ export default function App() {
         cameraPosition: activeLens?.device?.position,
       });
     } catch (error) {
-      Alert.alert("Falha na captura HEIF+", String(error.message || error));
+      if (portraitCapture.enabled) {
+        showTopBarNotice("Falha no retrato. Tente novamente.");
+      } else {
+        Alert.alert("Falha na captura HEIF+", String(error.message || error));
+      }
     } finally {
       captureInFlightRef.current = false;
     }
@@ -779,6 +784,8 @@ export default function App() {
     manual.wbAuto,
     livePhoto.enabled,
     portraitCapture.enabled,
+    portraitCapture.aperture,
+    showTopBarNotice,
     heifPlusPolicy.rawMode,
     heifPlusPolicy.effective,
     heifPlusSettings,
@@ -1276,7 +1283,7 @@ export default function App() {
             focus={focusBracketing}
             disabled={!cameraReady || imageStacking.capturing || isProcessing}
           />
-        ) : manual.manualMode === "manual" && !imageStacking.enabled ? (
+        ) : manual.manualMode === "manual" && !imageStacking.enabled && !portraitCapture.enabled ? (
           <ManualControlsPanel
             manual={manual}
             topBarBelow={topBarBelow}
@@ -1284,7 +1291,8 @@ export default function App() {
             setExposure={setExposure}
           />
         ) : (
-          <ExposureSlider
+          <PortraitAdjustmentSlider
+            portrait={portraitCapture}
             exposure={exposure}
             setExposure={setExposure}
             topBarBelow={topBarBelow}
