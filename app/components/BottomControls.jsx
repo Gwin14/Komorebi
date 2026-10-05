@@ -94,7 +94,9 @@ export default function BottomControls({
     await takePicture();
   };
 
-  const albumName = activeProject ? getProjectAlbumName(activeProject) : "Komorebi";
+  const albumName = activeProject
+    ? getProjectAlbumName(activeProject)
+    : "Komorebi";
   useEffect(() => {
     let active = true;
     const loadLastPhoto = async () => {
@@ -120,7 +122,9 @@ export default function BottomControls({
       }
     };
     void loadLastPhoto();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [galleryRefreshKey, albumName]);
 
   const shutterTranslate = controlsAnim.interpolate({

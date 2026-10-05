@@ -47,6 +47,7 @@ public final class CameraPhotographicStylesModule: Module {
       let cameraPosition = options?["cameraPosition"] as? String ?? "back"
 
       return try await Task.detached(priority: .userInitiated) {
+        defer { VideoToolboxHEVCEncoder.finishConversion() }
         let preparedInputURL = try Self.prepareInput(
           inputURL,
           metadata: metadata,
@@ -226,7 +227,7 @@ public final class CameraPhotographicStylesModule: Module {
   ) throws -> URL {
     guard let source = CGImageSourceCreateWithURL(inputURL as CFURL, nil),
           CGImageSourceGetCount(source) > 0,
-          let sourceType = CGImageSourceGetType(source) else {
+          CGImageSourceGetType(source) != nil else {
       throw CompatibilityError.invalidImage
     }
 
@@ -295,25 +296,28 @@ public final class CameraPhotographicStylesModule: Module {
     properties[kCGImagePropertyGPSDictionary] = gps
     properties[kCGImagePropertyOrientation] = 1
 
-    let fileExtension = inputURL.pathExtension.isEmpty ? "img" : inputURL.pathExtension
+    // Normalize color and capture metadata in one encode before Rust builds
+    // the auxiliary Styles graph. Avoid a separate full-resolution HEIF pass.
+    guard let sourceImage = CGImageSourceCreateImageAtIndex(source, 0, nil),
+          let image = PhotoDisplayP3.convert(sourceImage) else {
+      throw CompatibilityError.invalidImage
+    }
+    var outputProperties = properties as NSDictionary as? [String: Any] ?? [:]
+    PhotoDisplayP3.apply(to: &outputProperties)
+    outputProperties[kCGImageDestinationLossyCompressionQuality as String] = 0.92
     let preparedURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("komorebi-styles-metadata-\(UUID().uuidString)")
-      .appendingPathExtension(fileExtension)
+      .appendingPathExtension("heic")
     guard let destination = CGImageDestinationCreateWithURL(
       preparedURL as CFURL,
-      sourceType,
+      UTType.heic.identifier as CFString,
       1,
       nil
     ) else {
       throw CompatibilityError.metadataWriteFailed
     }
 
-    CGImageDestinationAddImageFromSource(
-      destination,
-      source,
-      0,
-      properties as CFDictionary
-    )
+    CGImageDestinationAddImage(destination, image, outputProperties as CFDictionary)
     guard CGImageDestinationFinalize(destination) else {
       try? FileManager.default.removeItem(at: preparedURL)
       throw CompatibilityError.metadataWriteFailed

@@ -7,15 +7,26 @@ export default function FocusBracketingPanel({ focus, disabled, topBarBelow }) {
   return (
     <View>
       <View style={styles.container}>
-        <FocusFrameCountDial value={focus.config.frameCount} onChange={focus.setFrameCount}
-          disabled={disabled} topBarBelow={topBarBelow} />
+        <FocusFrameCountDial
+          value={focus.config.frameCount}
+          onChange={focus.setFrameCount}
+          disabled={disabled}
+          topBarBelow={topBarBelow}
+        />
         <View style={styles.slider}>
-          <FocusRangeSlider limits={focus.limits} activeEndpoint={focus.activeEndpoint}
-            onChange={focus.adjustEndpoint} disabled={disabled} topBarBelow={topBarBelow} />
+          <FocusRangeSlider
+            limits={focus.limits}
+            activeEndpoint={focus.activeEndpoint}
+            onChange={focus.adjustEndpoint}
+            disabled={disabled}
+            topBarBelow={topBarBelow}
+          />
         </View>
       </View>
       {focus.error && (
-        <Text style={styles.message} accessibilityLiveRegion="polite">{focus.error}</Text>
+        <Text style={styles.message} accessibilityLiveRegion="polite">
+          {focus.error}
+        </Text>
       )}
     </View>
   );

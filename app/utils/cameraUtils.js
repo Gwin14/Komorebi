@@ -6,7 +6,11 @@ import * as piexif from "piexifjs";
 import { Image } from "react-native";
 import { captureLivePhoto } from "../../modules/camera-live-photo";
 import { capturePortraitPhoto } from "../../modules/camera-portrait-capture";
-import { enqueueHeifPlus, listHeifPlusJobs, toVisionCameraRawMode } from "../../modules/camera-raw-capture";
+import {
+  enqueueHeifPlus,
+  listHeifPlusJobs,
+  toVisionCameraRawMode,
+} from "../../modules/camera-raw-capture";
 import { getCachedLUT } from "./lutStore";
 import {
   applyKomorebiMetadataToExifObj,
@@ -391,7 +395,9 @@ export const takePicture = async ({
     }
 
     if (heifPlus && (await listHeifPlusJobs()).length >= 3) {
-      throw new Error("A fila HEIF+ está cheia. Aguarde ou descarte uma captura pendente.");
+      throw new Error(
+        "A fila HEIF+ está cheia. Aguarde ou descarte uma captura pendente.",
+      );
     }
     const additionalExif = await getLocationExif(location);
     const photo = await cameraRef.current.takePhoto({
@@ -405,26 +411,40 @@ export const takePicture = async ({
 
     if (heifPlus) {
       const komorebiMetadata = buildKomorebiExifMetadata({
-        selectedLutId, selectedLut, grainId: selectedGrainId,
-        grainConfig: selectedGrainConfig, halationId: selectedHalationId,
-        halationConfig: selectedHalationConfig, aspectRatio,
-        doubleCaptureMode, captureMode: "heifPlus", manualSettings,
+        selectedLutId,
+        selectedLut,
+        grainId: selectedGrainId,
+        grainConfig: selectedGrainConfig,
+        halationId: selectedHalationId,
+        halationConfig: selectedHalationConfig,
+        aspectRatio,
+        doubleCaptureMode,
+        captureMode: "heifPlus",
+        manualSettings,
       });
       const job = await enqueueHeifPlus(uri, {
         ...heifPlus,
         settings: heifPlus.settings,
         effects: {
           cube: selectedLutId !== "none" ? getCachedLUT(selectedLutId) : null,
-          grainConfig: selectedGrainConfig, halationConfig: selectedHalationConfig,
+          grainConfig: selectedGrainConfig,
+          halationConfig: selectedHalationConfig,
           seed: Math.floor(Math.random() * 100000),
         },
-        exifData: additionalExif, komorebiMetadata,
+        exifData: additionalExif,
+        komorebiMetadata,
         createdAt: komorebiMetadata.createdAt,
-        aspectRatio, doubleCaptureMode: doubleCaptureMode && flash !== "on",
+        aspectRatio,
+        doubleCaptureMode: doubleCaptureMode && flash !== "on",
         saveOriginalWithoutEffects,
-        companionUri: normalizeUri(photo.processedPath || photo.processedPhotoPath) || null,
+        companionUri:
+          normalizeUri(photo.processedPath || photo.processedPhotoPath) || null,
       });
-      setProcessingData({ captureMode: "heifPlus", needsProcessing: false, heifPlusJob: job });
+      setProcessingData({
+        captureMode: "heifPlus",
+        needsProcessing: false,
+        heifPlusJob: job,
+      });
       return;
     }
 

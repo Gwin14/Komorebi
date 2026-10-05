@@ -20,10 +20,10 @@ export default function ImageStackingStatus({ progress, onCancel }) {
         {current.strategyId === "focusBracketing"
           ? `Foto ${current.capturedFrames || 0} de ${current.targetFrames || 0}`
           : current.strategyId === "doubleExposure"
-          ? `${current.capturedFrames || 0}/2`
-          : ["bulb", "motionBlur"].includes(current.strategyId)
-            ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
-            : `${current.acceptedFrames || current.capturedFrames || 0} frames`}
+            ? `${current.capturedFrames || 0}/2`
+            : ["bulb", "motionBlur"].includes(current.strategyId)
+              ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+              : `${current.acceptedFrames || current.capturedFrames || 0} frames`}
       </Text>
       <TouchableOpacity
         onPress={onCancel}

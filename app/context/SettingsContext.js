@@ -7,7 +7,10 @@ import {
 import { getDefaultTopBarControls } from "../utils/topBarControls";
 import { reconcileProjectsWithAlbums } from "../utils/projects";
 
-import { DEFAULT_HEIF_PLUS_SETTINGS, normalizeHeifPlusSettings } from "../utils/heifPlusSettings";
+import {
+  DEFAULT_HEIF_PLUS_SETTINGS,
+  normalizeHeifPlusSettings,
+} from "../utils/heifPlusSettings";
 
 const SettingsContext = createContext(null);
 
@@ -46,7 +49,9 @@ export const DEFAULT_SETTINGS = {
 
 export const SettingsProvider = ({ children }) => {
   const [photoAuthor, setPhotoAuthor] = useState(DEFAULT_SETTINGS.photoAuthor);
-  const [photoCopyright, setPhotoCopyright] = useState(DEFAULT_SETTINGS.photoCopyright);
+  const [photoCopyright, setPhotoCopyright] = useState(
+    DEFAULT_SETTINGS.photoCopyright,
+  );
   const [retroStyle, setRetroStyle] = useState(DEFAULT_SETTINGS.retroStyle);
   const [gridVisible, setGridVisible] = useState(DEFAULT_SETTINGS.gridVisible);
   const [levelVisible, setLevelVisible] = useState(
@@ -90,17 +95,23 @@ export const SettingsProvider = ({ children }) => {
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
   const [heifPlusSupport, setHeifPlusSupport] = useState(null);
   const [photoFormat, setPhotoFormat] = useState(DEFAULT_SETTINGS.photoFormat);
-  const [heifPlusSettings, updateHeifPlusSettings] = useState(DEFAULT_SETTINGS.heifPlusSettings);
-  const heifPlusSaveQueue = useRef(Promise.resolve());
-  const setHeifPlusSettings = (value) => updateHeifPlusSettings((current) =>
-    normalizeHeifPlusSettings(typeof value === "function" ? value(current) : value),
+  const [heifPlusSettings, updateHeifPlusSettings] = useState(
+    DEFAULT_SETTINGS.heifPlusSettings,
   );
+  const heifPlusSaveQueue = useRef(Promise.resolve());
+  const setHeifPlusSettings = (value) =>
+    updateHeifPlusSettings((current) =>
+      normalizeHeifPlusSettings(
+        typeof value === "function" ? value(current) : value,
+      ),
+    );
   const saveAsJpeg = photoFormat === "jpeg";
   const setSaveAsJpeg = (enabled) => setPhotoFormat(enabled ? "jpeg" : "heif");
   const [preserveApplePhotographicStyles, setPreserveApplePhotographicStyles] =
     useState(DEFAULT_SETTINGS.preserveApplePhotographicStyles);
-  const [photographicStyles3Enabled, setPhotographicStyles3Enabled] =
-    useState(DEFAULT_SETTINGS.photographicStyles3Enabled);
+  const [photographicStyles3Enabled, setPhotographicStyles3Enabled] = useState(
+    DEFAULT_SETTINGS.photographicStyles3Enabled,
+  );
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
@@ -402,7 +413,10 @@ export const SettingsProvider = ({ children }) => {
   useEffect(() => {
     if (loading) return;
     void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_AUTHOR, photoAuthor);
-    void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_COPYRIGHT, photoCopyright);
+    void saveStoredSetting(
+      SETTINGS_STORAGE_KEYS.PHOTO_COPYRIGHT,
+      photoCopyright,
+    );
   }, [loading, photoAuthor, photoCopyright]);
 
   useEffect(() => {
@@ -414,13 +428,22 @@ export const SettingsProvider = ({ children }) => {
     if (loading) return;
     // Keep rapid slider updates ordered so an older write cannot replace the latest value.
     heifPlusSaveQueue.current = heifPlusSaveQueue.current
-      .then(() => saveStoredSetting(SETTINGS_STORAGE_KEYS.HEIF_PLUS_SETTINGS, JSON.stringify(heifPlusSettings)))
+      .then(() =>
+        saveStoredSetting(
+          SETTINGS_STORAGE_KEYS.HEIF_PLUS_SETTINGS,
+          JSON.stringify(heifPlusSettings),
+        ),
+      )
       .catch((error) => console.error("Erro ao salvar ajustes HEIF+", error));
   }, [loading, heifPlusSettings]);
 
   const value = {
-    photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSettings,
-    heifPlusSupport, setHeifPlusSupport,
+    photoFormat,
+    setPhotoFormat,
+    heifPlusSettings,
+    setHeifPlusSettings,
+    heifPlusSupport,
+    setHeifPlusSupport,
     photoAuthor,
     setPhotoAuthor,
     photoCopyright,

@@ -160,13 +160,17 @@ export default function Galery() {
       return;
     }
     void loadKomorebiPhotos();
-    return () => { photoLoadGeneration.current += 1; };
+    return () => {
+      photoLoadGeneration.current += 1;
+    };
   }, [loadKomorebiPhotos, permission, requestPermission]);
 
   useEffect(() => {
     if (!permission?.granted) return;
     let previousState = AppState.currentState;
-    const refresh = () => { void loadKomorebiPhotos(undefined, false); };
+    const refresh = () => {
+      void loadKomorebiPhotos(undefined, false);
+    };
     const appSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active" && previousState !== "active") refresh();
       previousState = state;
@@ -204,18 +208,29 @@ export default function Galery() {
         const info = await MediaLibrary.getAssetInfoAsync(assetId);
         refreshedUri = info.localUri || info.uri;
       } catch (error) {
-        console.warn("Classificação salva; não foi possível atualizar a prévia", error);
+        console.warn(
+          "Classificação salva; não foi possível atualizar a prévia",
+          error,
+        );
       }
-      setPhotos((previous) => previous.map((photo) => photo.id === assetId ? { ...photo, rating, uri: refreshedUri || photo.uri } : photo));
+      setPhotos((previous) =>
+        previous.map((photo) =>
+          photo.id === assetId
+            ? { ...photo, rating, uri: refreshedUri || photo.uri }
+            : photo,
+        ),
+      );
     } catch (error) {
       console.warn("Falha ao classificar foto", error);
-      Alert.alert("Não foi possível salvar a classificação", "A nota anterior foi mantida. Verifique a permissão para editar fotos e tente novamente.");
+      Alert.alert(
+        "Não foi possível salvar a classificação",
+        "A nota anterior foi mantida. Verifique a permissão para editar fotos e tente novamente.",
+      );
     } finally {
       ratingSavingRef.current = false;
       setRatingSaving(false);
     }
   };
-
 
   const handleChangeViewProject = useCallback(
     (projectId) => {
@@ -574,7 +589,10 @@ export default function Galery() {
               >
                 <Image source={{ uri: photo.uri }} style={styles.image} />
                 {photo.rating > 0 && (
-                  <View style={styles.ratingBadge}><Ionicons name="star" size={10} color="#ffaa00" /><Text style={styles.ratingBadgeText}>{photo.rating}</Text></View>
+                  <View style={styles.ratingBadge}>
+                    <Ionicons name="star" size={10} color="#ffaa00" />
+                    <Text style={styles.ratingBadgeText}>{photo.rating}</Text>
+                  </View>
                 )}
               </TouchableOpacity>
             ))}
@@ -808,17 +826,59 @@ export default function Galery() {
                   showsVerticalScrollIndicator={false}
                 >
                   <View style={styles.ratingSection}>
-                    <Text style={styles.ratingLabel}>Classificação{selectedPhoto?.rating != null ? ` · ${selectedPhoto.rating}/5` : ""}</Text>
+                    <Text style={styles.ratingLabel}>
+                      Classificação
+                      {selectedPhoto?.rating != null
+                        ? ` · ${selectedPhoto.rating}/5`
+                        : ""}
+                    </Text>
                     <View style={styles.ratingControls}>
-                      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Remover classificação" accessibilityState={{ disabled: ratingSaving, selected: selectedPhoto?.rating === 0 }} disabled={ratingSaving} onPress={() => handleRating(0)} style={styles.ratingClear}>
-                        <MaterialCommunityIcons name="star-off-outline" size={28} color={selectedPhoto?.rating === 0 ? "#ffaa00" : "#aaa"} />
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel="Remover classificação"
+                        accessibilityState={{
+                          disabled: ratingSaving,
+                          selected: selectedPhoto?.rating === 0,
+                        }}
+                        disabled={ratingSaving}
+                        onPress={() => handleRating(0)}
+                        style={styles.ratingClear}
+                      >
+                        <MaterialCommunityIcons
+                          name="star-off-outline"
+                          size={28}
+                          color={
+                            selectedPhoto?.rating === 0 ? "#ffaa00" : "#aaa"
+                          }
+                        />
                       </TouchableOpacity>
                       {[1, 2, 3, 4, 5].map((rating) => (
-                        <TouchableOpacity key={rating} accessibilityRole="button" accessibilityLabel={`Classificar com ${rating} estrelas`} accessibilityState={{ disabled: ratingSaving, selected: selectedPhoto?.rating === rating }} disabled={ratingSaving} onPress={() => handleRating(rating)} style={styles.ratingStar}>
-                          <Ionicons name={(selectedPhoto?.rating ?? 0) >= rating ? "star" : "star-outline"} size={28} color="#ffaa00" />
+                        <TouchableOpacity
+                          key={rating}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Classificar com ${rating} estrelas`}
+                          accessibilityState={{
+                            disabled: ratingSaving,
+                            selected: selectedPhoto?.rating === rating,
+                          }}
+                          disabled={ratingSaving}
+                          onPress={() => handleRating(rating)}
+                          style={styles.ratingStar}
+                        >
+                          <Ionicons
+                            name={
+                              (selectedPhoto?.rating ?? 0) >= rating
+                                ? "star"
+                                : "star-outline"
+                            }
+                            size={28}
+                            color="#ffaa00"
+                          />
                         </TouchableOpacity>
                       ))}
-                      {ratingSaving && <ActivityIndicator size="small" color="#ffaa00" />}
+                      {ratingSaving && (
+                        <ActivityIndicator size="small" color="#ffaa00" />
+                      )}
                     </View>
                   </View>
                   {exifLoading ? (

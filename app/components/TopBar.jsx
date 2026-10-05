@@ -88,10 +88,13 @@ export default function TopBar({
         lat: loc.coords.latitude,
         lon: loc.coords.longitude,
       });
-
     };
-    void loadLocation().catch((error) => console.error("Falha ao obter localização do clima:", error));
-    return () => { active = false; };
+    void loadLocation().catch((error) =>
+      console.error("Falha ao obter localização do clima:", error),
+    );
+    return () => {
+      active = false;
+    };
   }, [weatherEnabled]);
 
   useEffect(() => {
@@ -103,8 +106,12 @@ export default function TopBar({
       { signal: controller.signal },
     )
       .then((res) => res.json())
-      .then((json) => { if (!controller.signal.aborted) setData(json); })
-      .catch((error) => { if (!controller.signal.aborted) console.error(error); });
+      .then((json) => {
+        if (!controller.signal.aborted) setData(json);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
     return () => controller.abort();
   }, [coords, weatherEnabled]);
 
@@ -125,7 +132,9 @@ export default function TopBar({
           country: json.countryName || "",
         });
       })
-      .catch((error) => { if (!controller.signal.aborted) console.error(error); });
+      .catch((error) => {
+        if (!controller.signal.aborted) console.error(error);
+      });
     return () => controller.abort();
   }, [coords, weatherEnabled]);
 
@@ -177,7 +186,18 @@ export default function TopBar({
     },
     rawCapture: {
       icon: rawMode === "off" ? "aperture-outline" : "aperture",
-      label: rawMode !== "off" ? processedEnabled ? photoFormat === "jpeg" ? "RAW+J" : "RAW+H" : "RAW" : photoFormat === "heifPlus" ? "HEIF+" : photoFormat === "heif" ? "HEIF" : "JPEG",
+      label:
+        rawMode !== "off"
+          ? processedEnabled
+            ? photoFormat === "jpeg"
+              ? "RAW+J"
+              : "RAW+H"
+            : "RAW"
+          : photoFormat === "heifPlus"
+            ? "HEIF+"
+            : photoFormat === "heif"
+              ? "HEIF"
+              : "JPEG",
       onPress: () => setFormatOpen(true),
       active: rawMode !== "off",
     },
@@ -388,23 +408,51 @@ export default function TopBar({
           if (controlId === "rawCapture") {
             return (
               <Animated.View key={controlId} style={animatedStyle}>
-                <Popover isVisible={formatOpen} onRequestClose={() => setFormatOpen(false)}
+                <Popover
+                  isVisible={formatOpen}
+                  onRequestClose={() => setFormatOpen(false)}
                   backgroundStyle={{ backgroundColor: "transparent" }}
                   popoverStyle={{ backgroundColor: "transparent" }}
-                  from={<TouchableOpacity style={[styles.controlButton, control.active && styles.controlButtonActive]}
-                    accessibilityRole="button" accessibilityLabel={`Formato de arquivo: ${control.label}`}
-                    onPress={() => setFormatOpen(true)}>
-                    <View style={styles.rawControl}>
-                      <Ionicons name={control.icon} size={26} color={iconColor} />
-                      <Text style={[styles.rawLabel, control.active && styles.rawLabelActive]}>{control.label}</Text>
-                    </View>
-                  </TouchableOpacity>}>
-                  <FileFormatSelector rawMode={rawMode} processedEnabled={processedEnabled}
-                    photoFormat={photoFormat} rawAvailable={rawCaptureAvailable}
-                    supportedRawModes={supportedRawModes} heifPlusAvailable={heifPlusAvailable}
+                  from={
+                    <TouchableOpacity
+                      style={[
+                        styles.controlButton,
+                        control.active && styles.controlButtonActive,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Formato de arquivo: ${control.label}`}
+                      onPress={() => setFormatOpen(true)}
+                    >
+                      <View style={styles.rawControl}>
+                        <Ionicons
+                          name={control.icon}
+                          size={26}
+                          color={iconColor}
+                        />
+                        <Text
+                          style={[
+                            styles.rawLabel,
+                            control.active && styles.rawLabelActive,
+                          ]}
+                        >
+                          {control.label}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  }
+                >
+                  <FileFormatSelector
+                    rawMode={rawMode}
+                    processedEnabled={processedEnabled}
+                    photoFormat={photoFormat}
+                    rawAvailable={rawCaptureAvailable}
+                    supportedRawModes={supportedRawModes}
+                    heifPlusAvailable={heifPlusAvailable}
                     unavailableReason={unavailableReasons.rawCapture}
-                    onToggle={onToggleFileFormat} onSelectPhotoFormat={onSelectPhotoFormat}
-                    onSelectRawMode={onSelectRawMode} />
+                    onToggle={onToggleFileFormat}
+                    onSelectPhotoFormat={onSelectPhotoFormat}
+                    onSelectRawMode={onSelectRawMode}
+                  />
                 </Popover>
               </Animated.View>
             );

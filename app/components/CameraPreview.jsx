@@ -75,7 +75,8 @@ export default function CameraPreview({
   const lastSmileAt = useRef(-Infinity);
   const smileAllowed = useRef(false);
   const onSmileDetectedRef = useRef(onSmileDetected);
-  smileAllowed.current = isActive && smileDetectionEnabled && !compositionScan?.busy;
+  smileAllowed.current =
+    isActive && smileDetectionEnabled && !compositionScan?.busy;
   onSmileDetectedRef.current = onSmileDetected;
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [histogramBins, setHistogramBins] = useState(EMPTY_HISTOGRAM);
@@ -318,12 +319,13 @@ export default function CameraPreview({
   // obturador travado no AVCaptureDevice — só a captura "binned" (resolução
   // normal) respeita o lock manual de forma confiável.
   const formatFilters = useMemo(
-    () => getCameraFormatFilters({
-      sensorAspectRatio: getSensorAspectRatio(aspectRatio),
-      rawPhotoMode,
-      manualPhotoMode,
-      frameProcessorActive,
-    }),
+    () =>
+      getCameraFormatFilters({
+        sensorAspectRatio: getSensorAspectRatio(aspectRatio),
+        rawPhotoMode,
+        manualPhotoMode,
+        frameProcessorActive,
+      }),
     [aspectRatio, frameProcessorActive, manualPhotoMode, rawPhotoMode],
   );
   const format = useCameraFormat(device, formatFilters);
@@ -341,7 +343,6 @@ export default function CameraPreview({
     ) {
       lastSmileAt.current = now;
       onSmileDetectedRef.current?.();
-
     }
   }, []);
 
@@ -416,15 +417,24 @@ export default function CameraPreview({
     }, delay);
   }, [cameraScale, transitionOpacity]);
 
-  const handleCameraInitialized = useCallback((capabilities) => {
-    onRawCapabilities?.(capabilities);
-    console.log("[ZebraDebug][preview] onInitialized", {
-      deviceId: device?.id ?? null,
-      position: device?.position ?? null,
-    });
-    onCameraReady?.();
-    finishCameraTransition();
-  }, [device?.id, device?.position, finishCameraTransition, onCameraReady, onRawCapabilities]);
+  const handleCameraInitialized = useCallback(
+    (capabilities) => {
+      onRawCapabilities?.(capabilities);
+      console.log("[ZebraDebug][preview] onInitialized", {
+        deviceId: device?.id ?? null,
+        position: device?.position ?? null,
+      });
+      onCameraReady?.();
+      finishCameraTransition();
+    },
+    [
+      device?.id,
+      device?.position,
+      finishCameraTransition,
+      onCameraReady,
+      onRawCapabilities,
+    ],
+  );
 
   const handleCameraError = useCallback(
     (error) => {

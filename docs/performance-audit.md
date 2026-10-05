@@ -42,22 +42,22 @@ com conteúdo idêntico. Nenhuma dependência será atualizada por idade.
 
 ## Diagnóstico antes das alterações
 
-| Prioridade | Evidência | Ação / risco |
-| --- | --- | --- |
-| Alta | `isActive` e botões físicos não dependem do foco/foreground | Unificar elegibilidade da tela; validar retorno e handoff no aparelho |
-| Alta | WebView lê ImageData mesmo sem LUT; canvas mantém a última foto; exceções do callback podem não responder | Evitar cópia sem uso, liberar superfícies e responder falhas; preservar pixels e codecs |
-| Alta | Galeria continua I/O e pode publicar resultado antigo após trocar projeto | Invalidar carregamentos antigos entre lotes; preservar seleção atual |
-| Média | Vários hooks assinam DeviceMotion; intervalo global disputado pelo nível | Uma assinatura, menor intervalo requerido, parar sem consumidores/background |
-| Média | Carregamentos simultâneos dos LUTs repetem leitura/parsing | Compartilhar promessa em andamento, manter retry após falha |
-| Média | Configurações fazem 29 getItem em três fases | Uma leitura multiGet mantendo defaults e migração |
-| Média | Scan aquece modelo com tela inativa; captura/análise canceladas podem aguardar trabalho nativo | Restringir início do warmup à tela ativa; documentar inferência não abortável |
-| Média | Clima pede GPS/rede mesmo com controle oculto | Carregar somente com controle habilitado; cancelar rede e descartar respostas antigas |
-| Média | Native effect renderer retém LUT em Double e RGBA; fila principal pode acumular imagens prontas | Remover retenção redundante e manter backpressure até apresentação |
-| Futura | Crop JPEG 0,86, EXIF base64, conversão final e metadados geram múltiplas passagens | Pipeline nativo único requer comparação de pixels/EXIF/P3/depth; não trocar nesta etapa |
-| Futura | MiniCPM retém modelo do Scan e recria modelo por foto por isolamento do estado recorrente | Cancelamento cooperativo e política de memória exigem testes do runtime |
-| Futura | Ajustes manuais têm chamadas frequentes e catches silenciosos | Serialização precisa preservar pares ISO/shutter e reaplicação por lente |
-| Futura | Startup espera reconciliação de álbuns; contexto de preferências amplo | Separar sem sobrescrever edição durante restore; medir antes |
-| Futura | PNG do splash tem 4,84 MB; LUTs 6,9 MB | Não recomprimir com perda nem remover assets sem validação visual |
+| Prioridade | Evidência                                                                                                 | Ação / risco                                                                            |
+| ---------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Alta       | `isActive` e botões físicos não dependem do foco/foreground                                               | Unificar elegibilidade da tela; validar retorno e handoff no aparelho                   |
+| Alta       | WebView lê ImageData mesmo sem LUT; canvas mantém a última foto; exceções do callback podem não responder | Evitar cópia sem uso, liberar superfícies e responder falhas; preservar pixels e codecs |
+| Alta       | Galeria continua I/O e pode publicar resultado antigo após trocar projeto                                 | Invalidar carregamentos antigos entre lotes; preservar seleção atual                    |
+| Média      | Vários hooks assinam DeviceMotion; intervalo global disputado pelo nível                                  | Uma assinatura, menor intervalo requerido, parar sem consumidores/background            |
+| Média      | Carregamentos simultâneos dos LUTs repetem leitura/parsing                                                | Compartilhar promessa em andamento, manter retry após falha                             |
+| Média      | Configurações fazem 29 getItem em três fases                                                              | Uma leitura multiGet mantendo defaults e migração                                       |
+| Média      | Scan aquece modelo com tela inativa; captura/análise canceladas podem aguardar trabalho nativo            | Restringir início do warmup à tela ativa; documentar inferência não abortável           |
+| Média      | Clima pede GPS/rede mesmo com controle oculto                                                             | Carregar somente com controle habilitado; cancelar rede e descartar respostas antigas   |
+| Média      | Native effect renderer retém LUT em Double e RGBA; fila principal pode acumular imagens prontas           | Remover retenção redundante e manter backpressure até apresentação                      |
+| Futura     | Crop JPEG 0,86, EXIF base64, conversão final e metadados geram múltiplas passagens                        | Pipeline nativo único requer comparação de pixels/EXIF/P3/depth; não trocar nesta etapa |
+| Futura     | MiniCPM retém modelo do Scan e recria modelo por foto por isolamento do estado recorrente                 | Cancelamento cooperativo e política de memória exigem testes do runtime                 |
+| Futura     | Ajustes manuais têm chamadas frequentes e catches silenciosos                                             | Serialização precisa preservar pares ISO/shutter e reaplicação por lente                |
+| Futura     | Startup espera reconciliação de álbuns; contexto de preferências amplo                                    | Separar sem sobrescrever edição durante restore; medir antes                            |
+| Futura     | PNG do splash tem 4,84 MB; LUTs 6,9 MB                                                                    | Não recomprimir com perda nem remover assets sem validação visual                       |
 
 ## Verificação inicial
 
@@ -114,35 +114,35 @@ sorriso usa timestamp, eliminando o timer que sobrevivia à desmontagem.
 
 ### Arquivos modificados
 
-| Arquivo | Motivo |
-| --- | --- |
-| `app/index.jsx` | Atividade dos previews, bloqueio de disparo e botões físicos |
-| `app/hooks/useCameraActivity.js` (novo) | Foco/foreground e cleanup de AppState |
-| `app/hooks/useCompositionScan.js` | Warmup somente ativo e diagnóstico DEV |
-| `app/hooks/useDeviceOrientation.js` | Sensor compartilhado, foco e escrita só ao mudar |
-| `app/utils/deviceMotion.js` (novo) | Adaptação Expo/AppState do sensor compartilhado |
-| `app/utils/motionSubscriptions.js` (novo) | Assinatura única e arbitragem do intervalo |
-| `app/components/CameraLevel.jsx` | Participar da assinatura compartilhada |
-| `app/components/CameraPreview.jsx` | Cooldown sem timer e rejeição de sorriso inativo |
-| `app/components/BottomControls.jsx` | Miniatura sem corrida entre álbuns; remove warning real |
-| `app/components/TopBar.jsx` | Clima sob demanda e cancelamento; remove warning real |
-| `app/components/Galery.jsx` | Invalidação de cargas e publicação somente da geração atual |
-| `app/utils/galleryPhotos.js` (novo) | Pipeline de leitura testável com cancelamento entre lotes |
-| `app/utils/settingsStorage.js` | Leitura agrupada de preferências |
-| `app/utils/lutStore.js` | Deduplicação de carregamentos em andamento |
-| `app/utils/lutProcessingHtml.js` | Evitar cópia inútil, liberar buffers e responder falhas |
-| `app/utils/lutProcessorComponent.js` | Propriedade e validade das requisições/EXIF |
-| `modules/camera-live-photo/ios/LiveEffectPreviewRenderer.swift` | Limitar frames aguardando UI |
-| `package.json` | `npm test` inclui todas as suítes JS, inclusive Composition |
-| `tests/helpers/loadModule.cjs` (novo) | Carrega os fontes reais com adaptadores nativos explícitos |
-| `tests/helpers/hooks.cjs` (novo) | Harness determinístico de hooks para unidades |
-| `tests/performance/motion.test.cjs` (novo) | Assinaturas, frequência e 20 ciclos de background |
-| `tests/performance/loading.test.cjs` (novo) | LUT concorrente/retry e migração de preferências |
-| `tests/performance/effects-runtime.test.cjs` (novo) | Runtime HTML, pixels sintéticos e falhas |
-| `tests/performance/lifecycle.test.cjs` (novo) | Navegação, orientação e concorrência da bridge |
-| `tests/performance/gallery.test.cjs` (novo) | Limites de concorrência e cancelamento da galeria |
-| `tests/performance/weather.test.cjs` (novo) | GPS sob demanda e abort de rede |
-| `docs/performance-audit.md` (novo) | Diagnóstico, evidências e roteiro de validação |
+| Arquivo                                                         | Motivo                                                       |
+| --------------------------------------------------------------- | ------------------------------------------------------------ |
+| `app/index.jsx`                                                 | Atividade dos previews, bloqueio de disparo e botões físicos |
+| `app/hooks/useCameraActivity.js` (novo)                         | Foco/foreground e cleanup de AppState                        |
+| `app/hooks/useCompositionScan.js`                               | Warmup somente ativo e diagnóstico DEV                       |
+| `app/hooks/useDeviceOrientation.js`                             | Sensor compartilhado, foco e escrita só ao mudar             |
+| `app/utils/deviceMotion.js` (novo)                              | Adaptação Expo/AppState do sensor compartilhado              |
+| `app/utils/motionSubscriptions.js` (novo)                       | Assinatura única e arbitragem do intervalo                   |
+| `app/components/CameraLevel.jsx`                                | Participar da assinatura compartilhada                       |
+| `app/components/CameraPreview.jsx`                              | Cooldown sem timer e rejeição de sorriso inativo             |
+| `app/components/BottomControls.jsx`                             | Miniatura sem corrida entre álbuns; remove warning real      |
+| `app/components/TopBar.jsx`                                     | Clima sob demanda e cancelamento; remove warning real        |
+| `app/components/Galery.jsx`                                     | Invalidação de cargas e publicação somente da geração atual  |
+| `app/utils/galleryPhotos.js` (novo)                             | Pipeline de leitura testável com cancelamento entre lotes    |
+| `app/utils/settingsStorage.js`                                  | Leitura agrupada de preferências                             |
+| `app/utils/lutStore.js`                                         | Deduplicação de carregamentos em andamento                   |
+| `app/utils/lutProcessingHtml.js`                                | Evitar cópia inútil, liberar buffers e responder falhas      |
+| `app/utils/lutProcessorComponent.js`                            | Propriedade e validade das requisições/EXIF                  |
+| `modules/camera-live-photo/ios/LiveEffectPreviewRenderer.swift` | Limitar frames aguardando UI                                 |
+| `package.json`                                                  | `npm test` inclui todas as suítes JS, inclusive Composition  |
+| `tests/helpers/loadModule.cjs` (novo)                           | Carrega os fontes reais com adaptadores nativos explícitos   |
+| `tests/helpers/hooks.cjs` (novo)                                | Harness determinístico de hooks para unidades                |
+| `tests/performance/motion.test.cjs` (novo)                      | Assinaturas, frequência e 20 ciclos de background            |
+| `tests/performance/loading.test.cjs` (novo)                     | LUT concorrente/retry e migração de preferências             |
+| `tests/performance/effects-runtime.test.cjs` (novo)             | Runtime HTML, pixels sintéticos e falhas                     |
+| `tests/performance/lifecycle.test.cjs` (novo)                   | Navegação, orientação e concorrência da bridge               |
+| `tests/performance/gallery.test.cjs` (novo)                     | Limites de concorrência e cancelamento da galeria            |
+| `tests/performance/weather.test.cjs` (novo)                     | GPS sob demanda e abort de rede                              |
+| `docs/performance-audit.md` (novo)                              | Diagnóstico, evidências e roteiro de validação               |
 
 Nenhuma dependência de produção foi adicionada/atualizada. Nenhum asset, modo,
 formato, API pública nativa ou funcionalidade foi removido. Isso descreve o escopo
@@ -150,16 +150,16 @@ do diff; preservação visual e funcional no aparelho ainda precisa ser comprova
 
 ## Ganhos verificáveis e limites de medição
 
-| Evidência | Resultado | Tipo |
-| --- | --- | --- |
-| Leitura inicial de preferências | 29 chamadas getItem → 1 multiGet | Contagem no código e teste de adaptador; não é tempo de startup |
-| Três bootstraps concorrentes, dois LUTs | Duas leituras totais; próximas chamadas usam cache | Teste com arquivos simulados |
-| Cinco consumidores de orientação + nível | Uma assinatura nativa, nenhuma em background/sem consumidores | Teste do gerenciador com sensor simulado |
-| Amostras repetidas de orientação | Nenhuma nova escrita de shared value | Teste das quatro orientações e aliases |
-| Carga de galeria cancelada no primeiro lote | Quatro consultas de URI iniciadas, zero leituras de notas, zero lotes seguintes | Teste de 100 fotos simuladas |
-| Processamento sem LUT | Remove uma cópia RGBA de largura × altura × 4 bytes | Cálculo: 27 MB (25,75 MiB) para 3000 × 2250; não RSS do app |
-| Canvas após conclusão/falha | 1 × 1, sem fonte de imagem/handlers retidos | Teste do runtime com canvas simulado |
-| Preview nativo | Próximo frame só é aceito após consumo pela fila principal | Inspeção de sincronização e compilação; sem FPS medido |
+| Evidência                                   | Resultado                                                                       | Tipo                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Leitura inicial de preferências             | 29 chamadas getItem → 1 multiGet                                                | Contagem no código e teste de adaptador; não é tempo de startup |
+| Três bootstraps concorrentes, dois LUTs     | Duas leituras totais; próximas chamadas usam cache                              | Teste com arquivos simulados                                    |
+| Cinco consumidores de orientação + nível    | Uma assinatura nativa, nenhuma em background/sem consumidores                   | Teste do gerenciador com sensor simulado                        |
+| Amostras repetidas de orientação            | Nenhuma nova escrita de shared value                                            | Teste das quatro orientações e aliases                          |
+| Carga de galeria cancelada no primeiro lote | Quatro consultas de URI iniciadas, zero leituras de notas, zero lotes seguintes | Teste de 100 fotos simuladas                                    |
+| Processamento sem LUT                       | Remove uma cópia RGBA de largura × altura × 4 bytes                             | Cálculo: 27 MB (25,75 MiB) para 3000 × 2250; não RSS do app     |
+| Canvas após conclusão/falha                 | 1 × 1, sem fonte de imagem/handlers retidos                                     | Teste do runtime com canvas simulado                            |
+| Preview nativo                              | Próximo frame só é aceito após consumo pela fila principal                      | Inspeção de sincronização e compilação; sem FPS medido          |
 
 Não foram medidos FPS, consumo energético, temperatura, pico de RSS, tempo de
 captura ou inicialização no iPhone. Não há porcentagem de aceleração demonstrada.
@@ -181,15 +181,15 @@ Os bundles Hermes finais ficaram aproximadamente em 7,33 MB (iOS) e 7,32 MB
   fila durável, RAW intacto, retries, LUT tetraédrica, grain determinístico,
   halation, HEIF10 e metadados sem perda.
 - `xcrun swiftc -module-cache-path /tmp/komorebi-p3-cache
-  modules/shared/PhotoCatalogMetadata.swift scripts/checkDisplayP3.swift
-  -o /tmp/komorebi-check-p3 && /tmp/komorebi-check-p3`: passou; conversão dos
+modules/shared/PhotoCatalogMetadata.swift scripts/checkDisplayP3.swift
+-o /tmp/komorebi-check-p3 && /tmp/komorebi-check-p3`: passou; conversão dos
   pixels sRGB → P3, ICC, EXIF e orientação de JPEG/HEIC verificados.
 - `/Users/fabiosantos/.cargo/bin/cargo test --offline --manifest-path
-  modules/camera-photographic-styles/rust/Cargo.toml --target-dir
-  /tmp/komorebi-rust-tests`: 178 passaram; dois diagnósticos locais já marcados
+modules/camera-photographic-styles/rust/Cargo.toml --target-dir
+/tmp/komorebi-rust-tests`: 178 passaram; dois diagnósticos locais já marcados
   `ignored` exigem fixtures externas. Nenhum teste foi desabilitado nesta tarefa.
 - `npx expo export --platform ios --platform android --output-dir
-  /tmp/komorebi-audit-export-final`: passou para ambas as plataformas.
+/tmp/komorebi-audit-export-final`: passou para ambas as plataformas.
 - Build Debug iOS sem assinatura: duas execuções concluíram com
   `BUILD SUCCEEDED` antes da orientação para deixar Xcodebuild com o usuário.
   A validação final assinada e em aparelho fica com o usuário, conforme pedido.
@@ -210,7 +210,6 @@ A segunda revisão corrigiu o catch da WebView para não limpar uma requisição
 nova quando o salvamento antigo falha. O teste reproduz a sequência de promises
 fora de ordem. Não foram encontradas regressões nas verificações automatizadas
 executadas; isso não comprova ausência de regressões no hardware.
-
 
 ## Pendências e próximas otimizações
 
@@ -253,20 +252,20 @@ Pontos restantes, sem alteração arriscada nesta etapa:
 Executar no build final do Xcode, conforme combinado, e registrar aparelho/iOS.
 Cada linha abaixo permanece **pendente**, não é resultado de teste executado.
 
-| Área | Sequência | Aceitação |
-| --- | --- | --- |
-| Inicialização/permissões | Instalação existente e onboarding; negar/conceder permissões; retornar de Ajustes | Mesmos controles e preferências; câmera pronta sem travamento |
-| Lifecycle | Abrir galeria/configurações e voltar 20 vezes; background, bloquear/desbloquear, Central de Controle | Câmera para fora da tela; retoma; botões físicos não disparam fora dela |
-| Captura padrão/manual | Traseira/frontal, todas as lentes; ISO/shutter/WB/foco/EV; flash e sorriso | Preview e exposição corretos, sem disparos duplicados e sem perda de foto |
-| Troca de modos | Padrão → RAW → Live Photo → Retrato → Stacking → padrão, repetir após background | Sem duas sessões concorrentes, câmera preta ou espera permanente |
-| Efeitos | LUT de fábrica/customizado, grain isolado, halation isolado, combinações; capturas repetidas | Cor/textura, crop, dimensões e EXIF iguais à referência; fila termina |
-| Formatos/metadados | JPEG/HEIF/HEIF+, RAW simples/pareado, dupla captura, original e projetos | Todos os arquivos e variantes presentes; P3, GPS e metadados coerentes |
-| Native preview | Efeitos em Live Photo/Retrato/Stacking; abrir painéis durante preview | UI fluida, sem acúmulo contínuo de frames; preview retoma |
-| Scan | Iniciar, mover, receber moldura, alinhar, cancelar, reiniciar; sair durante captura/análise/tracking | Nenhum resultado/zoom antigo; novo Scan funciona; nada salvo pelo Scan |
-| Stacking | Noise/Night, Bulb/Motion Blur, dupla exposição e Focus 3/10/20; cancelar e background | Cancelamento libera câmera e temporários; próxima captura funciona |
-| Galeria | Trocar projetos rapidamente durante carregamento; álbum vazio; notas; editar biblioteca e retornar | Sem fotos/miniaturas do projeto anterior; notas e informações corretas |
-| Clima | Controle oculto/visível; negar GPS; alternar rapidamente e navegar | Sem GPS/rede quando oculto; informação disponível quando habilitado |
-| Recursos | Instruments Allocations/Time Profiler/Energy, idle e 20 ciclos de cada fluxo | Registrar picos/retorno de memória, CPU/GPU e atividade em background |
+| Área                     | Sequência                                                                                            | Aceitação                                                                 |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Inicialização/permissões | Instalação existente e onboarding; negar/conceder permissões; retornar de Ajustes                    | Mesmos controles e preferências; câmera pronta sem travamento             |
+| Lifecycle                | Abrir galeria/configurações e voltar 20 vezes; background, bloquear/desbloquear, Central de Controle | Câmera para fora da tela; retoma; botões físicos não disparam fora dela   |
+| Captura padrão/manual    | Traseira/frontal, todas as lentes; ISO/shutter/WB/foco/EV; flash e sorriso                           | Preview e exposição corretos, sem disparos duplicados e sem perda de foto |
+| Troca de modos           | Padrão → RAW → Live Photo → Retrato → Stacking → padrão, repetir após background                     | Sem duas sessões concorrentes, câmera preta ou espera permanente          |
+| Efeitos                  | LUT de fábrica/customizado, grain isolado, halation isolado, combinações; capturas repetidas         | Cor/textura, crop, dimensões e EXIF iguais à referência; fila termina     |
+| Formatos/metadados       | JPEG/HEIF/HEIF+, RAW simples/pareado, dupla captura, original e projetos                             | Todos os arquivos e variantes presentes; P3, GPS e metadados coerentes    |
+| Native preview           | Efeitos em Live Photo/Retrato/Stacking; abrir painéis durante preview                                | UI fluida, sem acúmulo contínuo de frames; preview retoma                 |
+| Scan                     | Iniciar, mover, receber moldura, alinhar, cancelar, reiniciar; sair durante captura/análise/tracking | Nenhum resultado/zoom antigo; novo Scan funciona; nada salvo pelo Scan    |
+| Stacking                 | Noise/Night, Bulb/Motion Blur, dupla exposição e Focus 3/10/20; cancelar e background                | Cancelamento libera câmera e temporários; próxima captura funciona        |
+| Galeria                  | Trocar projetos rapidamente durante carregamento; álbum vazio; notas; editar biblioteca e retornar   | Sem fotos/miniaturas do projeto anterior; notas e informações corretas    |
+| Clima                    | Controle oculto/visível; negar GPS; alternar rapidamente e navegar                                   | Sem GPS/rede quando oculto; informação disponível quando habilitado       |
+| Recursos                 | Instruments Allocations/Time Profiler/Energy, idle e 20 ciclos de cada fluxo                         | Registrar picos/retorno de memória, CPU/GPU e atividade em background     |
 
 Comparação sugerida: usar o mesmo aparelho, build Release, temperatura inicial,
 cena, lente e configurações. Comparar tempo até preview, latência de captura,

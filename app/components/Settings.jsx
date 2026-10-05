@@ -485,7 +485,10 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           onValueChange={setSaveOriginalWithoutEffects}
         />
       </Section>
-      <Section title="Autoria" description="Incluídos nos metadados das próximas fotos.">
+      <Section
+        title="Autoria"
+        description="Incluídos nos metadados das próximas fotos."
+      >
         <View style={styles.metadataField}>
           <Text style={styles.rowLabel}>Autor</Text>
           <TextInput
@@ -686,7 +689,9 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       </Text>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Na barra</Text>
-        <Text style={styles.sectionDescription}>Arraste pela alça à direita para mudar a ordem.</Text>
+        <Text style={styles.sectionDescription}>
+          Arraste pela alça à direita para mudar a ordem.
+        </Text>
         <TopBarControlList
           controls={topBarControls}
           onChange={setTopBarControls}

@@ -3,11 +3,11 @@
 Amostras fornecidas em 05/10/2026. A identificação abaixo usa o conteúdo dos
 arquivos, não sua ordem no ZIP.
 
-| Arquivo | Resultado informado no Fotos | Styles | Textura | Máscaras 2026 + XMP |
-| --- | --- | --- | --- | --- |
-| `komorebi-styles-969EC8B7-3ABA-4690-AD50-DF3EDC453584.HEIC` | Estilos 2 disponíveis | Versão 15, sem `l` | Ausente | Ausentes |
-| `komorebi-styles-2AC5AB28-9375-42A3-BBE4-CC66968ADA8B.HEIC` | Nenhum estilo disponível | Versão 15, sem `l` | Presente, perfil `iPhone18,1` | Ausentes |
-| `NO_FUSION_1005_001.HEIC` | Estilos 3 disponíveis | Versão 16, `l=false` | Presente, perfil `iPhone19,2` | 12 pares presentes |
+| Arquivo                                                     | Resultado informado no Fotos | Styles               | Textura                       | Máscaras 2026 + XMP |
+| ----------------------------------------------------------- | ---------------------------- | -------------------- | ----------------------------- | ------------------- |
+| `komorebi-styles-969EC8B7-3ABA-4690-AD50-DF3EDC453584.HEIC` | Estilos 2 disponíveis        | Versão 15, sem `l`   | Ausente                       | Ausentes            |
+| `komorebi-styles-2AC5AB28-9375-42A3-BBE4-CC66968ADA8B.HEIC` | Nenhum estilo disponível     | Versão 15, sem `l`   | Presente, perfil `iPhone18,1` | Ausentes            |
+| `NO_FUSION_1005_001.HEIC`                                   | Estilos 3 disponíveis        | Versão 16, `l=false` | Presente, perfil `iPhone19,2` | 12 pares presentes  |
 
 Os dois Komorebi mantêm o mesmo grafo básico: mapa de diferenças de estilo,
 thumbnail linear, sky matte, HDR/tmap, EXIF e plist Styles. O arquivo com modo 3

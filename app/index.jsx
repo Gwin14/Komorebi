@@ -1,7 +1,14 @@
 import { getHeifPlusPolicy } from "./utils/heifPlusSettings";
 import { isHeifPlusAvailable } from "../modules/camera-raw-capture";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Alert, Animated, Platform, Pressable, Text, View } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
@@ -78,7 +85,10 @@ export default function App() {
     photoCopyright,
     location,
     saveAsJpeg,
-    photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSupport,
+    photoFormat,
+    setPhotoFormat,
+    heifPlusSettings,
+    setHeifPlusSupport,
     setPreserveApplePhotographicStyles,
     preserveApplePhotographicStyles,
     photographicStyles3Enabled,
@@ -104,8 +114,7 @@ export default function App() {
     requestMediaPermission,
     requestLocationPermission,
   } = useCameraBootstrap({ customLuts });
-  const cameraFeaturesEnabled =
-    !firstTime && cameraPermission === "granted";
+  const cameraFeaturesEnabled = !firstTime && cameraPermission === "granted";
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -162,15 +171,20 @@ export default function App() {
   const portraitCapture = usePortraitCapture(captureDevice);
   const imageStacking = useImageStacking(captureDevice);
   const focusBracketing = useFocusBracketing({
-    deviceId: captureDevice?.id, zoomFactor: zoom,
+    deviceId: captureDevice?.id,
+    zoomFactor: zoom,
     enabled: imageStacking.strategyId === "focusBracketing",
-    ready: cameraReady, capturing: imageStacking.capturing,
+    ready: cameraReady,
+    capturing: imageStacking.capturing,
   });
   const heifPlusPolicy = getHeifPlusPolicy({
-    photoFormat: rawCapture.processedEnabled ? photoFormat : null, rawMode: rawCapture.rawMode,
+    photoFormat: rawCapture.processedEnabled ? photoFormat : null,
+    rawMode: rawCapture.rawMode,
     capabilities: isHeifPlusAvailable() ? rawCapture.capabilities : null,
-    livePhotoEnabled: livePhoto.enabled, portraitModeEnabled: portraitCapture.enabled,
-    stackingEnabled: imageStacking.enabled, platform: Platform.OS,
+    livePhotoEnabled: livePhoto.enabled,
+    portraitModeEnabled: portraitCapture.enabled,
+    stackingEnabled: imageStacking.enabled,
+    platform: Platform.OS,
   });
   const compositionModel = useCompositionModel();
   const intelligentModelReady = compositionModel.status.state === "ready";
@@ -182,14 +196,18 @@ export default function App() {
         styles3PreferenceEnabled: photographicStyles3Enabled,
         livePhotoEnabled: livePhoto.enabled,
         portraitModeEnabled: portraitCapture.enabled,
-        rawMode: heifPlusPolicy.effective ? heifPlusPolicy.rawMode : rawCapture.rawMode,
+        rawMode: heifPlusPolicy.effective
+          ? heifPlusPolicy.rawMode
+          : rawCapture.rawMode,
       }),
     [
       livePhoto.enabled,
       portraitCapture.enabled,
       preserveApplePhotographicStyles,
       photographicStyles3Enabled,
-      rawCapture.rawMode, heifPlusPolicy.effective, heifPlusPolicy.rawMode,
+      rawCapture.rawMode,
+      heifPlusPolicy.effective,
+      heifPlusPolicy.rawMode,
     ],
   );
   const nativeCaptureMode = imageStacking.enabled
@@ -551,8 +569,15 @@ export default function App() {
       )
         return;
 
-      if (imageStacking.strategyId === "focusBracketing" && !focusBracketing.valid) {
-        Alert.alert("Focus Bracketing", focusBracketing.error || "Ajuste os dois seletores de foco antes de disparar.");
+      if (
+        imageStacking.strategyId === "focusBracketing" &&
+        !focusBracketing.valid
+      ) {
+        Alert.alert(
+          "Focus Bracketing",
+          focusBracketing.error ||
+            "Ajuste os dois seletores de foco antes de disparar.",
+        );
         return;
       }
       stackingStartInFlightRef.current = true;
@@ -593,7 +618,8 @@ export default function App() {
             captureMode: "stacking",
             stackingMetadata: result,
             preserveApplePhotographicStyles: appleStylesCompatibility.effective,
-            photographicStyles3Enabled: appleStylesCompatibility.styles3Effective,
+            photographicStyles3Enabled:
+              appleStylesCompatibility.styles3Effective,
             cameraPosition: activeLens?.device?.position,
             extraData: {
               outputFormat:
@@ -632,7 +658,10 @@ export default function App() {
     }
 
     if (heifPlusPolicy.effective && heifPlusPendingCount >= 3) {
-      Alert.alert("Fila HEIF+ cheia", "Aguarde o processamento ou gerencie as capturas pendentes nas configurações.");
+      Alert.alert(
+        "Fila HEIF+ cheia",
+        "Aguarde o processamento ou gerencie as capturas pendentes nas configurações.",
+      );
       return;
     }
     if (captureInFlightRef.current || isProcessing || !cameraReady) return;
@@ -672,17 +701,27 @@ export default function App() {
         aspectRatio: captureAspectRatio,
         manualSettings,
         rawMode: heifPlusPolicy.rawMode,
-        rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
-        heifPlus: heifPlusPolicy.effective ? {
-          settings: heifPlusSettings,
-          rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
-          projectAlbum: activeProject ? getProjectAlbumName(activeProject) : null,
-          catalogMetadata: { author: photoAuthor, copyright: photoCopyright },
-          intelligence: {
-            generateTags: intelligentModelReady && intelligentTagsEnabled,
-            generateFilename: intelligentModelReady && intelligentFilenameEnabled,
-          },
-        } : null,
+        rawPairEnabled:
+          rawCapture.rawModeEnabled && rawCapture.processedEnabled,
+        heifPlus: heifPlusPolicy.effective
+          ? {
+              settings: heifPlusSettings,
+              rawPairEnabled:
+                rawCapture.rawModeEnabled && rawCapture.processedEnabled,
+              projectAlbum: activeProject
+                ? getProjectAlbumName(activeProject)
+                : null,
+              catalogMetadata: {
+                author: photoAuthor,
+                copyright: photoCopyright,
+              },
+              intelligence: {
+                generateTags: intelligentModelReady && intelligentTagsEnabled,
+                generateFilename:
+                  intelligentModelReady && intelligentFilenameEnabled,
+              },
+            }
+          : null,
         livePhotoEnabled: livePhoto.enabled,
         livePhotoDeviceId: activeLens?.device?.id,
         portraitModeEnabled: portraitCapture.enabled,
@@ -725,10 +764,18 @@ export default function App() {
     manual.wbAuto,
     livePhoto.enabled,
     portraitCapture.enabled,
-    heifPlusPolicy.rawMode, heifPlusPolicy.effective, heifPlusSettings, heifPlusPendingCount,
-    rawCapture.rawModeEnabled, rawCapture.processedEnabled,
-    activeProject, photoAuthor, photoCopyright, intelligentModelReady,
-    intelligentTagsEnabled, intelligentFilenameEnabled,
+    heifPlusPolicy.rawMode,
+    heifPlusPolicy.effective,
+    heifPlusSettings,
+    heifPlusPendingCount,
+    rawCapture.rawModeEnabled,
+    rawCapture.processedEnabled,
+    activeProject,
+    photoAuthor,
+    photoCopyright,
+    intelligentModelReady,
+    intelligentTagsEnabled,
+    intelligentFilenameEnabled,
     saveAsJpeg,
     preserveApplePhotographicStyles,
     appleStylesCompatibility.effective,
@@ -781,7 +828,8 @@ export default function App() {
           stackingRestoreRef.current = null;
           if (previous.rawMode !== "off" && rawCapture.available) {
             rawCapture.setRawMode(previous.rawMode);
-            if (!previous.processedEnabled) rawCapture.toggleFormat("processed");
+            if (!previous.processedEnabled)
+              rawCapture.toggleFormat("processed");
           } else if (previous.livePhoto && livePhoto.available) {
             livePhoto.setEnabled(true);
           } else if (previous.portrait && portraitCapture.available) {
@@ -818,11 +866,20 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (imageStacking.capabilities && imageStacking.strategyId &&
-        !imageStacking.capabilities.supportedStrategies.includes(imageStacking.strategyId)) {
+    if (
+      imageStacking.capabilities &&
+      imageStacking.strategyId &&
+      !imageStacking.capabilities.supportedStrategies.includes(
+        imageStacking.strategyId,
+      )
+    ) {
       void handleSelectImageStackingStrategy(null);
     }
-  }, [imageStacking.capabilities, imageStacking.strategyId, handleSelectImageStackingStrategy]);
+  }, [
+    imageStacking.capabilities,
+    imageStacking.strategyId,
+    handleSelectImageStackingStrategy,
+  ]);
 
   const handleCameraReady = useCallback(() => {
     if (!cameraScreenActive) return;
@@ -853,12 +910,20 @@ export default function App() {
   }, [cameraScreenActive]);
 
   useVolumeShutter({
-    enabled: cameraScreenActive && !firstTime && cameraPermission === "granted" && cameraReady,
+    enabled:
+      cameraScreenActive &&
+      !firstTime &&
+      cameraPermission === "granted" &&
+      cameraReady,
     onVolumeChange: handleTakePicture,
   });
 
   useCameraControlButton({
-    enabled: cameraScreenActive && !firstTime && cameraPermission === "granted" && cameraReady,
+    enabled:
+      cameraScreenActive &&
+      !firstTime &&
+      cameraPermission === "granted" &&
+      cameraReady,
     onPress: handleTakePicture,
   });
 
@@ -934,7 +999,8 @@ export default function App() {
     },
     imageStackingAvailable: imageStacking.available,
     imageStackingStrategyId: imageStacking.strategyId,
-    imageStackingSupportedStrategies: imageStacking.capabilities?.supportedStrategies || [],
+    imageStackingSupportedStrategies:
+      imageStacking.capabilities?.supportedStrategies || [],
     onSelectImageStackingStrategy: handleSelectImageStackingStrategy,
     selectedLutId,
     smileDetectionEnabled,
@@ -1033,12 +1099,17 @@ export default function App() {
               <NativeCapturePreview
                 mode={renderedNativeCaptureMode}
                 isActive={
-                  cameraScreenActive && nativeCaptureMode === renderedNativeCaptureMode &&
+                  cameraScreenActive &&
+                  nativeCaptureMode === renderedNativeCaptureMode &&
                   !cameraHandoffActive
                 }
                 retroStyle={retroStyle}
                 device={activeLens?.device}
-                zoomFactor={renderedNativeCaptureMode === "stacking" ? zoom : activeLens?.zoomFactor}
+                zoomFactor={
+                  renderedNativeCaptureMode === "stacking"
+                    ? zoom
+                    : activeLens?.zoomFactor
+                }
                 flash={flash}
                 onCameraReady={handleCameraReady}
                 gridVisible={gridVisible}
@@ -1081,13 +1152,17 @@ export default function App() {
                 aspectRatio={aspectRatio}
                 availableHeight={previewAvailableHeight}
                 doubleCaptureMode={doubleCaptureMode}
-                isActive={cameraScreenActive && !firstTime && !nativeCaptureMode}
+                isActive={
+                  cameraScreenActive && !firstTime && !nativeCaptureMode
+                }
                 manualPhotoMode={manual.manualMode === "manual"}
                 manualExposureActive={
                   manual.manualMode === "manual" &&
                   (!manual.isoAuto || !manual.shutterAuto)
                 }
-                rawPhotoMode={rawCapture.rawModeEnabled || heifPlusPolicy.effective}
+                rawPhotoMode={
+                  rawCapture.rawModeEnabled || heifPlusPolicy.effective
+                }
                 onRawCapabilities={rawCapture.updateCapabilities}
                 onFocusAtPoint={manual.focusAtPoint}
                 compositionScan={compositionScan}
@@ -1157,7 +1232,11 @@ export default function App() {
                 pressed && styles.permissionButtonPressed,
               ]}
             >
-              <Ionicons name="shield-checkmark-outline" size={19} color="#111" />
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={19}
+                color="#111"
+              />
               <Text style={styles.permissionButtonText}>Conceder acesso</Text>
             </Pressable>
           </View>
@@ -1184,7 +1263,11 @@ export default function App() {
         }
       >
         {imageStacking.strategyId === "focusBracketing" ? (
-          <FocusBracketingPanel topBarBelow={topBarBelow} focus={focusBracketing} disabled={!cameraReady || imageStacking.capturing || isProcessing} />
+          <FocusBracketingPanel
+            topBarBelow={topBarBelow}
+            focus={focusBracketing}
+            disabled={!cameraReady || imageStacking.capturing || isProcessing}
+          />
         ) : manual.manualMode === "manual" && !imageStacking.enabled ? (
           <ManualControlsPanel
             manual={manual}
@@ -1225,11 +1308,17 @@ export default function App() {
         availableLuts={availableLuts}
         availableGrains={AVAILABLE_GRAINS}
         availableHalations={AVAILABLE_HALATIONS}
-        isProcessing={isProcessing || (heifPlusPolicy.effective && heifPlusPendingCount >= 3)}
+        isProcessing={
+          isProcessing ||
+          (heifPlusPolicy.effective && heifPlusPendingCount >= 3)
+        }
         showProcessingFeedback={
           isProcessing && (!imageStacking.capturing || stackingFinishing)
         }
-        processingQueueLength={Math.max(processingQueue.length, heifPlusPendingCount)}
+        processingQueueLength={Math.max(
+          processingQueue.length,
+          heifPlusPendingCount,
+        )}
         galleryRefreshKey={galleryRefreshKey}
         activeProject={activeProject}
         imageStackingCapturing={imageStacking.capturing}

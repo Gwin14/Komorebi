@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import { Platform, View, type ViewProps } from "react-native";
 
-export type ImageStackingStrategyId = "bulb" | "motionBlur" | "doubleExposure" | "focusBracketing";
+export type ImageStackingStrategyId =
+  "bulb" | "motionBlur" | "doubleExposure" | "focusBracketing";
 
 export type FocusBracketingMetadata = {
   nearLensPosition: number;
@@ -169,7 +170,8 @@ export async function setImageStackingFocus(
   deviceId: string,
   lensPosition: number | null,
 ): Promise<number> {
-  if (!nativeModule) throw new Error("CameraImageStacking native module is not available");
+  if (!nativeModule)
+    throw new Error("CameraImageStacking native module is not available");
   return nativeModule.setImageStackingFocus(deviceId, lensPosition);
 }
 

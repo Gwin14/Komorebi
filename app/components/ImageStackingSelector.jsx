@@ -10,12 +10,19 @@ const MODES = [
   { id: "doubleExposure", label: "Dupla exposição", icon: "copy-outline" },
 ];
 
-export default function ImageStackingSelector({ value, onChange, disabled, supportedStrategies = [] }) {
+export default function ImageStackingSelector({
+  value,
+  onChange,
+  disabled,
+  supportedStrategies = [],
+}) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Modo de captura</Text>
       <View style={styles.options}>
-        {MODES.filter((mode) => mode.id === null || supportedStrategies.includes(mode.id)).map((mode) => {
+        {MODES.filter(
+          (mode) => mode.id === null || supportedStrategies.includes(mode.id),
+        ).map((mode) => {
           const active = value === mode.id;
           return (
             <TouchableOpacity
