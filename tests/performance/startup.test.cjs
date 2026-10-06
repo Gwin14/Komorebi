@@ -123,7 +123,7 @@ test("camera settings are available while slow album maintenance is still pendin
 
 test("viewfinder remains opaque beneath its startup mask while controls can fade", () => {
   const progress = { interpolate: () => 1 };
-  const startup = { progress, pulse: 0.6, complete: false };
+  const startup = { loading: true, progress, pulse: 0.6, complete: false };
   const Controls = loadModule("app/components/CameraStartupControls.jsx", {
     react: {},
     "react-native": {
@@ -137,7 +137,57 @@ test("viewfinder remains opaque beneath its startup mask while controls can fade
   assert.equal(preview.type, "NativeView");
   assert.equal(preview.props.style, undefined);
   assert.equal(mask.props.style[1].opacity, 1);
+  // Missing camera-ready events must not leave an opaque mask over live frames.
+  const restored = Controls({
+    startup: { ...startup, loading: false },
+    kind: "viewfinder",
+    children: "Camera",
+  });
+  assert.equal(restored.props.children[1], false);
+  assert.equal(restored.props.children[0].props.pointerEvents, "none");
   const topBar = Controls({ startup, kind: "top", children: "TopBar" });
   assert.equal(topBar.props.children[0].type, "AnimatedView");
   assert.equal(topBar.props.children[0].props.style.opacity, progress);
+});
+
+test("camera permission is available while photo and location queries are pending or fail", async (t) => {
+  const hooks = createHooks();
+  t.after(() => hooks.dispose());
+  const media = deferred();
+  const location = deferred();
+  const errors = [];
+  const originalError = console.error;
+  console.error = (...args) => errors.push(args);
+  t.after(() => { console.error = originalError; });
+  const useBootstrap = loadModule("app/hooks/useCameraBootstrap.js", {
+    react: hooks.react,
+    "react-native": {
+      AppState: { addEventListener: () => ({ remove() {} }) },
+      Linking: { openSettings: async () => {} },
+    },
+    "react-native-vision-camera": {
+      Camera: { getCameraPermissionStatus: () => "granted" },
+    },
+    "expo-media-library": { getPermissionsAsync: () => media.promise },
+    "expo-location": { getForegroundPermissionsAsync: () => location.promise },
+    "../utils/lutProcessor": {
+      loadAllLUTs: async () => {},
+      loadCustomLUTs: async () => {},
+    },
+  }).default;
+  const customLuts = [];
+  const render = () => hooks.render(() => useBootstrap({ customLuts }));
+  render();
+  await flush();
+  const pending = render();
+  assert.equal(pending.cameraPermission, "granted");
+  assert.equal(pending.mediaPermission, null);
+  assert.equal(pending.locationPermission, null);
+  media.reject(new Error("Synthetic library failure"));
+  location.resolve({ status: "denied", granted: false });
+  await flush();
+  const settled = render();
+  assert.equal(settled.cameraPermission, "granted");
+  assert.equal(settled.locationPermission.status, "denied");
+  assert.equal(errors.length, 1);
 });

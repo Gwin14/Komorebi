@@ -78,5 +78,5 @@ export default function useCameraStartup({ loading, ready }) {
     };
   }, [progress, revealed]);
 
-  return { progress, pulse, complete };
+  return { loading, progress, pulse, complete };
 }

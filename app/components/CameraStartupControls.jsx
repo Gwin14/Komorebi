@@ -56,6 +56,9 @@ export default function CameraStartupControls({
   children,
 }) {
   const isViewfinder = kind === "viewfinder";
+  // Once settings are restored, let the native preview appear immediately.
+  // Camera readiness still gates the controls, but must not cover live frames.
+  const showPlaceholder = isViewfinder ? startup.loading : !startup.complete;
   // Keep the native preview attached and opaque while it initializes. Fade
   // only the mask above it; preview events must not depend on hidden content.
   const ContentView = isViewfinder ? View : Animated.View;
@@ -71,7 +74,7 @@ export default function CameraStartupControls({
       >
         {children}
       </ContentView>
-      {!startup.complete && (
+      {showPlaceholder && (
         <Animated.View
           pointerEvents="none"
           accessible={false}

@@ -14,19 +14,32 @@ export default function useCameraBootstrap({ customLuts }) {
   const [lutsLoaded, setLutsLoaded] = useState(false);
 
   const refreshPermissions = useCallback(async () => {
-    try {
-      const [cameraStatus, mediaResult, locationResult] = await Promise.all([
-        Camera.getCameraPermissionStatus(),
-        MediaLibrary.getPermissionsAsync(false, MEDIA_PERMISSION_TYPES),
-        Location.getForegroundPermissionsAsync(),
-      ]);
-
-      setCameraPermission(cameraStatus);
-      setMediaPermission(mediaResult);
-      setLocationPermission(locationResult);
-    } catch (error) {
-      console.error("Erro ao consultar permissões:", error);
-    }
+    // Each permission settles independently: a slow or failed library/GPS
+    // query must not prevent the camera from mounting.
+    const refresh = async (name, read, update) => {
+      try {
+        update(await read());
+      } catch (error) {
+        console.error(`Erro ao consultar permissão de ${name}:`, error);
+      }
+    };
+    await Promise.all([
+      refresh(
+        "câmera",
+        () => Camera.getCameraPermissionStatus(),
+        setCameraPermission,
+      ),
+      refresh(
+        "fotos",
+        () => MediaLibrary.getPermissionsAsync(false, MEDIA_PERMISSION_TYPES),
+        setMediaPermission,
+      ),
+      refresh(
+        "localização",
+        () => Location.getForegroundPermissionsAsync(),
+        setLocationPermission,
+      ),
+    ]);
   }, []);
 
   const openSettings = useCallback(async () => {
