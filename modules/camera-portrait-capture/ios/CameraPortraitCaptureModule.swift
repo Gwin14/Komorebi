@@ -123,6 +123,10 @@ public class CameraPortraitCaptureModule: Module {
         view.zoomFactor = CGFloat(zoomFactor ?? 1)
       }
 
+      Prop("portraitAperture") { (view, aperture: Double?) in
+        view.portraitAperture = aperture ?? 4.5
+      }
+
       Prop("exposureBias") { (view, exposureBias: Double?) in
         view.exposureBias = Float(exposureBias ?? 0)
       }
@@ -185,6 +189,14 @@ public class CameraPortraitCaptureModule: Module {
         "captureDeviceName": selection?.device.localizedName ?? "",
         "canSaveToPhotoLibrary": libraryStatus == .authorized || libraryStatus == .limited
       ]
+    }
+
+    AsyncFunction("focusAtPoint") { (options: [String: Any]) async throws -> Bool in
+      guard let deviceId = options["deviceId"] as? String,
+            let x = options["x"] as? Double, let y = options["y"] as? Double,
+            x.isFinite, y.isFinite,
+            let view = await PortraitCameraView.activeView(for: deviceId) else { return false }
+      return try await view.focusAtPoint(x: x, y: y)
     }
 
     AsyncFunction("capturePortraitPhoto") { (options: [String: Any]) async throws -> [String: Any] in
@@ -652,6 +664,10 @@ public final class PortraitCameraView: ExpoView {
 
   var deviceId: String? {
     didSet {
+      if oldValue != deviceId {
+        portraitFocusPoint = nil
+        effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: nil)
+      }
       updateSession()
     }
   }
@@ -662,6 +678,11 @@ public final class PortraitCameraView: ExpoView {
 
   var exposureBias: Float = 0 {
     didSet { controller.setExposureBias(exposureBias) }
+  }
+
+  private var portraitFocusPoint: CGPoint?
+  var portraitAperture: Double = 4.5 {
+    didSet { effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: portraitFocusPoint) }
   }
 
   var flashMode: String = "off"
@@ -705,6 +726,7 @@ public final class PortraitCameraView: ExpoView {
     videoPreviewLayer.videoGravity = .resizeAspectFill
     videoPreviewLayer.session = controller.session
     addSubview(effectRenderer.imageView)
+    effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: nil)
     zebraOverlay.contentMode = .scaleAspectFill
     zebraOverlay.clipsToBounds = true
     zebraOverlay.isUserInteractionEnabled = false
@@ -718,8 +740,8 @@ public final class PortraitCameraView: ExpoView {
     controller.onZebraUpdated = { [weak self] image in
       DispatchQueue.main.async { self?.zebraOverlay.image = image.map { UIImage(cgImage: $0) } }
     }
-    controller.onEffectFrame = { [weak self] buffer, orientation, mirrored in
-      self?.effectRenderer.submit(buffer, orientation: orientation, mirrored: mirrored)
+    controller.onEffectFrame = { [weak self] buffer, orientation, mirrored, depth in
+      self?.effectRenderer.submit(buffer, orientation: orientation, mirrored: mirrored, depthData: depth)
     }
   }
 
@@ -745,6 +767,20 @@ public final class PortraitCameraView: ExpoView {
     return view
   }
 
+  @MainActor
+  func focusAtPoint(x: Double, y: Double) async throws -> Bool {
+    guard isActive, bounds.width > 0, bounds.height > 0 else { return false }
+    let layerPoint = CGPoint(x: max(0, min(1, x)) * bounds.width,
+                             y: max(0, min(1, y)) * bounds.height)
+    let point = videoPreviewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
+    let focused = try await controller.focus(at: point)
+    if focused {
+      portraitFocusPoint = point
+      effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: point)
+    }
+    return focused
+  }
+
   func capturePortraitPhoto(flashMode: String, outputFormat: String, aperture: Double) async throws -> [String: Any] {
     print("[PortraitNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
     let captureResult = try await controller.capture(
@@ -758,6 +794,7 @@ public final class PortraitCameraView: ExpoView {
         photoURL: captureResult.photoURL,
         depthData: captureResult.depthData,
         portraitEffectsMatte: captureResult.portraitEffectsMatte,
+        focusPoint: captureResult.focusPoint,
         aperture: aperture
       )
     }.value
@@ -863,10 +900,11 @@ private final class CaptureOrientationTracker {
   }
 }
 
-private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureDataOutputSynchronizerDelegate {
   struct CaptureResult {
     let photoURL: URL
     let depthData: AVDepthData
+    let focusPoint: CGPoint?
     let portraitEffectsMatte: AVPortraitEffectsMatte?
     let support: CameraPortraitCaptureModule.PortraitSupport
     let requestedDeviceId: String
@@ -878,6 +916,8 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
 
   private let output = AVCapturePhotoOutput()
   private let videoOutput = AVCaptureVideoDataOutput()
+  private let depthOutput = AVCaptureDepthDataOutput()
+  private var synchronizer: AVCaptureDataOutputSynchronizer?
   private let orientationTracker = CaptureOrientationTracker()
   private let smileQueue = DispatchQueue(label: "dev.komorebi.portrait.smile")
   private lazy var faceDetector = CIDetector(
@@ -892,7 +932,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   var zebraHighlightsEnabled = false
   var zebraShadowsEnabled = false
   var onZebraUpdated: ((CGImage?) -> Void)?
-  var onEffectFrame: ((CVPixelBuffer, Int32, Bool) -> Void)?
+  var onEffectFrame: ((CVPixelBuffer, Int32, Bool, AVDepthData?) -> Void)?
   private let zebraRenderer = ZebraOverlayRenderer()
   private var lastZebraAt = Date.distantPast
   private var lastSmileAt = Date.distantPast
@@ -902,6 +942,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   private var activeCaptureDevice: AVCaptureDevice?
   private var requestedZoomFactor: CGFloat = 1
   private var requestedExposureBias: Float = 0
+  private var requestedFocusPoint: CGPoint?
   private var activeSupport: CameraPortraitCaptureModule.PortraitSupport?
   private var isSessionReady = false
   private var inFlightDelegates: [PortraitPhotoCaptureDelegate] = []
@@ -936,6 +977,9 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         self.session.beginConfiguration()
         configurationOpen = true
 
+        self.synchronizer?.setDelegate(nil, queue: nil)
+        self.synchronizer = nil
+        self.requestedFocusPoint = nil
         self.session.inputs.forEach { self.session.removeInput($0) }
         self.session.outputs.forEach { self.session.removeOutput($0) }
         self.session.sessionPreset = .photo
@@ -961,6 +1005,14 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
           self.session.addOutput(self.videoOutput)
         }
 
+        if self.session.outputs.contains(self.videoOutput), self.session.canAddOutput(self.depthOutput) {
+          self.depthOutput.isFilteringEnabled = true
+          self.depthOutput.alwaysDiscardsLateDepthData = true
+          self.session.addOutput(self.depthOutput)
+          self.synchronizer = AVCaptureDataOutputSynchronizer(dataOutputs: [self.videoOutput, self.depthOutput])
+          self.synchronizer?.setDelegate(self, queue: self.smileQueue)
+        }
+
         let configuredSupport = CameraPortraitCaptureModule.PortraitSupport(
           supportsDepthData: self.output.isDepthDataDeliverySupported && selection.support.supportsDepthData,
           supportsPortraitEffectsMatte: self.output.isPortraitEffectsMatteDeliverySupported && selection.support.supportsPortraitEffectsMatte
@@ -971,6 +1023,16 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         }
 
         try self.configureDepthFormat(on: selection.device)
+        // Both synchronized buffers must use the same sensor coordinates.
+        // Display rotation/mirroring happens once in the effect renderer.
+        for connection in [self.videoOutput.connection(with: .video),
+                           self.depthOutput.connection(with: .depthData)].compactMap({ $0 }) {
+          if connection.isVideoOrientationSupported { connection.videoOrientation = .landscapeRight }
+          if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = false
+          }
+        }
         self.output.isDepthDataDeliveryEnabled = configuredSupport.supportsDepthData
         self.output.isPortraitEffectsMatteDeliveryEnabled = configuredSupport.supportsPortraitEffectsMatte
 
@@ -1007,6 +1069,32 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
       self.requestedZoomFactor = zoomFactor
       guard let device = self.activeCaptureDevice else { return }
       try? self.applyRequestedZoom(to: device)
+    }
+  }
+
+  func focus(at point: CGPoint) async throws -> Bool {
+    try await withCheckedThrowingContinuation { continuation in
+      sessionQueue.async { [weak self] in
+        guard let self, self.isSessionReady, self.session.isRunning,
+              let device = self.activeCaptureDevice else {
+          continuation.resume(returning: false)
+          return
+        }
+        do {
+          try device.lockForConfiguration()
+          defer { device.unlockForConfiguration() }
+          if device.isFocusPointOfInterestSupported {
+            device.focusPointOfInterest = point
+            if device.isFocusModeSupported(.autoFocus) { device.focusMode = .autoFocus }
+            else if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+          }
+          device.isSubjectAreaChangeMonitoringEnabled = false
+          self.requestedFocusPoint = point
+          continuation.resume(returning: true)
+        } catch {
+          continuation.resume(throwing: error)
+        }
+      }
     }
   }
 
@@ -1079,19 +1167,32 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
     }
   }
 
+  func dataOutputSynchronizer(
+    _ synchronizer: AVCaptureDataOutputSynchronizer,
+    didOutput collection: AVCaptureSynchronizedDataCollection
+  ) {
+    guard let video = collection.synchronizedData(for: videoOutput) as? AVCaptureSynchronizedSampleBufferData,
+          !video.sampleBufferWasDropped else { return }
+    let depth = collection.synchronizedData(for: depthOutput) as? AVCaptureSynchronizedDepthData
+    let data = depth.flatMap { $0.depthDataWasDropped ? nil : $0.depthData }
+    processFrame(video.sampleBuffer, depthData: data)
+  }
+
   func captureOutput(
     _ output: AVCaptureOutput,
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
-    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-      return
-    }
+    processFrame(sampleBuffer, depthData: nil)
+  }
 
+  private func processFrame(_ sampleBuffer: CMSampleBuffer, depthData: AVDepthData?) {
+    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
     onEffectFrame?(
       pixelBuffer,
       LiveEffectPreviewRenderer.exifOrientation(for: orientationTracker.outputOrientation),
-      activeCaptureDevice?.position == .front
+      activeCaptureDevice?.position == .front,
+      depthData
     )
 
     let now = Date()
@@ -1256,6 +1357,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         let delegate = PortraitPhotoCaptureDelegate(
           photoURL: photoURL,
           support: support,
+          focusPoint: self.requestedFocusPoint,
           requestedDeviceId: requestedDeviceId,
           captureDeviceId: captureDevice.uniqueID,
           captureDeviceName: captureDevice.localizedName
@@ -1277,6 +1379,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
 private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
   private let photoURL: URL
   private let support: CameraPortraitCaptureModule.PortraitSupport
+  private let focusPoint: CGPoint?
   private let requestedDeviceId: String
   private let captureDeviceId: String
   private let captureDeviceName: String
@@ -1289,12 +1392,14 @@ private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptur
   init(
     photoURL: URL,
     support: CameraPortraitCaptureModule.PortraitSupport,
+    focusPoint: CGPoint?,
     requestedDeviceId: String,
     captureDeviceId: String,
     captureDeviceName: String
   ) {
     self.photoURL = photoURL
     self.support = support
+    self.focusPoint = focusPoint
     self.requestedDeviceId = requestedDeviceId
     self.captureDeviceId = captureDeviceId
     self.captureDeviceName = captureDeviceName
@@ -1363,6 +1468,7 @@ private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptur
       finish(with: .success(PortraitCameraController.CaptureResult(
         photoURL: photoURL,
         depthData: depthData,
+        focusPoint: focusPoint,
         portraitEffectsMatte: portraitEffectsMatte,
         support: CameraPortraitCaptureModule.PortraitSupport(
           supportsDepthData: true,
@@ -1471,7 +1577,7 @@ enum PortraitDepthRenderer {
 
   static func render(
     photoURL: URL, depthData: AVDepthData,
-    portraitEffectsMatte: AVPortraitEffectsMatte?, aperture: Double
+    portraitEffectsMatte: AVPortraitEffectsMatte?, focusPoint: CGPoint?, aperture: Double
   ) throws -> URL {
     guard isUsable(depthData) else {
       throw CameraPortraitCaptureModule.PortraitCaptureError.invalidDepthData
@@ -1501,6 +1607,12 @@ enum PortraitDepthRenderer {
       throw CameraPortraitCaptureModule.PortraitCaptureError.portraitRenderingFailed
     }
 
+    if let focusPoint, filter.inputKeys.contains("inputFocusRect") {
+      filter.setValue(
+        LiveEffectPreviewRenderer.portraitFocusRectangle(at: focusPoint, extent: input.extent),
+        forKey: "inputFocusRect"
+      )
+    }
     filter.setValue(aperture.isFinite ? max(1.4, min(16, aperture)) : 4.5, forKey: "inputAperture")
     guard let output = filter.outputImage,
           let image = context.createCGImage(

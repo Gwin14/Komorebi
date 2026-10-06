@@ -1141,6 +1141,7 @@ export default function App() {
                 zebraHighlightsEnabled={zebraHighlightsEnabled}
                 zebraShadowsEnabled={zebraShadowsEnabled}
                 exposure={exposure}
+                portraitAperture={portraitCapture.aperture}
                 aspectRatio={aspectRatio}
                 availableHeight={previewAvailableHeight}
                 doubleCaptureMode={doubleCaptureMode}

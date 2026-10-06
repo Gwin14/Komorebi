@@ -20,6 +20,7 @@ export type PortraitCameraViewProps = ViewProps & {
   deviceId?: string | null;
   zoomFactor?: number;
   exposureBias?: number;
+  portraitAperture?: number;
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
@@ -186,4 +187,13 @@ export async function convertPhotoFormat(
     outputFormat: options.outputFormat,
   });
   return result.photoUri ?? options.photoUri;
+}
+
+export async function focusPortraitCamera(options: {
+  deviceId: string;
+  x: number;
+  y: number;
+}): Promise<boolean> {
+  if (!nativeModule) return false;
+  return Boolean(await nativeModule.focusAtPoint(options));
 }

@@ -25,6 +25,11 @@ final class LiveEffectPreviewRenderer {
   private var grainStrength = 0.0
   private var halation: [Double] = []
   private var hasPresentedFirstFrame = false
+  private var portraitEnabled = false
+  private var portraitAperture = 4.5
+  private var portraitFocusPoint: CGPoint?
+  private var lastPresentedAt = CFAbsoluteTime(0)
+  private var freshnessTimer: Timer?
 
   private static let grainKernel = CIColorKernel(source: """
     kernel vec4 grain(__sample image, __sample random, float strength) {
@@ -51,7 +56,16 @@ final class LiveEffectPreviewRenderer {
     imageView.isUserInteractionEnabled = false
     imageView.isHidden = true
     imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+    freshnessTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+      guard let self else { return }
+      self.lock.lock()
+      let stale = self.portraitEnabled && CFAbsoluteTimeGetCurrent() - self.lastPresentedAt > 0.4
+      self.lock.unlock()
+      if stale { self.imageView.image = nil; self.imageView.isHidden = true }
+    }
   }
+
+  deinit { freshnessTimer?.invalidate() }
 
   static func exifOrientation(for orientation: AVCaptureVideoOrientation) -> Int32 {
     switch orientation {
@@ -98,12 +112,22 @@ final class LiveEffectPreviewRenderer {
     updateVisibility(enabled)
   }
 
+  func setPortrait(aperture: Double, focusPoint: CGPoint?) {
+    lock.lock()
+    let focusChanged = portraitFocusPoint != focusPoint
+    if !portraitEnabled || focusChanged { generation += 1 }
+    portraitEnabled = true
+    portraitAperture = aperture.isFinite ? max(1.4, min(16, aperture)) : 4.5
+    portraitFocusPoint = focusPoint
+    lock.unlock()
+  }
+
   private var isEnabled: Bool {
     // Keep the zero-copy AVCaptureVideoPreviewLayer as the canonical preview
     // when no visual effect is active. Rendering every frame through Core
     // Image -> CGImage -> UIImage needlessly throttles all native modes and
     // puts continuous allocation pressure on the main thread.
-    cubeData != nil || grainStrength > 0 || halation.count >= 6
+    portraitEnabled || cubeData != nil || grainStrength > 0 || halation.count >= 6
   }
 
   private func updateVisibility(_ enabled: Bool) {
@@ -114,10 +138,10 @@ final class LiveEffectPreviewRenderer {
     }
   }
 
-  func submit(_ pixelBuffer: CVPixelBuffer, orientation: Int32, mirrored: Bool) {
+  func submit(_ pixelBuffer: CVPixelBuffer, orientation: Int32, mirrored: Bool, depthData: AVDepthData? = nil) {
     let now = CFAbsoluteTimeGetCurrent()
     lock.lock()
-    guard isEnabled, !inFlight, now - lastFrameAt >= 1.0 / 30.0 else {
+    guard isEnabled, !inFlight, now - lastFrameAt >= 1.0 / (portraitEnabled ? 12.0 : 30.0) else {
       lock.unlock()
       return
     }
@@ -131,19 +155,67 @@ final class LiveEffectPreviewRenderer {
     let domain = lutDomain
     let grain = grainStrength
     let halo = halation
+    let portrait = portraitEnabled
+    let aperture = portraitAperture
+    let focusPoint = portraitFocusPoint
     lock.unlock()
 
     queue.async { [weak self] in
       guard let self else { return }
       autoreleasepool {
         var image = CIImage(cvPixelBuffer: pixelBuffer)
-        if orientation != 1 { image = image.oriented(forExifOrientation: orientation) }
-        if mirrored { image = image.oriented(.upMirrored) }
         // Effects still need an intermediate bitmap. 720p keeps LUT, grain
         // and halation previews responsive while the full-resolution photo
         // output remains untouched.
-        let scale = min(1.0, 720.0 / max(image.extent.width, image.extent.height))
+        let scale = min(1.0, (portrait ? 540.0 : 720.0) / max(image.extent.width, image.extent.height))
         image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        var hasPortraitBlur = false
+        if portrait, let depthData,
+           [kCVPixelFormatType_DisparityFloat16, kCVPixelFormatType_DisparityFloat32,
+            kCVPixelFormatType_DepthFloat16, kCVPixelFormatType_DepthFloat32].contains(depthData.depthDataType),
+           CVPixelBufferGetWidth(depthData.depthDataMap) > 0,
+           CVPixelBufferGetHeight(depthData.depthDataMap) > 0 {
+          let disparity = depthData.converting(toDepthDataType: kCVPixelFormatType_DisparityFloat32)
+          let buffer = disparity.depthDataMap
+          if let focus = Self.focusDisparity(in: buffer, point: focusPoint ?? CGPoint(x: 0.5, y: 0.5)) {
+            let tolerance = max(0.025, focus * 0.15)
+            let depth = CIImage(cvPixelBuffer: buffer, options: [.colorSpace: NSNull()])
+            let inverseVariance = 1 / (tolerance * tolerance)
+            let coefficients = CIVector(x: focus * focus * inverseVariance,
+              y: -2 * focus * inverseVariance, z: inverseVariance, w: 0)
+            // Blur both sides of the tapped focal plane. Depth is scalar data,
+            // so it must not pass through an sRGB color conversion.
+            let mask = depth.applyingFilter("CIColorPolynomial", parameters: [
+              "inputRedCoefficients": coefficients,
+              "inputGreenCoefficients": coefficients,
+              "inputBlueCoefficients": coefficients,
+              "inputAlphaCoefficients": CIVector(x: 1, y: 0, z: 0, w: 0),
+            ]).applyingFilter("CIColorClamp", parameters: [
+              "inputMinComponents": CIVector(x: 0, y: 0, z: 0, w: 0),
+              "inputMaxComponents": CIVector(x: 1, y: 1, z: 1, w: 1),
+            ]).transformed(by: CGAffineTransform(
+              scaleX: image.extent.width / depth.extent.width,
+              y: image.extent.height / depth.extent.height
+            )).clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: 1.5])
+              .cropped(to: image.extent)
+            let radius = max(0, (16 - aperture) / 14.6) * 12
+            let blurred = image.clampedToExtent().applyingFilter("CIGaussianBlur", parameters: [kCIInputRadiusKey: radius])
+              .cropped(to: image.extent)
+            image = blurred.applyingFilter("CIBlendWithMask", parameters: [
+              kCIInputBackgroundImageKey: image, kCIInputMaskImageKey: mask,
+            ]).cropped(to: image.extent)
+            hasPortraitBlur = true
+          }
+        }
+        if portrait && !hasPortraitBlur && cube == nil && grain == 0 && halo.count < 6 {
+          self.lock.lock()
+          self.inFlight = false
+          self.lock.unlock()
+          self.updateVisibility(false)
+          return
+        }
+        if orientation != 1 { image = image.oriented(forExifOrientation: orientation) }
+        if mirrored { image = image.oriented(.upMirrored) }
         let extent = image.extent
 
         if let cube, size >= 2 {
@@ -200,6 +272,9 @@ final class LiveEffectPreviewRenderer {
             self.inFlight = false
             self.lock.unlock()
             if valid {
+              self.lock.lock()
+              self.lastPresentedAt = CFAbsoluteTimeGetCurrent()
+              self.lock.unlock()
               if let container = self.imageView.superview {
                 self.imageView.frame = container.bounds
               }
@@ -214,6 +289,41 @@ final class LiveEffectPreviewRenderer {
         }
       }
     }
+  }
+
+  static func focusDisparity(in buffer: CVPixelBuffer, point: CGPoint) -> CGFloat? {
+    guard CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_DisparityFloat32 else { return nil }
+    let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
+    guard width > 0, height > 0, point.x.isFinite, point.y.isFinite else { return nil }
+    guard CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess else { return nil }
+    defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+    guard let address = CVPixelBufferGetBaseAddress(buffer) else { return nil }
+    let x = min(width - 1, max(0, Int(point.x * CGFloat(width - 1))))
+    let y = min(height - 1, max(0, Int(point.y * CGFloat(height - 1))))
+    let rowBytes = CVPixelBufferGetBytesPerRow(buffer)
+    var samples: [Float] = []
+    for row in max(0, y - 1)...min(height - 1, y + 1) {
+      let values = address.advanced(by: row * rowBytes).assumingMemoryBound(to: Float.self)
+      for column in max(0, x - 1)...min(width - 1, x + 1) {
+        let value = values[column]
+        if value.isFinite && value > 0 { samples.append(value) }
+      }
+    }
+    guard !samples.isEmpty else { return nil }
+    samples.sort()
+    return CGFloat(samples[samples.count / 2])
+  }
+
+  static func portraitFocusRectangle(at point: CGPoint, extent: CGRect) -> CIVector {
+    // Device points have a top-left origin; Core Image rectangles use pixels
+    // with a bottom-left origin, before display rotation and mirroring.
+    let x = max(0, min(0.95, point.x - 0.025))
+    let y = max(0, min(0.95, 1 - point.y - 0.025))
+    return CIVector(cgRect: CGRect(
+      x: extent.minX + x * extent.width,
+      y: extent.minY + y * extent.height,
+      width: 0.05 * extent.width, height: 0.05 * extent.height
+    ))
   }
 
   private static func makeCubeData(size: Int, values: [Double]) -> Data? {

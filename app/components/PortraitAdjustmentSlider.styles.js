@@ -5,18 +5,18 @@ export default StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
+    paddingHorizontal: 24,
   },
   button: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+
   },
-  selected: {
-    backgroundColor: "rgba(255, 215, 0, 0.2)",
+  labelSpacer: {
+    opacity: 0,
   },
   pressed: {
     opacity: 0.6,
