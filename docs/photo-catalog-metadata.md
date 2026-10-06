@@ -6,12 +6,12 @@ Na galeria, abra uma foto e seu painel de informações para selecionar **0–5 
 
 Com as tags inteligentes ativadas, as palavras-chave retornadas pela análise local são gravadas nos campos padronizados e também continuam disponíveis nos detalhes internos da Komorebi. Falhas na análise não impedem a captura.
 
-| Informação | IPTC | XMP |
-| --- | --- | --- |
-| Autor | By-line | dc:creator, sequência de autores |
+| Informação        | IPTC            | XMP                                    |
+| ----------------- | --------------- | -------------------------------------- |
+| Autor             | By-line         | dc:creator, sequência de autores       |
 | Direitos autorais | CopyrightNotice | dc:rights, texto alternativo x-default |
-| Tags | Keywords | dc:subject, coleção sem ordem |
-| Classificação | — | xmp:Rating, inteiro 0–5 |
+| Tags              | Keywords        | dc:subject, coleção sem ordem          |
+| Classificação     | —               | xmp:Rating, inteiro 0–5                |
 
 JPEG armazena IPTC IIM em APP13 e XMP em APP1. TIFF/DNG usa os campos 33723 e 700 do IFD0. HEIF utiliza a serialização de metadados do ImageIO, com os campos XMP correspondentes. A escrita de TIFF/DNG acrescenta um novo IFD0 sem mover os dados RAW ou alterar os offsets existentes.
 

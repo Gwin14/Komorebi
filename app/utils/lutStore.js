@@ -27,7 +27,8 @@ export const loadCustomLUTs = async (customLuts) => {
       const cubeData = parseCubeFile(customLut.content);
       if (cubeData && cubeData.size > 0) {
         cachedLUTs[customLut.id] = cubeData;
-        if (__DEV__) console.log(`Custom LUT "${customLut.name}" carregado com sucesso`);
+        if (__DEV__)
+          console.log(`Custom LUT "${customLut.name}" carregado com sucesso`);
       } else {
         console.warn(`Custom LUT "${customLut.name}" não pôde ser parseado`);
       }

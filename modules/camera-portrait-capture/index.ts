@@ -10,6 +10,7 @@ export type PortraitCaptureCapabilities = {
 };
 
 export type PortraitCaptureOptions = {
+  aperture?: number;
   deviceId: string;
   flashMode?: "off" | "on" | "auto";
   outputFormat?: "heif" | "jpeg";
@@ -18,6 +19,8 @@ export type PortraitCaptureOptions = {
 export type PortraitCameraViewProps = ViewProps & {
   deviceId?: string | null;
   zoomFactor?: number;
+  exposureBias?: number;
+  portraitAperture?: number;
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
@@ -40,6 +43,7 @@ export type PortraitCameraViewProps = ViewProps & {
 
 export type PortraitCaptureResult = {
   photoUri: string;
+  originalPhotoUri: string;
   localIdentifier: string | null;
   savedToLibrary: boolean;
   depthDataEmbedded: boolean;
@@ -47,6 +51,9 @@ export type PortraitCaptureResult = {
 };
 
 export type SaveProcessedPortraitPhotoOptions = {
+  preserveApplePhotographicStyles?: boolean;
+  photographicStyles3Enabled?: boolean;
+  cameraPosition?: "back" | "front";
   processedPhotoUri: string;
   originalPhotoUri?: string | null;
   albumTitle?: string;
@@ -127,12 +134,14 @@ export async function capturePortraitPhoto(
 
   const result = await nativeModule.capturePortraitPhoto({
     deviceId: options.deviceId,
+    aperture: options.aperture ?? 4.5,
     flashMode: options.flashMode ?? "off",
     outputFormat: options.outputFormat ?? "heif",
   });
 
   return {
     photoUri: result.photoUri,
+    originalPhotoUri: result.originalPhotoUri ?? result.photoUri,
     localIdentifier: result.localIdentifier ?? null,
     savedToLibrary: Boolean(result.savedToLibrary),
     depthDataEmbedded: Boolean(result.depthDataEmbedded),
@@ -148,6 +157,9 @@ export async function saveProcessedPortraitPhoto(
   }
 
   const result = await nativeModule.saveProcessedPortraitPhoto({
+    preserveApplePhotographicStyles: options.preserveApplePhotographicStyles ?? false,
+    photographicStyles3Enabled: options.photographicStyles3Enabled ?? false,
+    cameraPosition: options.cameraPosition ?? "back",
     processedPhotoUri: options.processedPhotoUri,
     originalPhotoUri: options.originalPhotoUri ?? null,
     albumTitle: options.albumTitle ?? "Komorebi",
@@ -175,4 +187,13 @@ export async function convertPhotoFormat(
     outputFormat: options.outputFormat,
   });
   return result.photoUri ?? options.photoUri;
+}
+
+export async function focusPortraitCamera(options: {
+  deviceId: string;
+  x: number;
+  y: number;
+}): Promise<boolean> {
+  if (!nativeModule) return false;
+  return Boolean(await nativeModule.focusAtPoint(options));
 }

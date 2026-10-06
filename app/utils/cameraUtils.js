@@ -6,7 +6,11 @@ import * as piexif from "piexifjs";
 import { Image } from "react-native";
 import { captureLivePhoto } from "../../modules/camera-live-photo";
 import { capturePortraitPhoto } from "../../modules/camera-portrait-capture";
-import { enqueueHeifPlus, listHeifPlusJobs, toVisionCameraRawMode } from "../../modules/camera-raw-capture";
+import {
+  enqueueHeifPlus,
+  listHeifPlusJobs,
+  toVisionCameraRawMode,
+} from "../../modules/camera-raw-capture";
 import { getCachedLUT } from "./lutStore";
 import {
   applyKomorebiMetadataToExifObj,
@@ -126,6 +130,7 @@ export const getLocationExif = async (locationEnabled) => {
 
 export const buildPhotoProcessingData = async ({
   uri,
+  originalUri = uri,
   selectedLutId,
   selectedLut,
   selectedGrainId,
@@ -141,6 +146,8 @@ export const buildPhotoProcessingData = async ({
   manualSettings = null,
   stackingMetadata = null,
   preserveApplePhotographicStyles = false,
+  photographicStyles3Enabled = false,
+  cameraPosition = "back",
   extraData = {},
 }) => {
   const captureAspectRatio = await resolveCaptureAspectRatio(uri, aspectRatio);
@@ -163,7 +170,7 @@ export const buildPhotoProcessingData = async ({
   const noLutData = {
     ...extraData,
     needsProcessing: false,
-    originalUri: uri,
+    originalUri,
     imageUri: croppedUri,
     exifData: baseExifData,
     doubleCaptureMode,
@@ -171,6 +178,8 @@ export const buildPhotoProcessingData = async ({
     aspectRatio: captureAspectRatio,
     captureMode,
     preserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    cameraPosition,
     cube: null,
     halationConfig: null,
     grainConfig: null,
@@ -219,10 +228,12 @@ export const buildPhotoProcessingData = async ({
     exifData: lutExifData,
     doubleCaptureMode,
     saveOriginalWithoutEffects,
-    originalUri: uri,
+    originalUri,
     aspectRatio: captureAspectRatio,
     captureMode,
     preserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    cameraPosition,
   };
 };
 
@@ -252,8 +263,11 @@ export const takePicture = async ({
   livePhotoDeviceId = null,
   portraitModeEnabled = false,
   portraitDeviceId = null,
+  portraitAperture = 4.5,
   outputFormat = "jpeg",
   preserveApplePhotographicStyles = false,
+  photographicStyles3Enabled = false,
+  cameraPosition = "back",
   heifPlus = null,
 }) => {
   const normalizedRawMode = toVisionCameraRawMode(rawMode);
@@ -317,6 +331,8 @@ export const takePicture = async ({
           aspectRatio,
           captureMode: "live",
           preserveApplePhotographicStyles,
+          photographicStyles3Enabled,
+          cameraPosition,
           extraData: {
             outputFormat,
             livePhotoMovieUri: livePhoto.movieUri,
@@ -335,6 +351,7 @@ export const takePicture = async ({
       });
       const portraitPhoto = await capturePortraitPhoto({
         deviceId: portraitDeviceId,
+        aperture: portraitAperture,
         flashMode: flash === "on" ? "on" : "off",
         outputFormat,
       });
@@ -364,7 +381,10 @@ export const takePicture = async ({
           saveOriginalWithoutEffects,
           aspectRatio,
           captureMode: "portrait",
+          originalUri: normalizeUri(portraitPhoto.originalPhotoUri),
           preserveApplePhotographicStyles,
+          photographicStyles3Enabled,
+          cameraPosition,
           extraData: {
             outputFormat,
             localIdentifier: portraitPhoto.localIdentifier,
@@ -379,7 +399,9 @@ export const takePicture = async ({
     }
 
     if (heifPlus && (await listHeifPlusJobs()).length >= 3) {
-      throw new Error("A fila HEIF+ está cheia. Aguarde ou descarte uma captura pendente.");
+      throw new Error(
+        "A fila HEIF+ está cheia. Aguarde ou descarte uma captura pendente.",
+      );
     }
     const additionalExif = await getLocationExif(location);
     const photo = await cameraRef.current.takePhoto({
@@ -393,26 +415,43 @@ export const takePicture = async ({
 
     if (heifPlus) {
       const komorebiMetadata = buildKomorebiExifMetadata({
-        selectedLutId, selectedLut, grainId: selectedGrainId,
-        grainConfig: selectedGrainConfig, halationId: selectedHalationId,
-        halationConfig: selectedHalationConfig, aspectRatio,
-        doubleCaptureMode, captureMode: "heifPlus", manualSettings,
+        selectedLutId,
+        selectedLut,
+        grainId: selectedGrainId,
+        grainConfig: selectedGrainConfig,
+        halationId: selectedHalationId,
+        halationConfig: selectedHalationConfig,
+        aspectRatio,
+        doubleCaptureMode,
+        captureMode: "heifPlus",
+        manualSettings,
       });
       const job = await enqueueHeifPlus(uri, {
         ...heifPlus,
         settings: heifPlus.settings,
+        preserveApplePhotographicStyles,
+        photographicStyles3Enabled,
+        cameraPosition,
         effects: {
           cube: selectedLutId !== "none" ? getCachedLUT(selectedLutId) : null,
-          grainConfig: selectedGrainConfig, halationConfig: selectedHalationConfig,
+          grainConfig: selectedGrainConfig,
+          halationConfig: selectedHalationConfig,
           seed: Math.floor(Math.random() * 100000),
         },
-        exifData: additionalExif, komorebiMetadata,
+        exifData: additionalExif,
+        komorebiMetadata,
         createdAt: komorebiMetadata.createdAt,
-        aspectRatio, doubleCaptureMode: doubleCaptureMode && flash !== "on",
+        aspectRatio,
+        doubleCaptureMode: doubleCaptureMode && flash !== "on",
         saveOriginalWithoutEffects,
-        companionUri: normalizeUri(photo.processedPath || photo.processedPhotoPath) || null,
+        companionUri:
+          normalizeUri(photo.processedPath || photo.processedPhotoPath) || null,
       });
-      setProcessingData({ captureMode: "heifPlus", needsProcessing: false, heifPlusJob: job });
+      setProcessingData({
+        captureMode: "heifPlus",
+        needsProcessing: false,
+        heifPlusJob: job,
+      });
       return;
     }
 
@@ -449,6 +488,10 @@ export const takePicture = async ({
         saveOriginalWithoutEffects: false,
         aspectRatio: captureAspectRatio,
         captureMode: "raw",
+        preserveApplePhotographicStyles:
+          normalizedRawMode === "proRaw" && preserveApplePhotographicStyles,
+        photographicStyles3Enabled,
+        cameraPosition,
         cube: null,
         halationConfig: null,
         grainConfig: null,
@@ -493,12 +536,14 @@ export const takePicture = async ({
         captureMode: "standard",
         manualSettings,
         preserveApplePhotographicStyles,
+        photographicStyles3Enabled,
+        cameraPosition,
         extraData: { outputFormat },
       }),
     );
   } catch (error) {
     console.error("Erro ao tirar foto:", error);
-    if (heifPlus) throw error;
+    if (heifPlus || portraitModeEnabled) throw error;
   } finally {
     setIsProcessing(false);
   }

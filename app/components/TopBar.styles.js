@@ -1,13 +1,29 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  container: {
+    width: "100%",
+    minHeight: 44,
+  },
+  notice: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  noticeText: {
+    color: "white",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
   buttonsContainer: {
     flexDirection: "row",
     width: "100%",
     justifyContent: "space-around",
     alignItems: "center",
     paddingHorizontal: 4,
-    paddingVertical: 6,
+    paddingVertical: 3,
   },
   popoverTransparent: {
     backgroundColor: "transparent",

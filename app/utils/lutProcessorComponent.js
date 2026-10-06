@@ -17,17 +17,25 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
   const activeRequestRef = useRef(null);
   const dispatchedDataRef = useRef(new WeakSet());
 
-  useEffect(() => () => {
-    activeRequestRef.current = null;
-    pendingRef.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      activeRequestRef.current = null;
+      pendingRef.current = null;
+    },
+    [],
+  );
 
   const sendToWebView = useCallback(
     async (data) => {
       if (dispatchedDataRef.current.has(data)) return;
       dispatchedDataRef.current.add(data);
       const requestId = ++requestCounterRef.current;
-      const request = { id: requestId, data, originalExif: null, settling: false };
+      const request = {
+        id: requestId,
+        data,
+        originalExif: null,
+        settling: false,
+      };
       activeRequestRef.current = request;
       try {
         let base64 = data.base64;
@@ -38,11 +46,12 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
         }
         if (activeRequestRef.current !== request) return;
         try {
-          const exifSourceBase64 = data.originalUri && data.originalUri !== data.imageUri
-            ? await FileSystem.readAsStringAsync(data.originalUri, {
-                encoding: FileSystem.EncodingType.Base64,
-              })
-            : base64;
+          const exifSourceBase64 =
+            data.originalUri && data.originalUri !== data.imageUri
+              ? await FileSystem.readAsStringAsync(data.originalUri, {
+                  encoding: FileSystem.EncodingType.Base64,
+                })
+              : base64;
           if (activeRequestRef.current !== request) return;
           request.originalExif = piexif.load(
             "data:image/jpeg;base64," + exifSourceBase64,
@@ -96,7 +105,8 @@ export const LUTProcessor = ({ imageData, onProcessed, onError }) => {
       const request = activeRequestRef.current;
       try {
         const message = JSON.parse(event.nativeEvent.data);
-        if (!request || message.requestId !== request.id || request.settling) return;
+        if (!request || message.requestId !== request.id || request.settling)
+          return;
         if (message.type === "success") {
           request.settling = true;
           const savedUri = await saveProcessedImage(

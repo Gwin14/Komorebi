@@ -4,8 +4,8 @@ import CoreImage
 
 // Compiled into each image-writing module so all capture modes use the same schema.
 enum PhotoCatalogMetadata {
-  static func make(_ fields: [String: Any], source: CGImageSource) throws -> CGMutableImageMetadata {
-    let metadata = CGImageSourceCopyMetadataAtIndex(source, 0, nil)
+  static func make(_ fields: [String: Any], source: CGImageSource, baseMetadata: CGImageMetadata? = nil) throws -> CGMutableImageMetadata {
+    let metadata = (baseMetadata ?? CGImageSourceCopyMetadataAtIndex(source, 0, nil))
       .flatMap { CGImageMetadataCreateMutableCopy($0) } ?? CGImageMetadataCreateMutable()
     let dc = "http://purl.org/dc/elements/1.1/" as CFString
     let xmp = "http://ns.adobe.com/xap/1.0/" as CFString

@@ -94,7 +94,9 @@ export default function BottomControls({
     await takePicture();
   };
 
-  const albumName = activeProject ? getProjectAlbumName(activeProject) : "Komorebi";
+  const albumName = activeProject
+    ? getProjectAlbumName(activeProject)
+    : "Komorebi";
   useEffect(() => {
     let active = true;
     const loadLastPhoto = async () => {
@@ -120,7 +122,9 @@ export default function BottomControls({
       }
     };
     void loadLastPhoto();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [galleryRefreshKey, albumName]);
 
   const shutterTranslate = controlsAnim.interpolate({
@@ -225,31 +229,29 @@ export default function BottomControls({
         </View>
       </Animated.View>
 
-      {lenses.length > 1 && (
-        <Animated.View
-          style={[
-            styles.lensSlot,
-            {
-              opacity: shutterOpacity,
-              transform: [{ translateY: shutterTranslate }],
-            },
-          ]}
-          pointerEvents={
-            !imageStackingCapturing &&
-            (activeControl === "none" || activeControl === "manual")
-              ? "auto"
-              : "none"
-          }
-        >
-          {!imageStackingCapturing && (
-            <LensSelector
-              lenses={lenses}
-              activeLensId={activeLensId}
-              onSelectLens={onSelectLens}
-            />
-          )}
-        </Animated.View>
-      )}
+      <Animated.View
+        style={[
+          styles.lensSlot,
+          {
+            opacity: shutterOpacity,
+            transform: [{ translateY: shutterTranslate }],
+          },
+        ]}
+        pointerEvents={
+          !imageStackingCapturing &&
+          (activeControl === "none" || activeControl === "manual")
+            ? "auto"
+            : "none"
+        }
+      >
+        {lenses.length > 1 && !imageStackingCapturing && (
+          <LensSelector
+            lenses={lenses}
+            activeLensId={activeLensId}
+            onSelectLens={onSelectLens}
+          />
+        )}
+      </Animated.View>
 
       <Animated.View
         style={[

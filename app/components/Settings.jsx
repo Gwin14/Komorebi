@@ -173,10 +173,11 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     setShutterSound,
     location,
     setLocation,
-    photoFormat,
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    setPhotographicStyles3Enabled,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     customLuts,
@@ -483,7 +484,10 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           onValueChange={setSaveOriginalWithoutEffects}
         />
       </Section>
-      <Section title="Autoria" description="Incluídos nos metadados das próximas fotos.">
+      <Section
+        title="Autoria"
+        description="Incluídos nos metadados das próximas fotos."
+      >
         <View style={styles.metadataField}>
           <Text style={styles.rowLabel}>Autor</Text>
           <TextInput
@@ -520,19 +524,31 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           onValueChange={setLocation}
         />
         {Platform.OS === "ios" && (
-          <CustomToggle
-            badge="experimental"
-            grouped
-            last
-            description="Cria um HEIF editável no Fotos. Pausa em Live Photo, Retrato, RAW e HEIF+."
-            disabled={photoFormat === "heifPlus"}
-            label="Edição no Fotos da Apple"
-            value={preserveApplePhotographicStyles}
-            onValueChange={(enabled) => {
-              setPreserveApplePhotographicStyles(enabled);
-              if (enabled) setSaveAsJpeg(false);
-            }}
-          />
+          <>
+            <CustomToggle
+              badge="experimental"
+              grouped
+              last={!preserveApplePhotographicStyles}
+              description="Prepara o HEIF para edição no Fotos, inclusive em Stacking, Retrato e HEIF+. Pausa em Live Photo e RAW comum."
+              label="Edição no Fotos da Apple"
+              value={preserveApplePhotographicStyles}
+              onValueChange={(enabled) => {
+                setPreserveApplePhotographicStyles(enabled);
+                if (enabled) setSaveAsJpeg(false);
+              }}
+            />
+            {preserveApplePhotographicStyles && (
+              <CustomToggle
+                badge="experimental"
+                grouped
+                last
+                label="Compatibilidade com Estilos Fotográficos 3"
+                description="Prepara o HEIF para textura e grão no Fotos. Disponibilidade depende do iPhone e do iOS."
+                value={photographicStyles3Enabled}
+                onValueChange={setPhotographicStyles3Enabled}
+              />
+            )}
+          </>
         )}
       </Section>
       {Platform.OS === "ios" && <HeifPlusSettings />}
@@ -670,7 +686,9 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
       </Text>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Na barra</Text>
-        <Text style={styles.sectionDescription}>Arraste pela alça à direita para mudar a ordem.</Text>
+        <Text style={styles.sectionDescription}>
+          Arraste pela alça à direita para mudar a ordem.
+        </Text>
         <TopBarControlList
           controls={topBarControls}
           onChange={setTopBarControls}

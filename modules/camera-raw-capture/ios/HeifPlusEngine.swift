@@ -5,6 +5,9 @@ import ImageIO
 import UniformTypeIdentifiers
 import Photos
 import CoreLocation
+#if canImport(CameraPhotographicStyles)
+import CameraPhotographicStyles
+#endif
 
 // All access is serialized by the module. Only URLs/recipes cross the JS bridge.
 final class HeifPlusEngine {
@@ -26,7 +29,22 @@ final class HeifPlusEngine {
     if value { throw error("O tempo em background terminou. Tente novamente ao abrir o app.") }
   }
   private let root: URL
-  init(root testRoot: URL? = nil) {
+  private let stylesWriter: (URL, [String: Any]) throws -> URL
+  init(root testRoot: URL? = nil,
+       stylesWriter: ((URL, [String: Any]) throws -> URL)? = nil) {
+    self.stylesWriter = stylesWriter ?? { source, options in
+      #if canImport(CameraPhotographicStyles)
+      let result = try CameraPhotographicStylesModule.makeCompatible(
+        photoUri: source.absoluteString, options: options)
+      guard result["verified"] as? Bool == true,
+            let uri = result["photoUri"] as? String, let url = URL(string: uri) else {
+        throw NSError(domain: "Komorebi.HEIFPlus", code: 1, userInfo: [NSLocalizedDescriptionKey: "O HEIF+ não passou na validação dos Estilos Fotográficos"])
+      }
+      return url
+      #else
+      throw NSError(domain: "Komorebi.HEIFPlus", code: 1, userInfo: [NSLocalizedDescriptionKey: "O módulo de Estilos Fotográficos não está disponível"])
+      #endif
+    }
     root = testRoot ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("HeifPlus", isDirectory: true)
     try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
@@ -359,13 +377,47 @@ final class HeifPlusEngine {
       if let value = data[key] { job[key] = value }
     }
     let f = try filter(directory(id).appendingPathComponent("original.dng"))
-    for variant in job["variants"] as? [[String: Any]] ?? [] where variant["assetId"] == nil {
+    for variant in job["variants"] as? [[String: Any]] ?? [] where variant["assetId"] == nil && variant["stylesPrepared"] as? Bool != true {
       try metadata(directory(id).appendingPathComponent(variant["file"] as! String),
         raw: f.properties, job: job, recipe: variant["recipe"] as? [String: Any] ?? [:])
     }
     job["intelligenceCompleted"] = true
     try write(job, id: id)
   }
+  // Checkpoint each styled variant in the durable job directory before PhotoKit.
+  // Keep the rendered source so a crash before the checkpoint can safely retry.
+  func prepareStyles(_ id: String) throws -> [String: Any] {
+    var job = try read(id)
+    guard job["preserveApplePhotographicStyles"] as? Bool == true,
+          var variants = job["variants"] as? [[String: Any]] else { return job }
+    let dir = try directory(id)
+    for index in variants.indices {
+      if variants[index]["stylesPrepared"] as? Bool == true || variants[index]["assetId"] != nil { continue }
+      try checkExpiration()
+      let source = dir.appendingPathComponent(variants[index]["file"] as! String)
+      var metadata = job["exifData"] as? [String: Any] ?? [:]
+      metadata["catalogMetadata"] = job["catalogMetadata"]
+      let output = try stylesWriter(source, [
+        "inputPrepared": true,
+        "enableStyles3": job["photographicStyles3Enabled"] as? Bool ?? false,
+        "cameraPosition": job["cameraPosition"] as? String ?? "back",
+        "metadata": metadata,
+        "metadataSourceUri": source.absoluteString
+      ])
+      defer { if output != source { try? files.removeItem(at: output) } }
+      let filename = source.deletingPathExtension().lastPathComponent + "-styles.heic"
+      let destination = dir.appendingPathComponent(filename)
+      // An unjournaled output from an interrupted attempt is replaced atomically.
+      try Data(contentsOf: output).write(to: destination, options: .atomic)
+      variants[index]["file"] = filename
+      variants[index]["photoUri"] = destination.absoluteString
+      variants[index]["stylesPrepared"] = true
+      job["variants"] = variants
+      try write(job, id: id)
+    }
+    return job
+  }
+
   // Run on the serial worker; PhotoKit's completion runs on a separate queue.
   private func changes(_ block: @escaping () -> Void) throws {
     let semaphore = DispatchSemaphore(value: 0)
@@ -386,6 +438,7 @@ final class HeifPlusEngine {
   func save(_ id: String) throws -> [String: Any] {
     var job = try read(id)
     if job["state"] as? String == "saved" { return job }
+    job = try prepareStyles(id)
     guard var variants = job["variants"] as? [[String: Any]], !variants.isEmpty else {
       throw error("HEIF+ ainda não foi revelado")
     }

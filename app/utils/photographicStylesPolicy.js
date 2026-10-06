@@ -1,16 +1,17 @@
+// Styles belong to the rendered HEIF, never to the sensor data in a DNG.
 const getAppleStylesSuspensionReason = ({
   livePhotoEnabled = false,
-  portraitModeEnabled = false,
   rawMode = "off",
+  heifPlusEnabled = false,
 } = {}) => {
+  // The still Styles graph does not yet provide a working Live Photo editor.
   if (livePhotoEnabled) return "Live Photo";
-  if (portraitModeEnabled) return "Retrato";
-  if (rawMode !== "off") return "RAW";
-  return null;
+  return rawMode === "raw" && !heifPlusEnabled ? "RAW" : null;
 };
 
 const getAppleStylesCompatibility = ({
   preferenceEnabled = false,
+  styles3PreferenceEnabled = false,
   ...captureModes
 } = {}) => {
   const suspensionReason = getAppleStylesSuspensionReason(captureModes);
@@ -18,6 +19,10 @@ const getAppleStylesCompatibility = ({
   return {
     preferenceEnabled: Boolean(preferenceEnabled),
     effective: Boolean(preferenceEnabled) && suspensionReason === null,
+    styles3Effective:
+      Boolean(preferenceEnabled) &&
+      Boolean(styles3PreferenceEnabled) &&
+      suspensionReason === null,
     suspensionReason: preferenceEnabled ? suspensionReason : null,
   };
 };

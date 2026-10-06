@@ -1,20 +1,31 @@
 import { getHeifPlusPolicy } from "./utils/heifPlusSettings";
 import { isHeifPlusAvailable } from "../modules/camera-raw-capture";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Alert, Animated, Platform, Pressable, Text, View } from "react-native";
+import { Stack } from "expo-router";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Alert, Animated, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { consumePendingLockedCameraCaptures } from "../modules/camera-control-button";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
-import ExposureSlider from "./components/ExposureSlider";
+import CameraStartupControls from "./components/CameraStartupControls";
+import useCameraStartup from "./hooks/useCameraStartup";
+import PortraitAdjustmentSlider from "./components/PortraitAdjustmentSlider";
 import FocusBracketingPanel from "./components/FocusBracketingPanel";
 import useFocusBracketing from "./hooks/useFocusBracketing";
 import ManualControlsPanel from "./components/ManualControlsPanel";
 import NativeCapturePreview from "./components/NativeCapturePreview";
 import TopBar from "./components/TopBar";
+import useTopBarNotice from "./hooks/useTopBarNotice";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
 import useCameraActivity from "./hooks/useCameraActivity";
@@ -55,9 +66,11 @@ import { getAppleStylesCompatibility } from "./utils/photographicStylesPolicy";
 import {
   DEFAULT_ASPECT_RATIO,
   getAspectRatioValue,
+  getPreviewDimensions,
 } from "./utils/aspectRatios";
 
 export default function App() {
+  const { width: screenWidth } = useWindowDimensions();
   const cameraScreenActive = useCameraActivity();
   const {
     retroStyle,
@@ -78,9 +91,13 @@ export default function App() {
     photoCopyright,
     location,
     saveAsJpeg,
-    photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSupport,
+    photoFormat,
+    setPhotoFormat,
+    heifPlusSettings,
+    setHeifPlusSupport,
     setPreserveApplePhotographicStyles,
     preserveApplePhotographicStyles,
+    photographicStyles3Enabled,
     firstTime,
     loading,
     saveOriginalWithoutEffects,
@@ -104,7 +121,7 @@ export default function App() {
     requestLocationPermission,
   } = useCameraBootstrap({ customLuts });
   const cameraFeaturesEnabled =
-    !firstTime && cameraPermission === "granted";
+    !loading && !firstTime && cameraPermission === "granted";
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -116,6 +133,12 @@ export default function App() {
   const [aspectRatio, setAspectRatio] = useState(DEFAULT_ASPECT_RATIO);
   const [previewAvailableHeight, setPreviewAvailableHeight] = useState(0);
   const captureAspectRatio = getAspectRatioValue(aspectRatio);
+  const previewDimensions = getPreviewDimensions({
+    screenWidth,
+    retroStyle,
+    aspectRatio,
+    availableHeight: 0,
+  });
   const zoomSV = useSharedValue(1);
   const lastZoom = useSharedValue(1);
 
@@ -131,6 +154,13 @@ export default function App() {
   const { orientation: scanOrientation } = useDeviceOrientationState();
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const startup = useCameraStartup({
+    loading,
+    ready:
+      firstTime ||
+      cameraReady ||
+      (cameraPermission !== null && cameraPermission !== "granted"),
+  });
   const [activeControl, setActiveControl] = useState("none");
   const [stackingFinishing, setStackingFinishing] = useState(false);
   const [stackingSoundSignal, setStackingSoundSignal] = useState(0);
@@ -161,15 +191,20 @@ export default function App() {
   const portraitCapture = usePortraitCapture(captureDevice);
   const imageStacking = useImageStacking(captureDevice);
   const focusBracketing = useFocusBracketing({
-    deviceId: captureDevice?.id, zoomFactor: zoom,
+    deviceId: captureDevice?.id,
+    zoomFactor: zoom,
     enabled: imageStacking.strategyId === "focusBracketing",
-    ready: cameraReady, capturing: imageStacking.capturing,
+    ready: cameraReady,
+    capturing: imageStacking.capturing,
   });
   const heifPlusPolicy = getHeifPlusPolicy({
-    photoFormat: rawCapture.processedEnabled ? photoFormat : null, rawMode: rawCapture.rawMode,
+    photoFormat: rawCapture.processedEnabled ? photoFormat : null,
+    rawMode: rawCapture.rawMode,
     capabilities: isHeifPlusAvailable() ? rawCapture.capabilities : null,
-    livePhotoEnabled: livePhoto.enabled, portraitModeEnabled: portraitCapture.enabled,
-    stackingEnabled: imageStacking.enabled, platform: Platform.OS,
+    livePhotoEnabled: livePhoto.enabled,
+    portraitModeEnabled: portraitCapture.enabled,
+    stackingEnabled: imageStacking.enabled,
+    platform: Platform.OS,
   });
   const compositionModel = useCompositionModel();
   const intelligentModelReady = compositionModel.status.state === "ready";
@@ -178,17 +213,30 @@ export default function App() {
       getAppleStylesCompatibility({
         preferenceEnabled:
           Platform.OS === "ios" && preserveApplePhotographicStyles,
+        styles3PreferenceEnabled: photographicStyles3Enabled,
         livePhotoEnabled: livePhoto.enabled,
-        portraitModeEnabled: portraitCapture.enabled,
-        rawMode: heifPlusPolicy.effective ? heifPlusPolicy.rawMode : rawCapture.rawMode,
+        heifPlusEnabled: heifPlusPolicy.effective,
+        rawMode: heifPlusPolicy.effective
+          ? heifPlusPolicy.rawMode
+          : rawCapture.rawMode,
       }),
     [
       livePhoto.enabled,
-      portraitCapture.enabled,
       preserveApplePhotographicStyles,
-      rawCapture.rawMode, heifPlusPolicy.effective, heifPlusPolicy.rawMode,
+      photographicStyles3Enabled,
+      rawCapture.rawMode,
+      heifPlusPolicy.effective,
+      heifPlusPolicy.rawMode,
     ],
   );
+  const topBarNotice = useTopBarNotice();
+  const { showNotice: showTopBarNotice } = topBarNotice;
+  useEffect(() => {
+    if (appleStylesCompatibility.suspensionReason) {
+      showTopBarNotice("Estilos Apple pausados");
+    }
+  }, [appleStylesCompatibility.suspensionReason, showTopBarNotice]);
+
   const nativeCaptureMode = imageStacking.enabled
     ? "stacking"
     : livePhoto.enabled
@@ -548,15 +596,26 @@ export default function App() {
       )
         return;
 
-      if (imageStacking.strategyId === "focusBracketing" && !focusBracketing.valid) {
-        Alert.alert("Focus Bracketing", focusBracketing.error || "Ajuste os dois seletores de foco antes de disparar.");
+      if (
+        imageStacking.strategyId === "focusBracketing" &&
+        !focusBracketing.valid
+      ) {
+        Alert.alert(
+          "Focus Bracketing",
+          focusBracketing.error ||
+            "Ajuste os dois seletores de foco antes de disparar.",
+        );
         return;
       }
       stackingStartInFlightRef.current = true;
       setIsProcessing(true);
       try {
         const result = await imageStacking.start({
-          outputFormat: Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
+          outputFormat:
+            Platform.OS === "ios" &&
+            (appleStylesCompatibility.effective || !saveAsJpeg)
+              ? "heif"
+              : "jpeg",
           previewDoubleExposure,
           previewStacking,
           focusBracketing: focusBracketing.config,
@@ -590,9 +649,15 @@ export default function App() {
             captureMode: "stacking",
             stackingMetadata: result,
             preserveApplePhotographicStyles: appleStylesCompatibility.effective,
+            photographicStyles3Enabled:
+              appleStylesCompatibility.styles3Effective,
+            cameraPosition: activeLens?.device?.position,
             extraData: {
               outputFormat:
-                Platform.OS === "ios" && !saveAsJpeg ? "heif" : "jpeg",
+                Platform.OS === "ios" &&
+                (appleStylesCompatibility.effective || !saveAsJpeg)
+                  ? "heif"
+                  : "jpeg",
             },
           }),
         );
@@ -627,7 +692,10 @@ export default function App() {
     }
 
     if (heifPlusPolicy.effective && heifPlusPendingCount >= 3) {
-      Alert.alert("Fila HEIF+ cheia", "Aguarde o processamento ou gerencie as capturas pendentes nas configurações.");
+      Alert.alert(
+        "Fila HEIF+ cheia",
+        "Aguarde o processamento ou gerencie as capturas pendentes nas configurações.",
+      );
       return;
     }
     if (captureInFlightRef.current || isProcessing || !cameraReady) return;
@@ -667,30 +735,47 @@ export default function App() {
         aspectRatio: captureAspectRatio,
         manualSettings,
         rawMode: heifPlusPolicy.rawMode,
-        rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
-        heifPlus: heifPlusPolicy.effective ? {
-          settings: heifPlusSettings,
-          rawPairEnabled: rawCapture.rawModeEnabled && rawCapture.processedEnabled,
-          projectAlbum: activeProject ? getProjectAlbumName(activeProject) : null,
-          catalogMetadata: { author: photoAuthor, copyright: photoCopyright },
-          intelligence: {
-            generateTags: intelligentModelReady && intelligentTagsEnabled,
-            generateFilename: intelligentModelReady && intelligentFilenameEnabled,
-          },
-        } : null,
+        rawPairEnabled:
+          rawCapture.rawModeEnabled && rawCapture.processedEnabled,
+        heifPlus: heifPlusPolicy.effective
+          ? {
+              settings: heifPlusSettings,
+              rawPairEnabled:
+                rawCapture.rawModeEnabled && rawCapture.processedEnabled,
+              projectAlbum: activeProject
+                ? getProjectAlbumName(activeProject)
+                : null,
+              catalogMetadata: {
+                author: photoAuthor,
+                copyright: photoCopyright,
+              },
+              intelligence: {
+                generateTags: intelligentModelReady && intelligentTagsEnabled,
+                generateFilename:
+                  intelligentModelReady && intelligentFilenameEnabled,
+              },
+            }
+          : null,
         livePhotoEnabled: livePhoto.enabled,
         livePhotoDeviceId: activeLens?.device?.id,
         portraitModeEnabled: portraitCapture.enabled,
         portraitDeviceId: activeLens?.device?.id,
+        portraitAperture: portraitCapture.aperture,
         outputFormat:
           Platform.OS === "ios" &&
           (preserveApplePhotographicStyles || !saveAsJpeg)
             ? "heif"
             : "jpeg",
         preserveApplePhotographicStyles: appleStylesCompatibility.effective,
+        photographicStyles3Enabled: appleStylesCompatibility.styles3Effective,
+        cameraPosition: activeLens?.device?.position,
       });
     } catch (error) {
-      Alert.alert("Falha na captura HEIF+", String(error.message || error));
+      if (portraitCapture.enabled) {
+        showTopBarNotice("Falha no retrato. Tente novamente.");
+      } else {
+        Alert.alert("Falha na captura HEIF+", String(error.message || error));
+      }
     } finally {
       captureInFlightRef.current = false;
     }
@@ -718,13 +803,24 @@ export default function App() {
     manual.wbAuto,
     livePhoto.enabled,
     portraitCapture.enabled,
-    heifPlusPolicy.rawMode, heifPlusPolicy.effective, heifPlusSettings, heifPlusPendingCount,
-    rawCapture.rawModeEnabled, rawCapture.processedEnabled,
-    activeProject, photoAuthor, photoCopyright, intelligentModelReady,
-    intelligentTagsEnabled, intelligentFilenameEnabled,
+    portraitCapture.aperture,
+    showTopBarNotice,
+    heifPlusPolicy.rawMode,
+    heifPlusPolicy.effective,
+    heifPlusSettings,
+    heifPlusPendingCount,
+    rawCapture.rawModeEnabled,
+    rawCapture.processedEnabled,
+    activeProject,
+    photoAuthor,
+    photoCopyright,
+    intelligentModelReady,
+    intelligentTagsEnabled,
+    intelligentFilenameEnabled,
     saveAsJpeg,
     preserveApplePhotographicStyles,
     appleStylesCompatibility.effective,
+    appleStylesCompatibility.styles3Effective,
     saveOriginalWithoutEffects,
     selectedGrainId,
     selectedHalationId,
@@ -773,7 +869,8 @@ export default function App() {
           stackingRestoreRef.current = null;
           if (previous.rawMode !== "off" && rawCapture.available) {
             rawCapture.setRawMode(previous.rawMode);
-            if (!previous.processedEnabled) rawCapture.toggleFormat("processed");
+            if (!previous.processedEnabled)
+              rawCapture.toggleFormat("processed");
           } else if (previous.livePhoto && livePhoto.available) {
             livePhoto.setEnabled(true);
           } else if (previous.portrait && portraitCapture.available) {
@@ -810,11 +907,20 @@ export default function App() {
   );
 
   useEffect(() => {
-    if (imageStacking.capabilities && imageStacking.strategyId &&
-        !imageStacking.capabilities.supportedStrategies.includes(imageStacking.strategyId)) {
+    if (
+      imageStacking.capabilities &&
+      imageStacking.strategyId &&
+      !imageStacking.capabilities.supportedStrategies.includes(
+        imageStacking.strategyId,
+      )
+    ) {
       void handleSelectImageStackingStrategy(null);
     }
-  }, [imageStacking.capabilities, imageStacking.strategyId, handleSelectImageStackingStrategy]);
+  }, [
+    imageStacking.capabilities,
+    imageStacking.strategyId,
+    handleSelectImageStackingStrategy,
+  ]);
 
   const handleCameraReady = useCallback(() => {
     if (!cameraScreenActive) return;
@@ -845,12 +951,20 @@ export default function App() {
   }, [cameraScreenActive]);
 
   useVolumeShutter({
-    enabled: cameraScreenActive && !firstTime && cameraPermission === "granted" && cameraReady,
+    enabled:
+      cameraScreenActive &&
+      !firstTime &&
+      cameraPermission === "granted" &&
+      cameraReady,
     onVolumeChange: handleTakePicture,
   });
 
   useCameraControlButton({
-    enabled: cameraScreenActive && !firstTime && cameraPermission === "granted" && cameraReady,
+    enabled:
+      cameraScreenActive &&
+      !firstTime &&
+      cameraPermission === "granted" &&
+      cameraReady,
     onPress: handleTakePicture,
   });
 
@@ -871,6 +985,7 @@ export default function App() {
   );
 
   const topBarProps = {
+    notice: topBarNotice,
     activeControl,
     doubleCaptureMode,
     firstTime,
@@ -926,7 +1041,8 @@ export default function App() {
     },
     imageStackingAvailable: imageStacking.available,
     imageStackingStrategyId: imageStacking.strategyId,
-    imageStackingSupportedStrategies: imageStacking.capabilities?.supportedStrategies || [],
+    imageStackingSupportedStrategies:
+      imageStacking.capabilities?.supportedStrategies || [],
     onSelectImageStackingStrategy: handleSelectImageStackingStrategy,
     selectedLutId,
     smileDetectionEnabled,
@@ -976,10 +1092,9 @@ export default function App() {
     onCancelStacking: imageStacking.cancel,
   };
 
-  if (loading) return null;
-
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      <Stack.Screen options={{ statusBarHidden: true }} />
       <Animated.View
         pointerEvents="none"
         style={[
@@ -998,7 +1113,7 @@ export default function App() {
       </View>
 
       {/* {isProcessing && <View style={styles.processingOverlay} />} */}
-      {firstTime && (
+      {!loading && firstTime && (
         <Welcome
           permissions={{
             cameraPermission,
@@ -1011,124 +1126,152 @@ export default function App() {
         />
       )}
 
-      {!topBarBelow && <TopBar {...topBarProps} />}
-
-      {!firstTime && cameraPermission === "granted" && (
-        <GestureDetector gesture={composedGestures}>
-          <View
-            style={styles.previewContainer}
-            onLayout={(event) =>
-              setPreviewAvailableHeight(event.nativeEvent.layout.height)
-            }
-          >
-            {cameraHandoffActive ? null : renderedNativeCaptureMode ? (
-              <NativeCapturePreview
-                mode={renderedNativeCaptureMode}
-                isActive={
-                  cameraScreenActive && nativeCaptureMode === renderedNativeCaptureMode &&
-                  !cameraHandoffActive
-                }
-                retroStyle={retroStyle}
-                device={activeLens?.device}
-                zoomFactor={renderedNativeCaptureMode === "stacking" ? zoom : activeLens?.zoomFactor}
-                flash={flash}
-                onCameraReady={handleCameraReady}
-                gridVisible={gridVisible}
-                levelVisible={levelVisible}
-                histogramVisible={histogramVisible}
-                zebraHighlightsEnabled={zebraHighlightsEnabled}
-                zebraShadowsEnabled={zebraShadowsEnabled}
-                exposure={exposure}
-                aspectRatio={aspectRatio}
-                availableHeight={previewAvailableHeight}
-                doubleCaptureMode={doubleCaptureMode}
-                smileDetectionEnabled={smileDetectionEnabled}
-                onSmileDetected={handleTakePicture}
-                onStackingProgress={imageStacking.handleProgress}
-                effectPreview={effectPreview}
-                previewDoubleExposure={previewDoubleExposure}
-                previewStacking={previewStacking}
-              />
-            ) : (
-              <CameraPreview
-                retroStyle={retroStyle}
-                cameraRef={cameraRef}
-                facing={facing}
-                device={activeLens?.device}
-                flash={flash}
-                zoom={zoom}
-                exposure={exposure}
-                pictureSize={pictureSize}
-                onCameraReady={handleCameraReady}
-                gridVisible={gridVisible}
-                levelVisible={levelVisible}
-                histogramVisible={histogramVisible}
-                zebraHighlightsEnabled={zebraHighlightsEnabled}
-                zebraShadowsEnabled={zebraShadowsEnabled}
-                setMinZoom={setMinZoom}
-                setMaxZoom={setMaxZoom}
-                onSmileDetected={handleTakePicture}
-                smileDetectionEnabled={smileDetectionEnabled}
-                location={location}
-                aspectRatio={aspectRatio}
-                availableHeight={previewAvailableHeight}
-                doubleCaptureMode={doubleCaptureMode}
-                isActive={cameraScreenActive && !firstTime && !nativeCaptureMode}
-                manualPhotoMode={manual.manualMode === "manual"}
-                manualExposureActive={
-                  manual.manualMode === "manual" &&
-                  (!manual.isoAuto || !manual.shutterAuto)
-                }
-                rawPhotoMode={rawCapture.rawModeEnabled || heifPlusPolicy.effective}
-                onRawCapabilities={rawCapture.updateCapabilities}
-                onFocusAtPoint={manual.focusAtPoint}
-                compositionScan={compositionScan}
-                onPreviewLayout={setScanPreviewLayout}
-                effectPreview={effectPreview}
-                onCameraStopped={handleCameraStopped}
-              />
-            )}
-            {hasMediaPermission === false && (
-              <View style={styles.permissionBanner}>
-                <View style={styles.permissionBannerIcon}>
-                  <Ionicons name="images-outline" size={22} color="#ffb21d" />
-                </View>
-                <View style={styles.permissionBannerCopy}>
-                  <Text style={styles.permissionBannerTitle}>
-                    Permita acesso às fotos
-                  </Text>
-                  <Text style={styles.permissionBannerText}>
-                    O Komorebi precisa salvar as fotos que você fizer.
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Permitir acesso à biblioteca de fotos"
-                  onPress={requestMediaPermission}
-                  style={({ pressed }) => [
-                    styles.permissionButtonCompact,
-                    pressed && styles.permissionButtonPressed,
-                  ]}
-                >
-                  <Text style={styles.permissionButtonCompactText}>
-                    Permitir
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </GestureDetector>
+      {!topBarBelow && (
+        <CameraStartupControls
+          startup={startup}
+          kind="top"
+          controlCount={topBarControls.length}
+        >
+          <TopBar {...topBarProps} />
+        </CameraStartupControls>
       )}
 
-      {appleStylesCompatibility.suspensionReason && (
-        <View style={styles.appleStylesPaused} pointerEvents="none">
-          <Text style={styles.appleStylesPausedText}>
-            Estilos Apple pausados: {appleStylesCompatibility.suspensionReason}
-          </Text>
-        </View>
+      {(loading ||
+        (!firstTime &&
+          (cameraPermission === null || cameraPermission === "granted"))) && (
+        <CameraStartupControls
+          startup={startup}
+          kind="viewfinder"
+          style={retroStyle && !topBarBelow && { marginTop: 8 }}
+          viewfinderStyle={{
+            width: previewDimensions.width,
+            height: previewDimensions.height,
+            borderRadius: retroStyle ? 10 : 0,
+          }}
+        >
+          <GestureDetector gesture={composedGestures}>
+            <View
+              style={[
+                styles.previewContainer,
+                { height: previewDimensions.height },
+              ]}
+              onLayout={(event) =>
+                setPreviewAvailableHeight(event.nativeEvent.layout.height)
+              }
+            >
+              {!loading && cameraPermission === "granted" && (
+                cameraHandoffActive ? null : renderedNativeCaptureMode ? (
+                <NativeCapturePreview
+                  mode={renderedNativeCaptureMode}
+                  isActive={
+                    cameraScreenActive &&
+                    nativeCaptureMode === renderedNativeCaptureMode &&
+                    !cameraHandoffActive
+                  }
+                  retroStyle={retroStyle}
+                  device={activeLens?.device}
+                  zoomFactor={
+                    renderedNativeCaptureMode === "stacking"
+                      ? zoom
+                      : activeLens?.zoomFactor
+                  }
+                  flash={flash}
+                  onCameraReady={handleCameraReady}
+                  gridVisible={gridVisible}
+                  levelVisible={levelVisible}
+                  histogramVisible={histogramVisible}
+                  zebraHighlightsEnabled={zebraHighlightsEnabled}
+                  zebraShadowsEnabled={zebraShadowsEnabled}
+                  exposure={exposure}
+                  portraitAperture={portraitCapture.aperture}
+                  aspectRatio={aspectRatio}
+                  availableHeight={previewAvailableHeight}
+                  doubleCaptureMode={doubleCaptureMode}
+                  smileDetectionEnabled={smileDetectionEnabled}
+                  onSmileDetected={handleTakePicture}
+                  onStackingProgress={imageStacking.handleProgress}
+                  effectPreview={effectPreview}
+                  previewDoubleExposure={previewDoubleExposure}
+                  previewStacking={previewStacking}
+                />
+              ) : (
+                <CameraPreview
+                  retroStyle={retroStyle}
+                  cameraRef={cameraRef}
+                  facing={facing}
+                  device={activeLens?.device}
+                  flash={flash}
+                  zoom={zoom}
+                  exposure={exposure}
+                  pictureSize={pictureSize}
+                  onCameraReady={handleCameraReady}
+                  gridVisible={gridVisible}
+                  levelVisible={levelVisible}
+                  histogramVisible={histogramVisible}
+                  zebraHighlightsEnabled={zebraHighlightsEnabled}
+                  zebraShadowsEnabled={zebraShadowsEnabled}
+                  setMinZoom={setMinZoom}
+                  setMaxZoom={setMaxZoom}
+                  onSmileDetected={handleTakePicture}
+                  smileDetectionEnabled={smileDetectionEnabled}
+                  location={location}
+                  aspectRatio={aspectRatio}
+                  availableHeight={previewAvailableHeight}
+                  doubleCaptureMode={doubleCaptureMode}
+                  isActive={
+                    cameraScreenActive && !firstTime && !nativeCaptureMode
+                  }
+                  manualPhotoMode={manual.manualMode === "manual"}
+                  manualExposureActive={
+                    manual.manualMode === "manual" &&
+                    (!manual.isoAuto || !manual.shutterAuto)
+                  }
+                  rawPhotoMode={
+                    rawCapture.rawModeEnabled || heifPlusPolicy.effective
+                  }
+                  onRawCapabilities={rawCapture.updateCapabilities}
+                  onFocusAtPoint={manual.focusAtPoint}
+                  compositionScan={compositionScan}
+                  onPreviewLayout={setScanPreviewLayout}
+                  effectPreview={effectPreview}
+                  onCameraStopped={handleCameraStopped}
+                />
+              )
+              )}
+              {hasMediaPermission === false && (
+                <View style={styles.permissionBanner}>
+                  <View style={styles.permissionBannerIcon}>
+                    <Ionicons name="images-outline" size={22} color="#ffb21d" />
+                  </View>
+                  <View style={styles.permissionBannerCopy}>
+                    <Text style={styles.permissionBannerTitle}>
+                      Permita acesso às fotos
+                    </Text>
+                    <Text style={styles.permissionBannerText}>
+                      O Komorebi precisa salvar as fotos que você fizer.
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Permitir acesso à biblioteca de fotos"
+                    onPress={requestMediaPermission}
+                    style={({ pressed }) => [
+                      styles.permissionButtonCompact,
+                      pressed && styles.permissionButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.permissionButtonCompactText}>
+                      Permitir
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </GestureDetector>
+        </CameraStartupControls>
       )}
 
-      {!firstTime &&
+      {!loading && !firstTime &&
         cameraPermission !== null &&
         cameraPermission !== "granted" && (
           <View style={styles.permissionContainer}>
@@ -1149,96 +1292,129 @@ export default function App() {
                 pressed && styles.permissionButtonPressed,
               ]}
             >
-              <Ionicons name="shield-checkmark-outline" size={19} color="#111" />
+              <Ionicons
+                name="shield-checkmark-outline"
+                size={19}
+                color="#111"
+              />
               <Text style={styles.permissionButtonText}>Conceder acesso</Text>
             </Pressable>
           </View>
         )}
 
       {topBarBelow && (
-        <View style={styles.topBarBelow}>
-          <TopBar {...topBarProps} />
+        <View style={[styles.topBarBelow, retroStyle && { marginTop: 8 }]}>
+          <CameraStartupControls
+            startup={startup}
+            kind="top"
+            controlCount={topBarControls.length}
+          >
+            <TopBar {...topBarProps} />
+          </CameraStartupControls>
         </View>
       )}
 
-      <Animated.View
-        style={[
-          styles.adjustmentControlsSlot,
-          {
-            opacity: normalControlsOpacity,
-            transform: [{ translateY: normalControlsTranslate }],
-          },
-        ]}
-        pointerEvents={
-          activeControl === "none" || activeControl === "manual"
-            ? "auto"
-            : "none"
-        }
-      >
-        {imageStacking.strategyId === "focusBracketing" ? (
-          <FocusBracketingPanel topBarBelow={topBarBelow} focus={focusBracketing} disabled={!cameraReady || imageStacking.capturing || isProcessing} />
-        ) : manual.manualMode === "manual" && !imageStacking.enabled ? (
-          <ManualControlsPanel
-            manual={manual}
-            topBarBelow={topBarBelow}
-            exposure={exposure}
-            setExposure={setExposure}
-          />
-        ) : (
-          <ExposureSlider
-            exposure={exposure}
-            setExposure={setExposure}
-            topBarBelow={topBarBelow}
-          />
-        )}
-      </Animated.View>
+      <CameraStartupControls startup={startup} kind="adjustment">
+        <Animated.View
+          style={[
+            styles.adjustmentControlsSlot,
+            (imageStacking.strategyId === "focusBracketing" ||
+              (manual.manualMode === "manual" &&
+                !imageStacking.enabled &&
+                !portraitCapture.enabled)) && { height: 76 },
+            {
+              opacity: normalControlsOpacity,
+              transform: [{ translateY: normalControlsTranslate }],
+            },
+          ]}
+          pointerEvents={
+            activeControl === "none" || activeControl === "manual"
+              ? "auto"
+              : "none"
+          }
+        >
+          {imageStacking.strategyId === "focusBracketing" ? (
+            <FocusBracketingPanel
+              topBarBelow={topBarBelow}
+              focus={focusBracketing}
+              disabled={!cameraReady || imageStacking.capturing || isProcessing}
+            />
+          ) : manual.manualMode === "manual" && !imageStacking.enabled && !portraitCapture.enabled ? (
+            <ManualControlsPanel
+              manual={manual}
+              topBarBelow={topBarBelow}
+              exposure={exposure}
+              setExposure={setExposure}
+            />
+          ) : (
+            <PortraitAdjustmentSlider
+              portrait={portraitCapture}
+              exposure={exposure}
+              setExposure={setExposure}
+              topBarBelow={topBarBelow}
+            />
+          )}
+        </Animated.View>
+      </CameraStartupControls>
 
-      <BottomControls
-        controlsAnim={controlsAnim}
-        displayedControl={displayedControl}
-        activeControl={activeControl}
-        takePicture={handleTakePicture}
-        onToggleFacing={handleToggleFacing}
-        zoom={zoom}
-        setZoom={setZoom}
-        onZoomStart={handleManualZoomStart}
-        exposure={exposure}
-        setExposure={setExposure}
-        selectedLutId={selectedLutId}
-        setSelectedLutId={setSelectedLutId}
-        selectedGrainId={selectedGrainId}
-        setSelectedGrainId={setSelectedGrainId}
-        selectedHalationId={selectedHalationId}
-        setSelectedHalationId={setSelectedHalationId}
-        zoomSV={zoomSV}
-        minZoom={minZoom}
-        maxZoom={maxZoom}
-        onSliderRelease={() => toggleMode("none")}
-        availableLuts={availableLuts}
-        availableGrains={AVAILABLE_GRAINS}
-        availableHalations={AVAILABLE_HALATIONS}
-        isProcessing={isProcessing || (heifPlusPolicy.effective && heifPlusPendingCount >= 3)}
-        showProcessingFeedback={
-          isProcessing && (!imageStacking.capturing || stackingFinishing)
-        }
-        processingQueueLength={Math.max(processingQueue.length, heifPlusPendingCount)}
-        galleryRefreshKey={galleryRefreshKey}
-        activeProject={activeProject}
-        imageStackingCapturing={imageStacking.capturing}
-        imageStackingFinishing={stackingFinishing}
-        imageStackingStrategyId={imageStacking.strategyId}
-        imageStackingProgressState={imageStacking.progress.state}
-        stackingSoundSignal={stackingSoundSignal}
-        imageStackingContinuousCapturing={
-          imageStacking.capturing &&
-          ["bulb", "motionBlur", "doubleExposure"].includes(
-            imageStacking.strategyId,
-          )
-        }
-        lenses={lenses}
-        activeLensId={activeLensId}
-        onSelectLens={handleSelectLens}
-      />
+      <CameraStartupControls
+        startup={startup}
+        kind="bottom"
+        lensCount={lenses.length}
+      >
+        <BottomControls
+          controlsAnim={controlsAnim}
+          displayedControl={displayedControl}
+          activeControl={activeControl}
+          takePicture={handleTakePicture}
+          onToggleFacing={handleToggleFacing}
+          zoom={zoom}
+          setZoom={setZoom}
+          onZoomStart={handleManualZoomStart}
+          exposure={exposure}
+          setExposure={setExposure}
+          selectedLutId={selectedLutId}
+          setSelectedLutId={setSelectedLutId}
+          selectedGrainId={selectedGrainId}
+          setSelectedGrainId={setSelectedGrainId}
+          selectedHalationId={selectedHalationId}
+          setSelectedHalationId={setSelectedHalationId}
+          zoomSV={zoomSV}
+          minZoom={minZoom}
+          maxZoom={maxZoom}
+          onSliderRelease={() => toggleMode("none")}
+          availableLuts={availableLuts}
+          availableGrains={AVAILABLE_GRAINS}
+          availableHalations={AVAILABLE_HALATIONS}
+          isProcessing={
+            isProcessing ||
+            (heifPlusPolicy.effective && heifPlusPendingCount >= 3)
+          }
+          showProcessingFeedback={
+            isProcessing && (!imageStacking.capturing || stackingFinishing)
+          }
+          processingQueueLength={Math.max(
+            processingQueue.length,
+            heifPlusPendingCount,
+          )}
+          galleryRefreshKey={galleryRefreshKey}
+          activeProject={activeProject}
+          imageStackingCapturing={imageStacking.capturing}
+          imageStackingFinishing={stackingFinishing}
+          imageStackingStrategyId={imageStacking.strategyId}
+          imageStackingProgressState={imageStacking.progress.state}
+          stackingSoundSignal={stackingSoundSignal}
+          imageStackingContinuousCapturing={
+            imageStacking.capturing &&
+            ["bulb", "motionBlur", "doubleExposure"].includes(
+              imageStacking.strategyId,
+            )
+          }
+          lenses={lenses}
+          activeLensId={activeLensId}
+          onSelectLens={handleSelectLens}
+        />
+      </CameraStartupControls>
     </SafeAreaView>
   );
 }

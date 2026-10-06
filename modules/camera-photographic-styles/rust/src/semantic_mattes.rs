@@ -1,7 +1,7 @@
 //! Photographic Styles 3 — inject the 12 per-part `2026:photo:aux:semantic*`
 //! matte items into an existing converted HEIC.
 //!
-//! Native iPhone captures always carry twelve 768×576 8-bit HEVC matte items
+//! The supplied working capture carries twelve 768×576 mono HEVC matte items
 //! (nose / skin v2 / non-face skin / lips / teeth v2 / person / glasses v2 /
 //! eyebrows / tattoo / hands / ears / face skin), each declared with its own
 //! `auxC` property and referenced `auxl → [primary, tmap]`. Converted output
@@ -11,10 +11,8 @@
 //! Container surgery mirrors `texture_styles::inject_texture_styles`: rebuild
 //! iinf / iloc / iref / ipma / ipco, grow mdat, shift construction=0 extents.
 
-use crate::hevc::{
-    drop_parameter_nals, extract_hvcc_config_with_chroma, hevc_byte_stream_to_length_prefixed,
-    x265_encode_tiles,
-};
+#[path = "semantic_matte_templates.rs"]
+mod templates;
 use crate::isobmff;
 
 pub const SEMANTIC_MATTE_URNS: &[&str] = &[
@@ -32,8 +30,41 @@ pub const SEMANTIC_MATTE_URNS: &[&str] = &[
     "tag:apple.com,2026:photo:aux:semanticfaceskinmatte",
 ];
 
-const MATTE_W: u32 = 768;
-const MATTE_H: u32 = 576;
+fn matte_dimensions(data: &[u8]) -> Result<(u32, u32), String> {
+    let meta = isobmff::parse_source_meta(data)?;
+    let association = meta
+        .ipma_entries
+        .iter()
+        .find(|e| e.item_id == meta.primary_id)
+        .ok_or("primary properties missing")?;
+    let dimensions = association
+        .associations
+        .iter()
+        .find_map(|(id, _)| {
+            meta.props
+                .iter()
+                .find(|p| p.index == *id && p.ptype == "ispe")
+                .and_then(|p| isobmff::ispe_dimensions(&p.raw).ok())
+        })
+        .ok_or("primary dimensions missing")?;
+    let (w, h) = dimensions;
+    if w == 0 || h == 0 {
+        return Err("invalid primary dimensions".into());
+    }
+    // Match the app's three crop ratios with the native 768-pixel matte
+    // scale; pixel rounding in a 16:9 crop must not change its template.
+    if w == h {
+        return Ok((768, 768));
+    }
+    let landscape = w > h;
+    let ratio = w.max(h) as f64 / w.min(h) as f64;
+    let short = if ratio > 1.5 { 432 } else { 576 };
+    Ok(if landscape {
+        (768, short)
+    } else {
+        (short, 768)
+    })
+}
 
 fn make_box(btype: &[u8; 4], payload: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(8 + payload.len());
@@ -44,25 +75,27 @@ fn make_box(btype: &[u8; 4], payload: &[u8]) -> Vec<u8> {
 }
 
 /// Encode one zero-content matte and return (length-prefixed HEVC, hvcC).
-fn black_matte() -> Result<(Vec<u8>, Vec<u8>), String> {
-    let pixels = vec![0u8; (MATTE_W * MATTE_H) as usize];
-    let refs: Vec<&[u8]> = vec![&pixels];
-    let stream = x265_encode_tiles(&refs, MATTE_W, MATTE_H, 1, false)
-        .map_err(|e| format!("matte HEVC encode: {e}"))?
-        .into_iter()
-        .next()
-        .ok_or("matte encode produced no stream")?;
-    let hvcc = extract_hvcc_config_with_chroma(&stream, 0)
-        .ok_or("matte hvcC extraction failed")?;
-    let idr = drop_parameter_nals(&stream);
-    Ok((hevc_byte_stream_to_length_prefixed(&idr), hvcc))
+pub(crate) fn black_matte(matte_w: u32, matte_h: u32) -> Result<(Vec<u8>, Vec<u8>), String> {
+    let (stream, hvcc) =
+        templates::get(matte_w, matte_h).ok_or("unsupported semantic matte dimensions")?;
+    Ok((stream.to_vec(), hvcc.to_vec()))
 }
 
 /// Inject the 12 semantic part-matte items into `data`.
 pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
-    if data
-        .windows(SEMANTIC_MATTE_URNS[0].len())
-        .any(|w| w == SEMANTIC_MATTE_URNS[0].as_bytes())
+    let (w, h) = matte_dimensions(data)?;
+    let (stream, hvcc) = black_matte(w, h)?;
+    inject_with_matte(data, &stream, &hvcc)
+}
+
+pub(crate) fn inject_with_matte(
+    data: &[u8],
+    matte_stream: &[u8],
+    matte_hvcc: &[u8],
+) -> Result<Vec<u8>, String> {
+    if SEMANTIC_MATTE_URNS
+        .iter()
+        .any(|urn| data.windows(urn.len()).any(|w| w == urn.as_bytes()))
     {
         return Err("semantic mattes already present".into());
     }
@@ -85,13 +118,17 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
         .find(|b| b.btype == *b"iloc")
         .ok_or("iloc not found")?;
     let iref = children.iter().find(|b| b.btype == *b"iref");
-    let iprp = children.iter().find(|b| b.btype == *b"iprp").ok_or("iprp not found")?;
+    let iprp = children
+        .iter()
+        .find(|b| b.btype == *b"iprp")
+        .ok_or("iprp not found")?;
     let pitm = children
         .iter()
         .find(|b| b.btype == *b"pitm")
         .ok_or("pitm not found")?;
 
     let parsed = isobmff::parse_source_meta(data)?;
+    let (matte_w, matte_h) = matte_dimensions(data)?;
     let pitm_id = isobmff::parse_pitm(data, pitm);
     let id_exists = |id: u32| parsed.items.iter().any(|i| i.item_id == id);
     let primary_id = if pitm_id != 0 && id_exists(pitm_id) {
@@ -111,7 +148,7 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
         .map(|i| i.item_id);
 
     // ---- 1. Encode the shared black matte ------------------------------
-    let (matte_stream, matte_hvcc) = black_matte()?;
+    let matte_xmp = b"<x:xmpmeta xmlns:x=\"adobe:ns:meta/\"><rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\"><rdf:Description rdf:about=\"\" xmlns:fsincMattes=\"http://ns.apple.com/fsinc/1.0/\"><fsincMattes:FSINCMatteVersion>0</fsincMattes:FSINCMatteVersion></rdf:Description></rdf:RDF></x:xmpmeta>";
     let n = SEMANTIC_MATTE_URNS.len();
 
     // ---- 2. New item ids -------------------------------------------------
@@ -122,7 +159,11 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
         .max()
         .unwrap_or(0)
         .saturating_add(1);
-    let matte_ids: Vec<u32> = (0..n as u32).map(|i| next_id + i).collect();
+    let matte_ids: Vec<u32> = (0..n as u32).map(|i| next_id + 2 * i).collect();
+    let xmp_ids: Vec<u32> = matte_ids.iter().map(|id| id + 1).collect();
+    if next_id + (2 * n) as u32 > u16::MAX as u32 {
+        return Err("matte IDs exceed 16 bits".into());
+    }
 
     // ---- 3. iinf rebuild --------------------------------------------------
     let iinf_items = isobmff::parse_iinf(data, iinf)?;
@@ -131,11 +172,13 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
     let count_size = if iinf_version == 0 { 2 } else { 4 };
     let mut new_iinf_body = data[iinf.data_start..iinf.data_start + 4].to_vec();
     let entry_count_end = entry_count_pos + count_size;
-    new_iinf_body
-        .extend_from_slice(&(iinf_items.len() as u64 + n as u64).to_be_bytes()[8 - count_size..]);
+    new_iinf_body.extend_from_slice(
+        &(iinf_items.len() as u64 + (2 * n) as u64).to_be_bytes()[8 - count_size..],
+    );
     new_iinf_body.extend_from_slice(&data[entry_count_end..(iinf.box_start + iinf.size)]);
-    for &id in &matte_ids {
+    for (&id, &xmp_id) in matte_ids.iter().zip(&xmp_ids) {
         new_iinf_body.extend_from_slice(&isobmff::make_infe_box(id, "hvc1", 1));
+        new_iinf_body.extend_from_slice(&isobmff::make_mime_infe_box(xmp_id, 1));
     }
     let new_iinf = make_box(b"iinf", &new_iinf_body);
     let d_iinf = new_iinf.len() as i64 - iinf.size as i64;
@@ -149,7 +192,7 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
         new_props.push(raw);
         idx
     };
-    let ispe_idx = prop(isobmff::make_ispe_box(MATTE_W, MATTE_H), &mut next_index);
+    let ispe_idx = prop(isobmff::make_ispe_box(matte_w, matte_h), &mut next_index);
     let pixi_idx = prop(isobmff::PIXI_MONO8_BOX.to_vec(), &mut next_index);
     let hvcc_idx = prop(make_box(b"hvcC", &matte_hvcc), &mut next_index);
     let auxc_idxs: Vec<u32> = SEMANTIC_MATTE_URNS
@@ -161,11 +204,7 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
             prop(make_box(b"auxC", &payload), &mut next_index)
         })
         .collect();
-    let mut new_ipco: Vec<u8> = parsed
-        .props
-        .iter()
-        .flat_map(|p| p.raw.clone())
-        .collect();
+    let mut new_ipco: Vec<u8> = parsed.props.iter().flat_map(|p| p.raw.clone()).collect();
     for p in &new_props {
         new_ipco.extend_from_slice(p);
     }
@@ -185,7 +224,7 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
     // Serialize ver0/flags0 (u16 ids, 1-byte assocs). New entries: ispe,
     // pixi, auxC(essential), hvcC(essential) — mirrors the native matte.
     let ipma_ver = data[ipma.data_start];
-    let mut ipma_flags = data[ipma.data_start + 3];
+    let ipma_flags = data[ipma.data_start + 3];
     let mut entries = parsed.ipma_entries.clone();
     for (i, &id) in matte_ids.iter().enumerate() {
         entries.push(isobmff::IpmaEntry {
@@ -198,10 +237,10 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
             ],
         });
     }
-    // 1-byte associations cap the property index at 127; upgrade to 2-byte
-    // associations when the new auxC indexes exceed that.
-    if auxc_idxs.iter().any(|i| *i > 127) {
-        ipma_flags |= 2;
+    // Current Komorebi output uses compact associations. Reject unsupported
+    // widths rather than silently truncating new property indices.
+    if ipma_ver != 0 || ipma_flags & 1 != 0 || auxc_idxs.iter().any(|i| *i > 127) {
+        return Err("unsupported matte property association width".into());
     }
     let mut new_ipma_payload: Vec<u8> = vec![ipma_ver, 0, 0, ipma_flags];
     new_ipma_payload.extend_from_slice(&(entries.len() as u32).to_be_bytes());
@@ -231,33 +270,30 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
     let d_iprp = new_iprp.len() as i64 - iprp.size as i64;
 
     // ---- 6. iref rebuild (12 auxl → [primary, tmap]) ----------------------
-    let mut d_iref: i64 = 0;
-    let new_iref = if let Some(iref_box) = iref {
-        let body = data[iref_box.data_start..(iref_box.box_start + iref_box.size)].to_vec();
-        if body[0] != 0 {
-            return Err(format!("unsupported iref version {}", body[0]));
-        }
-        let mut new_body = body.clone();
-        for &id in &matte_ids {
-            let mut auxl = Vec::new();
-            auxl.extend_from_slice(&(id as u16).to_be_bytes());
-            // SDR captures have no tmap; the auxl degrades to [primary].
-            let targets: Vec<u32> = match tmap_id {
-                Some(tid) if tid != primary_id => vec![primary_id, tid],
-                _ => vec![primary_id],
-            };
-            auxl.extend_from_slice(&(targets.len() as u16).to_be_bytes());
-            for t in &targets {
-                auxl.extend_from_slice(&(*t as u16).to_be_bytes());
-            }
-            new_body.extend_from_slice(&make_box(b"auxl", &auxl));
-        }
-        let b = make_box(b"iref", &new_body);
-        d_iref = b.len() as i64 - iref_box.size as i64;
-        b
-    } else {
-        make_box(b"iref", &[])
+    let version = iref.map(|b| data[b.data_start]).unwrap_or(0);
+    let mut body = iref
+        .map(|b| data[b.data_start..b.data_end].to_vec())
+        .unwrap_or_else(|| vec![0, 0, 0, 0]);
+    let targets = match tmap_id {
+        Some(id) if id != primary_id => vec![primary_id, id],
+        _ => vec![primary_id],
     };
+    for (&id, &xmp_id) in matte_ids.iter().zip(&xmp_ids) {
+        body.extend_from_slice(&isobmff::make_iref_entry(
+            "auxl",
+            id,
+            &targets,
+            version != 0,
+        ));
+        body.extend_from_slice(&isobmff::make_iref_entry(
+            "cdsc",
+            xmp_id,
+            &[id],
+            version != 0,
+        ));
+    }
+    let new_iref = make_box(b"iref", &body);
+    let d_iref = new_iref.len() as i64 - iref.map(|b| b.size as i64).unwrap_or(0);
 
     // ---- 7. iloc rebuild (shift cm0, append 12 entries) -------------------
     let iloc_entries = isobmff::parse_iloc(data, iloc)?;
@@ -266,7 +302,8 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
         .find(|b| b.btype == *b"mdat")
         .ok_or("mdat box not found")?;
     let mdat_end = mdat.box_start + mdat.size;
-    let payload_len = (matte_stream.len() * n) as i64;
+    let stride = matte_stream.len() + matte_xmp.len();
+    let payload_len = (stride * n) as i64;
     // Two-pass: measure iloc growth (base fields + 12 new entries) before
     // computing the matte payload offsets.
     let build_entries = |delta_total: i64, payload_abs: u64| -> Vec<isobmff::IlocEntry> {
@@ -275,7 +312,11 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
             for ext in e.extents.iter_mut() {
                 if (e.construction_method & 0xF) == 0 {
                     let past_mdat = (ext.0 as i64) >= mdat_end as i64;
-                    let shift = delta_total + if past_mdat { payload_len } else { 0 };
+                    let shift = if ext.0 >= content_end as u64 {
+                        delta_total
+                    } else {
+                        0
+                    } + if past_mdat { payload_len } else { 0 };
                     ext.0 = (ext.0 as i64 + shift) as u64;
                 }
             }
@@ -287,8 +328,17 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
                 construction_method: 0,
                 data_reference_index: 0,
                 extents: vec![(
-                    payload_abs + (i as u64) * matte_stream.len() as u64,
+                    payload_abs + (i as u64) * stride as u64,
                     matte_stream.len() as u64,
+                )],
+            });
+            v.push(isobmff::IlocEntry {
+                item_id: xmp_ids[i],
+                construction_method: 0,
+                data_reference_index: 0,
+                extents: vec![(
+                    payload_abs + (i as u64) * stride as u64 + matte_stream.len() as u64,
+                    matte_xmp.len() as u64,
                 )],
             });
         }
@@ -297,7 +347,12 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
     let probe = isobmff::make_iloc_box(&build_entries(d_iinf + d_iprp + d_iref, 0));
     let d_iloc = probe.len() as i64 - iloc.size as i64;
     let delta_total = d_iinf + d_iprp + d_iref + d_iloc;
-    let payload_abs = (mdat_end as i64 + delta_total) as u64;
+    let payload_abs = (mdat_end as i64
+        + if content_end <= mdat.box_start {
+            delta_total
+        } else {
+            0
+        }) as u64;
     let new_iloc = isobmff::make_iloc_box(&build_entries(delta_total, payload_abs));
 
     // ---- 8. Assemble -------------------------------------------------------
@@ -315,12 +370,15 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
             new_meta_body.extend_from_slice(&data[child.box_start..child.data_end]);
         }
     }
+    if iref.is_none() {
+        new_meta_body.extend_from_slice(&new_iref);
+    }
     let new_meta = make_box(b"meta", &new_meta_body);
 
     // Grow mdat and place the 12 matte payloads inside it.
     let mut mdat_bytes = data[mdat.box_start..mdat_end].to_vec();
     let declared = u32::from_be_bytes([mdat_bytes[0], mdat_bytes[1], mdat_bytes[2], mdat_bytes[3]]);
-    let grown = mdat.size as u64 + (matte_stream.len() * n) as u64;
+    let grown = mdat.size as u64 + (stride * n) as u64;
     if declared == 1 {
         mdat_bytes[8..16].copy_from_slice(&grown.to_be_bytes());
     } else {
@@ -330,14 +388,102 @@ pub fn inject_semantic_mattes(data: &[u8]) -> Result<Vec<u8>, String> {
         mdat_bytes[0..4].copy_from_slice(&(grown as u32).to_be_bytes());
     }
 
-    let mut out = Vec::with_capacity(data.len() + delta_total as usize + matte_stream.len() * n);
-    out.extend_from_slice(&data[..meta_box.box_start]);
-    out.extend_from_slice(&new_meta);
-    out.extend_from_slice(&data[meta_box.box_start + meta_box.size as usize..mdat.box_start]);
-    out.extend_from_slice(&mdat_bytes);
-    for _ in 0..n {
-        out.extend_from_slice(&matte_stream);
+    let mut out = Vec::with_capacity((data.len() as i64 + delta_total + payload_len) as usize);
+    for b in &top {
+        if b.box_start == meta_box.box_start {
+            out.extend_from_slice(&new_meta);
+        } else if b.box_start == mdat.box_start {
+            out.extend_from_slice(&mdat_bytes);
+            for _ in 0..n {
+                out.extend_from_slice(matte_stream);
+                out.extend_from_slice(matte_xmp);
+            }
+        } else {
+            out.extend_from_slice(&data[b.box_start..b.data_end]);
+        }
     }
-    out.extend_from_slice(&data[mdat_end..]);
     Ok(out)
+}
+/// Check every auxiliary image and its own FSINC XMP, rather than treating
+/// one namespace string anywhere in the file as a complete PS3 graph.
+pub fn verify_semantic_mattes(data: &[u8]) -> bool {
+    let Ok(meta) = isobmff::parse_source_meta(data) else {
+        return false;
+    };
+    let targets: Vec<u32> = std::iter::once(meta.primary_id)
+        .chain(
+            meta.items
+                .iter()
+                .find(|i| i.itype.starts_with("tmap"))
+                .map(|i| i.item_id),
+        )
+        .collect();
+    for urn in SEMANTIC_MATTE_URNS {
+        let Some(prop) = meta.props.iter().find(|p| {
+            p.ptype == "auxC"
+                && p.raw
+                    .windows(urn.len() + 1)
+                    .any(|w| &w[..urn.len()] == urn.as_bytes() && w[urn.len()] == 0)
+        }) else {
+            return false;
+        };
+        let Some(association) = meta
+            .ipma_entries
+            .iter()
+            .find(|e| e.associations.iter().any(|(p, _)| *p == prop.index))
+        else {
+            return false;
+        };
+        let id = association.item_id;
+        if !meta
+            .items
+            .iter()
+            .any(|i| i.item_id == id && i.itype.starts_with("hvc1"))
+            || !meta
+                .refs
+                .iter()
+                .any(|r| r.rtype == "auxl" && r.from == id && r.to == targets)
+        {
+            return false;
+        }
+        for kind in ["ispe", "pixi", "hvcC"] {
+            if !association.associations.iter().any(|(idx, _)| {
+                meta.props
+                    .iter()
+                    .any(|p| p.index == *idx && p.ptype == kind)
+            }) {
+                return false;
+            }
+        }
+        let property = |kind: &str| {
+            association.associations.iter().find_map(|(index, _)| {
+                meta.props
+                    .iter()
+                    .find(|p| p.index == *index && p.ptype == kind)
+            })
+        };
+        if property("hvcC").and_then(|p| p.raw.get(24)).map(|v| v & 3) != Some(0)
+            || property("pixi").and_then(|p| p.raw.get(12..14)) != Some(&[1, 8][..])
+            || property("ispe").and_then(|p| isobmff::ispe_dimensions(&p.raw).ok())
+                != matte_dimensions(data).ok()
+        {
+            return false;
+        }
+        let Some(payload) = crate::styles_attach::item_payload_bytes(data, &meta, id) else {
+            return false;
+        };
+        if payload.is_empty() {
+            return false;
+        }
+        let has_xmp = meta.refs.iter().filter(|r|r.rtype == "cdsc" && r.to == vec![id]).any(|r| {
+            meta.items.iter().any(|i|i.item_id == r.from && i.itype.starts_with("mime")) &&
+            crate::styles_attach::item_payload_bytes(data,&meta,r.from).map(|b|
+                b.windows(b"<fsincMattes:FSINCMatteVersion>0</fsincMattes:FSINCMatteVersion>".len())
+                .any(|w|w == b"<fsincMattes:FSINCMatteVersion>0</fsincMattes:FSINCMatteVersion>")).unwrap_or(false)
+        });
+        if !has_xmp {
+            return false;
+        }
+    }
+    true
 }

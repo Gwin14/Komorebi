@@ -13,6 +13,7 @@
       "bundleIdentifier": "br.dev.fabiosantos.komorebi.app",
       "supportsTablet": true,
       "infoPlist": {
+        "UIViewControllerBasedStatusBarAppearance": true,
         "LSRequiresIPhoneOS": true,
         "UIRequiredDeviceCapabilities": ["camera"],
         "NSCameraUsageDescription": "Precisamos da câmera para tirar fotos."
@@ -44,10 +45,10 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withCameraStartupSplash",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icone.png",
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }

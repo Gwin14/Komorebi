@@ -1,3 +1,4 @@
+import CameraPhotographicStyles
 import ExpoModulesCore
 import AVFoundation
 import CoreMotion
@@ -56,6 +57,10 @@ public class CameraPortraitCaptureModule: Module {
     case captureSessionNotReady
     case captureFailed
     case missingPhotoData
+    case missingDepthData
+    case invalidDepthData
+    case depthEmbeddingFailed
+    case portraitRenderingFailed
     case photoLibraryDenied
 
     var errorDescription: String? {
@@ -74,6 +79,14 @@ public class CameraPortraitCaptureModule: Module {
         return "Portrait photo capture failed"
       case .missingPhotoData:
         return "Portrait photo capture did not return photo data"
+      case .missingDepthData:
+        return "Não foi possível obter profundidade para o retrato. Tente novamente com mais luz e distância do fundo."
+      case .invalidDepthData:
+        return "A câmera entregou um mapa de profundidade vazio para o retrato."
+      case .depthEmbeddingFailed:
+        return "Não foi possível preservar os dados de profundidade do retrato."
+      case .portraitRenderingFailed:
+        return "Não foi possível renderizar o desfoque do retrato."
       case .photoLibraryDenied:
         return "Photo library access was denied"
       }
@@ -85,7 +98,7 @@ public class CameraPortraitCaptureModule: Module {
     let supportsPortraitEffectsMatte: Bool
 
     var supportsPortraitCapture: Bool {
-      supportsDepthData || supportsPortraitEffectsMatte
+      supportsDepthData
     }
   }
 
@@ -108,6 +121,14 @@ public class CameraPortraitCaptureModule: Module {
 
       Prop("zoomFactor") { (view, zoomFactor: Double?) in
         view.zoomFactor = CGFloat(zoomFactor ?? 1)
+      }
+
+      Prop("portraitAperture") { (view, aperture: Double?) in
+        view.portraitAperture = aperture ?? 4.5
+      }
+
+      Prop("exposureBias") { (view, exposureBias: Double?) in
+        view.exposureBias = Float(exposureBias ?? 0)
       }
 
       Prop("flashMode") { (view, flashMode: String?) in
@@ -170,6 +191,14 @@ public class CameraPortraitCaptureModule: Module {
       ]
     }
 
+    AsyncFunction("focusAtPoint") { (options: [String: Any]) async throws -> Bool in
+      guard let deviceId = options["deviceId"] as? String,
+            let x = options["x"] as? Double, let y = options["y"] as? Double,
+            x.isFinite, y.isFinite,
+            let view = await PortraitCameraView.activeView(for: deviceId) else { return false }
+      return try await view.focusAtPoint(x: x, y: y)
+    }
+
     AsyncFunction("capturePortraitPhoto") { (options: [String: Any]) async throws -> [String: Any] in
       guard let deviceId = options["deviceId"] as? String else {
         throw PortraitCaptureError.captureFailed
@@ -182,7 +211,8 @@ public class CameraPortraitCaptureModule: Module {
       }
       return try await view.capturePortraitPhoto(
         flashMode: flashMode,
-        outputFormat: outputFormat
+        outputFormat: outputFormat,
+        aperture: options["aperture"] as? Double ?? 4.5
       )
     }
 
@@ -201,11 +231,42 @@ public class CameraPortraitCaptureModule: Module {
         metadata: options["metadata"] as? [String: Any],
         outputFormat: options["outputFormat"] as? String ?? "heif"
       )
+      defer {
+        if prepared.url != processedPhotoURL { try? FileManager.default.removeItem(at: prepared.url) }
+      }
       try PhotoCatalogMetadata.apply(to: prepared.url, metadata: options["metadata"] as? [String: Any])
+      let stylesEnabled = options["preserveApplePhotographicStyles"] as? Bool == true
+      let finalPhotoURL: URL
+      if stylesEnabled {
+        let result = try await Task.detached(priority: .userInitiated) {
+          try CameraPhotographicStylesModule.makeCompatible(photoUri: prepared.url.absoluteString, options: [
+            "inputPrepared": true,
+            "enableStyles3": options["photographicStyles3Enabled"] as? Bool ?? false,
+            "cameraPosition": options["cameraPosition"] as? String ?? "back",
+            "metadata": options["metadata"] as? [String: Any] ?? [:],
+            "metadataSourceUri": prepared.url.absoluteString
+          ])
+        }.value
+        guard let uri = result["photoUri"] as? String, let output = URL(string: uri),
+              result["verified"] as? Bool == true else { throw PortraitCaptureError.captureFailed }
+        finalPhotoURL = output
+      } else {
+        finalPhotoURL = prepared.url
+      }
+      defer {
+        if finalPhotoURL != prepared.url { try? FileManager.default.removeItem(at: finalPhotoURL) }
+      }
+      // Validate the file after metadata and Styles writes, not only the sensor
+      // capabilities or the auxiliary data we attempted to copy.
+      if let originalPhotoURL,
+         PortraitDepthRenderer.hasDepthData(at: originalPhotoURL),
+         !PortraitDepthRenderer.hasDepthData(at: finalPhotoURL) {
+        throw PortraitCaptureError.depthEmbeddingFailed
+      }
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
       let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.savePhotoToLibrary(
-        photoURL: prepared.url,
+        photoURL: finalPhotoURL,
         albumTitle: albumTitle,
         originalFilename: originalFilename
       )
@@ -352,7 +413,7 @@ public class CameraPortraitCaptureModule: Module {
     guard
       let sourceURL,
       let processedSource = CGImageSourceCreateWithURL(processedURL as CFURL, nil),
-      let sourceImage = CGImageSourceCreateImageAtIndex(processedSource, 0, nil),
+      let sourceImage = CGImageSourceCreateImageAtIndex(processedSource, CGImageSourceGetPrimaryImageIndex(processedSource), nil),
       let processedImage = PhotoDisplayP3.convert(sourceImage),
       let originalSource = CGImageSourceCreateWithURL(sourceURL as CFURL, nil)
     else {
@@ -390,7 +451,7 @@ public class CameraPortraitCaptureModule: Module {
     for auxiliaryType in auxiliaryTypes {
       if let auxiliaryData = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
         originalSource,
-        0,
+        CGImageSourceGetPrimaryImageIndex(originalSource),
         auxiliaryType
       ) {
         CGImageDestinationAddAuxiliaryDataInfo(
@@ -417,7 +478,7 @@ public class CameraPortraitCaptureModule: Module {
   ) throws -> URL {
     guard
       let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil),
-      let sourceImage = CGImageSourceCreateImageAtIndex(source, 0, nil),
+      let sourceImage = CGImageSourceCreateImageAtIndex(source, CGImageSourceGetPrimaryImageIndex(source), nil),
       let image = PhotoDisplayP3.convert(sourceImage)
     else {
       throw PortraitCaptureError.captureFailed
@@ -445,7 +506,7 @@ public class CameraPortraitCaptureModule: Module {
         processedSource: source
       ) as NSDictionary as? [String: Any] ?? [:]
     } else {
-      properties = (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [String: Any]) ?? [:]
+      properties = (CGImageSourceCopyPropertiesAtIndex(source, CGImageSourceGetPrimaryImageIndex(source), nil) as? [String: Any]) ?? [:]
     }
     Self.applyGPSMetadata(metadata, to: &properties)
     PhotoDisplayP3.apply(to: &properties)
@@ -492,8 +553,8 @@ public class CameraPortraitCaptureModule: Module {
     metadataSource: CGImageSource,
     processedSource: CGImageSource
   ) -> CFDictionary {
-    var merged = (CGImageSourceCopyPropertiesAtIndex(metadataSource, 0, nil) as? [String: Any]) ?? [:]
-    let processed = (CGImageSourceCopyPropertiesAtIndex(processedSource, 0, nil) as? [String: Any]) ?? [:]
+    var merged = (CGImageSourceCopyPropertiesAtIndex(metadataSource, CGImageSourceGetPrimaryImageIndex(metadataSource), nil) as? [String: Any]) ?? [:]
+    let processed = (CGImageSourceCopyPropertiesAtIndex(processedSource, CGImageSourceGetPrimaryImageIndex(processedSource), nil) as? [String: Any]) ?? [:]
 
     for key in [
       kCGImagePropertyGPSDictionary as String,
@@ -603,12 +664,25 @@ public final class PortraitCameraView: ExpoView {
 
   var deviceId: String? {
     didSet {
+      if oldValue != deviceId {
+        portraitFocusPoint = nil
+        effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: nil)
+      }
       updateSession()
     }
   }
 
   var zoomFactor: CGFloat = 1 {
     didSet { controller.setZoomFactor(zoomFactor) }
+  }
+
+  var exposureBias: Float = 0 {
+    didSet { controller.setExposureBias(exposureBias) }
+  }
+
+  private var portraitFocusPoint: CGPoint?
+  var portraitAperture: Double = 4.5 {
+    didSet { effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: portraitFocusPoint) }
   }
 
   var flashMode: String = "off"
@@ -652,6 +726,7 @@ public final class PortraitCameraView: ExpoView {
     videoPreviewLayer.videoGravity = .resizeAspectFill
     videoPreviewLayer.session = controller.session
     addSubview(effectRenderer.imageView)
+    effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: nil)
     zebraOverlay.contentMode = .scaleAspectFill
     zebraOverlay.clipsToBounds = true
     zebraOverlay.isUserInteractionEnabled = false
@@ -665,8 +740,8 @@ public final class PortraitCameraView: ExpoView {
     controller.onZebraUpdated = { [weak self] image in
       DispatchQueue.main.async { self?.zebraOverlay.image = image.map { UIImage(cgImage: $0) } }
     }
-    controller.onEffectFrame = { [weak self] buffer, orientation, mirrored in
-      self?.effectRenderer.submit(buffer, orientation: orientation, mirrored: mirrored)
+    controller.onEffectFrame = { [weak self] buffer, orientation, mirrored, depth in
+      self?.effectRenderer.submit(buffer, orientation: orientation, mirrored: mirrored, depthData: depth)
     }
   }
 
@@ -692,7 +767,21 @@ public final class PortraitCameraView: ExpoView {
     return view
   }
 
-  func capturePortraitPhoto(flashMode: String, outputFormat: String) async throws -> [String: Any] {
+  @MainActor
+  func focusAtPoint(x: Double, y: Double) async throws -> Bool {
+    guard isActive, bounds.width > 0, bounds.height > 0 else { return false }
+    let layerPoint = CGPoint(x: max(0, min(1, x)) * bounds.width,
+                             y: max(0, min(1, y)) * bounds.height)
+    let point = videoPreviewLayer.captureDevicePointConverted(fromLayerPoint: layerPoint)
+    let focused = try await controller.focus(at: point)
+    if focused {
+      portraitFocusPoint = point
+      effectRenderer.setPortrait(aperture: portraitAperture, focusPoint: point)
+    }
+    return focused
+  }
+
+  func capturePortraitPhoto(flashMode: String, outputFormat: String, aperture: Double) async throws -> [String: Any] {
     print("[PortraitNative] capture requested deviceId=\(deviceId ?? "nil") flashMode=\(flashMode)")
     let captureResult = try await controller.capture(
       flashMode: flashMode,
@@ -700,8 +789,19 @@ public final class PortraitCameraView: ExpoView {
     )
     print("[PortraitNative] capture finished photoURL=\(captureResult.photoURL.absoluteString) depth=\(captureResult.support.supportsDepthData) matte=\(captureResult.support.supportsPortraitEffectsMatte)")
 
+    let renderedURL = try await Task.detached(priority: .userInitiated) {
+      try PortraitDepthRenderer.render(
+        photoURL: captureResult.photoURL,
+        depthData: captureResult.depthData,
+        portraitEffectsMatte: captureResult.portraitEffectsMatte,
+        focusPoint: captureResult.focusPoint,
+        aperture: aperture
+      )
+    }.value
+
     return [
-      "photoUri": captureResult.photoURL.absoluteString,
+      "photoUri": renderedURL.absoluteString,
+      "originalPhotoUri": captureResult.photoURL.absoluteString,
       "localIdentifier": NSNull(),
       "savedToLibrary": false,
       "depthDataEmbedded": captureResult.support.supportsDepthData,
@@ -800,9 +900,12 @@ private final class CaptureOrientationTracker {
   }
 }
 
-private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, AVCaptureDataOutputSynchronizerDelegate {
   struct CaptureResult {
     let photoURL: URL
+    let depthData: AVDepthData
+    let focusPoint: CGPoint?
+    let portraitEffectsMatte: AVPortraitEffectsMatte?
     let support: CameraPortraitCaptureModule.PortraitSupport
     let requestedDeviceId: String
     let captureDeviceId: String
@@ -813,6 +916,8 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
 
   private let output = AVCapturePhotoOutput()
   private let videoOutput = AVCaptureVideoDataOutput()
+  private let depthOutput = AVCaptureDepthDataOutput()
+  private var synchronizer: AVCaptureDataOutputSynchronizer?
   private let orientationTracker = CaptureOrientationTracker()
   private let smileQueue = DispatchQueue(label: "dev.komorebi.portrait.smile")
   private lazy var faceDetector = CIDetector(
@@ -827,7 +932,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   var zebraHighlightsEnabled = false
   var zebraShadowsEnabled = false
   var onZebraUpdated: ((CGImage?) -> Void)?
-  var onEffectFrame: ((CVPixelBuffer, Int32, Bool) -> Void)?
+  var onEffectFrame: ((CVPixelBuffer, Int32, Bool, AVDepthData?) -> Void)?
   private let zebraRenderer = ZebraOverlayRenderer()
   private var lastZebraAt = Date.distantPast
   private var lastSmileAt = Date.distantPast
@@ -836,6 +941,8 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
   private var configuredRequestedDeviceId: String?
   private var activeCaptureDevice: AVCaptureDevice?
   private var requestedZoomFactor: CGFloat = 1
+  private var requestedExposureBias: Float = 0
+  private var requestedFocusPoint: CGPoint?
   private var activeSupport: CameraPortraitCaptureModule.PortraitSupport?
   private var isSessionReady = false
   private var inFlightDelegates: [PortraitPhotoCaptureDelegate] = []
@@ -870,6 +977,9 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         self.session.beginConfiguration()
         configurationOpen = true
 
+        self.synchronizer?.setDelegate(nil, queue: nil)
+        self.synchronizer = nil
+        self.requestedFocusPoint = nil
         self.session.inputs.forEach { self.session.removeInput($0) }
         self.session.outputs.forEach { self.session.removeOutput($0) }
         self.session.sessionPreset = .photo
@@ -895,6 +1005,14 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
           self.session.addOutput(self.videoOutput)
         }
 
+        if self.session.outputs.contains(self.videoOutput), self.session.canAddOutput(self.depthOutput) {
+          self.depthOutput.isFilteringEnabled = true
+          self.depthOutput.alwaysDiscardsLateDepthData = true
+          self.session.addOutput(self.depthOutput)
+          self.synchronizer = AVCaptureDataOutputSynchronizer(dataOutputs: [self.videoOutput, self.depthOutput])
+          self.synchronizer?.setDelegate(self, queue: self.smileQueue)
+        }
+
         let configuredSupport = CameraPortraitCaptureModule.PortraitSupport(
           supportsDepthData: self.output.isDepthDataDeliverySupported && selection.support.supportsDepthData,
           supportsPortraitEffectsMatte: self.output.isPortraitEffectsMatteDeliverySupported && selection.support.supportsPortraitEffectsMatte
@@ -904,10 +1022,22 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
           throw CameraPortraitCaptureModule.PortraitCaptureError.portraitCaptureNotSupported
         }
 
+        try self.configureDepthFormat(on: selection.device)
+        // Both synchronized buffers must use the same sensor coordinates.
+        // Display rotation/mirroring happens once in the effect renderer.
+        for connection in [self.videoOutput.connection(with: .video),
+                           self.depthOutput.connection(with: .depthData)].compactMap({ $0 }) {
+          if connection.isVideoOrientationSupported { connection.videoOrientation = .landscapeRight }
+          if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = false
+          }
+        }
         self.output.isDepthDataDeliveryEnabled = configuredSupport.supportsDepthData
         self.output.isPortraitEffectsMatteDeliveryEnabled = configuredSupport.supportsPortraitEffectsMatte
 
         try self.applyRequestedZoom(to: selection.device)
+        try self.applyRequestedExposure(to: selection.device)
         self.configuredRequestedDeviceId = requestedDeviceId
         self.activeCaptureDevice = selection.device
         self.activeSupport = configuredSupport
@@ -942,14 +1072,89 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
     }
   }
 
+  func focus(at point: CGPoint) async throws -> Bool {
+    try await withCheckedThrowingContinuation { continuation in
+      sessionQueue.async { [weak self] in
+        guard let self, self.isSessionReady, self.session.isRunning,
+              let device = self.activeCaptureDevice else {
+          continuation.resume(returning: false)
+          return
+        }
+        do {
+          try device.lockForConfiguration()
+          defer { device.unlockForConfiguration() }
+          if device.isFocusPointOfInterestSupported {
+            device.focusPointOfInterest = point
+            if device.isFocusModeSupported(.autoFocus) { device.focusMode = .autoFocus }
+            else if device.isFocusModeSupported(.continuousAutoFocus) { device.focusMode = .continuousAutoFocus }
+          }
+          device.isSubjectAreaChangeMonitoringEnabled = false
+          self.requestedFocusPoint = point
+          continuation.resume(returning: true)
+        } catch {
+          continuation.resume(throwing: error)
+        }
+      }
+    }
+  }
+
+  func setExposureBias(_ bias: Float) {
+    sessionQueue.async { [weak self] in
+      guard let self else { return }
+      self.requestedExposureBias = bias.isFinite ? bias : 0
+      guard let device = self.activeCaptureDevice else { return }
+      try? self.applyRequestedExposure(to: device)
+    }
+  }
+
+  private func applyRequestedExposure(to device: AVCaptureDevice) throws {
+    try device.lockForConfiguration()
+    defer { device.unlockForConfiguration() }
+    let bias = max(device.minExposureTargetBias, min(device.maxExposureTargetBias, requestedExposureBias))
+    device.setExposureTargetBias(bias, completionHandler: nil)
+  }
+
+  private func configureDepthFormat(on device: AVCaptureDevice) throws {
+    // Keep the color format selected by the photo preset; choose a matching
+    // depth format rather than leaving the sensor's depth format unspecified.
+    let formats = device.activeFormat.supportedDepthDataFormats
+    guard let format = formats.max(by: { lhs, rhs in
+      let left = CMVideoFormatDescriptionGetDimensions(lhs.formatDescription)
+      let right = CMVideoFormatDescriptionGetDimensions(rhs.formatDescription)
+      return Int64(left.width) * Int64(left.height) < Int64(right.width) * Int64(right.height)
+    }) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.portraitCaptureNotSupported
+    }
+    try device.lockForConfiguration()
+    defer { device.unlockForConfiguration() }
+    device.activeDepthDataFormat = format
+    let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+    print("[PortraitNative] active depth format=\(dimensions.width)x\(dimensions.height) type=\(CMFormatDescriptionGetMediaSubType(format.formatDescription))")
+  }
+
   private func applyRequestedZoom(to device: AVCaptureDevice) throws {
-    let zoom = max(
+    let requested = max(
       device.minAvailableVideoZoomFactor,
       min(device.maxAvailableVideoZoomFactor, requestedZoomFactor)
     )
+    let format = device.activeFormat
+    let ranges: [ClosedRange<CGFloat>]
+    if #available(iOS 17.2, *) {
+      ranges = format.supportedVideoZoomRangesForDepthDataDelivery
+    } else if #available(iOS 16.0, *) {
+      ranges = format.supportedVideoZoomFactorsForDepthDataDelivery.map { $0...$0 }
+    } else {
+      ranges = [format.videoMinZoomFactorForDepthDataDelivery...format.videoMaxZoomFactorForDepthDataDelivery]
+    }
+    guard let zoom = PortraitDepthPolicy.nearestZoom(to: requested, ranges: ranges) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.portraitCaptureNotSupported
+    }
     try device.lockForConfiguration()
     defer { device.unlockForConfiguration() }
     device.videoZoomFactor = zoom
+    if abs(requested - zoom) > 0.001 {
+      print("[PortraitNative] constrained portrait zoom requested=\(requested) applied=\(zoom) depthRanges=\(ranges)")
+    }
   }
 
   func stop() {
@@ -962,19 +1167,32 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
     }
   }
 
+  func dataOutputSynchronizer(
+    _ synchronizer: AVCaptureDataOutputSynchronizer,
+    didOutput collection: AVCaptureSynchronizedDataCollection
+  ) {
+    guard let video = collection.synchronizedData(for: videoOutput) as? AVCaptureSynchronizedSampleBufferData,
+          !video.sampleBufferWasDropped else { return }
+    let depth = collection.synchronizedData(for: depthOutput) as? AVCaptureSynchronizedDepthData
+    let data = depth.flatMap { $0.depthDataWasDropped ? nil : $0.depthData }
+    processFrame(video.sampleBuffer, depthData: data)
+  }
+
   func captureOutput(
     _ output: AVCaptureOutput,
     didOutput sampleBuffer: CMSampleBuffer,
     from connection: AVCaptureConnection
   ) {
-    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
-      return
-    }
+    processFrame(sampleBuffer, depthData: nil)
+  }
 
+  private func processFrame(_ sampleBuffer: CMSampleBuffer, depthData: AVDepthData?) {
+    guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
     onEffectFrame?(
       pixelBuffer,
       LiveEffectPreviewRenderer.exifOrientation(for: orientationTracker.outputOrientation),
-      activeCaptureDevice?.position == .front
+      activeCaptureDevice?.position == .front,
+      depthData
     )
 
     let now = Date()
@@ -1097,6 +1315,20 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
           return
         }
 
+        do {
+          try self.applyRequestedZoom(to: captureDevice)
+        } catch {
+          continuation.resume(throwing: error)
+          return
+        }
+        guard self.output.isDepthDataDeliverySupported else {
+          continuation.resume(throwing: CameraPortraitCaptureModule.PortraitCaptureError.portraitCaptureNotSupported)
+          return
+        }
+        self.output.isDepthDataDeliveryEnabled = true
+        self.output.isPortraitEffectsMatteDeliveryEnabled = self.output.isPortraitEffectsMatteDeliverySupported
+        print("[PortraitNative] capture depth pipeline zoom=\(captureDevice.videoZoomFactor) depthEnabled=\(self.output.isDepthDataDeliveryEnabled) matteEnabled=\(self.output.isPortraitEffectsMatteDeliveryEnabled)")
+
         let usesHevc = outputFormat != "jpeg" && self.output.availablePhotoCodecTypes.contains(.hevc)
         let photoURL = FileManager.default.temporaryDirectory
           .appendingPathComponent("komorebi-portrait-\(UUID().uuidString).\(usesHevc ? "heic" : "jpg")")
@@ -1110,10 +1342,10 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         } else {
           print("[PortraitNative] requested flash unsupported flashMode=\(flashMode)")
         }
-        settings.isDepthDataDeliveryEnabled = support.supportsDepthData
-        settings.isPortraitEffectsMatteDeliveryEnabled = support.supportsPortraitEffectsMatte
-        settings.embedsDepthDataInPhoto = support.supportsDepthData
-        settings.embedsPortraitEffectsMatteInPhoto = support.supportsPortraitEffectsMatte
+        settings.isDepthDataDeliveryEnabled = self.output.isDepthDataDeliveryEnabled
+        settings.isPortraitEffectsMatteDeliveryEnabled = self.output.isPortraitEffectsMatteDeliveryEnabled
+        settings.embedsDepthDataInPhoto = settings.isDepthDataDeliveryEnabled
+        settings.embedsPortraitEffectsMatteInPhoto = settings.isPortraitEffectsMatteDeliveryEnabled
 
         if
           let connection = self.output.connection(with: .video),
@@ -1125,6 +1357,7 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
         let delegate = PortraitPhotoCaptureDelegate(
           photoURL: photoURL,
           support: support,
+          focusPoint: self.requestedFocusPoint,
           requestedDeviceId: requestedDeviceId,
           captureDeviceId: captureDevice.uniqueID,
           captureDeviceName: captureDevice.localizedName
@@ -1146,22 +1379,27 @@ private final class PortraitCameraController: NSObject, AVCaptureVideoDataOutput
 private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
   private let photoURL: URL
   private let support: CameraPortraitCaptureModule.PortraitSupport
+  private let focusPoint: CGPoint?
   private let requestedDeviceId: String
   private let captureDeviceId: String
   private let captureDeviceName: String
   private var photoData: Data?
+  private var depthData: AVDepthData?
+  private var portraitEffectsMatte: AVPortraitEffectsMatte?
   private var continuation: CheckedContinuation<PortraitCameraController.CaptureResult, Error>?
   var onFinish: (() -> Void)?
 
   init(
     photoURL: URL,
     support: CameraPortraitCaptureModule.PortraitSupport,
+    focusPoint: CGPoint?,
     requestedDeviceId: String,
     captureDeviceId: String,
     captureDeviceName: String
   ) {
     self.photoURL = photoURL
     self.support = support
+    self.focusPoint = focusPoint
     self.requestedDeviceId = requestedDeviceId
     self.captureDeviceId = captureDeviceId
     self.captureDeviceName = captureDeviceName
@@ -1188,7 +1426,19 @@ private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptur
       return
     }
 
+    guard let depthData = photo.depthData else {
+      finish(with: .failure(CameraPortraitCaptureModule.PortraitCaptureError.missingDepthData))
+      return
+    }
+    guard PortraitDepthRenderer.isUsable(depthData) else {
+      print("[PortraitNative] rejecting empty sensor depth type=\(depthData.depthDataType)")
+      finish(with: .failure(CameraPortraitCaptureModule.PortraitCaptureError.invalidDepthData))
+      return
+    }
+    self.depthData = depthData
+    portraitEffectsMatte = photo.portraitEffectsMatte
     photoData = photo.fileDataRepresentation()
+    print("[PortraitNative] sensor depthType=\(depthData.depthDataType) matte=\(portraitEffectsMatte != nil)")
     print("[PortraitNative] didFinishProcessingPhoto hasData=\(photoData != nil) bytes=\(photoData?.count ?? 0)")
   }
 
@@ -1203,18 +1453,29 @@ private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptur
       return
     }
 
-    guard let photoData else {
+    guard let photoData, let depthData else {
       print("[PortraitNative] didFinishCapture missing photo data")
       finish(with: .failure(CameraPortraitCaptureModule.PortraitCaptureError.missingPhotoData))
       return
     }
 
     do {
-      try photoData.write(to: photoURL, options: .atomic)
+      let embeddedData = try PortraitDepthRenderer.embeddingDepth(
+        in: photoData, depthData: depthData, portraitEffectsMatte: portraitEffectsMatte
+      )
+      try embeddedData.write(to: photoURL, options: .atomic)
       print("[PortraitNative] didFinishCapture wrote photo=\(photoURL.lastPathComponent)")
       finish(with: .success(PortraitCameraController.CaptureResult(
         photoURL: photoURL,
-        support: support,
+        depthData: depthData,
+        focusPoint: focusPoint,
+        portraitEffectsMatte: portraitEffectsMatte,
+        support: CameraPortraitCaptureModule.PortraitSupport(
+          supportsDepthData: true,
+          supportsPortraitEffectsMatte: CGImageSourceCreateWithData(embeddedData as CFData, nil).map {
+            CGImageSourceCopyAuxiliaryDataInfoAtIndex($0, CGImageSourceGetPrimaryImageIndex($0), kCGImageAuxiliaryDataTypePortraitEffectsMatte) != nil
+          } ?? false
+        ),
         requestedDeviceId: requestedDeviceId,
         captureDeviceId: captureDeviceId,
         captureDeviceName: captureDeviceName
@@ -1239,5 +1500,167 @@ private final class PortraitPhotoCaptureDelegate: NSObject, AVCapturePhotoCaptur
     case .failure(let error):
       continuation.resume(throwing: error)
     }
+  }
+}
+
+// Render before LUTs and cropping so Apple's depth map and subject matte stay
+// aligned with the full-resolution image used to calculate the blur.
+enum PortraitDepthRenderer {
+  static func isUsable(_ data: AVDepthData) -> Bool {
+    // A non-nil AVDepthData may still be empty. Check its type before touching
+    // or converting the map to avoid Core Video attempting a 0 x 0 allocation.
+    guard [kCVPixelFormatType_DisparityFloat16, kCVPixelFormatType_DisparityFloat32,
+           kCVPixelFormatType_DepthFloat16, kCVPixelFormatType_DepthFloat32].contains(data.depthDataType) else {
+      return false
+    }
+    let map = data.depthDataMap
+    return CVPixelBufferGetWidth(map) > 0 && CVPixelBufferGetHeight(map) > 0
+  }
+
+  static func embeddingDepth(
+    in photoData: Data, depthData: AVDepthData,
+    portraitEffectsMatte: AVPortraitEffectsMatte?
+  ) throws -> Data {
+    guard isUsable(depthData) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.invalidDepthData
+    }
+    guard let source = CGImageSourceCreateWithData(photoData as CFData, nil) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.missingPhotoData
+    }
+    let index = CGImageSourceGetPrimaryImageIndex(source)
+    let embeddedDepth = [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth].contains {
+      CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, index, $0) != nil
+    }
+    let embeddedMatte = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+      source, index, kCGImageAuxiliaryDataTypePortraitEffectsMatte
+    ) != nil
+    print("[PortraitNative] file attachments primaryIndex=\(index) images=\(CGImageSourceGetCount(source)) depth=\(embeddedDepth) matte=\(embeddedMatte)")
+    if embeddedDepth && (portraitEffectsMatte == nil || embeddedMatte) { return photoData }
+
+    let data = NSMutableData()
+    guard let type = CGImageSourceGetType(source),
+          let destination = CGImageDestinationCreateWithData(data, type, 1, nil) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.depthEmbeddingFailed
+    }
+    CGImageDestinationAddImageFromSource(destination, source, index, nil)
+    var depthType: NSString?
+    let disparity = depthData.converting(toDepthDataType: kCVPixelFormatType_DisparityFloat16)
+    guard let depthInfo = disparity.dictionaryRepresentation(forAuxiliaryDataType: &depthType),
+          let depthType else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.depthEmbeddingFailed
+    }
+    CGImageDestinationAddAuxiliaryDataInfo(destination, depthType as CFString, depthInfo as CFDictionary)
+    if let portraitEffectsMatte {
+      var matteType: NSString?
+      if let info = portraitEffectsMatte.dictionaryRepresentation(forAuxiliaryDataType: &matteType),
+         let matteType {
+        CGImageDestinationAddAuxiliaryDataInfo(destination, matteType as CFString, info as CFDictionary)
+      }
+    }
+    guard CGImageDestinationFinalize(destination),
+          let verified = CGImageSourceCreateWithData(data, nil),
+          CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+            verified, CGImageSourceGetPrimaryImageIndex(verified), depthType as CFString
+          ) != nil else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.depthEmbeddingFailed
+    }
+    print("[PortraitNative] rebuilt file attachments depth=true")
+    return data as Data
+  }
+
+  static func hasDepthData(at url: URL) -> Bool {
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return false }
+    return [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth].contains {
+      CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, CGImageSourceGetPrimaryImageIndex(source), $0) != nil
+    }
+  }
+
+  static func render(
+    photoURL: URL, depthData: AVDepthData,
+    portraitEffectsMatte: AVPortraitEffectsMatte?, focusPoint: CGPoint?, aperture: Double
+  ) throws -> URL {
+    guard isUsable(depthData) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.invalidDepthData
+    }
+    let context = CIContext(options: [.cacheIntermediates: false])
+    guard let source = CGImageSourceCreateWithURL(photoURL as CFURL, nil),
+          let input = CIImage(contentsOf: photoURL, options: [.applyOrientationProperty: false]) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.missingPhotoData
+    }
+    let properties = CGImageSourceCopyPropertiesAtIndex(
+      source, CGImageSourceGetPrimaryImageIndex(source), nil
+    ) as? [String: Any] ?? [:]
+    let orientation = CGImagePropertyOrientation(
+      rawValue: (properties[kCGImagePropertyOrientation as String] as? NSNumber)?.uint32Value ?? 1
+    ) ?? .up
+    let disparity = depthData.converting(toDepthDataType: kCVPixelFormatType_DisparityFloat32)
+    let disparityImage = CIImage(cvPixelBuffer: disparity.depthDataMap)
+    let matteImage = portraitEffectsMatte.map { CIImage(cvPixelBuffer: $0.mattingImage) }
+    print("[PortraitNative] render input=\(input.extent) disparity=\(disparityImage.extent) orientation=\(orientation.rawValue) matte=\(matteImage != nil)")
+    // Use the sensor objects directly; a missing HEIC attachment must not be
+    // mistaken for the camera failing to deliver depth.
+    guard let filter = context.depthBlurEffectFilter(
+      for: input, disparityImage: disparityImage,
+      portraitEffectsMatte: matteImage, orientation: orientation, options: nil
+    ) else {
+      print("[PortraitNative] depth filter creation failed depthType=\(disparity.depthDataType) matte=\(matteImage != nil)")
+      throw CameraPortraitCaptureModule.PortraitCaptureError.portraitRenderingFailed
+    }
+
+    if let focusPoint, filter.inputKeys.contains("inputFocusRect") {
+      filter.setValue(
+        LiveEffectPreviewRenderer.portraitFocusRectangle(at: focusPoint, extent: input.extent),
+        forKey: "inputFocusRect"
+      )
+    }
+    filter.setValue(aperture.isFinite ? max(1.4, min(16, aperture)) : 4.5, forKey: "inputAperture")
+    guard let output = filter.outputImage,
+          let image = context.createCGImage(
+            output, from: output.extent, format: .RGBA8,
+            colorSpace: CGColorSpace(name: CGColorSpace.displayP3)
+          ) else {
+      print("[PortraitNative] depth filter failed to render pixels")
+      throw CameraPortraitCaptureModule.PortraitCaptureError.portraitRenderingFailed
+    }
+
+    let isJpeg = photoURL.pathExtension.lowercased() == "jpg"
+    let renderedURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("komorebi-portrait-blur-\(UUID().uuidString).\(isJpeg ? "jpg" : "heic")")
+    guard let destination = CGImageDestinationCreateWithURL(
+      renderedURL as CFURL,
+      (isJpeg ? UTType.jpeg : UTType.heic).identifier as CFString,
+      1,
+      nil
+    ) else {
+      throw CameraPortraitCaptureModule.PortraitCaptureError.captureFailed
+    }
+    CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+    // Keep the sensor depth alongside the rendered pixels for downstream saves.
+    for type in [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth,
+                 kCGImageAuxiliaryDataTypePortraitEffectsMatte] {
+      if let data = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, CGImageSourceGetPrimaryImageIndex(source), type) {
+        CGImageDestinationAddAuxiliaryDataInfo(destination, type, data)
+      }
+    }
+    guard CGImageDestinationFinalize(destination) else {
+      try? FileManager.default.removeItem(at: renderedURL)
+      throw CameraPortraitCaptureModule.PortraitCaptureError.captureFailed
+    }
+    guard hasDepthData(at: renderedURL) else {
+      try? FileManager.default.removeItem(at: renderedURL)
+      throw CameraPortraitCaptureModule.PortraitCaptureError.depthEmbeddingFailed
+    }
+    print("[PortraitNative] rendered portrait aperture=\(aperture) depthEmbedded=true")
+    return renderedURL
+  }
+}
+
+// Kept in the existing pod source so Xcode picks it up without regenerating Pods.
+enum PortraitDepthPolicy {
+  static func nearestZoom(to requested: CGFloat, ranges: [ClosedRange<CGFloat>]) -> CGFloat? {
+    guard requested.isFinite else { return nil }
+    return ranges.map { max($0.lowerBound, min($0.upperBound, requested)) }
+      .filter { $0.isFinite && $0 > 0 }
+      .min { abs($0 - requested) < abs($1 - requested) }
   }
 }

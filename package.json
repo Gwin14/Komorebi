@@ -87,7 +87,8 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "patch-package": "^8.0.1",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.2",
+    "pngjs": "3.4.0"
   },
   "private": true
 }

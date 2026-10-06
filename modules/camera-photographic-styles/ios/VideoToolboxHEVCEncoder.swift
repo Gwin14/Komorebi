@@ -12,13 +12,36 @@ import Darwin
 enum VideoToolboxHEVCEncoder {
     static let tileSize = 512
 
-    /// Tracks whether the next encoded tile is the first of a conversion. The
-    /// first tile carries VPS/SPS/PPS (prepended from VideoToolbox's format
-    /// description) so Rust can extract the hvcC decoder config; later tiles
-    /// are pure IDR slices, which ImageIO's ISO gain-map decoder expects.
-    static var isFirstTile = true
+    private final class CallbackRef {
+        var data = Data()
+        var includeParameterSets = false
+    }
 
-    static var isSupported: Bool { canEncode420() }
+    private final class EncoderSession {
+        let session: VTCompressionSession
+        let callback: CallbackRef
+        let width: Int
+        let height: Int
+        var frameIndex: Int64 = 0
+
+        init(session: VTCompressionSession, callback: CallbackRef, width: Int, height: Int) {
+            self.session = session
+            self.callback = callback
+            self.width = width
+            self.height = height
+        }
+
+        deinit { VTCompressionSessionInvalidate(session) }
+    }
+
+    // Rust invokes tile callbacks synchronously on the conversion's thread.
+    // Keep each batch isolated, including simultaneous photo conversions.
+    private static let sessionKey = "dev.komorebi.styles.hevc-session"
+    static let isSupported = canEncode420()
+
+    static func finishConversion() {
+        Thread.current.threadDictionary.removeObject(forKey: sessionKey)
+    }
 
     static func encodePixels(
         _ pixels: Data,
@@ -33,8 +56,7 @@ enum VideoToolboxHEVCEncoder {
             height: height,
             pixelBytes: pixelBytes
         ) else { return nil }
-        isFirstTile = includeParameterSets
-        return encodeTile(yuv: i420, width: width, height: height)
+        return encodeTile(yuv: i420, width: width, height: height, includeParameterSets: includeParameterSets)
     }
 
     private static func packedI420(
@@ -47,17 +69,17 @@ enum VideoToolboxHEVCEncoder {
               pixels.count >= width * height * pixelBytes else { return nil }
         let chromaW = (width + 1) / 2
         let chromaH = (height + 1) / 2
+        if pixelBytes == 1 {
+            var output = Data(pixels.prefix(width * height))
+            output.append(Data(repeating: 128, count: 2 * chromaW * chromaH))
+            return output
+        }
         var y = [UInt8](repeating: 0, count: width * height)
         var uFull = [UInt8](repeating: 128, count: width * height)
         var vFull = [UInt8](repeating: 128, count: width * height)
 
         pixels.withUnsafeBytes { raw in
             let source = raw.bindMemory(to: UInt8.self)
-            if pixelBytes == 1 {
-                let count = y.count
-                _ = y.withUnsafeMutableBytes { memcpy($0.baseAddress!, source.baseAddress!, count) }
-                return
-            }
             for index in 0..<(width * height) {
                 let r = Double(source[index * 3])
                 let g = Double(source[index * 3 + 1])
@@ -99,8 +121,7 @@ enum VideoToolboxHEVCEncoder {
         return output
     }
 
-    /// Whether this Mac can actually encode 4:2:0 HEVC (a real configure
-    /// attempt).  Any failure → false (caller falls back to software path).
+    /// Probe 4:2:0 HEVC once; device support is stable for the app's lifetime.
     static func canEncode420() -> Bool {
         var session: VTCompressionSession?
         let status = VTCompressionSessionCreate(
@@ -127,14 +148,10 @@ enum VideoToolboxHEVCEncoder {
         return true
     }
 
-    /// Encode one packed I420 frame to an Annex-B HEVC byte stream.
-    /// Returns nil on failure so the caller falls back to software encoding.
-    static func encodeTile(yuv: Data, width: Int, height: Int) -> Data? {
-        final class CallbackRef {
-            var data = Data()
-        }
+    /// Configure one encoder for a batch of independent HEVC tiles.
+    private static func makeSession(width: Int, height: Int) -> EncoderSession? {
         let ref = CallbackRef()
-        let refPtr = Unmanaged.passRetained(ref).toOpaque()
+        let refPtr = Unmanaged.passUnretained(ref).toOpaque()
 
         let w = Int32(width)
         let h = Int32(height)
@@ -154,16 +171,13 @@ enum VideoToolboxHEVCEncoder {
                 // The first tile of a conversion carries VPS/SPS/PPS (from
                 // VideoToolbox's format description) so Rust can build the hvcC
                 // decoder config. Later tiles are pure IDR slices.
-                let isFirst = VideoToolboxHEVCEncoder.isFirstTile
+                let isFirst = ctx.includeParameterSets
                 if isFirst,
                    let fmt = CMSampleBufferGetFormatDescription(sampleBuffer),
                    let ext = CMFormatDescriptionGetExtensions(fmt) as? [String: Any],
                    let atoms = ext["SampleDescriptionExtensionAtoms"] as? NSDictionary,
                    let hvcCData = atoms["hvcC"] as? Data {
                     ctx.data.append(VideoToolboxHEVCEncoder.hvccToAnnexB(hvcCData))
-                }
-                if isFirst {
-                    VideoToolboxHEVCEncoder.isFirstTile = false
                 }
                 if let dataBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) {
                     var length = 0
@@ -194,7 +208,6 @@ enum VideoToolboxHEVCEncoder {
             compressionSessionOut: &session
         )
         guard status == noErr, let session = session else {
-            Unmanaged.passUnretained(ref).release()
             return nil
         }
 
@@ -207,15 +220,34 @@ enum VideoToolboxHEVCEncoder {
         VTSessionSetProperty(session, key: kVTCompressionPropertyKey_MaxKeyFrameInterval,
                              value: 1 as CFTypeRef)
 
-        let frameSize = width * height
-        let chromaW = (width + 1) / 2
-        let chromaH = (height + 1) / 2
-        let chromaSize = chromaW * chromaH
-        guard yuv.count >= frameSize + 2 * chromaSize else {
+        guard VTCompressionSessionPrepareToEncodeFrames(session) == noErr else {
             VTCompressionSessionInvalidate(session)
-            Unmanaged.passUnretained(ref).release()
             return nil
         }
+        return EncoderSession(session: session, callback: ref, width: width, height: height)
+    }
+
+    /// All tiles remain independent keyframes, sharing one decoder configuration.
+    static func encodeTile(yuv: Data, width: Int, height: Int, includeParameterSets: Bool = true) -> Data? {
+        let frameSize = width * height
+        let chromaSize = ((width + 1) / 2) * ((height + 1) / 2)
+        guard width > 0, height > 0, yuv.count >= frameSize + 2 * chromaSize else { return nil }
+        var encoder = Thread.current.threadDictionary[sessionKey] as? EncoderSession
+        // The first tile marks a new Rust batch; never share hvcC across batches.
+        if includeParameterSets || encoder?.width != width || encoder?.height != height {
+            finishConversion()
+            encoder = makeSession(width: width, height: height)
+            if let encoder { Thread.current.threadDictionary[sessionKey] = encoder }
+        }
+        guard let encoder else { return nil }
+        let session = encoder.session
+        let ref = encoder.callback
+        ref.data.removeAll(keepingCapacity: true)
+        ref.includeParameterSets = includeParameterSets
+        let w = Int32(width)
+        let h = Int32(height)
+        let chromaW = (width + 1) / 2
+        let chromaH = (height + 1) / 2
 
         // Full-range (0–255) YUV, matching x265's "range full". Without this
         // VideoToolbox encodes limited range (420v), shifting decoded gain
@@ -234,8 +266,7 @@ enum VideoToolboxHEVCEncoder {
                                            pbFormat,
                                            attrs as CFDictionary, &pixelBuffer)
         guard pbStatus == kCVReturnSuccess, let buffer = pixelBuffer else {
-            VTCompressionSessionInvalidate(session)
-            Unmanaged.passUnretained(ref).release()
+            finishConversion()
             return nil
         }
 
@@ -308,7 +339,8 @@ enum VideoToolboxHEVCEncoder {
         CVPixelBufferUnlockBaseAddress(buffer, [])
 
         // Encode the frame as a keyframe.
-        let pts = CMTime(value: 0, timescale: 30)
+        let pts = CMTime(value: encoder.frameIndex, timescale: 30)
+        encoder.frameIndex += 1
         let encodeStatus = VTCompressionSessionEncodeFrame(
             session,
             imageBuffer: buffer,
@@ -319,14 +351,13 @@ enum VideoToolboxHEVCEncoder {
             infoFlagsOut: nil
         )
 
-        if encodeStatus == noErr {
-            VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid)
+        guard encodeStatus == noErr,
+              VTCompressionSessionCompleteFrames(session, untilPresentationTimeStamp: .invalid) == noErr,
+              !ref.data.isEmpty else {
+            finishConversion()
+            return nil
         }
-
-        VTCompressionSessionInvalidate(session)
-        Unmanaged.passUnretained(ref).release()
-
-        return ref.data.isEmpty ? nil : ref.data
+        return ref.data
     }
 
     /// Convert a VideoToolbox hvcC decoder-config record (VPS/SPS/PPS NALs)

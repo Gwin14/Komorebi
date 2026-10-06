@@ -11,6 +11,9 @@ function getCameraFormatFilters({
     ...(rawPhotoMode || (!manualPhotoMode && !frameProcessorActive)
       ? [{ photoResolution: "max" }]
       : []),
+    // The preview uses the video stream, whose ratio can differ from the photo.
+    // Prefer a matching stream before its resolution to avoid an extra crop.
+    { videoAspectRatio: sensorAspectRatio },
     {
       videoResolution: frameProcessorActive
         ? { width: 1080, height: 720 }

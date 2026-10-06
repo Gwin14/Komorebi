@@ -10,5 +10,10 @@ export default StyleSheet.create({
     paddingVertical: 2,
   },
   slider: { flex: 1 },
-  message: { color: "#aaa", fontSize: 10, textAlign: "center", paddingHorizontal: 24 },
+  message: {
+    color: "#aaa",
+    fontSize: 10,
+    textAlign: "center",
+    paddingHorizontal: 24,
+  },
 });

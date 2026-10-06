@@ -28,9 +28,12 @@ const DEFAULT_HEIF_PLUS_SETTINGS = Object.freeze({
 function normalizeHeifPlusSettings(value) {
   let source = value && typeof value === "object" ? value : {};
   // Upgrade the untouched legacy profile, while retaining custom/automatic choices.
-  const untouchedLegacy = HEIF_PLUS_CONTROLS.every(([key]) =>
-    source[key] === (key === "exposure" ? 0 : null))
-    && source.highlightRecoveryEnabled === true && source.lensCorrectionEnabled === null;
+  const untouchedLegacy =
+    HEIF_PLUS_CONTROLS.every(
+      ([key]) => source[key] === (key === "exposure" ? 0 : null),
+    ) &&
+    source.highlightRecoveryEnabled === true &&
+    source.lensCorrectionEnabled === null;
   if (untouchedLegacy) source = {};
   const result = { ...DEFAULT_HEIF_PLUS_SETTINGS };
   for (const [key, , min, max] of HEIF_PLUS_CONTROLS) {
@@ -46,20 +49,53 @@ function normalizeHeifPlusSettings(value) {
 }
 function restorePhotoFormat(value, saveAsJpeg = false) {
   return ["heif", "heifPlus", "jpeg"].includes(value)
-    ? value : saveAsJpeg ? "jpeg" : "heif";
+    ? value
+    : saveAsJpeg
+      ? "jpeg"
+      : "heif";
 }
-function getHeifPlusPolicy({ photoFormat, rawMode = "off", capabilities,
-  livePhotoEnabled, portraitModeEnabled, stackingEnabled, platform = "ios" }) {
+function getHeifPlusPolicy({
+  photoFormat,
+  rawMode = "off",
+  capabilities,
+  livePhotoEnabled,
+  portraitModeEnabled,
+  stackingEnabled,
+  platform = "ios",
+}) {
   const requested = photoFormat === "heifPlus";
   const modes = capabilities?.supportedModes || ["off"];
-  const selectedRaw = rawMode !== "off" && modes.includes(rawMode)
-    ? rawMode : modes.includes("proRaw") ? "proRaw" : modes.includes("raw") ? "raw" : "off";
-  const reason = platform !== "ios" ? "Disponível apenas no iOS"
-    : livePhotoEnabled ? "Live Photo" : portraitModeEnabled ? "Retrato"
-      : stackingEnabled ? "Stacking" : selectedRaw === "off" ? "Câmera sem RAW disponível" : null;
-  return { requested, effective: requested && !reason,
+  const selectedRaw =
+    rawMode !== "off" && modes.includes(rawMode)
+      ? rawMode
+      : modes.includes("proRaw")
+        ? "proRaw"
+        : modes.includes("raw")
+          ? "raw"
+          : "off";
+  const reason =
+    platform !== "ios"
+      ? "Disponível apenas no iOS"
+      : livePhotoEnabled
+        ? "Live Photo"
+        : portraitModeEnabled
+          ? "Retrato"
+          : stackingEnabled
+            ? "Stacking"
+            : selectedRaw === "off"
+              ? "Câmera sem RAW disponível"
+              : null;
+  return {
+    requested,
+    effective: requested && !reason,
     rawMode: requested && !reason ? selectedRaw : rawMode,
-    suspensionReason: requested ? reason : null };
+    suspensionReason: requested ? reason : null,
+  };
 }
-module.exports = { HEIF_PLUS_CONTROLS, DEFAULT_HEIF_PLUS_SETTINGS,
-  normalizeHeifPlusSettings, restorePhotoFormat, getHeifPlusPolicy };
+module.exports = {
+  HEIF_PLUS_CONTROLS,
+  DEFAULT_HEIF_PLUS_SETTINGS,
+  normalizeHeifPlusSettings,
+  restorePhotoFormat,
+  getHeifPlusPolicy,
+};

@@ -4,7 +4,9 @@ import { AppState } from "react-native";
 
 export default function useCameraActivity() {
   const focused = useIsFocused();
-  const [foreground, setForeground] = useState(AppState.currentState === "active");
+  const [foreground, setForeground] = useState(
+    AppState.currentState === "active",
+  );
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (state) => {
       setForeground(state === "active");

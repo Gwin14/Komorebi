@@ -141,8 +141,8 @@ a composição antes dos efeitos, não as fotos fonte.
   detalhes em três planos, registro, escala, recorte sem transparência, 20 fotos,
   composição de fontes temporárias, exportação JPEG/HEIF, orientação e limpeza.
 - Build iOS sem assinatura: `xcodebuild -workspace ios/Komorebi.xcworkspace
-  -scheme Komorebi -configuration Debug -sdk iphoneos
-  -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`.
+-scheme Komorebi -configuration Debug -sdk iphoneos
+-destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`.
 
 ### Verificação pendente em iPhone físico
 

@@ -251,3 +251,168 @@ fn push_ref(out: &mut Vec<u8>, index: usize, ref_size: u8) {
         _ => out.extend_from_slice(&(index as u16).to_be_bytes()),
     }
 }
+
+/// Upgrade only the Styles schema selector and its new boolean flag. All
+/// image-dependent objects retain their original bytes and references.
+pub fn promote_texture_schema(payload: &[u8]) -> Result<Vec<u8>, String> {
+    let (mut offsets, ref_size, top, table) = object_table(payload)?;
+    let root = offsets[top];
+    if payload[root] >> 4 != 0xd {
+        return Err("Styles root is not a dictionary".into());
+    }
+    let (count, header) = plist_length(payload, root).ok_or("invalid Styles dictionary")?;
+    if count > offsets.len() {
+        return Err("Styles dictionary too large".into());
+    }
+    let refs = payload
+        .get(root + header..root + header + count * 2 * ref_size)
+        .ok_or("invalid Styles references")?;
+    let mut keys: Vec<usize> = refs[..count * ref_size]
+        .chunks_exact(ref_size)
+        .map(read_sized_be)
+        .collect();
+    let mut values: Vec<usize> = refs[count * ref_size..]
+        .chunks_exact(ref_size)
+        .map(read_sized_be)
+        .collect();
+    let key_index = |key: u8| {
+        keys.iter().position(|id| {
+            offsets
+                .get(*id)
+                .and_then(|p| payload.get(*p..*p + 2))
+                .map(|b| b == [0x51, key])
+                .unwrap_or(false)
+        })
+    };
+    let version = key_index(b'0').ok_or("Styles version selector missing")?;
+    let l = key_index(b'l');
+    let mut output = payload[..table].to_vec();
+    let version_id = offsets.len();
+    offsets.push(output.len());
+    output.extend_from_slice(&[0x10, 16]);
+    values[version] = version_id;
+    let false_id = offsets.len();
+    offsets.push(output.len());
+    output.push(0x08);
+    if let Some(index) = l {
+        values[index] = false_id;
+    } else {
+        let key_id = offsets.len();
+        offsets.push(output.len());
+        output.extend_from_slice(&[0x51, b'l']);
+        keys.push(key_id);
+        values.push(false_id);
+    }
+    if ref_size < 8 && offsets.len() as u64 >= (1u64 << (ref_size * 8)) {
+        return Err("Styles object references overflow".into());
+    }
+    offsets[top] = output.len();
+    if keys.len() < 15 {
+        output.push(0xd0 | keys.len() as u8);
+    } else {
+        output.extend_from_slice(&[0xdf, 0x12]);
+        output.extend_from_slice(&(keys.len() as u32).to_be_bytes());
+    }
+    for id in keys.iter().chain(&values) {
+        output.extend_from_slice(&(*id as u64).to_be_bytes()[8 - ref_size..]);
+    }
+    let new_table = output.len();
+    for offset in &offsets {
+        output.extend_from_slice(&(*offset as u64).to_be_bytes());
+    }
+    output.extend_from_slice(&[0, 0, 0, 0, 0, 0, 8, ref_size as u8]);
+    output.extend_from_slice(&(offsets.len() as u64).to_be_bytes());
+    output.extend_from_slice(&(top as u64).to_be_bytes());
+    output.extend_from_slice(&(new_table as u64).to_be_bytes());
+    Ok(output)
+}
+
+fn object_table(payload: &[u8]) -> Result<(Vec<usize>, usize, usize, usize), String> {
+    if payload.len() < 40 || !payload.starts_with(b"bplist00") {
+        return Err("invalid Styles plist".into());
+    }
+    let trailer = &payload[payload.len() - 32..];
+    let os = trailer[6] as usize;
+    let rs = trailer[7] as usize;
+    let count = read_sized_be(&trailer[8..16]);
+    let top = read_sized_be(&trailer[16..24]);
+    let table = read_sized_be(&trailer[24..32]);
+    if os == 0 || os > 8 || rs == 0 || rs > 8 || top >= count {
+        return Err("invalid Styles object table".into());
+    }
+    let size = count.checked_mul(os).ok_or("Styles table overflow")?;
+    let bytes = payload
+        .get(table..table.checked_add(size).ok_or("Styles table overflow")?)
+        .ok_or("Styles table truncated")?;
+    let offsets: Vec<_> = bytes.chunks_exact(os).map(read_sized_be).collect();
+    if offsets.iter().any(|p| *p < 8 || *p >= table) {
+        return Err("Styles object outside table".into());
+    }
+    Ok((offsets, rs, top, table))
+}
+
+pub fn has_texture_schema(payload: &[u8]) -> bool {
+    let Ok((offsets, rs, top, _)) = object_table(payload) else {
+        return false;
+    };
+    let root = offsets[top];
+    if payload[root] >> 4 != 0xd {
+        return false;
+    }
+    let Some((count, header)) = plist_length(payload, root) else {
+        return false;
+    };
+    if count > offsets.len() {
+        return false;
+    }
+    let Some(refs) = payload.get(root + header..root + header + count * rs * 2) else {
+        return false;
+    };
+    let value = |key: u8| -> Option<usize> {
+        for i in 0..count {
+            let k = read_sized_be(&refs[i * rs..(i + 1) * rs]);
+            if payload.get(*offsets.get(k)?..offsets[k] + 2)? == [0x51, key] {
+                let v = read_sized_be(&refs[(count + i) * rs..(count + i + 1) * rs]);
+                return offsets.get(v).copied();
+            }
+        }
+        None
+    };
+    let Some(v) = value(b'0') else {
+        return false;
+    };
+    let marker = payload[v];
+    if marker >> 4 != 1 {
+        return false;
+    }
+    let Some(length) = 1usize.checked_shl((marker & 15) as u32) else {
+        return false;
+    };
+    payload.get(v + 1..v + 1 + length).map(read_sized_be) == Some(16)
+        && value(b'l').map(|p| payload[p]) == Some(0x08)
+}
+
+#[cfg(test)]
+mod texture_schema_tests {
+    use super::*;
+    #[test]
+    fn texture_schema_upgrade_preserves_all_original_objects() {
+        let original = crate::styles_native::build_style_metadata();
+        let (_, _, _, old_table) = object_table(&original).unwrap();
+        assert!(!has_texture_schema(&original));
+        let upgraded = promote_texture_schema(&original).unwrap();
+        assert_eq!(&upgraded[..old_table], &original[..old_table]);
+        assert!(has_texture_schema(&upgraded));
+        assert!(contains_data_object(&upgraded, 51_840));
+        assert!(has_texture_schema(
+            &promote_texture_schema(&upgraded).unwrap()
+        ));
+    }
+    #[test]
+    fn texture_schema_rejects_incomplete_plists() {
+        for data in [&b"bplist00"[..], &b""[..], &b"not a plist"[..]] {
+            assert!(!has_texture_schema(data));
+            assert!(promote_texture_schema(data).is_err());
+        }
+    }
+}

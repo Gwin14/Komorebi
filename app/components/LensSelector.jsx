@@ -44,7 +44,11 @@ export default function LensSelector({
               ]}
             >
               <Animated.Text
-                style={[styles.label, active && styles.labelActive, animatedStyle]}
+                style={[
+                  styles.label,
+                  active && styles.labelActive,
+                  animatedStyle,
+                ]}
               >
                 {lens.label}
               </Animated.Text>

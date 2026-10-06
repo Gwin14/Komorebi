@@ -60,7 +60,7 @@ export default StyleSheet.create({
   lensSlot: {
     width: "100%",
     height: 34,
-    marginTop: 8,
+    marginTop: 0,
   },
   lutSelectorWrapper: {
     flex: 1,

@@ -4,18 +4,19 @@ export default StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 2,
   },
   exposureText: {
     color: "white",
     fontSize: 12,
+    lineHeight: 16,
     fontWeight: "700",
-    marginBottom: 8,
+    marginBottom: 4,
     fontVariant: ["tabular-nums"], // Evita o texto de "tremer" mudando de largura
     letterSpacing: 0.5,
   },
   exposureTextBelow: {
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 0,
   },
   dialContainer: {

@@ -33,39 +33,8 @@ public final class CameraPhotographicStylesModule: Module {
       photoUri: String,
       options: [String: Any]?
     ) async throws -> [String: Any] in
-      guard VideoToolboxHEVCEncoder.isSupported else { throw CompatibilityError.unsupported }
-      guard let inputURL = Self.fileURL(from: photoUri) else { throw CompatibilityError.invalidURL }
-
-      let outputURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent("komorebi-styles-\(UUID().uuidString)")
-        .appendingPathExtension("heic")
-
-      let metadata = options?["metadata"] as? [String: Any]
-      let metadataSourceURL = (options?["metadataSourceUri"] as? String)
-        .flatMap { Self.fileURL(from: $0) }
-
       return try await Task.detached(priority: .userInitiated) {
-        let preparedInputURL = try Self.prepareInput(
-          inputURL,
-          metadata: metadata,
-          metadataSourceURL: metadataSourceURL
-        )
-        defer {
-          if preparedInputURL != inputURL {
-            try? FileManager.default.removeItem(at: preparedInputURL)
-          }
-        }
-
-        do {
-          try XDRemuxBridge.makeCompatible(
-            from: preparedInputURL.path,
-            to: outputURL.path
-          )
-          return ["photoUri": outputURL.absoluteString, "verified": true]
-        } catch {
-          try? FileManager.default.removeItem(at: outputURL)
-          throw error
-        }
+        try Self.makeCompatible(photoUri: photoUri, options: options)
       }.value
     }
 
@@ -178,9 +147,7 @@ public final class CameraPhotographicStylesModule: Module {
       }
       let candidate = fileURL.standardizedFileURL
       let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
-      guard candidate.deletingLastPathComponent() == temporaryDirectory,
-            candidate.lastPathComponent.hasPrefix("komorebi-styles-"),
-            candidate.pathExtension.lowercased() == "heic" else {
+      guard PhotographicStylesTemporaryFiles.canDelete(candidate, in: temporaryDirectory) else {
         throw CompatibilityError.invalidURL
       }
       guard FileManager.default.fileExists(atPath: candidate.path) else {
@@ -197,20 +164,123 @@ public final class CameraPhotographicStylesModule: Module {
     return URL(fileURLWithPath: value)
   }
 
+  // Save pipelines call this after their last ImageIO write. Rewriting the
+  // resulting HEIF would discard the Styles graph.
+  public static func makeCompatible(
+    photoUri: String,
+    options: [String: Any]? = nil
+  ) throws -> [String: Any] {
+    guard VideoToolboxHEVCEncoder.isSupported else { throw CompatibilityError.unsupported }
+    guard let inputURL = Self.fileURL(from: photoUri) else { throw CompatibilityError.invalidURL }
+
+    let outputURL = FileManager.default.temporaryDirectory
+      .appendingPathComponent("komorebi-styles-\(UUID().uuidString)")
+      .appendingPathExtension("heic")
+
+    let metadata = options?["metadata"] as? [String: Any]
+    let metadataSourceURL = (options?["metadataSourceUri"] as? String)
+      .flatMap { Self.fileURL(from: $0) }
+    let enableStyles3 = options?["enableStyles3"] as? Bool ?? false
+    let cameraPosition = options?["cameraPosition"] as? String ?? "back"
+
+    defer { VideoToolboxHEVCEncoder.finishConversion() }
+    let preparedInputURL = try Self.prepareInput(
+      inputURL,
+      metadata: metadata,
+      metadataSourceURL: metadataSourceURL,
+      inputPrepared: options?["inputPrepared"] as? Bool ?? false
+    )
+    defer {
+      if preparedInputURL != inputURL {
+        try? FileManager.default.removeItem(at: preparedInputURL)
+      }
+    }
+
+    do {
+      try XDRemuxBridge.makeCompatible(
+        from: preparedInputURL.path,
+        to: outputURL.path
+      )
+      // Serialize catalog changes into the original HDR XMP, then patch
+      // only its HEIF item. ImageIO must never rewrite this Styles file.
+      if let fields = metadata?["catalogMetadata"] as? [String: Any], !fields.isEmpty {
+        let originalXMP = try XDRemuxBridge.readStylesXMP(from: outputURL.path)
+        guard let source = CGImageSourceCreateWithURL(outputURL as CFURL, nil) else {
+          throw CompatibilityError.metadataWriteFailed
+        }
+        let xmp = try TextureStylesMetadata.catalogPayload(
+          fields: fields, source: source, originalXMP: originalXMP
+        )
+        try XDRemuxBridge.writeStylesXMP(xmp, toFile: outputURL.path)
+      }
+      if enableStyles3 {
+        try XDRemuxBridge.addTextureStylesMetadata(
+          TextureStylesMetadata.make(cameraPosition: cameraPosition),
+          toFile: outputURL.path
+        )
+      }
+      try Self.verifyCaptureResources(from: preparedInputURL, to: outputURL)
+      return [
+        "photoUri": outputURL.absoluteString,
+        "verified": true,
+        "styles3Verified": enableStyles3,
+      ]
+    } catch {
+      try? FileManager.default.removeItem(at: outputURL)
+      throw error
+    }
+  }
+
+  private static func verifyCaptureResources(from input: URL, to output: URL) throws {
+    guard let source = CGImageSourceCreateWithURL(input as CFURL, nil),
+          let result = CGImageSourceCreateWithURL(output as CFURL, nil) else {
+      throw CompatibilityError.invalidImage
+    }
+    let original = imageProperties(at: input)?[kCGImagePropertyMakerAppleDictionary] as? [String: Any]
+    if let pairingID = original?["17"] as? String {
+      let saved = imageProperties(at: output)?[kCGImagePropertyMakerAppleDictionary] as? [String: Any]
+      guard saved?["17"] as? String == pairingID else {
+        throw CompatibilityError.metadataWriteFailed
+      }
+    }
+    for type in [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth,
+                 kCGImageAuxiliaryDataTypePortraitEffectsMatte] {
+      if CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, type) != nil &&
+         CGImageSourceCopyAuxiliaryDataInfoAtIndex(result, 0, type) == nil {
+        throw CompatibilityError.metadataWriteFailed
+      }
+    }
+  }
+
   private static func prepareInput(
     _ inputURL: URL,
     metadata: [String: Any]?,
-    metadataSourceURL: URL?
+    metadataSourceURL: URL?,
+    inputPrepared: Bool
   ) throws -> URL {
     guard let source = CGImageSourceCreateWithURL(inputURL as CFURL, nil),
           CGImageSourceGetCount(source) > 0,
-          let sourceType = CGImageSourceGetType(source) else {
+          CGImageSourceGetType(source) != nil else {
       throw CompatibilityError.invalidImage
     }
 
-    var properties =
-      CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] ?? [:]
+    if inputPrepared {
+      guard CGImageSourceGetType(source) as String? == UTType.heic.identifier,
+            let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+            image.colorSpace?.name == CGColorSpace.displayP3 else {
+        throw CompatibilityError.invalidImage
+      }
+      return inputURL
+    }
+
     let captureProperties = imageProperties(at: metadataSourceURL) ?? [:]
+    var properties = captureProperties
+    properties.merge(CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+      as? [CFString: Any] ?? [:]) { _, processed in processed }
+    // Pairing ID and portrait camera metadata are capture properties.
+    if let makerApple = captureProperties[kCGImagePropertyMakerAppleDictionary] {
+      properties[kCGImagePropertyMakerAppleDictionary] = makerApple
+    }
     var tiff = captureProperties[kCGImagePropertyTIFFDictionary]
       as? [CFString: Any] ?? [:]
     var exif = captureProperties[kCGImagePropertyExifDictionary]
@@ -273,25 +343,38 @@ public final class CameraPhotographicStylesModule: Module {
     properties[kCGImagePropertyGPSDictionary] = gps
     properties[kCGImagePropertyOrientation] = 1
 
-    let fileExtension = inputURL.pathExtension.isEmpty ? "img" : inputURL.pathExtension
+    // Normalize color and capture metadata in one encode before Rust builds
+    // the auxiliary Styles graph. Avoid a separate full-resolution HEIF pass.
+    guard let sourceImage = CGImageSourceCreateImageAtIndex(source, 0, nil),
+          let image = PhotoDisplayP3.convert(sourceImage) else {
+      throw CompatibilityError.invalidImage
+    }
+    var outputProperties = properties as NSDictionary as? [String: Any] ?? [:]
+    PhotoDisplayP3.apply(to: &outputProperties)
+    outputProperties[kCGImageDestinationLossyCompressionQuality as String] = 0.92
     let preparedURL = FileManager.default.temporaryDirectory
       .appendingPathComponent("komorebi-styles-metadata-\(UUID().uuidString)")
-      .appendingPathExtension(fileExtension)
+      .appendingPathExtension("heic")
     guard let destination = CGImageDestinationCreateWithURL(
       preparedURL as CFURL,
-      sourceType,
+      UTType.heic.identifier as CFString,
       1,
       nil
     ) else {
       throw CompatibilityError.metadataWriteFailed
     }
 
-    CGImageDestinationAddImageFromSource(
-      destination,
-      source,
-      0,
-      properties as CFDictionary
-    )
+    CGImageDestinationAddImageAndMetadata(destination, image,
+      CGImageSourceCopyMetadataAtIndex(source, 0, nil), outputProperties as CFDictionary)
+    let auxiliarySource = metadataSourceURL.flatMap {
+      CGImageSourceCreateWithURL($0 as CFURL, nil)
+    } ?? source
+    for type in [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth,
+                 kCGImageAuxiliaryDataTypePortraitEffectsMatte] {
+      if let data = CGImageSourceCopyAuxiliaryDataInfoAtIndex(auxiliarySource, 0, type) {
+        CGImageDestinationAddAuxiliaryDataInfo(destination, type, data)
+      }
+    }
     guard CGImageDestinationFinalize(destination) else {
       try? FileManager.default.removeItem(at: preparedURL)
       throw CompatibilityError.metadataWriteFailed

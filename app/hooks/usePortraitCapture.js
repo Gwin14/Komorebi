@@ -8,6 +8,7 @@ import {
 export default function usePortraitCapture(device) {
   const nativeAvailable = Platform.OS === "ios" && isPortraitCaptureAvailable();
   const [enabled, setEnabled] = useState(false);
+  const [aperture, setAperture] = useState(4.5);
   const [capabilities, setCapabilities] = useState(null);
 
   const deviceId = device?.id;
@@ -51,11 +52,13 @@ export default function usePortraitCapture(device) {
   return useMemo(
     () => ({
       available,
+      aperture,
+      setAperture,
       capabilities,
       enabled,
       setEnabled,
       toggleEnabled,
     }),
-    [available, capabilities, enabled, toggleEnabled],
+    [available, aperture, capabilities, enabled, toggleEnabled],
   );
 }

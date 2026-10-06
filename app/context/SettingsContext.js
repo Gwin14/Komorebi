@@ -7,7 +7,10 @@ import {
 import { getDefaultTopBarControls } from "../utils/topBarControls";
 import { reconcileProjectsWithAlbums } from "../utils/projects";
 
-import { DEFAULT_HEIF_PLUS_SETTINGS, normalizeHeifPlusSettings } from "../utils/heifPlusSettings";
+import {
+  DEFAULT_HEIF_PLUS_SETTINGS,
+  normalizeHeifPlusSettings,
+} from "../utils/heifPlusSettings";
 
 const SettingsContext = createContext(null);
 
@@ -34,6 +37,7 @@ export const DEFAULT_SETTINGS = {
   photoFormat: "heif",
   heifPlusSettings: DEFAULT_HEIF_PLUS_SETTINGS,
   preserveApplePhotographicStyles: false,
+  photographicStyles3Enabled: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
   customLuts: [],
@@ -45,7 +49,9 @@ export const DEFAULT_SETTINGS = {
 
 export const SettingsProvider = ({ children }) => {
   const [photoAuthor, setPhotoAuthor] = useState(DEFAULT_SETTINGS.photoAuthor);
-  const [photoCopyright, setPhotoCopyright] = useState(DEFAULT_SETTINGS.photoCopyright);
+  const [photoCopyright, setPhotoCopyright] = useState(
+    DEFAULT_SETTINGS.photoCopyright,
+  );
   const [retroStyle, setRetroStyle] = useState(DEFAULT_SETTINGS.retroStyle);
   const [gridVisible, setGridVisible] = useState(DEFAULT_SETTINGS.gridVisible);
   const [levelVisible, setLevelVisible] = useState(
@@ -89,15 +95,23 @@ export const SettingsProvider = ({ children }) => {
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
   const [heifPlusSupport, setHeifPlusSupport] = useState(null);
   const [photoFormat, setPhotoFormat] = useState(DEFAULT_SETTINGS.photoFormat);
-  const [heifPlusSettings, updateHeifPlusSettings] = useState(DEFAULT_SETTINGS.heifPlusSettings);
-  const heifPlusSaveQueue = useRef(Promise.resolve());
-  const setHeifPlusSettings = (value) => updateHeifPlusSettings((current) =>
-    normalizeHeifPlusSettings(typeof value === "function" ? value(current) : value),
+  const [heifPlusSettings, updateHeifPlusSettings] = useState(
+    DEFAULT_SETTINGS.heifPlusSettings,
   );
+  const heifPlusSaveQueue = useRef(Promise.resolve());
+  const setHeifPlusSettings = (value) =>
+    updateHeifPlusSettings((current) =>
+      normalizeHeifPlusSettings(
+        typeof value === "function" ? value(current) : value,
+      ),
+    );
   const saveAsJpeg = photoFormat === "jpeg";
   const setSaveAsJpeg = (enabled) => setPhotoFormat(enabled ? "jpeg" : "heif");
   const [preserveApplePhotographicStyles, setPreserveApplePhotographicStyles] =
     useState(DEFAULT_SETTINGS.preserveApplePhotographicStyles);
+  const [photographicStyles3Enabled, setPhotographicStyles3Enabled] = useState(
+    DEFAULT_SETTINGS.photographicStyles3Enabled,
+  );
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
@@ -140,6 +154,7 @@ export const SettingsProvider = ({ children }) => {
         setPreserveApplePhotographicStyles(
           savedSettings.preserveApplePhotographicStyles,
         );
+        setPhotographicStyles3Enabled(savedSettings.photographicStyles3Enabled);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
@@ -148,22 +163,25 @@ export const SettingsProvider = ({ children }) => {
         setProjects(savedSettings.projects);
         setActiveProjectId(savedSettings.activeProjectId);
 
-        // 🔄 Sincroniza os projetos salvos com os álbuns reais da biblioteca
-        // (remove projetos de álbuns apagados e descobre álbuns novos).
-        try {
-          const reconciled = await reconcileProjectsWithAlbums(
-            savedSettings.projects,
-          );
-          setProjects(reconciled);
-          if (
-            savedSettings.activeProjectId &&
-            !reconciled.some((p) => p.id === savedSettings.activeProjectId)
-          ) {
-            setActiveProjectId(null);
-          }
-        } catch (reconcileError) {
-          console.warn("Falha ao reconciliar projetos:", reconcileError);
-        }
+        // Album maintenance must not hold the settings gate or camera startup.
+        // Preserve any project edits made while the library query is pending.
+        void reconcileProjectsWithAlbums(savedSettings.projects)
+          .then((reconciled) => {
+            setProjects((current) =>
+              current === savedSettings.projects ? reconciled : current,
+            );
+            if (
+              savedSettings.activeProjectId &&
+              !reconciled.some((p) => p.id === savedSettings.activeProjectId)
+            ) {
+              setActiveProjectId((current) =>
+                current === savedSettings.activeProjectId ? null : current,
+              );
+            }
+          })
+          .catch((reconcileError) => {
+            console.warn("Falha ao reconciliar projetos:", reconcileError);
+          });
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
@@ -339,6 +357,15 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [preserveApplePhotographicStyles, loading]);
 
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.PHOTOGRAPHIC_STYLES_3_ENABLED,
+        photographicStyles3Enabled.toString(),
+      );
+    }
+  }, [photographicStyles3Enabled, loading]);
+
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
     if (!loading) {
@@ -389,7 +416,10 @@ export const SettingsProvider = ({ children }) => {
   useEffect(() => {
     if (loading) return;
     void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_AUTHOR, photoAuthor);
-    void saveStoredSetting(SETTINGS_STORAGE_KEYS.PHOTO_COPYRIGHT, photoCopyright);
+    void saveStoredSetting(
+      SETTINGS_STORAGE_KEYS.PHOTO_COPYRIGHT,
+      photoCopyright,
+    );
   }, [loading, photoAuthor, photoCopyright]);
 
   useEffect(() => {
@@ -401,13 +431,22 @@ export const SettingsProvider = ({ children }) => {
     if (loading) return;
     // Keep rapid slider updates ordered so an older write cannot replace the latest value.
     heifPlusSaveQueue.current = heifPlusSaveQueue.current
-      .then(() => saveStoredSetting(SETTINGS_STORAGE_KEYS.HEIF_PLUS_SETTINGS, JSON.stringify(heifPlusSettings)))
+      .then(() =>
+        saveStoredSetting(
+          SETTINGS_STORAGE_KEYS.HEIF_PLUS_SETTINGS,
+          JSON.stringify(heifPlusSettings),
+        ),
+      )
       .catch((error) => console.error("Erro ao salvar ajustes HEIF+", error));
   }, [loading, heifPlusSettings]);
 
   const value = {
-    photoFormat, setPhotoFormat, heifPlusSettings, setHeifPlusSettings,
-    heifPlusSupport, setHeifPlusSupport,
+    photoFormat,
+    setPhotoFormat,
+    heifPlusSettings,
+    setHeifPlusSettings,
+    heifPlusSupport,
+    setHeifPlusSupport,
     photoAuthor,
     setPhotoAuthor,
     photoCopyright,
@@ -449,6 +488,8 @@ export const SettingsProvider = ({ children }) => {
     setSaveAsJpeg,
     preserveApplePhotographicStyles,
     setPreserveApplePhotographicStyles,
+    photographicStyles3Enabled,
+    setPhotographicStyles3Enabled,
     saveOriginalWithoutEffects,
     setSaveOriginalWithoutEffects,
     firstTime,

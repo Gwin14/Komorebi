@@ -190,7 +190,13 @@ public class CameraLivePhotoModule: Module {
         metadata: options["metadata"] as? [String: Any],
         outputFormat: options["outputFormat"] as? String ?? "heif"
       ) ?? photoURL
+      defer {
+        if preparedPhotoURL != photoURL { try? FileManager.default.removeItem(at: preparedPhotoURL) }
+      }
       try PhotoCatalogMetadata.apply(to: preparedPhotoURL, metadata: options["metadata"] as? [String: Any])
+      // Save the prepared native photo/video pair without a synthetic Styles
+      // graph. Such graphs currently fail in Photos' Live Photo editor even
+      // when the still and its pairing identifier pass structural validation.
       let albumTitle = options["albumTitle"] as? String ?? "Komorebi"
       let originalFilename = options["originalFilename"] as? String
       let localIdentifier = try await Self.saveLivePhotoToLibrary(

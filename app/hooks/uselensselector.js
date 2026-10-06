@@ -128,8 +128,7 @@ export function usePhysicalCameraDevices(facing = "back", enabled = true) {
       .filter((device) => device.position === position)
       .sort(
         (a, b) =>
-          getDevicePreferenceScore(b, true) -
-          getDevicePreferenceScore(a, true),
+          getDevicePreferenceScore(b, true) - getDevicePreferenceScore(a, true),
       )[0];
   }, [devices, position]);
 

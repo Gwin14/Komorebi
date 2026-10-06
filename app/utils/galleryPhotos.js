@@ -23,20 +23,33 @@ export async function loadGalleryPhotos(project, isCurrent) {
       assets.assets.slice(index, index + 4).map(async (asset) => {
         if (!asset?.uri || !asset?.id) return null;
         if (!asset.uri.startsWith("ph://")) {
-          return { ...asset, rating: await readPhotoRating(asset.uri, asset.id) };
+          return {
+            ...asset,
+            rating: await readPhotoRating(asset.uri, asset.id),
+          };
         }
         try {
           const info = await MediaLibrary.getAssetInfoAsync(asset.id);
           if (!isCurrent()) return null;
           const uri = info.localUri || asset.uri;
-          return { ...asset, uri, rating: await readPhotoRating(uri, asset.id) };
+          return {
+            ...asset,
+            uri,
+            rating: await readPhotoRating(uri, asset.id),
+          };
         } catch (error) {
-          console.warn("Não foi possível carregar o asset da galeria:", asset.id, error);
+          console.warn(
+            "Não foi possível carregar o asset da galeria:",
+            asset.id,
+            error,
+          );
           return null;
         }
       }),
     );
-    resolved.push(...batch.filter((asset) => asset && Number.isFinite(asset.creationTime)));
+    resolved.push(
+      ...batch.filter((asset) => asset && Number.isFinite(asset.creationTime)),
+    );
   }
   return isCurrent() ? resolved : null;
 }

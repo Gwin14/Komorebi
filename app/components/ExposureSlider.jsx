@@ -77,7 +77,7 @@ export default function ExposureSlider({
         },
         onPanResponderMove: (_, gestureState) => {
           const startProgress = progressFor(exposureStart.current);
-          const deltaProgress = -gestureState.dx / DIAL_WIDTH;
+          const deltaProgress = -gestureState.dx / dialWidth;
           const nextProgress = Math.min(
             1,
             Math.max(0, startProgress + deltaProgress),
@@ -121,7 +121,7 @@ export default function ExposureSlider({
           exposureStart.current = exposureRef.current;
         },
       }),
-    [onReset, progressFor, resetValue, setExposure, valueFor],
+    [dialWidth, onReset, progressFor, resetValue, setExposure, valueFor],
   );
 
   // Renderiza os tracinhos da régua (quantidade fixa, independente do range)

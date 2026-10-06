@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Image, StyleSheet, useWindowDimensions, View } from "react-native";
+import {
+  Animated,
+  Image,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { LivePhotoCameraView } from "../../modules/camera-live-photo";
-import { PortraitCameraView } from "../../modules/camera-portrait-capture";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { runOnJS } from "react-native-reanimated";
+import {
+  PortraitCameraView,
+  focusPortraitCamera,
+} from "../../modules/camera-portrait-capture";
 import { ImageStackingCameraView } from "../../modules/camera-image-stacking";
 import { getCachedLUT } from "../utils/lutStore";
 import { getGrainConfig } from "../utils/grainCatalog";
 import { getHalationConfig } from "../utils/halationCatalog";
+import { portraitPreviewFocusPoint } from "../utils/portraitPreview";
 import {
   getAspectRatioValue,
   getPreviewDimensions,
@@ -30,6 +42,7 @@ export default function NativeCapturePreview({
   zebraHighlightsEnabled,
   zebraShadowsEnabled,
   exposure,
+  portraitAperture = 4.5,
   aspectRatio,
   availableHeight = 0,
   doubleCaptureMode,
@@ -192,118 +205,172 @@ export default function NativeCapturePreview({
     setHistogramBins(smoothedBins);
   }, []);
 
+  const [focusPoint, setFocusPoint] = useState(null);
+  const focusAnim = useRef(new Animated.Value(0)).current;
+  const focusRequest = useRef(0);
+  const focusOnPoint = useCallback(async (x, y) => {
+    if (mode !== "portrait" || !isActive || !device?.id) return;
+    const point = portraitPreviewFocusPoint({ x, y }, {
+      width: nativeSurfaceDimensions.width,
+      height: nativeSurfaceDimensions.height,
+      left: nativeSurfaceStyle.left,
+      top: nativeSurfaceStyle.top,
+    });
+    if (!point) return;
+    const request = ++focusRequest.current;
+    try {
+      const focused = await focusPortraitCamera({ deviceId: device.id, ...point });
+      if (!focused || focusRequest.current !== request) return;
+      setFocusPoint({ x, y });
+      focusAnim.stopAnimation();
+      focusAnim.setValue(1);
+      Animated.timing(focusAnim, {
+        toValue: 0, duration: 600, delay: 500, useNativeDriver: true,
+      }).start();
+    } catch (error) {
+      console.warn("[NativeCapturePreview] portrait focus failed", error);
+    }
+  }, [device?.id, focusAnim, isActive, mode, nativeSurfaceDimensions.width,
+    nativeSurfaceDimensions.height, nativeSurfaceStyle.left, nativeSurfaceStyle.top]);
+  const focusGesture = useMemo(() => Gesture.Tap()
+    .enabled(mode === "portrait" && isActive)
+    .maxDuration(250)
+    .onEnd((event, success) => {
+      if (success) runOnJS(focusOnPoint)(event.x, event.y);
+    }), [focusOnPoint, isActive, mode]);
+  useEffect(() => {
+    focusRequest.current += 1;
+    setFocusPoint(null);
+    focusAnim.stopAnimation();
+    return () => {
+      focusRequest.current += 1;
+      focusAnim.stopAnimation();
+    };
+  }, [device?.id, focusAnim, isActive, mode]);
+
   if (!device || !mode) {
     return null;
   }
 
   return (
-    <View
-      style={[
-        retroStyle ? styles.retroStyle : styles.cameraWrapper,
-        {
-          width: previewDimensions.width,
-          height: previewDimensions.height,
-          alignSelf: "center",
-          borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
-          borderWidth: doubleCaptureMode ? 3 : 0,
-        },
-      ]}
-    >
-      <NativeCameraView
-        style={nativeSurfaceStyle}
-        deviceId={device.id}
-        zoomFactor={zoomFactor}
-        flashMode={flash === "on" ? "on" : "off"}
-        isActive={isActive}
-        onInitialized={handleInitialized}
-        onError={handleError}
-        smileDetectionEnabled={smileDetectionEnabled}
-        onSmileDetected={onSmileDetected}
-        histogramEnabled={histogramVisible}
-        zebraHighlightsEnabled={zebraHighlightsEnabled}
-        zebraShadowsEnabled={zebraShadowsEnabled}
-        previewLutSize={nativeLut.size}
-        previewLutValues={nativeLut.values}
-        previewLutDomain={nativeLut.domain}
-        previewGrainStrength={
-          grainConfig ? (grainConfig.lumaStrength * 2) / 255 : 0
-        }
-        previewHalation={nativeHalation}
-        {...(mode === "stacking"
-          ? { previewDoubleExposure, previewStacking }
-          : {})}
-        {...(mode === "stacking" ? { exposureBias: exposure } : {})}
-        onHistogramUpdated={
-          histogramVisible ? handleHistogramUpdated : undefined
-        }
-        onStackingProgress={
-          mode === "stacking" ? onStackingProgress : undefined
-        }
-        onPreviewImage={mode === "stacking" ? handlePreviewImage : undefined}
-      />
+    <GestureDetector gesture={focusGesture}>
+      <View
+        style={[
+          retroStyle ? styles.retroStyle : styles.cameraWrapper,
+          {
+            width: previewDimensions.width,
+            height: previewDimensions.height,
+            alignSelf: "center",
+            borderColor: doubleCaptureMode ? "#ffaa00" : "transparent",
+            borderWidth: doubleCaptureMode ? 3 : 0,
+          },
+        ]}
+      >
+        <NativeCameraView
+          style={nativeSurfaceStyle}
+          deviceId={device.id}
+          zoomFactor={zoomFactor}
+          flashMode={flash === "on" ? "on" : "off"}
+          isActive={isActive}
+          onInitialized={handleInitialized}
+          onError={handleError}
+          smileDetectionEnabled={smileDetectionEnabled}
+          onSmileDetected={onSmileDetected}
+          histogramEnabled={histogramVisible}
+          zebraHighlightsEnabled={zebraHighlightsEnabled}
+          zebraShadowsEnabled={zebraShadowsEnabled}
+          previewLutSize={nativeLut.size}
+          previewLutValues={nativeLut.values}
+          previewLutDomain={nativeLut.domain}
+          previewGrainStrength={
+            grainConfig ? (grainConfig.lumaStrength * 2) / 255 : 0
+          }
+          previewHalation={nativeHalation}
+          {...(mode === "stacking"
+            ? { previewDoubleExposure, previewStacking }
+            : {})}
+          {...(mode === "portrait" ? { portraitAperture } : {})}
+          {...(mode === "stacking" || mode === "portrait"
+            ? { exposureBias: exposure }
+            : {})}
+          onHistogramUpdated={
+            histogramVisible ? handleHistogramUpdated : undefined
+          }
+          onStackingProgress={
+            mode === "stacking" ? onStackingProgress : undefined
+          }
+          onPreviewImage={mode === "stacking" ? handlePreviewImage : undefined}
+        />
 
-      {mode === "stacking" &&
-        previewImage &&
-        ((previewImage.type === "doubleExposure" && previewDoubleExposure) ||
-          (previewImage.type === "stacking" && previewStacking)) && (
-          <Image
-            pointerEvents="none"
-            source={{ uri: previewImage.uri }}
-            resizeMode="cover"
-            onError={(event) =>
-              console.warn(
-                "[ImageStacking] preview decode failed",
-                event.nativeEvent?.error,
-              )
-            }
-            style={[
-              StyleSheet.absoluteFill,
-              {
-                opacity: previewImage.type === "doubleExposure" ? 0.5 : 1,
-              },
-            ]}
-          />
+        {mode === "stacking" &&
+          previewImage &&
+          ((previewImage.type === "doubleExposure" && previewDoubleExposure) ||
+            (previewImage.type === "stacking" && previewStacking)) && (
+            <Image
+              pointerEvents="none"
+              source={{ uri: previewImage.uri }}
+              resizeMode="cover"
+              onError={(event) =>
+                console.warn(
+                  "[ImageStacking] preview decode failed",
+                  event.nativeEvent?.error,
+                )
+              }
+              style={[
+                StyleSheet.absoluteFill,
+                {
+                  opacity: previewImage.type === "doubleExposure" ? 0.5 : 1,
+                },
+              ]}
+            />
+          )}
+
+        {gridVisible && (
+          <View pointerEvents="none" style={styles.gridOverlay}>
+            <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
+            <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
+
+            <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
+            <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
+          </View>
         )}
 
-      {gridVisible && (
-        <View pointerEvents="none" style={styles.gridOverlay}>
-          <View style={[styles.gridLineVertical, { left: "33.333%" }]} />
-          <View style={[styles.gridLineVertical, { left: "66.666%" }]} />
+        {levelVisible && <CameraLevel />}
 
-          <View style={[styles.gridLineHorizontal, { top: "33.333%" }]} />
-          <View style={[styles.gridLineHorizontal, { top: "66.666%" }]} />
-        </View>
-      )}
+        {histogramVisible && <HistogramOverlay bins={histogramBins} />}
 
-      {levelVisible && <CameraLevel />}
-
-      {histogramVisible && <HistogramOverlay bins={histogramBins} />}
-
-      {doubleCaptureMode &&
-        (() => {
-          const marginPct = `${(((1 - aspectRatioValue * aspectRatioValue) / 2) * 100).toFixed(4)}%`;
-          return (
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-              <View style={[styles.doubleCropZone, { height: marginPct }]}>
-                <View style={styles.doubleCropBorder} />
-              </View>
-              <View
-                style={[
-                  styles.doubleCropZone,
-                  styles.doubleCropZoneBottom,
-                  { height: marginPct },
-                ]}
-              >
+        {doubleCaptureMode &&
+          (() => {
+            const marginPct = `${(((1 - aspectRatioValue * aspectRatioValue) / 2) * 100).toFixed(4)}%`;
+            return (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <View style={[styles.doubleCropZone, { height: marginPct }]}>
+                  <View style={styles.doubleCropBorder} />
+                </View>
                 <View
                   style={[
-                    styles.doubleCropBorder,
-                    { top: 0, bottom: undefined },
+                    styles.doubleCropZone,
+                    styles.doubleCropZoneBottom,
+                    { height: marginPct },
                   ]}
-                />
+                >
+                  <View
+                    style={[
+                      styles.doubleCropBorder,
+                      { top: 0, bottom: undefined },
+                    ]}
+                  />
+                </View>
               </View>
-            </View>
-          );
-        })()}
-    </View>
+            );
+          })()}
+        {mode === "portrait" && focusPoint && (
+          <Animated.View pointerEvents="none" style={[
+            styles.focusSquare,
+            { left: focusPoint.x, top: focusPoint.y, opacity: focusAnim },
+          ]} />
+        )}
+      </View>
+    </GestureDetector>
   );
 }

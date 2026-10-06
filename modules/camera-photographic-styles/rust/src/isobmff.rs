@@ -573,11 +573,13 @@ pub fn parse_iloc(data: &[u8], box_hdr: &BoxHeader) -> Result<Vec<IlocEntry>, St
             if index_size > 0 {
                 pos += index_size;
             }
-            let mut offset: u64 = base_offset;
+            let mut extent_offset: u64 = 0;
             for _ in 0..offset_size {
-                offset = (offset << 8) | data[pos] as u64;
+                extent_offset = (extent_offset << 8) | data[pos] as u64;
                 pos += 1;
             }
+            let offset = base_offset.checked_add(extent_offset)
+                .ok_or("iloc base_offset + extent_offset overflow")?;
             let mut length: u64 = 0;
             for _ in 0..length_size {
                 length = (length << 8) | data[pos] as u64;
@@ -1006,6 +1008,31 @@ mod tests {
         assert_eq!(parsed[0].item_id, 1);
         assert_eq!(parsed[0].extents.len(), 1);
         assert_eq!(parsed[0].extents[0], (0, 100));
+    }
+
+    #[test]
+    fn iloc_adds_base_offset_instead_of_shifting_it() {
+        for version in [0, 1, 2] {
+            let mut payload = vec![version, 0, 0, 0, 0x44, 0x40];
+            if version == 2 {
+                payload.extend_from_slice(&1u32.to_be_bytes());
+                payload.extend_from_slice(&7u32.to_be_bytes());
+            } else {
+                payload.extend_from_slice(&1u16.to_be_bytes());
+                payload.extend_from_slice(&7u16.to_be_bytes());
+            }
+            if version != 0 { payload.extend_from_slice(&0u16.to_be_bytes()); }
+            payload.extend_from_slice(&0u16.to_be_bytes()); // data reference
+            payload.extend_from_slice(&4096u32.to_be_bytes()); // base offset
+            payload.extend_from_slice(&1u16.to_be_bytes()); // extent count
+            payload.extend_from_slice(&128u32.to_be_bytes()); // relative offset
+            payload.extend_from_slice(&64u32.to_be_bytes()); // length
+            let data = make_box(b"iloc", &payload);
+            let boxes = parse_boxes(&data, 0, data.len());
+            let entries = parse_iloc(&data, &boxes[0]).unwrap();
+            assert_eq!(entries[0].item_id, 7);
+            assert_eq!(entries[0].extents, vec![(4224, 64)]);
+        }
     }
 
     #[test]

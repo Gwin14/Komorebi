@@ -3,7 +3,10 @@ import { restoreIntelligentPreferences } from "./intelligentSettings";
 import { restoreZebraPreferences } from "./zebraSettings";
 import { normalizeTopBarControls } from "./topBarControls";
 
-import { normalizeHeifPlusSettings, restorePhotoFormat } from "./heifPlusSettings";
+import {
+  normalizeHeifPlusSettings,
+  restorePhotoFormat,
+} from "./heifPlusSettings";
 
 export const SETTINGS_STORAGE_KEYS = {
   PHOTO_AUTHOR: "@settings/photoAuthor",
@@ -29,6 +32,7 @@ export const SETTINGS_STORAGE_KEYS = {
   SAVE_AS_JPEG: "@settings/saveAsJpeg",
   PRESERVE_APPLE_PHOTOGRAPHIC_STYLES:
     "@settings/preserveApplePhotographicStyles",
+  PHOTOGRAPHIC_STYLES_3_ENABLED: "@settings/photographicStyles3Enabled",
   SAVE_ORIGINAL_WITH_LUT: "@settings/saveOriginalWithLUT",
   FIRSTTIME: "@settings/firstTime",
   CUSTOM_LUTS: "@settings/customLuts",
@@ -66,17 +70,23 @@ export async function loadStoredSettings(defaults) {
   const savedPreviewLut = stored[keys.PREVIEW_LUT] ?? null;
   const savedPreviewHalation = stored[keys.PREVIEW_HALATION] ?? null;
   const savedPreviewGrain = stored[keys.PREVIEW_GRAIN] ?? null;
-  const savedPreviewDoubleExposure = stored[keys.PREVIEW_DOUBLE_EXPOSURE] ?? null;
+  const savedPreviewDoubleExposure =
+    stored[keys.PREVIEW_DOUBLE_EXPOSURE] ?? null;
   const savedPreviewStacking = stored[keys.PREVIEW_STACKING] ?? null;
-  const savedZebraHighlightsEnabled = stored[keys.ZEBRA_HIGHLIGHTS_ENABLED] ?? null;
+  const savedZebraHighlightsEnabled =
+    stored[keys.ZEBRA_HIGHLIGHTS_ENABLED] ?? null;
   const savedZebraShadowsEnabled = stored[keys.ZEBRA_SHADOWS_ENABLED] ?? null;
-  const savedCompositionScanEnabled = stored[keys.COMPOSITION_SCAN_ENABLED] ?? null;
-  const savedIntelligentTagsEnabled = stored[keys.INTELLIGENT_TAGS_ENABLED] ?? null;
-  const savedIntelligentFilenameEnabled = stored[keys.INTELLIGENT_FILENAME_ENABLED] ?? null;
+  const savedCompositionScanEnabled =
+    stored[keys.COMPOSITION_SCAN_ENABLED] ?? null;
+  const savedIntelligentTagsEnabled =
+    stored[keys.INTELLIGENT_TAGS_ENABLED] ?? null;
+  const savedIntelligentFilenameEnabled =
+    stored[keys.INTELLIGENT_FILENAME_ENABLED] ?? null;
   const savedShutterSound = stored[keys.SHUTTER_SOUND] ?? null;
   const savedLocation = stored[keys.LOCATION] ?? null;
   const savedSaveAsJpeg = stored[keys.SAVE_AS_JPEG] ?? null;
-  const savedPreserveApplePhotographicStyles = stored[keys.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES] ?? null;
+  const savedPreserveApplePhotographicStyles =
+    stored[keys.PRESERVE_APPLE_PHOTOGRAPHIC_STYLES] ?? null;
   const savedSaveOriginalWithLUT = stored[keys.SAVE_ORIGINAL_WITH_LUT] ?? null;
   const savedFirstTime = stored[keys.FIRSTTIME] ?? null;
   const savedCustomLuts = stored[keys.CUSTOM_LUTS] ?? null;
@@ -106,7 +116,10 @@ export async function loadStoredSettings(defaults) {
   );
 
   return {
-    photoFormat: restorePhotoFormat(format, parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg)),
+    photoFormat: restorePhotoFormat(
+      format,
+      parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg),
+    ),
     heifPlusSettings: normalizeHeifPlusSettings(parseJSON(rawSettings, null)),
     photoAuthor: photoAuthor ?? defaults.photoAuthor,
     photoCopyright: photoCopyright ?? defaults.photoCopyright,
@@ -139,6 +152,10 @@ export async function loadStoredSettings(defaults) {
     preserveApplePhotographicStyles: parseBoolean(
       savedPreserveApplePhotographicStyles,
       defaults.preserveApplePhotographicStyles,
+    ),
+    photographicStyles3Enabled: parseBoolean(
+      stored[keys.PHOTOGRAPHIC_STYLES_3_ENABLED] ?? null,
+      defaults.photographicStyles3Enabled,
     ),
     saveOriginalWithoutEffects: parseBoolean(
       savedSaveOriginalWithLUT,

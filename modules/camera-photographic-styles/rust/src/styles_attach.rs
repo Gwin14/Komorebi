@@ -80,14 +80,17 @@ fn find_item(parsed: &isobmff::ParsedMeta, uri: &str) -> Option<u32> {
 }
 
 /// Read an item payload (construction 0 from mdat / 1 from idat).
-fn item_payload_bytes(data: &[u8], parsed: &isobmff::ParsedMeta, item_id: u32) -> Option<Vec<u8>> {
+pub(crate) fn item_payload_bytes(data: &[u8], parsed: &isobmff::ParsedMeta, item_id: u32) -> Option<Vec<u8>> {
     let loc = parsed.iloc_entries.iter().find(|e| e.item_id == item_id)?;
+    if loc.data_reference_index != 0 || loc.extents.is_empty() { return None; }
     match loc.construction_method & 0xF {
         0 => {
             // Multi-extent items (e.g. Huawei Exif) concatenate in order.
             let mut blob = Vec::new();
             for &(off, len) in &loc.extents {
-                blob.extend_from_slice(data.get(off as usize..(off + len) as usize)?);
+                let start = usize::try_from(off).ok()?;
+                let end = usize::try_from(off.checked_add(len)?).ok()?;
+                blob.extend_from_slice(data.get(start..end)?);
             }
             Some(blob)
         }
@@ -97,9 +100,14 @@ fn item_payload_bytes(data: &[u8], parsed: &isobmff::ParsedMeta, item_id: u32) -
             let idat = isobmff::parse_boxes(data, meta.data_start + 4, meta.data_end)
                 .into_iter()
                 .find(|b| b.btype == *b"idat")?;
-            let blob = &data[idat.data_start..idat.data_end];
-            let (off, len) = *loc.extents.first()?;
-            Some(blob.get(off as usize..(off + len) as usize)?.to_vec())
+            let source = &data[idat.data_start..idat.data_end];
+            let mut blob = Vec::new();
+            for &(off, len) in &loc.extents {
+                let start = usize::try_from(off).ok()?;
+                let end = usize::try_from(off.checked_add(len)?).ok()?;
+                blob.extend_from_slice(source.get(start..end)?);
+            }
+            Some(blob)
         }
         _ => None,
     }

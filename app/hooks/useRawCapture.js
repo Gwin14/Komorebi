@@ -9,11 +9,16 @@ import { toggleFileFormat } from "../utils/fileFormatSelection";
 
 export default function useRawCapture(device) {
   const nativeAvailable = Platform.OS === "ios" && isRawCaptureAvailable();
-  const [selection, setSelection] = useState({ rawMode: "off", processedEnabled: true });
+  const [selection, setSelection] = useState({
+    rawMode: "off",
+    processedEnabled: true,
+  });
   const { rawMode, processedEnabled } = selection;
   const setRawMode = useCallback((mode) => {
-    setSelection((current) => ({ rawMode: mode,
-      processedEnabled: mode === "off" || current.processedEnabled }));
+    setSelection((current) => ({
+      rawMode: mode,
+      processedEnabled: mode === "off" || current.processedEnabled,
+    }));
   }, []);
   const [capabilities, setCapabilities] = useState(null);
 
@@ -23,20 +28,20 @@ export default function useRawCapture(device) {
     capabilities?.supportedModes?.some((mode) => mode !== "off"),
   );
   const canCheckCapabilities = nativeAvailable && Boolean(deviceId);
-  const available =
-    canCheckCapabilities &&
-    isBackCamera &&
-    nativeModesAllowRaw;
+  const available = canCheckCapabilities && isBackCamera && nativeModesAllowRaw;
 
   useEffect(() => {
     setCapabilities(null);
     setRawMode("off");
   }, [deviceId, setRawMode]);
 
-  const updateCapabilities = useCallback((caps) => {
-    if (!caps || caps.deviceId !== deviceId) return;
-    setCapabilities(caps);
-  }, [deviceId]);
+  const updateCapabilities = useCallback(
+    (caps) => {
+      if (!caps || caps.deviceId !== deviceId) return;
+      setCapabilities(caps);
+    },
+    [deviceId],
+  );
 
   useEffect(() => {
     if (!isRawCaptureModeSupported(rawMode, capabilities)) {
@@ -44,10 +49,18 @@ export default function useRawCapture(device) {
     }
   }, [capabilities, rawMode, setRawMode]);
 
-  const toggleFormat = useCallback((target) => {
-    setSelection((current) => toggleFileFormat(current, target,
-      available ? capabilities.supportedModes : ["off"]));
-  }, [available, capabilities]);
+  const toggleFormat = useCallback(
+    (target) => {
+      setSelection((current) =>
+        toggleFileFormat(
+          current,
+          target,
+          available ? capabilities.supportedModes : ["off"],
+        ),
+      );
+    },
+    [available, capabilities],
+  );
 
   return useMemo(
     () => ({
@@ -60,6 +73,14 @@ export default function useRawCapture(device) {
       processedEnabled,
       toggleFormat,
     }),
-    [available, capabilities, rawMode, processedEnabled, toggleFormat, updateCapabilities, setRawMode],
+    [
+      available,
+      capabilities,
+      rawMode,
+      processedEnabled,
+      toggleFormat,
+      updateCapabilities,
+      setRawMode,
+    ],
   );
 }
