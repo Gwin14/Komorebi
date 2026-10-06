@@ -229,31 +229,29 @@ export default function BottomControls({
         </View>
       </Animated.View>
 
-      {lenses.length > 1 && (
-        <Animated.View
-          style={[
-            styles.lensSlot,
-            {
-              opacity: shutterOpacity,
-              transform: [{ translateY: shutterTranslate }],
-            },
-          ]}
-          pointerEvents={
-            !imageStackingCapturing &&
-            (activeControl === "none" || activeControl === "manual")
-              ? "auto"
-              : "none"
-          }
-        >
-          {!imageStackingCapturing && (
-            <LensSelector
-              lenses={lenses}
-              activeLensId={activeLensId}
-              onSelectLens={onSelectLens}
-            />
-          )}
-        </Animated.View>
-      )}
+      <Animated.View
+        style={[
+          styles.lensSlot,
+          {
+            opacity: shutterOpacity,
+            transform: [{ translateY: shutterTranslate }],
+          },
+        ]}
+        pointerEvents={
+          !imageStackingCapturing &&
+          (activeControl === "none" || activeControl === "manual")
+            ? "auto"
+            : "none"
+        }
+      >
+        {lenses.length > 1 && !imageStackingCapturing && (
+          <LensSelector
+            lenses={lenses}
+            activeLensId={activeLensId}
+            onSelectLens={onSelectLens}
+          />
+        )}
+      </Animated.View>
 
       <Animated.View
         style={[

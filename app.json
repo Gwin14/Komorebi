@@ -45,10 +45,10 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withCameraStartupSplash",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/icone.png",
           "resizeMode": "contain",
           "backgroundColor": "#000000"
         }

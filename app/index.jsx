@@ -17,6 +17,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { consumePendingLockedCameraCaptures } from "../modules/camera-control-button";
 import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
+import CameraStartupControls from "./components/CameraStartupControls";
+import useCameraStartup from "./hooks/useCameraStartup";
 import PortraitAdjustmentSlider from "./components/PortraitAdjustmentSlider";
 import FocusBracketingPanel from "./components/FocusBracketingPanel";
 import useFocusBracketing from "./hooks/useFocusBracketing";
@@ -64,6 +66,7 @@ import { getAppleStylesCompatibility } from "./utils/photographicStylesPolicy";
 import {
   DEFAULT_ASPECT_RATIO,
   getAspectRatioValue,
+  getPreviewDimensions,
 } from "./utils/aspectRatios";
 
 export default function App() {
@@ -117,7 +120,8 @@ export default function App() {
     requestMediaPermission,
     requestLocationPermission,
   } = useCameraBootstrap({ customLuts });
-  const cameraFeaturesEnabled = !firstTime && cameraPermission === "granted";
+  const cameraFeaturesEnabled =
+    !loading && !firstTime && cameraPermission === "granted";
 
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
@@ -129,6 +133,12 @@ export default function App() {
   const [aspectRatio, setAspectRatio] = useState(DEFAULT_ASPECT_RATIO);
   const [previewAvailableHeight, setPreviewAvailableHeight] = useState(0);
   const captureAspectRatio = getAspectRatioValue(aspectRatio);
+  const previewDimensions = getPreviewDimensions({
+    screenWidth,
+    retroStyle,
+    aspectRatio,
+    availableHeight: 0,
+  });
   const zoomSV = useSharedValue(1);
   const lastZoom = useSharedValue(1);
 
@@ -144,6 +154,13 @@ export default function App() {
   const { orientation: scanOrientation } = useDeviceOrientationState();
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
+  const startup = useCameraStartup({
+    loading,
+    ready:
+      firstTime ||
+      cameraReady ||
+      (cameraPermission !== null && cameraPermission !== "granted"),
+  });
   const [activeControl, setActiveControl] = useState("none");
   const [stackingFinishing, setStackingFinishing] = useState(false);
   const [stackingSoundSignal, setStackingSoundSignal] = useState(0);
@@ -1075,8 +1092,6 @@ export default function App() {
     onCancelStacking: imageStacking.cancel,
   };
 
-  if (loading) return null;
-
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <Stack.Screen options={{ statusBarHidden: true }} />
@@ -1098,7 +1113,7 @@ export default function App() {
       </View>
 
       {/* {isProcessing && <View style={styles.processingOverlay} />} */}
-      {firstTime && (
+      {!loading && firstTime && (
         <Welcome
           permissions={{
             cameraPermission,
@@ -1111,132 +1126,152 @@ export default function App() {
         />
       )}
 
-      {!topBarBelow && <TopBar {...topBarProps} />}
-
-      {!firstTime && cameraPermission === "granted" && (
-        <GestureDetector gesture={composedGestures}>
-          <View
-            style={[
-              styles.previewContainer,
-              retroStyle && !topBarBelow && { marginTop: 8 },
-              aspectRatio === "4:3" && {
-                minHeight: (screenWidth * (retroStyle ? 0.9 : 1)) / (3 / 4),
-              },
-            ]}
-            onLayout={(event) =>
-              setPreviewAvailableHeight(event.nativeEvent.layout.height)
-            }
-          >
-            {cameraHandoffActive ? null : renderedNativeCaptureMode ? (
-              <NativeCapturePreview
-                mode={renderedNativeCaptureMode}
-                isActive={
-                  cameraScreenActive &&
-                  nativeCaptureMode === renderedNativeCaptureMode &&
-                  !cameraHandoffActive
-                }
-                retroStyle={retroStyle}
-                device={activeLens?.device}
-                zoomFactor={
-                  renderedNativeCaptureMode === "stacking"
-                    ? zoom
-                    : activeLens?.zoomFactor
-                }
-                flash={flash}
-                onCameraReady={handleCameraReady}
-                gridVisible={gridVisible}
-                levelVisible={levelVisible}
-                histogramVisible={histogramVisible}
-                zebraHighlightsEnabled={zebraHighlightsEnabled}
-                zebraShadowsEnabled={zebraShadowsEnabled}
-                exposure={exposure}
-                portraitAperture={portraitCapture.aperture}
-                aspectRatio={aspectRatio}
-                availableHeight={previewAvailableHeight}
-                doubleCaptureMode={doubleCaptureMode}
-                smileDetectionEnabled={smileDetectionEnabled}
-                onSmileDetected={handleTakePicture}
-                onStackingProgress={imageStacking.handleProgress}
-                effectPreview={effectPreview}
-                previewDoubleExposure={previewDoubleExposure}
-                previewStacking={previewStacking}
-              />
-            ) : (
-              <CameraPreview
-                retroStyle={retroStyle}
-                cameraRef={cameraRef}
-                facing={facing}
-                device={activeLens?.device}
-                flash={flash}
-                zoom={zoom}
-                exposure={exposure}
-                pictureSize={pictureSize}
-                onCameraReady={handleCameraReady}
-                gridVisible={gridVisible}
-                levelVisible={levelVisible}
-                histogramVisible={histogramVisible}
-                zebraHighlightsEnabled={zebraHighlightsEnabled}
-                zebraShadowsEnabled={zebraShadowsEnabled}
-                setMinZoom={setMinZoom}
-                setMaxZoom={setMaxZoom}
-                onSmileDetected={handleTakePicture}
-                smileDetectionEnabled={smileDetectionEnabled}
-                location={location}
-                aspectRatio={aspectRatio}
-                availableHeight={previewAvailableHeight}
-                doubleCaptureMode={doubleCaptureMode}
-                isActive={
-                  cameraScreenActive && !firstTime && !nativeCaptureMode
-                }
-                manualPhotoMode={manual.manualMode === "manual"}
-                manualExposureActive={
-                  manual.manualMode === "manual" &&
-                  (!manual.isoAuto || !manual.shutterAuto)
-                }
-                rawPhotoMode={
-                  rawCapture.rawModeEnabled || heifPlusPolicy.effective
-                }
-                onRawCapabilities={rawCapture.updateCapabilities}
-                onFocusAtPoint={manual.focusAtPoint}
-                compositionScan={compositionScan}
-                onPreviewLayout={setScanPreviewLayout}
-                effectPreview={effectPreview}
-                onCameraStopped={handleCameraStopped}
-              />
-            )}
-            {hasMediaPermission === false && (
-              <View style={styles.permissionBanner}>
-                <View style={styles.permissionBannerIcon}>
-                  <Ionicons name="images-outline" size={22} color="#ffb21d" />
-                </View>
-                <View style={styles.permissionBannerCopy}>
-                  <Text style={styles.permissionBannerTitle}>
-                    Permita acesso às fotos
-                  </Text>
-                  <Text style={styles.permissionBannerText}>
-                    O Komorebi precisa salvar as fotos que você fizer.
-                  </Text>
-                </View>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Permitir acesso à biblioteca de fotos"
-                  onPress={requestMediaPermission}
-                  style={({ pressed }) => [
-                    styles.permissionButtonCompact,
-                    pressed && styles.permissionButtonPressed,
-                  ]}
-                >
-                  <Text style={styles.permissionButtonCompactText}>
-                    Permitir
-                  </Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </GestureDetector>
+      {!topBarBelow && (
+        <CameraStartupControls
+          startup={startup}
+          kind="top"
+          controlCount={topBarControls.length}
+        >
+          <TopBar {...topBarProps} />
+        </CameraStartupControls>
       )}
 
-      {!firstTime &&
+      {(loading ||
+        (!firstTime &&
+          (cameraPermission === null || cameraPermission === "granted"))) && (
+        <CameraStartupControls
+          startup={startup}
+          kind="viewfinder"
+          style={retroStyle && !topBarBelow && { marginTop: 8 }}
+          viewfinderStyle={{
+            width: previewDimensions.width,
+            height: previewDimensions.height,
+            borderRadius: retroStyle ? 10 : 0,
+          }}
+        >
+          <GestureDetector gesture={composedGestures}>
+            <View
+              style={[
+                styles.previewContainer,
+                { height: previewDimensions.height },
+              ]}
+              onLayout={(event) =>
+                setPreviewAvailableHeight(event.nativeEvent.layout.height)
+              }
+            >
+              {!loading && cameraPermission === "granted" && (
+                cameraHandoffActive ? null : renderedNativeCaptureMode ? (
+                <NativeCapturePreview
+                  mode={renderedNativeCaptureMode}
+                  isActive={
+                    cameraScreenActive &&
+                    nativeCaptureMode === renderedNativeCaptureMode &&
+                    !cameraHandoffActive
+                  }
+                  retroStyle={retroStyle}
+                  device={activeLens?.device}
+                  zoomFactor={
+                    renderedNativeCaptureMode === "stacking"
+                      ? zoom
+                      : activeLens?.zoomFactor
+                  }
+                  flash={flash}
+                  onCameraReady={handleCameraReady}
+                  gridVisible={gridVisible}
+                  levelVisible={levelVisible}
+                  histogramVisible={histogramVisible}
+                  zebraHighlightsEnabled={zebraHighlightsEnabled}
+                  zebraShadowsEnabled={zebraShadowsEnabled}
+                  exposure={exposure}
+                  portraitAperture={portraitCapture.aperture}
+                  aspectRatio={aspectRatio}
+                  availableHeight={previewAvailableHeight}
+                  doubleCaptureMode={doubleCaptureMode}
+                  smileDetectionEnabled={smileDetectionEnabled}
+                  onSmileDetected={handleTakePicture}
+                  onStackingProgress={imageStacking.handleProgress}
+                  effectPreview={effectPreview}
+                  previewDoubleExposure={previewDoubleExposure}
+                  previewStacking={previewStacking}
+                />
+              ) : (
+                <CameraPreview
+                  retroStyle={retroStyle}
+                  cameraRef={cameraRef}
+                  facing={facing}
+                  device={activeLens?.device}
+                  flash={flash}
+                  zoom={zoom}
+                  exposure={exposure}
+                  pictureSize={pictureSize}
+                  onCameraReady={handleCameraReady}
+                  gridVisible={gridVisible}
+                  levelVisible={levelVisible}
+                  histogramVisible={histogramVisible}
+                  zebraHighlightsEnabled={zebraHighlightsEnabled}
+                  zebraShadowsEnabled={zebraShadowsEnabled}
+                  setMinZoom={setMinZoom}
+                  setMaxZoom={setMaxZoom}
+                  onSmileDetected={handleTakePicture}
+                  smileDetectionEnabled={smileDetectionEnabled}
+                  location={location}
+                  aspectRatio={aspectRatio}
+                  availableHeight={previewAvailableHeight}
+                  doubleCaptureMode={doubleCaptureMode}
+                  isActive={
+                    cameraScreenActive && !firstTime && !nativeCaptureMode
+                  }
+                  manualPhotoMode={manual.manualMode === "manual"}
+                  manualExposureActive={
+                    manual.manualMode === "manual" &&
+                    (!manual.isoAuto || !manual.shutterAuto)
+                  }
+                  rawPhotoMode={
+                    rawCapture.rawModeEnabled || heifPlusPolicy.effective
+                  }
+                  onRawCapabilities={rawCapture.updateCapabilities}
+                  onFocusAtPoint={manual.focusAtPoint}
+                  compositionScan={compositionScan}
+                  onPreviewLayout={setScanPreviewLayout}
+                  effectPreview={effectPreview}
+                  onCameraStopped={handleCameraStopped}
+                />
+              )
+              )}
+              {hasMediaPermission === false && (
+                <View style={styles.permissionBanner}>
+                  <View style={styles.permissionBannerIcon}>
+                    <Ionicons name="images-outline" size={22} color="#ffb21d" />
+                  </View>
+                  <View style={styles.permissionBannerCopy}>
+                    <Text style={styles.permissionBannerTitle}>
+                      Permita acesso às fotos
+                    </Text>
+                    <Text style={styles.permissionBannerText}>
+                      O Komorebi precisa salvar as fotos que você fizer.
+                    </Text>
+                  </View>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Permitir acesso à biblioteca de fotos"
+                    onPress={requestMediaPermission}
+                    style={({ pressed }) => [
+                      styles.permissionButtonCompact,
+                      pressed && styles.permissionButtonPressed,
+                    ]}
+                  >
+                    <Text style={styles.permissionButtonCompactText}>
+                      Permitir
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+          </GestureDetector>
+        </CameraStartupControls>
+      )}
+
+      {!loading && !firstTime &&
         cameraPermission !== null &&
         cameraPermission !== "granted" && (
           <View style={styles.permissionContainer}>
@@ -1269,99 +1304,113 @@ export default function App() {
 
       {topBarBelow && (
         <View style={[styles.topBarBelow, retroStyle && { marginTop: 8 }]}>
-          <TopBar {...topBarProps} />
+          <CameraStartupControls
+            startup={startup}
+            kind="top"
+            controlCount={topBarControls.length}
+          >
+            <TopBar {...topBarProps} />
+          </CameraStartupControls>
         </View>
       )}
 
-      <Animated.View
-        style={[
-          styles.adjustmentControlsSlot,
-          {
-            opacity: normalControlsOpacity,
-            transform: [{ translateY: normalControlsTranslate }],
-          },
-        ]}
-        pointerEvents={
-          activeControl === "none" || activeControl === "manual"
-            ? "auto"
-            : "none"
-        }
-      >
-        {imageStacking.strategyId === "focusBracketing" ? (
-          <FocusBracketingPanel
-            topBarBelow={topBarBelow}
-            focus={focusBracketing}
-            disabled={!cameraReady || imageStacking.capturing || isProcessing}
-          />
-        ) : manual.manualMode === "manual" && !imageStacking.enabled && !portraitCapture.enabled ? (
-          <ManualControlsPanel
-            manual={manual}
-            topBarBelow={topBarBelow}
-            exposure={exposure}
-            setExposure={setExposure}
-          />
-        ) : (
-          <PortraitAdjustmentSlider
-            portrait={portraitCapture}
-            exposure={exposure}
-            setExposure={setExposure}
-            topBarBelow={topBarBelow}
-          />
-        )}
-      </Animated.View>
+      <CameraStartupControls startup={startup} kind="adjustment">
+        <Animated.View
+          style={[
+            styles.adjustmentControlsSlot,
+            {
+              opacity: normalControlsOpacity,
+              transform: [{ translateY: normalControlsTranslate }],
+            },
+          ]}
+          pointerEvents={
+            activeControl === "none" || activeControl === "manual"
+              ? "auto"
+              : "none"
+          }
+        >
+          {imageStacking.strategyId === "focusBracketing" ? (
+            <FocusBracketingPanel
+              topBarBelow={topBarBelow}
+              focus={focusBracketing}
+              disabled={!cameraReady || imageStacking.capturing || isProcessing}
+            />
+          ) : manual.manualMode === "manual" && !imageStacking.enabled && !portraitCapture.enabled ? (
+            <ManualControlsPanel
+              manual={manual}
+              topBarBelow={topBarBelow}
+              exposure={exposure}
+              setExposure={setExposure}
+            />
+          ) : (
+            <PortraitAdjustmentSlider
+              portrait={portraitCapture}
+              exposure={exposure}
+              setExposure={setExposure}
+              topBarBelow={topBarBelow}
+            />
+          )}
+        </Animated.View>
+      </CameraStartupControls>
 
-      <BottomControls
-        controlsAnim={controlsAnim}
-        displayedControl={displayedControl}
-        activeControl={activeControl}
-        takePicture={handleTakePicture}
-        onToggleFacing={handleToggleFacing}
-        zoom={zoom}
-        setZoom={setZoom}
-        onZoomStart={handleManualZoomStart}
-        exposure={exposure}
-        setExposure={setExposure}
-        selectedLutId={selectedLutId}
-        setSelectedLutId={setSelectedLutId}
-        selectedGrainId={selectedGrainId}
-        setSelectedGrainId={setSelectedGrainId}
-        selectedHalationId={selectedHalationId}
-        setSelectedHalationId={setSelectedHalationId}
-        zoomSV={zoomSV}
-        minZoom={minZoom}
-        maxZoom={maxZoom}
-        onSliderRelease={() => toggleMode("none")}
-        availableLuts={availableLuts}
-        availableGrains={AVAILABLE_GRAINS}
-        availableHalations={AVAILABLE_HALATIONS}
-        isProcessing={
-          isProcessing ||
-          (heifPlusPolicy.effective && heifPlusPendingCount >= 3)
-        }
-        showProcessingFeedback={
-          isProcessing && (!imageStacking.capturing || stackingFinishing)
-        }
-        processingQueueLength={Math.max(
-          processingQueue.length,
-          heifPlusPendingCount,
-        )}
-        galleryRefreshKey={galleryRefreshKey}
-        activeProject={activeProject}
-        imageStackingCapturing={imageStacking.capturing}
-        imageStackingFinishing={stackingFinishing}
-        imageStackingStrategyId={imageStacking.strategyId}
-        imageStackingProgressState={imageStacking.progress.state}
-        stackingSoundSignal={stackingSoundSignal}
-        imageStackingContinuousCapturing={
-          imageStacking.capturing &&
-          ["bulb", "motionBlur", "doubleExposure"].includes(
-            imageStacking.strategyId,
-          )
-        }
-        lenses={lenses}
-        activeLensId={activeLensId}
-        onSelectLens={handleSelectLens}
-      />
+      <CameraStartupControls
+        startup={startup}
+        kind="bottom"
+        lensCount={lenses.length}
+      >
+        <BottomControls
+          controlsAnim={controlsAnim}
+          displayedControl={displayedControl}
+          activeControl={activeControl}
+          takePicture={handleTakePicture}
+          onToggleFacing={handleToggleFacing}
+          zoom={zoom}
+          setZoom={setZoom}
+          onZoomStart={handleManualZoomStart}
+          exposure={exposure}
+          setExposure={setExposure}
+          selectedLutId={selectedLutId}
+          setSelectedLutId={setSelectedLutId}
+          selectedGrainId={selectedGrainId}
+          setSelectedGrainId={setSelectedGrainId}
+          selectedHalationId={selectedHalationId}
+          setSelectedHalationId={setSelectedHalationId}
+          zoomSV={zoomSV}
+          minZoom={minZoom}
+          maxZoom={maxZoom}
+          onSliderRelease={() => toggleMode("none")}
+          availableLuts={availableLuts}
+          availableGrains={AVAILABLE_GRAINS}
+          availableHalations={AVAILABLE_HALATIONS}
+          isProcessing={
+            isProcessing ||
+            (heifPlusPolicy.effective && heifPlusPendingCount >= 3)
+          }
+          showProcessingFeedback={
+            isProcessing && (!imageStacking.capturing || stackingFinishing)
+          }
+          processingQueueLength={Math.max(
+            processingQueue.length,
+            heifPlusPendingCount,
+          )}
+          galleryRefreshKey={galleryRefreshKey}
+          activeProject={activeProject}
+          imageStackingCapturing={imageStacking.capturing}
+          imageStackingFinishing={stackingFinishing}
+          imageStackingStrategyId={imageStacking.strategyId}
+          imageStackingProgressState={imageStacking.progress.state}
+          stackingSoundSignal={stackingSoundSignal}
+          imageStackingContinuousCapturing={
+            imageStacking.capturing &&
+            ["bulb", "motionBlur", "doubleExposure"].includes(
+              imageStacking.strategyId,
+            )
+          }
+          lenses={lenses}
+          activeLensId={activeLensId}
+          onSelectLens={handleSelectLens}
+        />
+      </CameraStartupControls>
     </SafeAreaView>
   );
 }

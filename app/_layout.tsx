@@ -1,8 +1,17 @@
 import { Stack } from "expo-router";
 import * as Sentry from "@sentry/react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { SettingsProvider } from "./context/SettingsContext";
+import {
+  initialWindowMetrics,
+  SafeAreaProvider,
+} from "react-native-safe-area-context";
+import { SettingsProvider, useSettings } from "./context/SettingsContext";
+import { useState } from "react";
+import useNativeSplashHandoff from "./hooks/useNativeSplashHandoff";
+import * as SplashScreen from "expo-splash-screen";
+
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({ fade: true, duration: 200 });
 
 Sentry.init({
   dsn:
@@ -14,16 +23,29 @@ Sentry.init({
   tracesSampleRate: __DEV__ ? 1 : 0.2,
 });
 
-function RootLayout() {
+function AppNavigator({ layoutReady }: { layoutReady: boolean }) {
+  const { loading } = useSettings();
+  useNativeSplashHandoff({ loading, layoutReady });
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "#000" },
+      }}
+    />
+  );
+}
+
+function RootLayout() {
+  const [layoutReady, setLayoutReady] = useState(false);
+  return (
+    <GestureHandlerRootView
+      style={{ flex: 1 }}
+      onLayout={() => setLayoutReady(true)}
+    >
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <SettingsProvider>
-          <Stack
-            screenOptions={{
-              headerShown: false, // ❌ remove o header
-            }}
-          />
+          <AppNavigator layoutReady={layoutReady} />
         </SettingsProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

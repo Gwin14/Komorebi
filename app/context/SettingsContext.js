@@ -163,22 +163,25 @@ export const SettingsProvider = ({ children }) => {
         setProjects(savedSettings.projects);
         setActiveProjectId(savedSettings.activeProjectId);
 
-        // 🔄 Sincroniza os projetos salvos com os álbuns reais da biblioteca
-        // (remove projetos de álbuns apagados e descobre álbuns novos).
-        try {
-          const reconciled = await reconcileProjectsWithAlbums(
-            savedSettings.projects,
-          );
-          setProjects(reconciled);
-          if (
-            savedSettings.activeProjectId &&
-            !reconciled.some((p) => p.id === savedSettings.activeProjectId)
-          ) {
-            setActiveProjectId(null);
-          }
-        } catch (reconcileError) {
-          console.warn("Falha ao reconciliar projetos:", reconcileError);
-        }
+        // Album maintenance must not hold the settings gate or camera startup.
+        // Preserve any project edits made while the library query is pending.
+        void reconcileProjectsWithAlbums(savedSettings.projects)
+          .then((reconciled) => {
+            setProjects((current) =>
+              current === savedSettings.projects ? reconciled : current,
+            );
+            if (
+              savedSettings.activeProjectId &&
+              !reconciled.some((p) => p.id === savedSettings.activeProjectId)
+            ) {
+              setActiveProjectId((current) =>
+                current === savedSettings.activeProjectId ? null : current,
+              );
+            }
+          })
+          .catch((reconcileError) => {
+            console.warn("Falha ao reconciliar projetos:", reconcileError);
+          });
       } catch (e) {
         console.error("Erro ao carregar settings", e);
       } finally {
