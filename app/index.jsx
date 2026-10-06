@@ -1318,6 +1318,10 @@ export default function App() {
         <Animated.View
           style={[
             styles.adjustmentControlsSlot,
+            (imageStacking.strategyId === "focusBracketing" ||
+              (manual.manualMode === "manual" &&
+                !imageStacking.enabled &&
+                !portraitCapture.enabled)) && { height: 76 },
             {
               opacity: normalControlsOpacity,
               transform: [{ translateY: normalControlsTranslate }],

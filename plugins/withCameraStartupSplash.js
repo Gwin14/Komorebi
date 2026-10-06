@@ -36,7 +36,7 @@ function cameraSplashStoryboard() {
   constraint("preview-height", 'firstItem="camera-preview" firstAttribute="height" secondItem="camera-root" secondAttribute="width" multiplier="4:3"');
   shape("camera-adjustment", 176, 6, 3);
   centerX("camera-adjustment", 0.5);
-  constraint("adjustment-y", 'firstItem="camera-adjustment" firstAttribute="top" secondItem="camera-preview" secondAttribute="bottom" constant="53"');
+  constraint("adjustment-y", 'firstItem="camera-adjustment" firstAttribute="top" secondItem="camera-preview" secondAttribute="bottom" constant="41"');
   shape("camera-shutter", 80, 80, 30, "0.188235");
   shape("camera-shutter-inner", 72, 72, 26, "0.066667");
   shape("camera-gallery", 52, 52, 8);
@@ -46,7 +46,7 @@ function cameraSplashStoryboard() {
   centerX("camera-gallery", 0.25, -20);
   centerX("camera-flip", 0.75, 20);
   for (const id of ["camera-shutter", "camera-shutter-inner", "camera-gallery", "camera-flip"]) {
-    constraint(`${id}-y`, `firstItem="${id}" firstAttribute="centerY" secondItem="camera-preview" secondAttribute="bottom" constant="124"`);
+    constraint(`${id}-y`, `firstItem="${id}" firstAttribute="centerY" secondItem="camera-preview" secondAttribute="bottom" constant="108"`);
   }
   return `<?xml version="1.0" encoding="UTF-8"?>
 <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="24093.7" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="camera-controller">

@@ -19,7 +19,7 @@ export default StyleSheet.create({
   placeholder: { backgroundColor: "#202020" },
   topControl: { width: 38, height: 38, borderRadius: 11 },
   adjustment: {
-    height: 76,
+    height: 64,
     alignItems: "center",
     justifyContent: "flex-end",
   },
@@ -41,7 +41,7 @@ export default StyleSheet.create({
   flip: { width: 54, height: 54, borderRadius: 8 },
   lenses: {
     height: 34,
-    marginTop: 8,
+    marginTop: 0,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",

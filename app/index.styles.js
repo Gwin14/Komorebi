@@ -43,9 +43,9 @@ export default StyleSheet.create({
   },
   adjustmentControlsSlot: {
     width: "100%",
-    height: 76,
+    height: 64,
     justifyContent: "flex-end",
-    marginBottom: 4,
+    marginBottom: 0,
   },
 
   permissionContainer: {
