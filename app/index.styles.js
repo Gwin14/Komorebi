@@ -5,13 +5,14 @@ export default StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
     alignItems: "stretch",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
   },
   previewContainer: {
     position: "relative",
     width: "100%",
-    flex: 1,
-    minHeight: 0,
+    flexGrow: 0,
+    // Reserve the full preview height before distributing space to controls.
+    flexShrink: 0,
     alignItems: "center",
     justifyContent: "flex-start",
     overflow: "hidden",
@@ -36,15 +37,15 @@ export default StyleSheet.create({
   topBarBelow: {
     width: "96%",
     paddingHorizontal: 2,
-    paddingVertical: 4,
+    paddingVertical: 2,
     margin: "auto",
     borderRadius: 14,
   },
   adjustmentControlsSlot: {
     width: "100%",
-    height: 112,
+    height: 76,
     justifyContent: "flex-end",
-    marginBottom: 8,
+    marginBottom: 4,
   },
 
   permissionContainer: {

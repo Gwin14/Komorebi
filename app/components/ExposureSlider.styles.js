@@ -4,7 +4,7 @@ export default StyleSheet.create({
   container: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 10,
+    paddingVertical: 4,
   },
   exposureText: {
     color: "white",

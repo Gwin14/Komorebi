@@ -3,7 +3,7 @@ import { StyleSheet } from "react-native";
 export default StyleSheet.create({
   container: {
     width: "100%",
-    minHeight: 50,
+    minHeight: 44,
   },
   notice: {
     ...StyleSheet.absoluteFillObject,
@@ -23,7 +23,7 @@ export default StyleSheet.create({
     justifyContent: "space-around",
     alignItems: "center",
     paddingHorizontal: 4,
-    paddingVertical: 6,
+    paddingVertical: 3,
   },
   popoverTransparent: {
     backgroundColor: "transparent",

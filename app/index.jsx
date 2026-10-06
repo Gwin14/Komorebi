@@ -1,6 +1,7 @@
 import { getHeifPlusPolicy } from "./utils/heifPlusSettings";
 import { isHeifPlusAvailable } from "../modules/camera-raw-capture";
 import { Ionicons } from "@expo/vector-icons";
+import { Stack } from "expo-router";
 import {
   useCallback,
   useEffect,
@@ -9,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { Alert, Animated, Platform, Pressable, Text, View } from "react-native";
+import { Alert, Animated, Platform, Pressable, Text, View, useWindowDimensions } from "react-native";
 import { GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -66,6 +67,7 @@ import {
 } from "./utils/aspectRatios";
 
 export default function App() {
+  const { width: screenWidth } = useWindowDimensions();
   const cameraScreenActive = useCameraActivity();
   const {
     retroStyle,
@@ -1077,6 +1079,7 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      <Stack.Screen options={{ statusBarHidden: true }} />
       <Animated.View
         pointerEvents="none"
         style={[
@@ -1113,7 +1116,13 @@ export default function App() {
       {!firstTime && cameraPermission === "granted" && (
         <GestureDetector gesture={composedGestures}>
           <View
-            style={styles.previewContainer}
+            style={[
+              styles.previewContainer,
+              retroStyle && !topBarBelow && { marginTop: 8 },
+              aspectRatio === "4:3" && {
+                minHeight: (screenWidth * (retroStyle ? 0.9 : 1)) / (3 / 4),
+              },
+            ]}
             onLayout={(event) =>
               setPreviewAvailableHeight(event.nativeEvent.layout.height)
             }
@@ -1259,7 +1268,7 @@ export default function App() {
         )}
 
       {topBarBelow && (
-        <View style={styles.topBarBelow}>
+        <View style={[styles.topBarBelow, retroStyle && { marginTop: 8 }]}>
           <TopBar {...topBarProps} />
         </View>
       )}

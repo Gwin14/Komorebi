@@ -13,6 +13,7 @@
       "bundleIdentifier": "br.dev.fabiosantos.komorebi.app",
       "supportsTablet": true,
       "infoPlist": {
+        "UIViewControllerBasedStatusBarAppearance": true,
         "LSRequiresIPhoneOS": true,
         "UIRequiredDeviceCapabilities": ["camera"],
         "NSCameraUsageDescription": "Precisamos da câmera para tirar fotos."

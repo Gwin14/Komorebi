@@ -27,10 +27,13 @@ export function getPreviewDimensions({
   aspectRatio,
 }) {
   const ratio = getAspectRatioValue(aspectRatio);
+  if (aspectRatio === "4:3" && !retroStyle) {
+    return { width: screenWidth, height: screenWidth / ratio };
+  }
   const maximumWidth = screenWidth * (retroStyle ? 0.9 : 1);
   const fourThreeHeight = maximumWidth / (3 / 4);
   const heightLimit =
-    retroStyle && availableHeight > 0
+    availableHeight > 0
       ? Math.min(fourThreeHeight, availableHeight)
       : fourThreeHeight;
   const width = Math.min(maximumWidth, heightLimit * ratio);
