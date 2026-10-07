@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   intelligentTagsEnabled: false,
   intelligentFilenameEnabled: false,
   shutterSound: false,
+  captureTimerSeconds: 0,
   location: true,
   saveAsJpeg: false,
   photoFormat: "heif",
@@ -92,6 +93,9 @@ export const SettingsProvider = ({ children }) => {
   const [shutterSound, setShutterSound] = useState(
     DEFAULT_SETTINGS.shutterSound,
   );
+  const [captureTimerSeconds, setCaptureTimerSeconds] = useState(
+    DEFAULT_SETTINGS.captureTimerSeconds,
+  );
   const [location, setLocation] = useState(DEFAULT_SETTINGS.location);
   const [heifPlusSupport, setHeifPlusSupport] = useState(null);
   const [photoFormat, setPhotoFormat] = useState(DEFAULT_SETTINGS.photoFormat);
@@ -148,6 +152,7 @@ export const SettingsProvider = ({ children }) => {
         setPhotoAuthor(savedSettings.photoAuthor);
         setPhotoCopyright(savedSettings.photoCopyright);
         setShutterSound(savedSettings.shutterSound);
+        setCaptureTimerSeconds(savedSettings.captureTimerSeconds);
         setLocation(savedSettings.location);
         setPhotoFormat(savedSettings.photoFormat);
         setHeifPlusSettings(savedSettings.heifPlusSettings);
@@ -308,6 +313,15 @@ export const SettingsProvider = ({ children }) => {
       );
     }
   }, [shutterSound, loading]);
+
+  useEffect(() => {
+    if (!loading) {
+      void saveStoredSetting(
+        SETTINGS_STORAGE_KEYS.CAPTURE_TIMER_SECONDS,
+        String(captureTimerSeconds),
+      );
+    }
+  }, [captureTimerSeconds, loading]);
 
   // Preserva a chave legada para manter a preferência dos usuários atuais.
   useEffect(() => {
@@ -482,6 +496,8 @@ export const SettingsProvider = ({ children }) => {
     loading,
     shutterSound,
     setShutterSound,
+    captureTimerSeconds,
+    setCaptureTimerSeconds,
     location,
     setLocation,
     saveAsJpeg,

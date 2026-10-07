@@ -3,13 +3,11 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Animated, Text, TouchableOpacity, View } from "react-native";
 import Reanimated from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSettings } from "../context/SettingsContext";
 import useDeviceOrientation from "../hooks/useDeviceOrientation";
-import useShutterSound from "../utils/useShutterSound";
 import { getProjectAlbumName } from "../utils/projects";
 import ExposureDialFinal from "./ExposureDialFinal";
 import LUTSelector from "./LUTSelector";
@@ -48,9 +46,6 @@ export default function BottomControls({
   activeProject = null,
   imageStackingCapturing = false,
   imageStackingFinishing = false,
-  imageStackingStrategyId = null,
-  imageStackingProgressState = "idle",
-  stackingSoundSignal = 0,
   imageStackingContinuousCapturing = false,
   lenses = [],
   activeLensId,
@@ -58,8 +53,6 @@ export default function BottomControls({
 }) {
   const router = useRouter();
   const { bottom: bottomInset } = useSafeAreaInsets();
-  const { shutterSound } = useSettings();
-  const playShutterSound = useShutterSound();
   const deviceOrientationStyle = useDeviceOrientation();
   const [lastPhotoUri, setLastPhotoUri] = useState(null);
 
@@ -67,30 +60,8 @@ export default function BottomControls({
     processingQueueLength,
     showProcessingFeedback ? 1 : 0,
   );
-  const lastSoundSignal = useRef(stackingSoundSignal);
-
-  useEffect(() => {
-    if (stackingSoundSignal !== lastSoundSignal.current && shutterSound) {
-      void playShutterSound();
-    }
-    lastSoundSignal.current = stackingSoundSignal;
-  }, [stackingSoundSignal, shutterSound, playShutterSound]);
-
   const handleShutterPress = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const twoTapStacking =
-      imageStackingCapturing &&
-      ["bulb", "motionBlur", "doubleExposure"].includes(
-        imageStackingStrategyId,
-      );
-    const finishingTap =
-      twoTapStacking &&
-      !imageStackingFinishing &&
-      (imageStackingStrategyId !== "doubleExposure" ||
-        imageStackingProgressState === "awaitingSecondExposure");
-    if (shutterSound && (!imageStackingStrategyId || finishingTap)) {
-      await playShutterSound();
-    }
     await takePicture();
   };
 

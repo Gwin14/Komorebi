@@ -1,3 +1,4 @@
+import { normalizeCaptureTimer } from "./captureTimer";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { restoreIntelligentPreferences } from "./intelligentSettings";
 import { restoreZebraPreferences } from "./zebraSettings";
@@ -25,6 +26,7 @@ export const SETTINGS_STORAGE_KEYS = {
   COMPOSITION_SCAN_ENABLED: "@settings/compositionScanEnabled",
   INTELLIGENT_TAGS_ENABLED: "@settings/intelligentTagsEnabled",
   INTELLIGENT_FILENAME_ENABLED: "@settings/intelligentFilenameEnabled",
+  CAPTURE_TIMER_SECONDS: "@settings/captureTimerSeconds",
   SHUTTER_SOUND: "@settings/shutterSound",
   LOCATION: "@settings/location",
   PHOTO_FORMAT: "@settings/photoFormat",
@@ -146,6 +148,9 @@ export async function loadStoredSettings(defaults) {
     ),
     ...zebraPreferences,
     ...intelligentPreferences,
+    captureTimerSeconds: normalizeCaptureTimer(
+      stored[keys.CAPTURE_TIMER_SECONDS] ?? defaults.captureTimerSeconds,
+    ),
     shutterSound: parseBoolean(savedShutterSound, defaults.shutterSound),
     location: parseBoolean(savedLocation, defaults.location),
     saveAsJpeg: parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg),

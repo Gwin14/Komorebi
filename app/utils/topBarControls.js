@@ -44,6 +44,12 @@ export const TOP_BAR_CONTROLS = [
     alwaysEnabled: false,
   },
   {
+    id: "timer",
+    label: "Timer",
+    icon: "timer-outline",
+    alwaysEnabled: false,
+  },
+  {
     id: "flash",
     label: "Flash",
     icon: "flash-outline",
@@ -92,6 +98,7 @@ export function getDefaultTopBarControls(platform = Platform.OS) {
     "luts",
     ...(platform === "ios" ? ["livePhoto"] : []),
     "vertical",
+    "timer",
     "manual",
     ...(platform === "ios" ? ["stacking"] : []),
     "settings",

@@ -17,6 +17,15 @@ export default StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
+  countdown: {
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  cancelCountdown: { minWidth: 44, minHeight: 38, alignItems: "center", justifyContent: "center" },
+  timerLabel: { position: "absolute", right: 2, bottom: 0, color: "#ffaa00", fontSize: 10, fontWeight: "700" },
   buttonsContainer: {
     flexDirection: "row",
     width: "100%",

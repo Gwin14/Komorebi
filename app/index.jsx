@@ -25,6 +25,8 @@ import useFocusBracketing from "./hooks/useFocusBracketing";
 import ManualControlsPanel from "./components/ManualControlsPanel";
 import NativeCapturePreview from "./components/NativeCapturePreview";
 import TopBar from "./components/TopBar";
+import useCaptureTimer from "./hooks/useCaptureTimer";
+import useShutterSound from "./utils/useShutterSound";
 import useTopBarNotice from "./hooks/useTopBarNotice";
 import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
@@ -73,6 +75,9 @@ export default function App() {
   const { width: screenWidth } = useWindowDimensions();
   const cameraScreenActive = useCameraActivity();
   const {
+    captureTimerSeconds,
+    setCaptureTimerSeconds,
+    shutterSound,
     retroStyle,
     gridVisible,
     levelVisible,
@@ -123,6 +128,7 @@ export default function App() {
   const cameraFeaturesEnabled =
     !loading && !firstTime && cameraPermission === "granted";
 
+  const playShutterSound = useShutterSound();
   const [facing, setFacing] = useState("back");
   const [flash, setFlash] = useState("off");
   const [zoom, setZoom] = useState(1);
@@ -163,7 +169,6 @@ export default function App() {
   });
   const [activeControl, setActiveControl] = useState("none");
   const [stackingFinishing, setStackingFinishing] = useState(false);
-  const [stackingSoundSignal, setStackingSoundSignal] = useState(0);
 
   const [selectedLutId, setSelectedLutId] = useState("none");
   const [selectedGrainId, setSelectedGrainId] = useState("none");
@@ -571,7 +576,7 @@ export default function App() {
     setActiveControl((current) => (current === mode ? "none" : mode));
   }, []);
 
-  const handleTakePicture = useCallback(async () => {
+  const capturePhoto = useCallback(async () => {
     if (!cameraScreenActive) return;
     cancelAutoZoomAnimation();
     cancelCompositionScan();
@@ -580,10 +585,12 @@ export default function App() {
         if (stackingFinishing) return;
         if (["bulb", "motionBlur"].includes(imageStacking.strategyId)) {
           setStackingFinishing(true);
+          if (shutterSound) void playShutterSound();
           await imageStacking.stop();
         } else if (imageStacking.strategyId === "doubleExposure") {
           if (imageStacking.progress.state !== "awaitingSecondExposure") return;
           setStackingFinishing(true);
+          if (shutterSound) void playShutterSound();
           await imageStacking.advance();
         }
         return;
@@ -626,7 +633,7 @@ export default function App() {
             imageStacking.strategyId,
           )
         ) {
-          setStackingSoundSignal((value) => value + 1);
+          if (shutterSound) void playShutterSound();
         }
         const additionalExif = await getLocationExif(location);
         enqueueProcessing(
@@ -700,6 +707,7 @@ export default function App() {
     }
     if (captureInFlightRef.current || isProcessing || !cameraReady) return;
     captureInFlightRef.current = true;
+    if (shutterSound) void playShutterSound();
     animateShutter();
 
     const manualSettings =
@@ -785,6 +793,8 @@ export default function App() {
     cancelAutoZoomAnimation,
     cancelCompositionScan,
     animateShutter,
+    shutterSound,
+    playShutterSound,
     availableLuts,
     cameraReady,
     doubleCaptureMode,
@@ -950,6 +960,51 @@ export default function App() {
     if (!cameraScreenActive) setCameraReady(false);
   }, [cameraScreenActive]);
 
+  const { remaining: countdownRemaining, cancel: cancelCountdown, requestCapture } = useCaptureTimer({
+    seconds: captureTimerSeconds,
+    enabled: cameraScreenActive && cameraFeaturesEnabled && cameraReady,
+    configurationKey: `${facing}:${activeLens?.device?.id}:${nativeCaptureMode}:${imageStacking.strategyId}`,
+    onCapture: capturePhoto,
+    onStart: () => {
+      cancelAutoZoomAnimation();
+      cancelCompositionScan();
+      setActiveControl("none");
+    },
+  });
+  const handleTakePicture = useCallback(() => {
+    // Finishing a continuous exposure must remain immediate. The timer delays
+    // its start, and also the second frame of a double exposure.
+    if (imageStacking.capturing) {
+      if (stackingFinishing) return;
+      if (["bulb", "motionBlur"].includes(imageStacking.strategyId)) {
+        return requestCapture({ immediate: true });
+      }
+      if (
+        imageStacking.strategyId !== "doubleExposure" ||
+        imageStacking.progress.state !== "awaitingSecondExposure"
+      ) return;
+    } else if (
+      isProcessing ||
+      captureInFlightRef.current ||
+      stackingStartInFlightRef.current ||
+      !hasMediaPermission ||
+      (heifPlusPolicy.effective && heifPlusPendingCount >= 3)
+    ) {
+      return;
+    }
+    return requestCapture();
+  }, [
+    requestCapture,
+    imageStacking.capturing,
+    imageStacking.strategyId,
+    imageStacking.progress.state,
+    stackingFinishing,
+    isProcessing,
+    hasMediaPermission,
+    heifPlusPolicy.effective,
+    heifPlusPendingCount,
+  ]);
+
   useVolumeShutter({
     enabled:
       cameraScreenActive &&
@@ -986,6 +1041,10 @@ export default function App() {
 
   const topBarProps = {
     notice: topBarNotice,
+    captureTimerSeconds,
+    onSelectCaptureTimer: setCaptureTimerSeconds,
+    countdownRemaining: countdownRemaining,
+    onCancelCountdown: cancelCountdown,
     activeControl,
     doubleCaptureMode,
     firstTime,
@@ -1401,9 +1460,6 @@ export default function App() {
           activeProject={activeProject}
           imageStackingCapturing={imageStacking.capturing}
           imageStackingFinishing={stackingFinishing}
-          imageStackingStrategyId={imageStacking.strategyId}
-          imageStackingProgressState={imageStacking.progress.state}
-          stackingSoundSignal={stackingSoundSignal}
           imageStackingContinuousCapturing={
             imageStacking.capturing &&
             ["bulb", "motionBlur", "doubleExposure"].includes(

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import RNFS from "react-native-fs";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { CAPTURE_TIMER_OPTIONS } from "../utils/captureTimer";
 import { useSettings } from "../context/SettingsContext";
 import useCompositionModel from "../hooks/useCompositionModel";
 import {
@@ -169,6 +170,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     intelligentFilenameEnabled,
     setIntelligentFilenameEnabled,
     loading,
+    captureTimerSeconds,
+    setCaptureTimerSeconds,
     shutterSound,
     setShutterSound,
     location,
@@ -401,6 +404,18 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
           onValueChange={setZebraShadowsEnabled}
         />
       )}
+      <MenuRow
+        icon="timer-outline"
+        label="Timer"
+        status={CAPTURE_TIMER_OPTIONS.find((option) => option.seconds === captureTimerSeconds)?.label}
+        onPress={() => Alert.alert("Timer", "Tempo antes do disparo",
+          CAPTURE_TIMER_OPTIONS.map(({ seconds, label }) => ({
+            text: label,
+            onPress: () => setCaptureTimerSeconds(seconds),
+          })),
+          { cancelable: true },
+        )}
+      />
       <CustomToggle
         grouped
         label="Som do obturador"

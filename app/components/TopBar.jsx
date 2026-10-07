@@ -13,6 +13,7 @@ import ProjectSelector from "./ProjectSelector";
 import PhotoWeather from "./PhotoWeather";
 import ImageStackingSelector from "./ImageStackingSelector";
 import ImageStackingStatus from "./ImageStackingStatus";
+import CaptureTimerSelector from "./CaptureTimerSelector";
 import styles from "./TopBar.styles";
 
 export default function TopBar({
@@ -59,18 +60,33 @@ export default function TopBar({
   stackingProgress,
   onCancelStacking,
   notice,
+  captureTimerSeconds = 0,
+  onSelectCaptureTimer,
+  countdownRemaining = 0,
+  onCancelCountdown,
 }) {
-  const noticeVisible = Boolean(notice?.message) && !controlsDisabled;
+  const countingDown = countdownRemaining > 0;
+  const noticeVisible = Boolean(notice?.message) && !controlsDisabled && !countingDown;
   const router = useRouter();
   const animatedStyle = useDeviceOrientation();
   const [formatOpen, setFormatOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [stackingOpen, setStackingOpen] = useState(false);
   const [aspectRatioOpen, setAspectRatioOpen] = useState(false);
+  const [timerOpen, setTimerOpen] = useState(false);
   const [data, setData] = useState(null);
   const [place, setPlace] = useState(null);
   const [coords, setCoords] = useState(null);
   const weatherEnabled = !firstTime && topBarControls.includes("weather");
+
+  useEffect(() => {
+    if (!countingDown) return;
+    setTimerOpen(false);
+    setFormatOpen(false);
+    setOpen(false);
+    setStackingOpen(false);
+    setAspectRatioOpen(false);
+  }, [countingDown]);
 
   useEffect(() => {
     if (!weatherEnabled) return;
@@ -141,6 +157,11 @@ export default function TopBar({
   }, [coords, weatherEnabled]);
 
   const controlOptions = {
+    timer: {
+      icon: "timer-outline",
+      active: captureTimerSeconds > 0,
+      onPress: () => setTimerOpen(true),
+    },
     aspectRatio: {
       icon: "crop-outline",
       onPress: () => toggleMode("zoom"),
@@ -245,7 +266,21 @@ export default function TopBar({
         accessibilityElementsHidden={noticeVisible}
         importantForAccessibility={noticeVisible ? "no-hide-descendants" : "auto"}
       >
-        {controlsDisabled ? (
+        {countingDown ? (
+          <View style={styles.countdown}>
+            <Text style={styles.noticeText} numberOfLines={1} accessibilityLiveRegion="polite">
+              Foto em {countdownRemaining} s
+            </Text>
+            <TouchableOpacity
+              onPress={onCancelCountdown}
+              style={styles.cancelCountdown}
+              accessibilityRole="button"
+              accessibilityLabel="Cancelar timer"
+            >
+              <Ionicons name="close-circle-outline" size={26} color="white" />
+            </TouchableOpacity>
+          </View>
+        ) : controlsDisabled ? (
           <ImageStackingStatus
             progress={stackingProgress}
             onCancel={onCancelStacking}
@@ -266,6 +301,35 @@ export default function TopBar({
               (controlId === "portrait" && !portraitCaptureAvailable);
             const unavailableReason = unavailableReasons[controlId];
             const iconColor = control.active ? "#ffaa00" : "white";
+
+            if (controlId === "timer") {
+              return (
+                <Animated.View key={controlId} style={animatedStyle}>
+                  <Popover
+                    isVisible={timerOpen}
+                    onRequestClose={() => setTimerOpen(false)}
+                    backgroundStyle={{ backgroundColor: "transparent" }}
+                    popoverStyle={{ backgroundColor: "transparent" }}
+                    from={
+                      <TouchableOpacity
+                        style={[styles.controlButton, control.active && styles.controlButtonActive]}
+                        onPress={control.onPress}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Timer: ${captureTimerSeconds ? `${captureTimerSeconds} segundos` : "desligado"}`}
+                      >
+                        <Ionicons name="timer-outline" size={24} color={iconColor} />
+                        {control.active && <Text style={styles.timerLabel}>{captureTimerSeconds}</Text>}
+                      </TouchableOpacity>
+                    }
+                  >
+                    <CaptureTimerSelector value={captureTimerSeconds} onChange={(seconds) => {
+                      setTimerOpen(false);
+                      onSelectCaptureTimer(seconds);
+                    }} />
+                  </Popover>
+                </Animated.View>
+              );
+            }
 
             if (controlId === "weather") {
               return (

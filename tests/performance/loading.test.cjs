@@ -102,6 +102,7 @@ test("settings use one batch and preserve legacy format, explicit false, text an
   });
   assert.equal(reads, 1);
   assert.equal(result.photoFormat, "jpeg");
+  assert.equal(result.captureTimerSeconds, 0);
   assert.equal(result.gridVisible, false);
   assert.equal(result.levelVisible, true);
   assert.equal(result.photoAuthor, "Fábio");

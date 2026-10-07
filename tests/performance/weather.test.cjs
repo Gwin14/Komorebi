@@ -11,7 +11,7 @@ function fixture(location) {
     "expo-location": location,
     "expo-symbols": { SymbolView: "Symbol" },
     "expo-router": { useRouter: () => ({}) },
-    "react-native": { View: "View", Text: "Text", TouchableOpacity: "Button" },
+    "react-native": { View: "View", Text: "Text", TouchableOpacity: "Button", Animated: { View: "View" } },
     "react-native-popover-view": "Popover",
     "react-native-reanimated": { View: "View" },
     "../hooks/useDeviceOrientation": () => ({}),
@@ -24,14 +24,15 @@ function fixture(location) {
     "PhotoWeather",
     "ImageStackingSelector",
     "ImageStackingStatus",
+    "CaptureTimerSelector",
   ])
     mocks[`./${child}`] = child;
   const TopBar = loadModule("app/components/TopBar.jsx", mocks).default;
   return {
     hooks,
-    render: (controls) =>
+    render: (controls, props = {}) =>
       hooks.render(() =>
-        TopBar({ topBarControls: controls, firstTime: false }),
+        TopBar({ topBarControls: controls, firstTime: false, ...props }),
       ),
   };
 }
@@ -99,4 +100,31 @@ test("enabled weather keeps both endpoints; cleanup aborts their requests", asyn
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+function descendants(node) {
+  if (!node || typeof node !== "object") return [];
+  const children = [node.props?.children].flat(Infinity);
+  return [node, ...children.flatMap(descendants)];
+}
+
+test("timer progress keeps cancellation accessible above stacking and notices", () => {
+  const f = fixture({});
+  let cancelled = false;
+  const props = {
+    controlsDisabled: true,
+    countdownRemaining: 3,
+    notice: { message: "Outro aviso" },
+    onCancelCountdown: () => { cancelled = true; },
+  };
+  const nodes = descendants(f.render(["timer", "settings"], props));
+  const cancel = nodes.find((node) => node.props?.accessibilityLabel === "Cancelar timer");
+  assert.ok(cancel);
+  cancel.props.onPress();
+  assert.equal(cancelled, true);
+  assert.equal(nodes.some((node) => node.type === "ImageStackingStatus"), false);
+  assert.equal(nodes.some((node) => node.props?.children === "Outro aviso"), false);
+  const restored = descendants(f.render(["timer", "settings"], { ...props, countdownRemaining: 0 }));
+  assert.equal(restored.some((node) => node.type === "ImageStackingStatus"), true);
+  f.hooks.dispose();
 });
