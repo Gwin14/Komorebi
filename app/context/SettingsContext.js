@@ -1,3 +1,4 @@
+import { DEFAULT_CONTROL_GESTURES, normalizeControlGestures } from "../utils/controlGestures";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   loadStoredSettings,
@@ -15,6 +16,7 @@ import {
 const SettingsContext = createContext(null);
 
 export const DEFAULT_SETTINGS = {
+  controlGestures: DEFAULT_CONTROL_GESTURES,
   photoAuthor: "",
   photoCopyright: "",
   retroStyle: false,
@@ -49,6 +51,11 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const SettingsProvider = ({ children }) => {
+  const [controlGestures, updateControlGestures] = useState(DEFAULT_SETTINGS.controlGestures);
+  const controlGesturesSaveQueue = useRef(Promise.resolve());
+  const setControlGestures = (value) => updateControlGestures((current) =>
+    normalizeControlGestures(typeof value === "function" ? value(current) : value),
+  );
   const [photoAuthor, setPhotoAuthor] = useState(DEFAULT_SETTINGS.photoAuthor);
   const [photoCopyright, setPhotoCopyright] = useState(
     DEFAULT_SETTINGS.photoCopyright,
@@ -135,6 +142,7 @@ export const SettingsProvider = ({ children }) => {
       try {
         const savedSettings = await loadStoredSettings(DEFAULT_SETTINGS);
 
+        setControlGestures(savedSettings.controlGestures);
         setRetroStyle(savedSettings.retroStyle);
         setGridVisible(savedSettings.gridVisible);
         setLevelVisible(savedSettings.levelVisible);
@@ -454,7 +462,16 @@ export const SettingsProvider = ({ children }) => {
       .catch((error) => console.error("Erro ao salvar ajustes HEIF+", error));
   }, [loading, heifPlusSettings]);
 
+  useEffect(() => {
+    if (loading) return;
+    controlGesturesSaveQueue.current = controlGesturesSaveQueue.current
+      .then(() => saveStoredSetting(SETTINGS_STORAGE_KEYS.CONTROL_GESTURES, JSON.stringify(controlGestures)))
+      .catch((error) => console.error("Erro ao salvar controles e gestos", error));
+  }, [loading, controlGestures]);
+
   const value = {
+    controlGestures,
+    setControlGestures,
     photoFormat,
     setPhotoFormat,
     heifPlusSettings,

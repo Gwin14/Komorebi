@@ -23,27 +23,6 @@ export default StyleSheet.create({
     backgroundColor: "#000",
   },
   loadingText: { color: "#a0a0a0", fontSize: 14, marginTop: 12 },
-  header: {
-    height: 58,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#242424",
-  },
-  headerButton: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerTitle: {
-    flex: 1,
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    textAlign: "center",
-  },
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 44 },
   intro: {

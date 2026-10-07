@@ -33,7 +33,7 @@ import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
 import { getProjectAlbumName } from "../utils/projects";
 import { loadGalleryPhotos } from "../utils/galleryPhotos";
-import BackButton from "./BackButton";
+import ScreenHeader from "./ScreenHeader";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
 import ProjectChecklist from "./ProjectChecklist";
@@ -471,22 +471,50 @@ export default function Galery() {
     }
   };
 
-  if (!permission) return null;
-
-  if (!permission.granted) {
+  const navigationHeader = (
+    <ScreenHeader
+      title="Galeria"
+      right={permission?.granted ? (
+        <ProjectSwipeList
+          projects={projects}
+          activeProjectId={viewProjectId}
+          onChangeProject={handleChangeViewProject}
+          onCreateProject={handleCreateProject}
+          onDeleteProject={handleDeleteProject}
+          includeNoneOption
+          noneOptionLabel="Todas as fotos"
+        />
+      ) : null}
+    />
+  );
+  if (!permission || (loading && permission.granted)) {
     return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>
-          Permissão para acessar fotos é necessária.
-        </Text>
-        <Pressable style={styles.permissionButton} onPress={requestPermission}>
-          <Text style={styles.permissionButtonText}>Permitir acesso</Text>
-        </Pressable>
-      </View>
+      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+        <StatusBar style="light" />
+        {navigationHeader}
+        <View style={styles.loadingContent}>
+          <LoadingScreen />
+        </View>
+      </SafeAreaView>
     );
   }
 
-  if (loading) return <LoadingScreen />;
+  if (!permission.granted) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+        <StatusBar style="light" />
+        {navigationHeader}
+        <View style={styles.permissionContainer}>
+          <Text style={styles.permissionText}>
+            Permissão para acessar fotos é necessária.
+          </Text>
+          <Pressable style={styles.permissionButton} onPress={requestPermission}>
+            <Text style={styles.permissionButtonText}>Permitir acesso</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const panelTranslateY = infoAnimation.interpolate({
     inputRange: [0, 1],
@@ -542,28 +570,7 @@ export default function Galery() {
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="light" />
 
-      <BlurView
-        intensity={30}
-        tint="dark"
-        style={[
-          styles.navigationBar,
-          { paddingTop: safeAreaInsets.top, height: 48 + safeAreaInsets.top },
-        ]}
-      >
-        <BackButton top={70} left={5} />
-        <Text style={styles.title}>Galeria</Text>
-        <View style={styles.navigationProjectSelector}>
-          <ProjectSwipeList
-            projects={projects}
-            activeProjectId={viewProjectId}
-            onChangeProject={handleChangeViewProject}
-            onCreateProject={handleCreateProject}
-            onDeleteProject={handleDeleteProject}
-            includeNoneOption
-            noneOptionLabel="Todas as fotos"
-          />
-        </View>
-      </BlurView>
+      {navigationHeader}
 
       <SectionList
         sections={photoSections}

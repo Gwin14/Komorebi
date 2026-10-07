@@ -10,6 +10,9 @@ import UIKit
 // the camera preview), so it is safe to keep attached while the camera is open.
 public class CameraControlButtonModule: Module {
   private var interaction: AnyObject?
+  private var listeningRequested = false
+  private var primaryPressed = false
+  private var secondaryPressed = false
 
   public func definition() -> ModuleDefinition {
     Name("CameraControlButton")
@@ -25,11 +28,13 @@ public class CameraControlButtonModule: Module {
     }
 
     AsyncFunction("startListening") { [weak self] in
+      self?.listeningRequested = true
       self?.attachInteraction()
     }
     .runOnQueue(.main)
 
     AsyncFunction("stopListening") { [weak self] in
+      self?.listeningRequested = false
       self?.detachInteraction()
     }
     .runOnQueue(.main)
@@ -69,6 +74,13 @@ public class CameraControlButtonModule: Module {
       return importedUrls
     }
 
+    OnAppEntersBackground { [weak self] in
+      self?.detachInteraction()
+    }
+    OnAppBecomesActive { [weak self] in
+      if self?.listeningRequested == true { self?.attachInteraction() }
+    }
+
     OnDestroy { [weak self] in
       DispatchQueue.main.async {
         self?.detachInteraction()
@@ -80,14 +92,25 @@ public class CameraControlButtonModule: Module {
   private func makeInteraction() -> AVCaptureEventInteraction {
     return AVCaptureEventInteraction(
       primary: { [weak self] event in
-        // Fire once per click, on release, to mirror a shutter tap.
+        guard let self else { return }
+        if event.phase == .began { self.primaryPressed = true }
+        if event.phase == .cancelled { self.primaryPressed = false }
         if event.phase == .ended {
-          self?.sendEvent("onCameraButtonPressed", ["type": "primary"])
+          if self.primaryPressed && self.listeningRequested {
+            self.sendEvent("onCameraButtonPressed", ["type": "primary"])
+          }
+          self.primaryPressed = false
         }
       },
       secondary: { [weak self] event in
+        guard let self else { return }
+        if event.phase == .began { self.secondaryPressed = true }
+        if event.phase == .cancelled { self.secondaryPressed = false }
         if event.phase == .ended {
-          self?.sendEvent("onCameraButtonPressed", ["type": "secondary"])
+          if self.secondaryPressed && self.listeningRequested {
+            self.sendEvent("onCameraButtonPressed", ["type": "secondary"])
+          }
+          self.secondaryPressed = false
         }
       }
     )
@@ -104,6 +127,8 @@ public class CameraControlButtonModule: Module {
   }
 
   private func detachInteraction() {
+    primaryPressed = false
+    secondaryPressed = false
     guard #available(iOS 17.2, *) else {
       interaction = nil
       return

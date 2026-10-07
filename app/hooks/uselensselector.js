@@ -1,3 +1,4 @@
+import { getPhysicalLenses } from "../utils/controlGestures";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Platform } from "react-native";
 import { Camera } from "react-native-vision-camera";
@@ -233,8 +234,11 @@ export function usePhysicalCameraDevices(facing = "back", enabled = true) {
     lenses.find((lens) => lens.type === "wide") ??
     lenses[0];
 
+  const physicalLenses = useMemo(() => getPhysicalLenses(lenses), [lenses]);
+
   return {
     lenses,
+    physicalLenses,
     activeLens,
     activeLensId: activeLens?.id ?? activeLensId,
     setActiveLensId,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
-import { createCaptureCountdown } from "../utils/captureTimer";
+import { createCaptureCountdown, normalizeCaptureTimer } from "../utils/captureTimer";
 
 export default function useCaptureTimer({
   seconds,
@@ -34,13 +34,14 @@ export default function useCaptureTimer({
     return () => listener.remove();
   }, [cancel]);
 
-  const requestCapture = useCallback(async ({ immediate = false } = {}) => {
+  const requestCapture = useCallback(async ({ immediate = false, seconds: overrideSeconds } = {}) => {
     if (!latest.current.enabled || inFlight.current) return;
     inFlight.current = true;
     try {
       latest.current.onStart?.();
-      if (seconds && !immediate) {
-        const pending = createCaptureCountdown(seconds, setRemaining);
+      const duration = normalizeCaptureTimer(overrideSeconds ?? seconds);
+      if (duration && !immediate) {
+        const pending = createCaptureCountdown(duration, setRemaining);
         countdown.current = pending;
         const completed = await pending.finished;
         if (countdown.current === pending) countdown.current = null;

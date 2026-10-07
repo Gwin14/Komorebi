@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.cameracontrolbutton'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.cameracontrolbutton"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}

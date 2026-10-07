@@ -1,3 +1,4 @@
+import { normalizeControlGestures } from "./controlGestures";
 import { normalizeCaptureTimer } from "./captureTimer";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { restoreIntelligentPreferences } from "./intelligentSettings";
@@ -10,6 +11,7 @@ import {
 } from "./heifPlusSettings";
 
 export const SETTINGS_STORAGE_KEYS = {
+  CONTROL_GESTURES: "@settings/controlGestures",
   PHOTO_AUTHOR: "@settings/photoAuthor",
   PHOTO_COPYRIGHT: "@settings/photoCopyright",
   RETRO_STYLE: "@settings/retroStyle",
@@ -118,6 +120,7 @@ export async function loadStoredSettings(defaults) {
   );
 
   return {
+    controlGestures: normalizeControlGestures(parseJSON(stored[keys.CONTROL_GESTURES] ?? null, null)),
     photoFormat: restorePhotoFormat(
       format,
       parseBoolean(savedSaveAsJpeg, defaults.saveAsJpeg),

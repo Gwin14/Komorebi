@@ -45,7 +45,7 @@ import usePhotoProcessingQueue from "./hooks/usePhotoProcessingQueue";
 import usePortraitCapture from "./hooks/usePortraitCapture";
 import useRawCapture from "./hooks/useRawCapture";
 import useShutterAnimation from "./hooks/useShutterAnimation";
-import useVolumeShutter from "./hooks/useVolumeShutter";
+import { executeCameraShortcut } from "./utils/controlGestures";
 import { usePhysicalCameraDevices } from "./hooks/uselensselector";
 import styles from "./index.styles";
 import {
@@ -75,6 +75,7 @@ export default function App() {
   const { width: screenWidth } = useWindowDimensions();
   const cameraScreenActive = useCameraActivity();
   const {
+    controlGestures,
     captureTimerSeconds,
     setCaptureTimerSeconds,
     shutterSound,
@@ -183,6 +184,7 @@ export default function App() {
 
   const {
     lenses,
+    physicalLenses,
     activeLens,
     activeLensId,
     setActiveLensId,
@@ -471,21 +473,6 @@ export default function App() {
     cancelAutoZoomAnimation();
     cancelCompositionScan();
   }, [cancelAutoZoomAnimation, cancelCompositionScan]);
-  const composedGestures = useCameraGestures({
-    disabled: imageStacking.capturing,
-    lastZoom,
-    maxZoom,
-    minZoom,
-    setZoom,
-    zoomSV,
-    onZoomStart: handleManualZoomStart,
-    showLuts: useCallback(() => setActiveControl("lut"), []),
-    hideLuts: useCallback(
-      () =>
-        setActiveControl((current) => (current === "lut" ? "none" : current)),
-      [],
-    ),
-  });
 
   useEffect(() => {
     if (!hasMediaPermission) return;
@@ -971,7 +958,7 @@ export default function App() {
       setActiveControl("none");
     },
   });
-  const handleTakePicture = useCallback(() => {
+  const handleTakePicture = useCallback((options = {}) => {
     // Finishing a continuous exposure must remain immediate. The timer delays
     // its start, and also the second frame of a double exposure.
     if (imageStacking.capturing) {
@@ -992,7 +979,7 @@ export default function App() {
     ) {
       return;
     }
-    return requestCapture();
+    return requestCapture({ seconds: options?.seconds });
   }, [
     requestCapture,
     imageStacking.capturing,
@@ -1005,22 +992,64 @@ export default function App() {
     heifPlusPendingCount,
   ]);
 
-  useVolumeShutter({
-    enabled:
-      cameraScreenActive &&
-      !firstTime &&
-      cameraPermission === "granted" &&
-      cameraReady,
-    onVolumeChange: handleTakePicture,
+  const shortcutsActive = cameraScreenActive && cameraFeaturesEnabled && cameraReady;
+  const executeShortcut = useCallback((action, direction) => {
+    void executeCameraShortcut(action, direction, {
+      active: cameraScreenActive && cameraFeaturesEnabled && (cameraReady || imageStacking.capturing),
+      busy: !cameraReady || imageStacking.capturing || isProcessing || countdownRemaining > 0 ||
+        captureInFlightRef.current || stackingStartInFlightRef.current || stackingSwitchInFlightRef.current,
+      capture: handleTakePicture,
+      manual,
+      stacking: imageStacking,
+      selectStacking: handleSelectImageStackingStrategy,
+      setActiveControl,
+      notice: showTopBarNotice,
+      targets: {
+        luts: { options: availableLuts, currentId: selectedLutId, select: setSelectedLutId, label: "LUT" },
+        grain: { options: AVAILABLE_GRAINS, currentId: selectedGrainId, select: setSelectedGrainId, label: "Grão" },
+        halation: { options: AVAILABLE_HALATIONS, currentId: selectedHalationId, select: setSelectedHalationId, label: "Halation" },
+        lens: {
+          options: physicalLenses,
+          currentId: physicalLenses.find((lens) => lens.device.id === activeLens?.device?.id)?.id,
+          select: handleSelectLens,
+          label: "Lente",
+        },
+      },
+    }).catch((error) => {
+      console.warn("Falha ao executar atalho da câmera:", error);
+      showTopBarNotice("Não foi possível executar o atalho.");
+    });
+  }, [
+    cameraScreenActive, cameraFeaturesEnabled, cameraReady, imageStacking, isProcessing,
+    countdownRemaining, handleTakePicture, manual, handleSelectImageStackingStrategy,
+    showTopBarNotice, availableLuts, selectedLutId, selectedGrainId, selectedHalationId,
+    physicalLenses, activeLens?.device?.id, handleSelectLens,
+  ]);
+  const composedGestures = useCameraGestures({
+    disabled: !shortcutsActive || imageStacking.capturing || isProcessing || countdownRemaining > 0,
+    lastZoom,
+    maxZoom,
+    minZoom,
+    setZoom,
+    zoomSV,
+    onZoomStart: handleManualZoomStart,
+    verticalEnabled: controlGestures.vertical !== "off",
+    horizontalEnabled: controlGestures.horizontal !== "off",
+    onVerticalSwipe: useCallback((direction) => {
+      executeShortcut(controlGestures.vertical === "luts" ? "lutsPanel" : controlGestures.vertical, direction);
+    }, [controlGestures.vertical, executeShortcut]),
+    onHorizontalSwipe: useCallback((direction) => {
+      executeShortcut(controlGestures.horizontal, direction);
+    }, [controlGestures.horizontal, executeShortcut]),
   });
 
   useCameraControlButton({
-    enabled:
-      cameraScreenActive &&
-      !firstTime &&
-      cameraPermission === "granted" &&
-      cameraReady,
-    onPress: handleTakePicture,
+    enabled: cameraScreenActive && cameraFeaturesEnabled && (cameraReady || imageStacking.capturing),
+    onPress: useCallback((event) => {
+      const action = event.type === "secondary" ? controlGestures.volumeUp : controlGestures.volumeDown;
+      const direction = action.endsWith("Previous") ? -1 : 1;
+      executeShortcut(action.replace(/(Next|Previous)$/, ""), direction);
+    }, [controlGestures.volumeUp, controlGestures.volumeDown, executeShortcut]),
   });
 
   const handleChangeProject = useCallback(

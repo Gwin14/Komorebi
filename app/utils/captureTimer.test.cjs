@@ -119,3 +119,39 @@ test("a late JS tick uses elapsed time instead of extending the countdown", asyn
   assert.equal(await countdown.finished, true);
   assert.deepEqual(ticks, [3, 0]);
 });
+
+for (const [general, override] of [[10, 3], [3, 10], [10, 0]]) {
+  test(`per-shot timer ${override}s overrides ${general}s without changing the next shot`, async (t) => {
+    const f = fixture(t, general);
+    const pending = f.render().requestCapture({ seconds: override });
+    assert.equal(f.render().remaining, override);
+    t.mock.timers.tick(override * 1000);
+    await pending;
+    assert.equal(f.captures(), 1);
+    const next = f.render().requestCapture();
+    assert.equal(f.render().remaining, general);
+    t.mock.timers.tick(general * 1000);
+    await next;
+    assert.equal(f.captures(), 2);
+    assert.equal(f.options.seconds, general);
+  });
+}
+
+test("finishing continuous exposure overrides both the general and per-shot timers", async (t) => {
+  const f = fixture(t, 3);
+  await f.render().requestCapture({ immediate: true, seconds: 10 });
+  assert.equal(f.captures(), 1);
+  assert.equal(f.render().remaining, 0);
+});
+
+test("a second exposure keeps its per-shot timer, which can be cancelled", async (t) => {
+  const f = fixture(t, 0);
+  await f.render().requestCapture();
+  const second = f.render().requestCapture({ seconds: 10 });
+  t.mock.timers.tick(3000);
+  assert.equal(f.render().remaining, 7);
+  f.render().cancel();
+  t.mock.timers.tick(10000);
+  await second;
+  assert.equal(f.captures(), 1);
+});

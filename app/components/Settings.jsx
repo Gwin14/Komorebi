@@ -1,3 +1,5 @@
+import ControlGestureSettings, { CONTROL_GESTURE_FIELDS } from "./ControlGestureSettings";
+import ScreenHeader from "./ScreenHeader";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "@react-native-documents/picker";
 import * as Haptics from "expo-haptics";
@@ -43,28 +45,10 @@ export const SETTINGS_PAGES = {
   CAPTURE: "capture",
   INTELLIGENCE: "intelligence",
   CONTROLS: "controls",
+  GESTURES: "gestures",
   LUTS: "luts",
   ABOUT: "about",
 };
-
-function SettingsHeader({ onBack, title }) {
-  return (
-    <View style={styles.header}>
-      <TouchableOpacity
-        accessibilityLabel="Voltar"
-        accessibilityRole="button"
-        onPress={onBack}
-        style={styles.headerButton}
-      >
-        <Ionicons name="chevron-back" size={25} color="#fff" />
-      </TouchableOpacity>
-      <Text numberOfLines={1} style={styles.headerTitle}>
-        {title}
-      </Text>
-      <View style={styles.headerButton} />
-    </View>
-  );
-}
 
 function Section({ children, description, title }) {
   return (
@@ -130,7 +114,7 @@ function ActionRow({ description, external = false, icon, label, onPress }) {
   );
 }
 
-export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
+export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureField = null }) {
   const router = useRouter();
   const compositionModel = useCompositionModel();
   const page = Object.values(SETTINGS_PAGES).includes(initialPage)
@@ -283,6 +267,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     [SETTINGS_PAGES.CAPTURE]: "Captura e arquivos",
     [SETTINGS_PAGES.INTELLIGENCE]: "Recursos inteligentes",
     [SETTINGS_PAGES.CONTROLS]: "Barra de controles",
+    [SETTINGS_PAGES.GESTURES]: "Controles e gestos",
     [SETTINGS_PAGES.LUTS]: "LUTs personalizados",
     [SETTINGS_PAGES.ABOUT]: "Sobre e suporte",
   };
@@ -333,6 +318,12 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
         )}
       </Section>
       <Section title="Personalização">
+        <MenuRow
+          description="Gestos no viewfinder e atalhos dos botões de volume"
+          icon="hand-left-outline"
+          label="Controles e gestos"
+          onPress={() => openPage(SETTINGS_PAGES.GESTURES)}
+        />
         <MenuRow
           description="Escolha e ordene os atalhos da câmera"
           icon="options-outline"
@@ -866,6 +857,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
         return renderCapture();
       case SETTINGS_PAGES.INTELLIGENCE:
         return renderIntelligence();
+      case SETTINGS_PAGES.GESTURES:
+        return <ControlGestureSettings fieldKey={gestureField} />;
       case SETTINGS_PAGES.CONTROLS:
         return renderControls();
       case SETTINGS_PAGES.LUTS:
@@ -877,17 +870,24 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT }) {
     }
   };
 
+  const title = page === SETTINGS_PAGES.GESTURES
+    ? CONTROL_GESTURE_FIELDS.find(({ key }) => key === gestureField)?.label ?? pageTitles[page]
+    : pageTitles[page];
+
   if (loading)
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator color={ACCENT} />
-        <Text style={styles.loadingText}>Carregando configurações…</Text>
+      <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+        <ScreenHeader onBack={goBack} title={title} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={ACCENT} />
+          <Text style={styles.loadingText}>Carregando configurações…</Text>
+        </View>
       </SafeAreaView>
     );
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <SettingsHeader onBack={goBack} title={pageTitles[page]} />
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+      <ScreenHeader onBack={goBack} title={title} />
       <ScrollView
         scrollEnabled={!draggingControl}
         contentContainerStyle={styles.scrollContent}

@@ -10,8 +10,10 @@ export default function useCameraGestures({
   setZoom,
   zoomSV,
   onZoomStart,
-  showLuts,
-  hideLuts,
+  verticalEnabled = true,
+  horizontalEnabled = false,
+  onVerticalSwipe,
+  onHorizontalSwipe,
 }) {
   return useMemo(() => {
     const pinchGesture = Gesture.Pinch()
@@ -33,22 +35,33 @@ export default function useCameraGestures({
         runOnJS(setZoom)(nextZoom);
       });
 
-    // Arrastar para cima revela os LUTs, arrastar para baixo esconde — igual
-    // tocar no botão de LUTs.
-    const panGesture = Gesture.Pan()
-      .enabled(!disabled)
+    const verticalGesture = Gesture.Pan()
+      .enabled(!disabled && verticalEnabled)
       .minPointers(1)
       .maxPointers(1)
       .activeOffsetY([-20, 20])
       .failOffsetX([-30, 30])
-      .onEnd((event) => {
-        const swipeUp = event.translationY < -50 || event.velocityY < -400;
-        const swipeDown = event.translationY > 50 || event.velocityY > 400;
+      .onEnd((event, success) => {
+        if (!success || Math.abs(event.translationX) > Math.abs(event.translationY)) return;
+        if (event.translationY < -50 || event.velocityY < -400) {
+          if (onVerticalSwipe) runOnJS(onVerticalSwipe)(1);
+        } else if (event.translationY > 50 || event.velocityY > 400) {
+          if (onVerticalSwipe) runOnJS(onVerticalSwipe)(-1);
+        }
+      });
 
-        if (swipeUp && showLuts) {
-          runOnJS(showLuts)();
-        } else if (swipeDown && hideLuts) {
-          runOnJS(hideLuts)();
+    const horizontalGesture = Gesture.Pan()
+      .enabled(!disabled && horizontalEnabled)
+      .minPointers(1)
+      .maxPointers(1)
+      .activeOffsetX([-20, 20])
+      .failOffsetY([-30, 30])
+      .onEnd((event, success) => {
+        if (!success || Math.abs(event.translationY) > Math.abs(event.translationX)) return;
+        if (event.translationX > 50 || event.velocityX > 400) {
+          if (onHorizontalSwipe) runOnJS(onHorizontalSwipe)(1);
+        } else if (event.translationX < -50 || event.velocityX < -400) {
+          if (onHorizontalSwipe) runOnJS(onHorizontalSwipe)(-1);
         }
       });
 
@@ -59,7 +72,9 @@ export default function useCameraGestures({
         console.log("Double tap detected");
       });
 
-    return Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+    return Gesture.Simultaneous(
+      pinchGesture, Gesture.Race(verticalGesture, horizontalGesture), doubleTapGesture,
+    );
   }, [
     disabled,
     lastZoom,
@@ -68,7 +83,9 @@ export default function useCameraGestures({
     onZoomStart,
     setZoom,
     zoomSV,
-    showLuts,
-    hideLuts,
+    verticalEnabled,
+    horizontalEnabled,
+    onVerticalSwipe,
+    onHorizontalSwipe,
   ]);
 }

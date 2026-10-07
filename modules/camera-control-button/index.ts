@@ -1,13 +1,12 @@
 import { Platform } from "react-native";
 import type { EventSubscription } from "expo-modules-core";
 
-type CameraButtonEvent = { type: "primary" | "secondary" };
+export type CameraButtonEvent = { type: "primary" | "secondary" };
 type CameraButtonListener = (event: CameraButtonEvent) => void;
 
-// The native module only exists on iOS (and not in Expo Go), so resolve it
-// lazily and degrade to a no-op everywhere else.
+// Resolve lazily; degrade to a no-op in Expo Go and unsupported platforms.
 let nativeModule: any = null;
-if (Platform.OS === "ios") {
+if (Platform.OS === "ios" || Platform.OS === "android") {
   try {
     const { requireNativeModule } = require("expo-modules-core");
     nativeModule = requireNativeModule("CameraControlButton");
