@@ -715,7 +715,7 @@ export default function usePhotoProcessingQueue(
             : "Falha ao salvar captura",
           mainAssetSaved
             ? "O arquivo principal foi preservado, mas uma versão derivada não pôde ser criada."
-            : "Não foi possível salvar o arquivo principal desta captura.",
+            : `Não foi possível salvar o arquivo principal desta captura.\n\n${String(error?.message || error)}`,
         );
       } finally {
         if (captureMode === "heifPlus") {

@@ -650,12 +650,11 @@ fn merge_styles_note(note: &[u8], styles: &[u8]) -> Result<Vec<u8>, String> {
     }
     let missing = required.iter().filter(|r| !entries.iter().any(|e| e.tag == r.tag)).count();
     let shift = missing * 12;
-    if shift != 0 && entries.iter().any(|e| e.typ == 7 && e.payload_offset.is_some() && e.tag != 84) {
-        return Err("cannot expand Apple MakerNote with unknown out-of-line UNDEFINED payload".into());
-    }
     let count = u16::try_from(entries.len() + missing).map_err(|_| "too many MakerNote entries")?;
-    // Only incomplete notes expand the fixed-position directory. Relocate typed
-    // fields and the demonstrated self-relative tag84 plist, not opaque blobs.
+    // Only incomplete notes expand the fixed-position directory. All external
+    // payloads move together, including UNDEFINED camera data. Update their IFD
+    // offsets while keeping the payload bytes intact, without interpreting
+    // opaque data. IFD/IFD8 fields remain rejected by type_size.
     let mut out = note.to_vec();
     if shift != 0 {
         out.splice(old_end..old_end, vec![0; shift]);

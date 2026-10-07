@@ -164,6 +164,13 @@ for (const [enabled, styles3Verified, shouldSave] of [
     assert.equal(nativeCalls[0].metadata.catalogMetadata.author, "Fotógrafo");
     assert.equal(saves.length, shouldSave ? 1 : 0);
     assert.equal(alerts.length, shouldSave ? 0 : 1);
+    if (!shouldSave) {
+      assert.match(
+        alerts[0][1],
+        /O HEIF gerado não passou na validação dos Estilos Fotográficos/,
+        "the save alert exposes the conversion failure needed for diagnosis",
+      );
+    }
     assert.equal(
       catalogWrites.length,
       0,

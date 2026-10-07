@@ -251,13 +251,25 @@ fn apple_merge_adds_missing_uuid_and_updates_flags_without_moving_other_payloads
 }
 
 #[test]
-fn incomplete_opaque_note_expansion_fails_closed_but_complete_note_stays_exact() {
+fn incomplete_opaque_note_expansion_preserves_payloads_and_complete_note_stays_exact() {
     for bo in [Bo(false), Bo(true)] {
         let typed = incomplete_note(bo);
         let mut opaque = typed.clone();
         bo.put_u16(&mut opaque[30..32], 7); // unknown out-of-line UNDEFINED
-        let error = merge_styles_note(&opaque, &build_maker_note()).unwrap_err();
-        assert!(error.contains("unknown out-of-line UNDEFINED"));
+        let expanded = merge_styles_note(&opaque, &build_maker_note()).unwrap();
+        let (old, _) = read_ifd(&opaque, bo, 14).unwrap();
+        let (new, _) = read_ifd(&expanded, bo, 14).unwrap();
+        assert_eq!(new.len(), old.len() + 1);
+        for entry in &old {
+            let merged = new.iter().find(|e| e.tag == entry.tag).unwrap();
+            assert_eq!(entry.typ, merged.typ);
+            assert_eq!(entry.count, merged.count);
+            assert_eq!(entry_bytes(&opaque, entry), entry_bytes(&expanded, merged));
+            assert_eq!(merged.payload_offset, entry.payload_offset.map(|o| o + 12));
+        }
+        assert_eq!(merge_styles_note(&expanded, &build_maker_note()).unwrap(), expanded);
+        let source = inject_maker_note(&exif_fixture(bo), &opaque).unwrap();
+        assert_eq!(compose_styles_maker_note(&source).unwrap(), expanded);
         let mut complete = merge_styles_note(&typed, &build_maker_note()).unwrap();
         let (entries, _) = read_ifd(&complete, bo, 14).unwrap();
         let unknown = entries.iter().find(|e| e.tag == 0xbeef).unwrap();
