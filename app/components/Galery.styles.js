@@ -1,6 +1,19 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  selectionToolbar: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", paddingHorizontal: 10 },
+  selectionButton: { paddingHorizontal: 9, paddingVertical: 13 },
+  selectionBadge: { position: "absolute", top: 7, left: 7, backgroundColor: "#0008", borderRadius: 14 },
+  disabledAction: { opacity: 0.4 },
+  dangerText: { color: "#ff6868", fontSize: 13, fontWeight: "700" },
+  viewerMenuButtons: { flexDirection: "row", gap: 8 },
+  viewerOperation: { position: "absolute", left: 12, right: 12, zIndex: 6, backgroundColor: "#161616", borderRadius: 12 },
+  actionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 16 },
+  actionExplanation: { color: "#aaa", fontSize: 13, lineHeight: 19, marginBottom: 12 },
+  operationProgress: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8, padding: 12 },
+  operationText: { color: "#ddd", flexShrink: 1, fontSize: 13 },
+  batchModalBackdrop: { flex: 1, backgroundColor: "#000a", justifyContent: "center", padding: 24 },
+  batchModalContent: { backgroundColor: "#161616", borderRadius: 24, padding: 20, gap: 18 },
   ratingBadge: {
     position: "absolute",
     bottom: 4,

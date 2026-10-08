@@ -1,6 +1,48 @@
 import Foundation
 import ImageIO
 import CoreImage
+import Photos
+
+// Returning false requests the rendered current image. Capture the previous
+// adjustment in the PhotoKit callback rather than relying on adjustmentData
+// being present on an input that contains already-rendered edits.
+struct PhotoEditingInput {
+  let content: PHContentEditingInput
+  let previousAdjustment: PHAdjustmentData?
+
+  private final class AdjustmentSnapshot {
+    private let lock = NSLock()
+    private var value: PHAdjustmentData?
+    func set(_ adjustment: PHAdjustmentData) {
+      lock.lock(); defer { lock.unlock() }
+      value = adjustment
+    }
+    func get() -> PHAdjustmentData? {
+      lock.lock(); defer { lock.unlock() }
+      return value
+    }
+  }
+
+  static func read(_ asset: PHAsset) async throws -> PhotoEditingInput {
+    let snapshot = AdjustmentSnapshot()
+    let options = PHContentEditingInputRequestOptions()
+    options.isNetworkAccessAllowed = true
+    options.canHandleAdjustmentData = { adjustment in
+      snapshot.set(adjustment)
+      return false
+    }
+    return try await withCheckedThrowingContinuation { continuation in
+      asset.requestContentEditingInput(with: options) { input, info in
+        if let input {
+          continuation.resume(returning: PhotoEditingInput(content: input, previousAdjustment: snapshot.get() ?? input.adjustmentData))
+        } else {
+          continuation.resume(throwing: info[PHContentEditingInputErrorKey] as? Error ?? NSError(domain: "PhotoEditingInput", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Não foi possível acessar a versão atual da foto."]))
+        }
+      }
+    }
+  }
+}
 
 // Compiled into each image-writing module so all capture modes use the same schema.
 enum PhotoCatalogMetadata {

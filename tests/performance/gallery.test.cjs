@@ -18,7 +18,10 @@ function fixture(info, rating = async () => 3) {
         assert.equal(first, 100);
         return { assets: album.title === "project" ? [] : photos };
       },
-      getAssetInfoAsync: info,
+      getAssetInfoAsync: (id, options) => {
+        assert.deepEqual(options, { shouldDownloadFromNetwork: false });
+        return info(id, options);
+      },
       SortBy: { creationTime: "creationTime" },
     },
     "./projects": {
@@ -95,4 +98,43 @@ test("cancel before album lookup completes avoids the asset query; missing album
     [],
   );
   assert.equal(f.queries, 0);
+});
+
+test("gallery reads subsequent pages, deduplicates IDs and respects cancellation between pages", async () => {
+  const queries = [];
+  const { loadGalleryPhotos } = loadModule("app/utils/galleryPhotos.js", {
+    "expo-media-library": {
+      getAlbumsAsync: async () => [{ title: "Komorebi" }],
+      getAssetsAsync: async (options) => {
+        queries.push(options.after);
+        return options.after ? {
+          assets: [{ id: "a", uri: "file:///a.jpg", creationTime: 2 }, { id: "b", uri: "file:///b.jpg", creationTime: 1 }],
+          hasNextPage: false,
+        } : {
+          assets: [{ id: "a", uri: "file:///a.jpg", creationTime: 2 }], hasNextPage: true, endCursor: "next",
+        };
+      },
+      SortBy: { creationTime: "creationTime" },
+    },
+    "./projects": { DEFAULT_ALBUM_NAME: "Komorebi" },
+    "./photoCatalogMetadata": { readPhotoRating: async () => 4 },
+  });
+  const result = await loadGalleryPhotos(null, () => true);
+  assert.deepEqual(queries, [undefined, "next"]);
+  assert.deepEqual(result.map((photo) => photo.id), ["a", "b"]);
+  queries.length = 0;
+  assert.equal(await loadGalleryPhotos(null, () => queries.length < 2), null);
+});
+
+test("unavailable previews retain asset IDs so failed batch actions can be retried", async () => {
+  const f = fixture(async () => { throw new Error("offline"); });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const result = await f.loadGalleryPhotos(null, () => true);
+    assert.equal(result.length, 100);
+    assert.deepEqual(result[0], { ...f.photos[0], rating: null });
+  } finally {
+    console.warn = warn;
+  }
 });
