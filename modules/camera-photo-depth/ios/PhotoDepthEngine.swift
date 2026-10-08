@@ -111,6 +111,19 @@ enum PhotoDepthEngine {
     return depth
   }
 
+  // A small, upright preview for the transient gallery scan; never written to Photos.
+  static func scanPreview(source: CGImageSource, disparity: AVDepthData) -> String? {
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, CGImageSourceGetPrimaryImageIndex(source), nil) as? [String: Any]
+    let orientation = (properties?[kCGImagePropertyOrientation as String] as? NSNumber)?.int32Value ?? 1
+    let image = CIImage(cvPixelBuffer: disparity.depthDataMap).oriented(forExifOrientation: orientation)
+    let scale = min(1, 512 / max(image.extent.width, image.extent.height))
+    let preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+    let context = CIContext(options: [.cacheIntermediates: false])
+    guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+          let png = context.pngRepresentation(of: preview, format: .RGBA8, colorSpace: colorSpace) else { return nil }
+    return "data:image/png;base64," + png.base64EncodedString()
+  }
+
   static func write(source: CGImageSource, disparity: AVDepthData, to url: URL) throws {
     let auxiliary = try PhotoDepthPortraitEncoding.auxiliary(source: source, disparity: disparity)
     guard let type = CGImageSourceGetType(source),

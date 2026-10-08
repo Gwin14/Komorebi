@@ -11,6 +11,7 @@ export type PhotoDepthProgress = {
   assetId: string;
   operationId: string;
   progress: number;
+  previewUri?: string;
   cancellable: boolean;
 };
 

@@ -153,6 +153,16 @@ struct PhotoDepthChecks {
       }
       let source = try PhotoDepthEngine.source(inputURL)
       let depth = try PhotoDepthEngine.disparity(source: source, model: model, checkCancellation: {})
+      let preview = PhotoDepthEngine.scanPreview(source: source, disparity: depth)
+      let encoded = preview?.replacingOccurrences(of: "data:image/png;base64,", with: "") ?? ""
+      guard let png = Data(base64Encoded: encoded),
+            let previewSource = CGImageSourceCreateWithData(png as CFData, nil),
+            let previewImage = CGImageSourceCreateImageAtIndex(previewSource, 0, nil) else {
+        throw NSError(domain: "PhotoDepthChecks", code: 2, userInfo: [NSLocalizedDescriptionKey: "Scan preview must be a readable PNG"])
+      }
+      try require(previewImage.width == (orientation >= 5 ? 160 : 240)
+        && previewImage.height == (orientation >= 5 ? 240 : 160), "scan preview is upright for EXIF \(orientation)")
+
       try require(depth.depthDataAccuracy == .relative, "synthetic depth must be relative")
       try require(CVPixelBufferGetWidth(depth.depthDataMap) == 240 && CVPixelBufferGetHeight(depth.depthDataMap) == 160, "map must align with stored raster for EXIF \(orientation)")
       let outputURL = temporary.appendingPathComponent("depth-\(orientation).jpg")

@@ -10,7 +10,9 @@ public final class CameraPhotoDepthModule: Module {
     }
     AsyncFunction("addDepth") { (assetId: String, operationId: String) async throws -> String in
       try await Task.detached(priority: .userInitiated) {
-        try await PhotoDepthService.add(assetId, operationId: operationId) { progress, cancellable in
+        try await PhotoDepthService.add(assetId, operationId: operationId, preview: { uri in
+          self.sendEvent("onDepthProgress", ["assetId": assetId, "operationId": operationId, "progress": 0.65, "cancellable": true, "previewUri": uri])
+        }) { progress, cancellable in
           self.sendEvent("onDepthProgress", ["assetId": assetId, "operationId": operationId, "progress": progress, "cancellable": cancellable])
         }
       }.value

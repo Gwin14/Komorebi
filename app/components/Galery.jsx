@@ -43,6 +43,7 @@ import ProjectSwipeList from "./ProjectSwipeList";
 import { deleteGalleryPhotos, rateGalleryPhotos, shareGalleryPhotos } from "../utils/galleryActions";
 import { retainPhotoSelection, togglePhotoSelection, withGalleryAssets } from "../utils/galleryActionState";
 import { addPhotoDepth, cancelPhotoDepth, getPhotoDepthState, revertPhotoDepth, cleanupDeletedDepthBackups, subscribeToPhotoDepth } from "../../modules/camera-photo-depth";
+import PhotoDepthScan from "./PhotoDepthScan";
 import PhotoRatingControls from "./PhotoRatingControls";
 import GalleryActionProgress from "./GalleryActionProgress";
 
@@ -122,13 +123,19 @@ export default function Galery() {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
+  const [depthScan, setDepthScan] = useState(null);
   const [depthState, setDepthState] = useState(null);
   const [metadataRevision, setMetadataRevision] = useState(0);
   const photoLoadGeneration = useRef(0);
+  const depthScanRef = useRef(null);
+  const pendingLibraryRefresh = useRef(false);
+  depthScanRef.current = depthScan;
 
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewerVisible, setViewerVisible] = useState(false);
+  const viewerVisibleRef = useRef(false);
+  viewerVisibleRef.current = viewerVisible;
   const [infoOpen, setInfoOpen] = useState(false);
   const [intelligentTagsOpen, setIntelligentTagsOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState(null);
@@ -136,6 +143,8 @@ export default function Galery() {
   const [exifLoading, setExifLoading] = useState(false);
   const pagerRef = useRef(null);
   const thumbnailRef = useRef(null);
+  const infoScrollRef = useRef(null);
+  const infoScrollOffset = useRef(0);
   const galleryPhotoRefs = useRef(new Map());
   const closingViewerRef = useRef(false);
   const infoAnimation = useRef(new Animated.Value(0)).current;
@@ -187,6 +196,10 @@ export default function Galery() {
     if (!permission?.granted) return;
     let previousState = AppState.currentState;
     const refresh = () => {
+      if (operationRef.current?.depth || depthScanRef.current) {
+        pendingLibraryRefresh.current = true;
+        return;
+      }
       void loadKomorebiPhotos(undefined, false);
     };
     const appSubscription = AppState.addEventListener("change", (state) => {
@@ -199,6 +212,12 @@ export default function Galery() {
       librarySubscription.remove();
     };
   }, [permission?.granted, loadKomorebiPhotos]);
+
+  useEffect(() => {
+    if (depthScan || operation?.depth || !pendingLibraryRefresh.current) return;
+    pendingLibraryRefresh.current = false;
+    void loadKomorebiPhotos(undefined, false);
+  }, [depthScan, operation, loadKomorebiPhotos]);
 
   const orderedPhotos = useMemo(
     () => [...photos].sort((a, b) => b.creationTime - a.creationTime),
@@ -322,29 +341,63 @@ export default function Galery() {
     return () => { current = false; };
   }, [viewerVisible, infoOpen, selectedAssetId, operation?.id]);
 
+  useEffect(() => {
+    setDepthScan((scan) => viewerVisible && scan?.assetId === selectedAssetId ? scan : null);
+  }, [selectedAssetId, viewerVisible]);
+
   const handleDepth = async (revert = false) => {
     if (!selectedPhoto) return;
     const assetId = selectedPhoto.id;
     const job = beginOperation(revert ? "Revertendo profundidade" : "Gerando profundidade", 100);
     if (!job) return;
     job.depth = true;
+    reportProgress(job, { depth: true });
+    // Discard any grid refresh started before Photos commits the new asset.
+    photoLoadGeneration.current += 1;
+    setDepthScan(null);
+    let previewUri = null;
     const subscription = subscribeToPhotoDepth((event) => {
-      if (event.operationId === job.id) reportProgress(job, { completed: Math.round(event.progress * 100), cancellable: event.cancellable });
+      if (event.operationId !== job.id) return;
+      if (event.previewUri) previewUri = event.previewUri;
+      reportProgress(job, { completed: Math.round(event.progress * 100), cancellable: event.cancellable });
     });
     try {
       const createdId = await withGalleryAssets([assetId], () => revert ? revertPhotoDepth(assetId, job.id) : addPhotoDepth(assetId, job.id));
-      if (mountedRef.current) {
-        const refreshed = await loadKomorebiPhotos(undefined, false);
-        if (mountedRef.current && createdId && refreshed?.some((photo) => photo.id === createdId)) {
-          setSelectedAssetId(createdId);
-          const index = [...refreshed].sort((a, b) => b.creationTime - a.creationTime).findIndex((photo) => photo.id === createdId);
-          requestAnimationFrame(() => {
-            if (mountedRef.current) pagerRef.current?.scrollToOffset({ offset: index * screenWidth, animated: false });
-          });
-        }
-        setDepthState(null);
-        setMetadataRevision((value) => value + 1);
+      if (!mountedRef.current) return;
+      if (revert) {
+        await loadKomorebiPhotos(undefined, false);
+      } else if (createdId && !job.cancelled && viewerVisibleRef.current && !closingViewerRef.current) {
+        // The generated portrait has the same upright pixels as its source.
+        // Keep those pixels visible immediately, without enumerating the library.
+        const createdPhoto = { ...selectedPhoto, id: createdId };
+        setPhotos((previous) => [
+          ...previous.filter((photo) => photo.id !== createdId),
+          createdPhoto,
+        ]);
+        setSelectedAssetId(createdId);
+        const scan = {
+          assetId: createdId,
+          uri: previewUri,
+          id: job.id,
+          ready: false,
+          scrollOffset: infoScrollOffset.current,
+        };
+        depthScanRef.current = scan;
+        console.info("[PhotoDepthScan] geração concluída; fechando painel", { hasDepthPreview: !!previewUri });
+        setDepthScan(scan);
+        pendingLibraryRefresh.current = true;
+        // Resolve only this asset; preview errors cannot suppress a confirmed scan.
+        void MediaLibrary.getAssetInfoAsync(createdId, { shouldDownloadFromNetwork: false })
+          .then((info) => {
+            if (!mountedRef.current) return;
+            setPhotos((previous) => previous.map((photo) => photo.id === createdId
+              ? { ...photo, ...info, id: createdId, uri: info.localUri || info.uri || photo.uri, rating: selectedPhoto.rating }
+              : photo));
+          })
+          .catch((error) => console.warn("Prévia da foto gerada indisponível", error));
       }
+      setDepthState(null);
+      setMetadataRevision((value) => value + 1);
     } catch (error) {
       if (!job.cancelled && mountedRef.current) Alert.alert("Não foi possível alterar a profundidade", error.message);
     } finally {
@@ -405,19 +458,45 @@ export default function Galery() {
   );
 
   const setInfoPanel = useCallback(
-    (open) => {
+    (open, onFinished, preserveContents = false) => {
       setInfoOpen(open);
-      if (!open) setIntelligentTagsOpen(false);
+      if (!open && !preserveContents) setIntelligentTagsOpen(false);
       Animated.spring(infoAnimation, {
         toValue: open ? 1 : 0,
         damping: 24,
         stiffness: 230,
         mass: 0.9,
         useNativeDriver: true,
-      }).start();
+      }).start(({ finished }) => {
+        if (finished) onFinished?.();
+      });
     },
     [infoAnimation],
   );
+
+  // Wait for the panel and photo transform to settle before mounting the scan.
+  const scanId = depthScan?.id;
+  const scanAssetId = depthScan?.assetId;
+  useEffect(() => {
+    if (!scanId || !viewerVisible || scanAssetId !== selectedAssetId) return;
+    let current = true;
+    pagerRef.current?.scrollToOffset({ offset: selectedIndex * screenWidth, animated: false });
+    setInfoPanel(false, () => {
+      if (current && !closingViewerRef.current) {
+        console.info("[PhotoDepthScan] painel fechado; iniciando scan");
+        setDepthScan((scan) => scan?.id === scanId ? { ...scan, ready: true } : scan);
+      }
+    }, true);
+    return () => { current = false; };
+  }, [scanId, scanAssetId, viewerVisible, selectedAssetId, selectedIndex, screenWidth, setInfoPanel]);
+
+  const finishDepthScan = (id) => {
+    if (depthScan?.id !== id || !viewerVisible || closingViewerRef.current) return;
+    const offset = depthScan.scrollOffset;
+    console.info("[PhotoDepthScan] scan concluído; reabrindo informações");
+    setDepthScan(null);
+    setInfoPanel(true, () => infoScrollRef.current?.scrollTo({ y: offset, animated: false }));
+  };
 
   const measureGalleryPhoto = useCallback((assetId, callback) => {
     const node = galleryPhotoRefs.current.get(assetId);
@@ -433,6 +512,7 @@ export default function Galery() {
   const closeViewer = useCallback(() => {
     if (closingViewerRef.current || !selectedPhoto) return;
     closingViewerRef.current = true;
+    setDepthScan(null);
     setInfoPanel(false);
 
     measureGalleryPhoto(selectedPhoto.id, (measuredRect) => {
@@ -503,7 +583,7 @@ export default function Galery() {
   const selectPhotoAtIndex = useCallback(
     (index) => {
       const photo = orderedPhotos[index];
-      if (operationRef.current || !photo || photo.id === selectedAssetId) return;
+      if (operationRef.current || depthScan || !photo || photo.id === selectedAssetId) return;
       setInfoPanel(false);
       setIntelligentTagsOpen(false);
       setExifData(null);
@@ -514,7 +594,7 @@ export default function Galery() {
         viewPosition: 0.5,
       });
     },
-    [orderedPhotos, selectedAssetId, setInfoPanel],
+    [depthScan, orderedPhotos, selectedAssetId, setInfoPanel],
   );
 
   const handlePagerScrollEnd = useCallback(
@@ -580,11 +660,11 @@ export default function Galery() {
           Math.abs(gesture.dy) > 12 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
         onPanResponderRelease: (_, gesture) => {
-          if (gesture.dy < -INFO_SWIPE_DISTANCE || gesture.vy < -0.55)
+          if (!depthScan && (gesture.dy < -INFO_SWIPE_DISTANCE || gesture.vy < -0.55))
             setInfoPanel(true);
         },
       }),
-    [setInfoPanel],
+    [depthScan, setInfoPanel],
   );
 
   useEffect(() => {
@@ -864,6 +944,7 @@ export default function Galery() {
               <TouchableOpacity
                 accessibilityLabel="Informações da foto"
                 accessibilityRole="button"
+                disabled={!!depthScan}
                 onPress={() => setInfoPanel(true)}
                 style={styles.viewerRoundButton}
               >
@@ -890,7 +971,8 @@ export default function Galery() {
                 pagingEnabled
                 directionalLockEnabled
                 disableIntervalMomentum
-                scrollEnabled={!operation && orderedPhotos.length > 1}
+                scrollEnabled={!operation && !depthScan && orderedPhotos.length > 1}
+                extraData={depthScan}
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(photo) => photo.id}
                 getItemLayout={(_, index) => ({
@@ -912,6 +994,13 @@ export default function Galery() {
                         resizeMode="cover"
                         style={styles.viewerPhoto}
                       />
+                      {viewerVisible && !infoOpen && depthScan?.ready && photo.id === selectedAssetId && depthScan.assetId === photo.id && (
+                        <PhotoDepthScan
+                          key={depthScan.id}
+                          uri={depthScan.uri}
+                          onComplete={() => finishDepthScan(depthScan.id)}
+                        />
+                      )}
                     </View>
                   </View>
                 )}
@@ -935,6 +1024,7 @@ export default function Galery() {
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => setInfoPanel(true)}
+                disabled={!!depthScan}
                 style={styles.infoHandleButton}
               >
                 <View style={styles.infoHandle} />
@@ -970,7 +1060,7 @@ export default function Galery() {
                   return (
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      disabled={!!operation}
+                      disabled={!!operation || !!depthScan}
                       onPress={() => selectThumbnail(index)}
                       style={[
                         styles.thumbnailButton,
@@ -1029,6 +1119,9 @@ export default function Galery() {
 
                 <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
                 <ScrollView
+                  ref={infoScrollRef}
+                  onScroll={(event) => { infoScrollOffset.current = event.nativeEvent.contentOffset.y; }}
+                  scrollEventThrottle={16}
                   contentContainerStyle={styles.infoScrollContent}
                   showsVerticalScrollIndicator={false}
                 >

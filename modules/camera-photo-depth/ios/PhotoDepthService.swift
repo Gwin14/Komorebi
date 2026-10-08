@@ -137,7 +137,7 @@ enum PhotoDepthService {
     guard current.modificationDate == asset.modificationDate else { throw PhotoDepthError.externalEdit }
   }
 
-  static func add(_ identifier: String, operationId: String, progress: Progress) async throws -> String {
+  static func add(_ identifier: String, operationId: String, preview: (String) -> Void = { _ in }, progress: Progress) async throws -> String {
     guard PhotosPortraitCompatibility.generationEnabled else { throw PhotoDepthError.unavailable }
     let asset = try asset(identifier)
     try PhotoDepthJobs.shared.begin(operationId, assetId: asset.localIdentifier)
@@ -171,6 +171,7 @@ enum PhotoDepthService {
     defer { try? FileManager.default.removeItem(at: destination) }
     let model = try PhotoDepthEngine.loadModel()
     let disparity = try PhotoDepthEngine.disparity(source: editingSource, model: model) { try PhotoDepthJobs.shared.check(operationId) }
+    if let image = PhotoDepthEngine.scanPreview(source: editingSource, disparity: disparity) { preview(image) }
     progress(0.65, true)
     try PhotoDepthEngine.write(source: editingSource, disparity: disparity, to: destination)
     if let rating { try PhotoCatalogMetadata.apply(to: destination, metadata: ["catalogMetadata": ["rating": rating]]) }
