@@ -138,17 +138,30 @@ enum PhotoDepthEngine {
     // supplied XMP object. Merge it losslessly after embedding all auxiliaries.
     let rendered = try self.source(url)
     let options = try PhotoDepthPortraitEncoding.imageOptions(source, index: primary) as NSDictionary
+    // A CGImageMetadata copied from the input also retains its native MakerNote
+    // internally. Merging that object can undo the flags just written. Serialize
+    // only its XMP, including the preserved face regions, so CopyImageSource keeps
+    // the updated native MakerNote from the rendered file.
+    let requestedMetadata = options[kCGImageDestinationMetadata] as! CGImageMetadata
+    guard let xmp = CGImageMetadataCreateXMPData(requestedMetadata, nil),
+          let xmpMetadata = CGImageMetadataCreateFromXMPData(xmp) else { throw PhotoDepthError.invalidImage }
     let temporary = url.deletingLastPathComponent().appendingPathComponent(UUID().uuidString + "." + url.pathExtension)
     defer { try? FileManager.default.removeItem(at: temporary) }
     guard let merged = CGImageDestinationCreateWithURL(temporary as CFURL, type, CGImageSourceGetCount(rendered), nil) else { throw PhotoDepthError.invalidImage }
-    let mergeOptions: [CFString: Any] = [kCGImageDestinationMetadata: options[kCGImageDestinationMetadata]!, kCGImageDestinationMergeMetadata: true]
+    let mergeOptions: [CFString: Any] = [kCGImageDestinationMetadata: xmpMetadata, kCGImageDestinationMergeMetadata: true]
     var error: Unmanaged<CFError>?
     guard CGImageDestinationCopyImageSource(merged, rendered, mergeOptions as CFDictionary, &error) else {
       if let error { throw error.takeRetainedValue() }
       throw PhotoDepthError.invalidImage
     }
     _ = try FileManager.default.replaceItemAt(url, withItemAt: temporary)
-    guard hasDepth(try self.source(url)) else { throw PhotoDepthError.invalidImage }
+    let finalized = try self.source(url)
+    let properties = CGImageSourceCopyPropertiesAtIndex(finalized, CGImageSourceGetPrimaryImageIndex(finalized), nil) as? [String: Any]
+    let maker = properties?[kCGImagePropertyMakerAppleDictionary as String] as? [String: Any]
+    let processingFlags = (maker?["25"] as? NSNumber)?.intValue ?? 0
+    guard hasDepth(finalized), processingFlags & PhotoDepthPortraitEncoding.unrenderedDepthProcessingFlag != 0 else {
+      throw PhotoDepthError.invalidImage
+    }
   }
 
   static func rating(_ url: URL) -> Int? {

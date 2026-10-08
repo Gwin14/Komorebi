@@ -4,6 +4,12 @@ import Foundation
 import ImageIO
 
 enum PhotoDepthPortraitEncoding {
+  // Apple MakerNote 0x0019 / ImageProcessingFlags: depth is attached to the
+  // unrendered image. Photos distinguishes this from CustomRendered=Portrait,
+  // which only labels pixels as an already-applied effect. The adjacent 0x40
+  // bit is not interchangeable: PhotoImaging rejects it as previously applied.
+  static let unrenderedDepthProcessingFlag = 0x20
+
   struct Projection {
     let width: Int
     let height: Int
@@ -142,6 +148,7 @@ enum PhotoDepthPortraitEncoding {
           CGImageMetadataSetTagWithPath(metadata, nil, "mwg-rs:Regions" as CFString, merged) else { throw PhotoDepthError.invalidImage }
     let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [String: Any] ?? [:]
     var maker = properties[kCGImagePropertyMakerAppleDictionary as String] as? [String: Any] ?? [:]
+    maker["25"] = ((maker["25"] as? NSNumber)?.intValue ?? 0) | unrenderedDepthProcessingFlag
     maker["31"] = ((maker["31"] as? NSNumber)?.intValue ?? 0) | 1
     return [kCGImageDestinationMetadata as String: metadata, kCGImagePropertyMakerAppleDictionary as String: maker] as CFDictionary
   }

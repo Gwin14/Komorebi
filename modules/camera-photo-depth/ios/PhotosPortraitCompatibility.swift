@@ -8,8 +8,8 @@ enum PhotosPortraitCompatibility {
   static let generationEnabled = true
   static var generationReason: String {
     validated
-      ? "Gerar profundidade no aparelho, preservando a versão anterior."
-      : "Gerar profundidade experimental. Confira o desfoque no Fotos."
+      ? "Salva uma cópia com profundidade e mantém a original."
+      : "Salva uma cópia com profundidade experimental e mantém a original. Confira o botão Retrato no Fotos."
   }
   static let reason = "Profundidade aguardando validação do desfoque no Fotos."
 }

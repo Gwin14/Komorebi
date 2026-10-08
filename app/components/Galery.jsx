@@ -161,6 +161,7 @@ export default function Galery() {
           void cleanupDeletedDepthBackups().catch((error) =>
             console.warn("Falha ao limpar recuperação de fotos apagadas", error),
           );
+          return resolved;
         }
       } catch (error) {
         console.log("Erro ao carregar fotos:", error);
@@ -332,10 +333,17 @@ export default function Galery() {
       if (event.operationId === job.id) reportProgress(job, { completed: Math.round(event.progress * 100), cancellable: event.cancellable });
     });
     try {
-      await withGalleryAssets([assetId], () => revert ? revertPhotoDepth(assetId, job.id) : addPhotoDepth(assetId, job.id));
+      const createdId = await withGalleryAssets([assetId], () => revert ? revertPhotoDepth(assetId, job.id) : addPhotoDepth(assetId, job.id));
       if (mountedRef.current) {
-        void loadKomorebiPhotos(undefined, false);
-        setDepthState(await getPhotoDepthState(assetId));
+        const refreshed = await loadKomorebiPhotos(undefined, false);
+        if (mountedRef.current && createdId && refreshed?.some((photo) => photo.id === createdId)) {
+          setSelectedAssetId(createdId);
+          const index = [...refreshed].sort((a, b) => b.creationTime - a.creationTime).findIndex((photo) => photo.id === createdId);
+          requestAnimationFrame(() => {
+            if (mountedRef.current) pagerRef.current?.scrollToOffset({ offset: index * screenWidth, animated: false });
+          });
+        }
+        setDepthState(null);
         setMetadataRevision((value) => value + 1);
       }
     } catch (error) {
@@ -1041,14 +1049,18 @@ export default function Galery() {
                       </TouchableOpacity>
                       <PhotoRatingControls rating={selectedPhoto?.rating} disabled={!!operation} onRate={handleRating} />
                       {Platform.OS === "ios" && <>
-                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || !(depthState?.eligible || depthState?.canRevert)} style={[styles.actionRow, !(depthState?.eligible || depthState?.canRevert) && styles.disabledAction]} onPress={() => {
-                          if (depthState?.canRevert) Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }]);
+                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy) && styles.disabledAction]} onPress={() => {
+                          if (depthState?.canRevert && !depthState?.canCopy) Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }]);
                           else void handleDepth();
                         }}>
                           <Ionicons name="layers-outline" size={22} color="#ffaa00" />
-                          <Text style={styles.infoActionText}>{depthState?.canRevert ? "Reverter profundidade" : "Adicionar profundidade"}</Text>
+                          <Text style={styles.infoActionText}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : "Criar foto com profundidade"}</Text>
                         </TouchableOpacity>
                         <Text style={styles.actionExplanation}>{depthState?.reason || "Verificando disponibilidade…"}</Text>
+                        {depthState?.canCopy && <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={styles.actionRow} onPress={() => Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }])}>
+                          <Ionicons name="arrow-undo-outline" size={22} color="#ffaa00" />
+                          <Text style={styles.infoActionText}>Reverter profundidade</Text>
+                        </TouchableOpacity>}
                         {depthState?.canRevert && <Text style={styles.actionExplanation}>A recuperação da versão anterior depende dos dados deste app. Desinstalar o Komorebi remove essa recuperação.</Text>}
                       </>}
                       <GalleryActionProgress operation={operation} onCancel={cancelOperation} />

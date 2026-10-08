@@ -4,6 +4,7 @@ import type { EventSubscription } from "expo-modules-core";
 export type PhotoDepthState = {
   eligible: boolean;
   canRevert: boolean;
+  canCopy?: boolean;
   reason: string;
 };
 export type PhotoDepthProgress = {
@@ -15,7 +16,7 @@ export type PhotoDepthProgress = {
 
 type NativeDepthModule = {
   getState(assetId: string): Promise<PhotoDepthState>;
-  addDepth(assetId: string, operationId: string): Promise<void>;
+  addDepth(assetId: string, operationId: string): Promise<string>;
   revertDepth(assetId: string, operationId: string): Promise<void>;
   cancel(operationId: string): void;
   exportCurrentPhoto(assetId: string, destination: string): Promise<string>;

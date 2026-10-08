@@ -1,5 +1,133 @@
 # Análise dos arquivos de profundidade no iPhone
 
+## Objetivo atual: botão de Retrato fora do editor — 8 de outubro
+
+O usuário delimitou o objetivo ao controle que aparece ao abrir a foto no Fotos
+e permite ligar/desligar o desfoque, sem entrar em Editar. O sucesso do editor
+na variante X não satisfaz esse requisito.
+
+A revisão do encoder e uma execução nativa confirmaram `PhotosAppFeatureFlags = 1`
+após geração, mesclagem XMP e avaliação nas oito orientações JPEG. A reprodução
+HEIC `fusion-generated.heic` também conserva a flag. ImageIO consegue criar essa
+MakerNote mesmo em imagens sem MakerNotes anteriores. Portanto, perda dessa
+flag nessas etapas não foi reproduzida. Foi acrescentada uma asserção à suíte
+para conservar essa verificação. Isso não comprova a classificação do asset pelo
+PhotoKit nem a presença do botão.
+
+Foram preparadas em `/private/tmp/komorebi-portrait-button/` três cópias da
+reprodução colorida No Fusion com profundidade do encoder atual:
+
+| Arquivo | Diferença em relação ao controle |
+| --- | --- |
+| `01-controle.heic` | Nenhuma; saída atual, sem edição do Fotos |
+| `02-marcador-retrato.heic` | Somente EXIF CustomRendered = 8 (Portrait no ExifTool) |
+| `03-tipo-retrato.heic` | Somente Apple ImageCaptureType = 2 (Portrait) |
+
+Todas conservam PhotosAppFeatureFlags = 1. A decodificação ImageIO e SHA-256
+confirmaram identidade dos pixels principais, amostras de disparidade, HDR e
+XMP de ambos os auxiliares. Os arquivos foram alterados com ExifTool; não são
+uma mudança de produção. O script temporário `verify.swift` registra a comparação.
+
+Esse teste usa a estrutura completa atual, ao contrário de A/C, anteriores à
+correção de geometria/receita, e separa os marcadores em vez de alterá-los juntos.
+CustomRendered = 8 é apenas uma hipótese de reconhecimento: os pixels dessas
+cópias continuam sem desfoque aplicado. Não adotá-lo como representação final
+sem avaliar também a coerência entre estado ligado/desligado e aparência.
+
+### Resultado das três cópias informado pelo usuário
+
+Todas permitem aplicar e regular o desfoque em Editar. Somente 02 apresenta o
+ícone desde a importação, sempre ativo e sem opção de desligar. Em 01/03 e numa
+nova captura Komorebi com profundidade, aplicar desfoque no editor faz o ícone
+aparecer; desligar o efeito no editor faz o ícone desaparecer. Em 02 o ícone
+permanece mesmo depois de desligar o efeito no editor, ainda sem opção de
+alternância. Logo, CustomRendered=8 resolve apenas a indicação persistente de
+retrato já aplicado. Não satisfaz o controle reversível solicitado.
+
+### Marcador de fonte com profundidade sem efeito aplicado
+
+Diagnósticos locais, somente de leitura e fora do app, carregaram os componentes
+PhotoFoundation/PhotoImaging do macOS 27 e examinaram a classificação das cópias.
+`PFMetadata` reconhece 01/03 como `isPortrait=false`, `isSDOF=false`,
+`hasDepthDataAndIsNotRenderedSDOF=false`; 02 como `isPortrait=true`, `isSDOF=true`,
+`hasDepthDataAndIsNotRenderedSDOF=false`. Isso reproduz uma distinção compatível
+com o comportamento relatado no iPhone, mas não equivale ao teste da interface.
+
+O campo Apple `ImageProcessingFlags` (MakerNote 0x0019, chave ImageIO `"25"`)
+vale 2 no controle. Acrescentar **apenas 0x20**, conservando os bits anteriores,
+produz `isPortrait=true`, `isSDOF=false`,
+`hasDepthDataAndIsNotRenderedSDOF=true`. O marcador adjacente 0x40 também muda a
+última classificação, mas `PIPortraitAutoCalculator` rejeita a configuração com
+`NUError Code=2 (Invalid) Portrait was previously applied.` Portanto os dois
+bits não são intercambiáveis. Com 0x20, `portraitSettingsWithExifProperties`
+continua permitindo abertura/foco e retorna configurações sem erro.
+
+O encoder agora acrescenta 0x20 às flags de processamento, preservando os outros
+bits e os metadados existentes. Não passa a escrever CustomRendered=8 nem 0x40.
+Nenhuma chamada a APIs privadas foi acrescentada ao aplicativo; essas chamadas
+existem somente nos diagnósticos temporários do macOS:
+`/private/tmp/portrait-classify.m`, `portrait-flags.m` e `portrait-settings.m`.
+A suíte nativa verifica a persistência do marcador após XMP e avaliação, assim
+como a preservação das flags anteriores. O commit registra processingFlags e
+photoDepthEffect antes/depois, para distinguir reconhecimento do arquivo de
+classificação do asset existente pelo PhotoKit.
+
+Essa verificação também reproduziu uma perda de marcadores durante o merge
+final: com MakerNotes anteriores 25=131074 / 31=4, a primeira gravação produzia
+25=131106 / 31=5, mas mesclar o `CGImageMetadata` da fonte restaurava os valores
+anteriores. O objeto conserva metadados nativos não expostos como tags XMP.
+O encoder agora serializa as tags XMP pretendidas e cria um novo objeto somente
+com esse XMP para mesclar, conservando a MakerNote já atualizada no arquivo.
+Isso preserva as regiões Face da fonte, que não sobrevivem a simplesmente
+trocar a base de metadados pela imagem reconstruída. A saída final também é
+verificada quanto à presença do mapa e de 0x20 antes de ser entregue ao PhotoKit.
+
+Nova amostra: `/private/tmp/komorebi-portrait-button/04-profundidade-reversivel.heic`.
+Ela altera somente ImageProcessingFlags de 2 para 34 no controle 01. SHA-256
+dos pixels decodificados, disparidade, HDR e XMP dos auxiliares são idênticos
+aos de 01/02/03. Os diagnósticos confirmam a nova classificação também ao ler
+essa amostra real. O nome do arquivo descreve a hipótese; o botão reversível
+continua pendente de validação no Fotos do iPhone.
+
+Pendente: abrir 04 no Fotos, antes de Editar, e verificar se o controle permite
+ligar **e** desligar o efeito, além de testar uma nova geração pelo aplicativo
+recompilado no asset existente. Não considerar o objetivo atingido somente por
+aparecer o ícone ou pelos resultados do macOS. `validated` permanece false.
+
+Após corrigir a mesclagem, foi gerada **05-encoder-corrigido.heic** pelo encoder
+completo atualizado, desde a foto No Fusion sem profundidade. Ela está na mesma
+pasta de 04 e apresenta processingFlags=34, featureFlags=1, CustomRendered=1;
+o diagnóstico local confirma `isPortrait=true`, `isSDOF=false`,
+`hasDepthDataAndIsNotRenderedSDOF=true`. Os cinco hashes de pixels, profundidade,
+HDR e XMP auxiliar coincidem com 01–04. Esta é a amostra preferencial para o
+próximo teste, pois reproduz o caminho real do encoder. Passaram lint, typecheck
+Swift com SDK iOS (target iOS 17), suíte nativa completa e `git diff --check`.
+Não foi compilado/instalado o aplicativo completo nem observado o botão no iPhone.
+
+### Retorno da amostra corrigida no iPhone
+
+O usuário confirmou posteriormente que 05-encoder-corrigido.heic importada
+funciona perfeitamente, incluindo a alternância. A geração no asset existente
+pelo app mostra o ícone ativo, sem opção de desligar. O arquivo gerado funciona
+como original importado; sua aplicação como PHContentEditingOutput mantém um
+original sem profundidade e não reproduz esse comportamento no visualizador.
+
+O salvamento passou a criar um novo asset com o arquivo gerado como recurso
+`.photo`, preservando a foto de origem. Data, localização, favorito, visibilidade,
+classificação e álbuns comuns que aceitam adição são copiados na mesma transação.
+A galeria seleciona a cópia após recarregar. As edições antigas continuam podendo
+ser revertidas; **Salvar cópia para Retrato** regenera a partir do backup anterior,
+sem apagar o asset antigo ou seus dados de recuperação. Edições externas sem o
+marcador esperado continuam bloqueadas para impedir copiar desfoque já aplicado.
+
+Pendente no dispositivo: recompilar o módulo e abrir essa nova cópia no Fotos,
+verificando ligar/desligar no próprio ícone antes de entrar em Editar. O resultado
+da amostra importada não prova o novo fluxo PhotoKit. `validated` permanece false.
+
+Verificação desta mudança: lint sem avisos, typecheck TypeScript, typecheck
+Swift com SDK iOS/target iOS 17, suíte nativa e sete testes existentes da galeria
+aprovados; `git diff --check` limpo. Não foi compilado/instalado o app completo.
+
 Em 7 de outubro de 2026, o usuário gerou profundidade no Komorebi e relatou que o Fotos não ofereceu edição de desfoque. A geração permanece habilitada por solicitação do usuário; a compatibilidade com o editor do Fotos não está validada.
 
 O primeiro ZIP continha o original não modificado da foto processada. A ausência de disparidade nesse original é esperada e não indica perda durante a edição. O arquivo posterior `0.heic`, compartilhado para analisar o resultado, contém disparidade.

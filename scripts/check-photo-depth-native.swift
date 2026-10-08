@@ -136,6 +136,7 @@ struct PhotoDepthChecks {
       let inputURL = temporary.appendingPathComponent("orientation-\(orientation).jpg")
       let inputDestination = CGImageDestinationCreateWithURL(inputURL as CFURL, UTType.jpeg.identifier as CFString, 1, nil)!
       CGImageDestinationAddImage(inputDestination, image, [kCGImagePropertyOrientation: orientation,
+        kCGImagePropertyMakerAppleDictionary: ["25": 0x20002, "31": 4],
         kCGImagePropertyExifDictionary: [kCGImagePropertyExifFocalLength: 6.8, kCGImagePropertyExifFocalLenIn35mmFilm: 24] as [CFString: Any]] as CFDictionary)
       try require(CGImageDestinationFinalize(inputDestination), "orientation fixture")
       if orientation == 1 {
@@ -162,6 +163,15 @@ struct PhotoDepthChecks {
       let outputSource = try PhotoDepthEngine.source(outputURL)
       let properties = CGImageSourceCopyPropertiesAtIndex(outputSource, 0, nil) as? [String: Any]
       try require((properties?[kCGImagePropertyOrientation as String] as? Int) == orientation, "image orientation preserved")
+      let maker = properties?[kCGImagePropertyMakerAppleDictionary as String] as? [String: Any]
+      let featureFlags = (maker?["31"] as? NSNumber)?.intValue ?? 0
+      try require(featureFlags & 1 == 1, "depth feature flag survives encoding, XMP merge and rating")
+      try require(featureFlags == 5, "existing Photos feature flags are preserved")
+      let processingFlags = (maker?["25"] as? NSNumber)?.intValue ?? 0
+      try require(processingFlags == 0x20022, "unrendered depth marker and existing processing flags survive encoding, XMP merge and rating")
+      let exif = properties?[kCGImagePropertyExifDictionary as String] as? [String: Any]
+      try require((exif?[kCGImagePropertyExifCustomRendered as String] as? NSNumber)?.intValue != 8,
+        "adding depth must not label unblurred pixels as an applied portrait")
       let primaryMetadata = CGImageSourceCopyMetadataAtIndex(outputSource, 0, nil)!
       try require(CGImageMetadataCopyTagWithPath(primaryMetadata, nil, "mwg-rs:Regions" as CFString) != nil, "focus region survives generation and rating")
       if orientation == 1 {
