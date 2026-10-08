@@ -122,7 +122,6 @@ export default function Galery() {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
-  const [panelKind, setPanelKind] = useState("information");
   const [depthState, setDepthState] = useState(null);
   const [metadataRevision, setMetadataRevision] = useState(0);
   const photoLoadGeneration = useRef(0);
@@ -312,7 +311,7 @@ export default function Galery() {
   };
 
   useEffect(() => {
-    if (operation?.id || !viewerVisible || panelKind !== "actions" || !infoOpen || !selectedAssetId || Platform.OS !== "ios") return;
+    if (operation?.id || !viewerVisible || !infoOpen || !selectedAssetId || Platform.OS !== "ios") return;
     let current = true;
     setDepthState(null);
     getPhotoDepthState(selectedAssetId).then((state) => {
@@ -321,7 +320,7 @@ export default function Galery() {
       if (current) setDepthState({ eligible: false, canRevert: false, reason: error.message });
     });
     return () => { current = false; };
-  }, [viewerVisible, panelKind, infoOpen, selectedAssetId, operation?.id]);
+  }, [viewerVisible, infoOpen, selectedAssetId, operation?.id]);
 
   const handleDepth = async (revert = false) => {
     if (!selectedPhoto) return;
@@ -406,8 +405,7 @@ export default function Galery() {
   );
 
   const setInfoPanel = useCallback(
-    (open, kind = "information") => {
-      if (open) setPanelKind(kind);
+    (open) => {
       setInfoOpen(open);
       if (!open) setIntelligentTagsOpen(false);
       Animated.spring(infoAnimation, {
@@ -840,7 +838,7 @@ export default function Galery() {
                 { paddingTop: safeAreaInsets.top + 8 },
               ]}
             >
-              {operation && !(infoOpen && panelKind === "actions") && (
+              {operation && !infoOpen && (
                 <View style={[styles.viewerOperation, { top: safeAreaInsets.top + 60 }]}>
                   <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
                 </View>
@@ -863,15 +861,6 @@ export default function Galery() {
                   {selectedIndex + 1} de {orderedPhotos.length}
                 </Text>
               </View>
-              <View style={styles.viewerMenuButtons}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Ações da foto"
-                onPress={() => setInfoPanel(true, "actions")}
-                style={styles.viewerRoundButton}
-              >
-                <Ionicons name="ellipsis-horizontal" size={23} color="#fff" />
-              </TouchableOpacity>
               <TouchableOpacity
                 accessibilityLabel="Informações da foto"
                 accessibilityRole="button"
@@ -880,7 +869,6 @@ export default function Galery() {
               >
                 <Ionicons name="information" size={23} color="#fff" />
               </TouchableOpacity>
-              </View>
             </View>
 
             <Animated.View
@@ -1027,9 +1015,11 @@ export default function Galery() {
                     <Text style={styles.infoEyebrow}>
                       FOTO {selectedIndex + 1}
                     </Text>
-                    <Text style={styles.infoTitle}>{panelKind === "actions" ? "Ações" : "Informações"}</Text>
+                    <Text style={styles.infoTitle}>Informações</Text>
                   </View>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Fechar informações"
                     onPress={() => setInfoPanel(false)}
                     style={styles.infoCloseButton}
                   >
@@ -1037,36 +1027,71 @@ export default function Galery() {
                   </TouchableOpacity>
                 </View>
 
+                <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
                 <ScrollView
                   contentContainerStyle={styles.infoScrollContent}
                   showsVerticalScrollIndicator={false}
                 >
-                  {panelKind === "actions" ? (
-                    <>
-                      <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={styles.actionRow} onPress={() => selectedPhoto && handleShare([selectedPhoto.id])}>
-                        <Ionicons name="share-outline" size={22} color="#ffaa00" />
-                        <Text style={styles.infoActionText}>Compartilhar</Text>
-                      </TouchableOpacity>
-                      <PhotoRatingControls rating={selectedPhoto?.rating} disabled={!!operation} onRate={handleRating} />
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    disabled={!!operation}
+                    style={[styles.primaryPhotoAction, !!operation && styles.disabledAction]}
+                    onPress={() => selectedPhoto && handleShare([selectedPhoto.id])}
+                  >
+                    <Ionicons name="share-outline" size={22} color="#ffaa00" />
+                    <Text style={styles.infoActionText}>Compartilhar</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.infoSectionLabel}>ORGANIZAR</Text>
+                  <View style={styles.photoActionGroup}>
+                    <PhotoRatingControls rating={selectedPhoto?.rating} disabled={!!operation} onRate={handleRating} />
+                    <ProjectChecklist
+                      assetId={selectedPhoto?.id}
+                      projects={projects}
+                      onProjectsChange={loadKomorebiPhotos}
+                      onCreateProject={(project) =>
+                        setProjects((previous) => [...previous, project])
+                      }
+                      triggerText="Projetos"
+                      triggerStyle={styles.infoActionButton}
+                      triggerTextStyle={styles.infoActionText}
+                    />
+                  </View>
+                  <Text style={styles.infoSectionLabel}>CRIAR E EDITAR</Text>
+                  <View style={styles.photoActionGroup}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      disabled={!!operation}
+                      style={[styles.actionRow, !!operation && styles.disabledAction]}
+                      onPress={() => {
+                        const photoUri = selectedPhoto?.uri;
+                        closeViewer();
+                        router.push({
+                          pathname: "components/ExifFrameWithPhoto",
+                          params: { photoUri },
+                        });
+                      }}
+                    >
+                      <Ionicons name="image-outline" size={22} color="#ffaa00" />
+                      <Text style={styles.actionLabel}>EXIF Frame</Text>
+                    </TouchableOpacity>
+
                       {Platform.OS === "ios" && <>
-                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy) && styles.disabledAction]} onPress={() => {
+                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, styles.actionDivider, (!!operation || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)) && styles.disabledAction]} onPress={() => {
                           if (depthState?.canRevert && !depthState?.canCopy) Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }]);
                           else void handleDepth();
                         }}>
                           <Ionicons name="layers-outline" size={22} color="#ffaa00" />
-                          <Text style={styles.infoActionText}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : "Criar foto com profundidade"}</Text>
+                          <Text style={styles.actionLabel}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : "Criar foto com profundidade"}</Text>
                         </TouchableOpacity>
                         <Text style={styles.actionExplanation}>{depthState?.reason || "Verificando disponibilidade…"}</Text>
-                        {depthState?.canCopy && <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={styles.actionRow} onPress={() => Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }])}>
+                        {depthState?.canCopy && <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={[styles.actionRow, !!operation && styles.disabledAction]} onPress={() => Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }])}>
                           <Ionicons name="arrow-undo-outline" size={22} color="#ffaa00" />
-                          <Text style={styles.infoActionText}>Reverter profundidade</Text>
+                          <Text style={styles.actionLabel}>Reverter profundidade</Text>
                         </TouchableOpacity>}
                         {depthState?.canRevert && <Text style={styles.actionExplanation}>A recuperação da versão anterior depende dos dados deste app. Desinstalar o Komorebi remove essa recuperação.</Text>}
                       </>}
-                      <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
-                    </>
-                  ) : <>
-                  <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
+                  </View>
+                  <Text style={styles.infoSectionLabel}>SOBRE A FOTO</Text>
                   {exifLoading ? (
                     <View style={styles.photoDataLoading}>
                       <ActivityIndicator color="#ffaa00" size="small" />
@@ -1185,44 +1210,15 @@ export default function Galery() {
                     </Text>
                   )}
 
-                  <View style={styles.infoActions}>
-                    <ProjectChecklist
-                      assetId={selectedPhoto?.id}
-                      projects={projects}
-                      onProjectsChange={loadKomorebiPhotos}
-                      onCreateProject={(project) =>
-                        setProjects((previous) => [...previous, project])
-                      }
-                      triggerText="Projetos"
-                      triggerStyle={styles.infoActionButton}
-                      triggerTextStyle={styles.infoActionText}
-                    />
-                    <TouchableOpacity
-                      style={styles.infoActionButton}
-                      onPress={() => {
-                        const photoUri = selectedPhoto?.uri;
-                        closeViewer();
-                        router.push({
-                          pathname: "components/ExifFrameWithPhoto",
-                          params: { photoUri },
-                        });
-                      }}
-                    >
-                      <Text style={styles.infoActionText}>EXIF Frame</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.infoActionDanger}
-                      disabled={!!operation}
-                      onPress={() => selectedPhoto && handleDeletePhoto([selectedPhoto.id])}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color="#ff6868"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  </>}
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    disabled={!!operation}
+                    style={[styles.deletePhotoButton, !!operation && styles.disabledAction]}
+                    onPress={() => selectedPhoto && handleDeletePhoto([selectedPhoto.id])}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ff6868" />
+                    <Text style={styles.dangerText}>Excluir foto</Text>
+                  </TouchableOpacity>
                 </ScrollView>
               </BlurView>
             </Animated.View>
