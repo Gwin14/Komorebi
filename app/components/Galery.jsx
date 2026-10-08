@@ -18,6 +18,7 @@ import {
   Pressable,
   ScrollView,
   SectionList,
+  Switch,
   Text,
   TouchableOpacity,
   useWindowDimensions,
@@ -125,6 +126,7 @@ export default function Galery() {
   const [batchRatingOpen, setBatchRatingOpen] = useState(false);
   const [depthScan, setDepthScan] = useState(null);
   const [depthState, setDepthState] = useState(null);
+  const [depthCreateCopy, setDepthCreateCopy] = useState(false);
   const [metadataRevision, setMetadataRevision] = useState(0);
   const photoLoadGeneration = useRef(0);
   const depthScanRef = useRef(null);
@@ -362,7 +364,7 @@ export default function Galery() {
       reportProgress(job, { completed: Math.round(event.progress * 100), cancellable: event.cancellable });
     });
     try {
-      const createdId = await withGalleryAssets([assetId], () => revert ? revertPhotoDepth(assetId, job.id) : addPhotoDepth(assetId, job.id));
+      const createdId = await withGalleryAssets([assetId], () => revert ? revertPhotoDepth(assetId, job.id) : addPhotoDepth(assetId, job.id, { createCopy: depthCreateCopy || !!depthState?.canCopy }));
       if (!mountedRef.current) return;
       if (revert) {
         await loadKomorebiPhotos(undefined, false);
@@ -370,10 +372,9 @@ export default function Galery() {
         // The generated portrait has the same upright pixels as its source.
         // Keep those pixels visible immediately, without enumerating the library.
         const createdPhoto = { ...selectedPhoto, id: createdId };
-        setPhotos((previous) => [
-          ...previous.filter((photo) => photo.id !== createdId),
-          createdPhoto,
-        ]);
+        setPhotos((previous) => createdId === assetId
+          ? previous.map((photo) => photo.id === assetId ? createdPhoto : photo)
+          : [...previous.filter((photo) => photo.id !== createdId), createdPhoto]);
         setSelectedAssetId(createdId);
         const scan = {
           assetId: createdId,
@@ -1169,12 +1170,26 @@ export default function Galery() {
                     </TouchableOpacity>
 
                       {Platform.OS === "ios" && <>
-                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, styles.actionDivider, (!!operation || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)) && styles.disabledAction]} onPress={() => {
+                        {depthState?.eligible && <View style={styles.actionRow}>
+                          <Text style={styles.actionLabel}>Criar uma cópia</Text>
+                          <Switch
+                            accessibilityLabel="Criar uma cópia ao aplicar profundidade"
+                            accessibilityHint="Desativado: aplica na foto original. Ativado: mantém a original e cria outra foto."
+                            value={depthCreateCopy}
+                            onValueChange={setDepthCreateCopy}
+                            disabled={!!operation}
+                            trackColor={{ true: "#ffaa00" }}
+                          />
+                        </View>}
+                        {depthState?.eligible && <Text style={styles.actionExplanation}>
+                          {depthCreateCopy ? "Mantém a original e salva uma nova foto." : "Aplica na original, com opção de reverter."}
+                        </Text>}
+                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, styles.actionDivider, (!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)) && styles.disabledAction]} onPress={() => {
                           if (depthState?.canRevert && !depthState?.canCopy) Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }]);
                           else void handleDepth();
                         }}>
                           <Ionicons name="layers-outline" size={22} color="#ffaa00" />
-                          <Text style={styles.actionLabel}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : "Criar foto com profundidade"}</Text>
+                          <Text style={styles.actionLabel}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : depthCreateCopy ? "Criar cópia com profundidade" : "Aplicar profundidade na original"}</Text>
                         </TouchableOpacity>
                         <Text style={styles.actionExplanation}>{depthState?.reason || "Verificando disponibilidade…"}</Text>
                         {depthState?.canCopy && <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={[styles.actionRow, !!operation && styles.disabledAction]} onPress={() => Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }])}>

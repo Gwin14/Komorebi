@@ -5,6 +5,7 @@ struct PhotoDepthRecovery: Codable {
   let assetId: String
   let recoveryId: String
   let filename: String
+  var movieFilename: String? = nil
   let baselineModificationTime: TimeInterval?
   var phase: String
 }
@@ -47,17 +48,22 @@ final class PhotoDepthRecoveryStore {
     guard record.assetId == assetId, record.filename == "before.jpg" || record.filename == "before.heic" else {
       throw PhotoDepthError.invalidRecovery
     }
+    guard record.movieFilename == nil || record.movieFilename == "before.mov" else { throw PhotoDepthError.invalidRecovery }
     return record
   }
 
-  func prepare(assetId: String, source: URL, modificationDate: Date? = nil) throws -> PhotoDepthRecovery {
+  func prepare(assetId: String, source: URL, movie: URL? = nil, modificationDate: Date? = nil) throws -> PhotoDepthRecovery {
     guard try read(assetId) == nil else { throw PhotoDepthError.existingRecovery }
     let directory = directory(assetId)
     try manager.createDirectory(at: directory, withIntermediateDirectories: true)
     let ext = source.pathExtension.lowercased() == "heic" ? "heic" : "jpg"
-    let record = PhotoDepthRecovery(assetId: assetId, recoveryId: UUID().uuidString, filename: "before.\(ext)", baselineModificationTime: modificationDate?.timeIntervalSince1970, phase: "prepared")
+    var record = PhotoDepthRecovery(assetId: assetId, recoveryId: UUID().uuidString, filename: "before.\(ext)", baselineModificationTime: modificationDate?.timeIntervalSince1970, phase: "prepared")
     do {
       try manager.copyItem(at: source, to: directory.appendingPathComponent(record.filename))
+      if let movie {
+        try manager.copyItem(at: movie, to: directory.appendingPathComponent("before.mov"))
+        record.movieFilename = "before.mov"
+      }
       try write(record)
     } catch {
       try? manager.removeItem(at: directory)
@@ -73,6 +79,13 @@ final class PhotoDepthRecoveryStore {
   func backup(_ record: PhotoDepthRecovery) throws -> URL {
     let url = directory(record.assetId).appendingPathComponent(record.filename)
     guard manager.fileExists(atPath: url.path) else { throw PhotoDepthError.invalidRecovery }
+    return url
+  }
+
+  func movieBackup(_ record: PhotoDepthRecovery) throws -> URL? {
+    guard let filename = record.movieFilename else { return nil }
+    let url = directory(record.assetId).appendingPathComponent(filename)
+    guard filename == "before.mov", manager.fileExists(atPath: url.path) else { throw PhotoDepthError.invalidRecovery }
     return url
   }
 
@@ -93,9 +106,11 @@ final class PhotoDepthRecoveryStore {
 }
 
 enum PhotoDepthError: LocalizedError {
-  case unavailable, invalidImage, missingGeometry, invalidRecovery, existingRecovery, externalEdit, cancelled, busy, commitFailed, modelMissing
+  case stylesRequireCopy, invalidLivePair, unavailable, invalidImage, missingGeometry, invalidRecovery, existingRecovery, externalEdit, cancelled, busy, commitFailed, modelMissing
   var errorDescription: String? {
     switch self {
+    case .stylesRequireCopy: return "Para preservar os Estilos Apple desta foto, ative Criar uma cópia."
+    case .invalidLivePair: return "Não foi possível preservar o vídeo desta Live Photo. Nenhuma foto foi salva."
     case .unavailable: return PhotosPortraitCompatibility.reason
     case .invalidImage: return "Esta foto não pode receber profundidade nesta versão."
     case .missingGeometry: return "Faltam dados EXIF de lente para gerar profundidade editável no Fotos."

@@ -8,6 +8,7 @@ xcrun swiftc -module-cache-path "$check_build/cache" \
   "$check_root/modules/camera-photo-depth/ios/PhotoDepthRecoveryStore.swift" \
   "$check_root/modules/camera-photo-depth/ios/PhotosPortraitCompatibility.swift" \
   "$check_root/modules/camera-photo-depth/ios/PhotoDepthEngine.swift" \
+  "$check_root/modules/camera-photo-depth/ios/PhotoDepthHEIF.swift" \
   "$check_root/modules/camera-photo-depth/ios/PhotoDepthPortraitEncoding.swift" \
   "$check_root/modules/camera-photo-depth/ios/PhotoDepthRenderingProfile.swift" \
   "$check_root/modules/shared/PhotoCatalogMetadata.swift" \

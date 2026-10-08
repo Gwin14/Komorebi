@@ -5,6 +5,7 @@ export type PhotoDepthState = {
   eligible: boolean;
   canRevert: boolean;
   canCopy?: boolean;
+  requiresCopy?: boolean;
   reason: string;
 };
 export type PhotoDepthProgress = {
@@ -17,7 +18,7 @@ export type PhotoDepthProgress = {
 
 type NativeDepthModule = {
   getState(assetId: string): Promise<PhotoDepthState>;
-  addDepth(assetId: string, operationId: string): Promise<string>;
+  addDepth(assetId: string, operationId: string, createCopy: boolean): Promise<string>;
   revertDepth(assetId: string, operationId: string): Promise<void>;
   cancel(operationId: string): void;
   exportCurrentPhoto(assetId: string, destination: string): Promise<string>;
@@ -47,8 +48,8 @@ export async function getPhotoDepthState(assetId: string): Promise<PhotoDepthSta
     reason: Platform.OS === "ios" ? "Disponível após recompilar o app iOS." : "Profundidade disponível apenas no iOS.",
   };
 }
-export async function addPhotoDepth(assetId: string, operationId: string) {
-  return requireModule().addDepth(assetId, operationId);
+export async function addPhotoDepth(assetId: string, operationId: string, options: { createCopy?: boolean } = {}) {
+  return requireModule().addDepth(assetId, operationId, options.createCopy ?? false);
 }
 export async function revertPhotoDepth(assetId: string, operationId: string) {
   return requireModule().revertDepth(assetId, operationId);

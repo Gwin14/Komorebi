@@ -55,7 +55,6 @@ enum PhotoDepthService {
   }
 
   static func formatReason(_ asset: PHAsset) -> String? {
-    if asset.mediaSubtypes.contains(.photoLive) { return "Live Photos ainda não podem receber profundidade." }
     let resources = PHAssetResource.assetResources(for: asset)
     if resources.contains(where: { UTType($0.uniformTypeIdentifier)?.conforms(to: .rawImage) == true }) {
       return "Fotos RAW ainda não podem receber profundidade."
@@ -96,8 +95,10 @@ enum PhotoDepthService {
     guard let url = input.fullSizeImageURL else { throw PhotoDepthError.invalidImage }
     let source = try PhotoDepthEngine.source(url)
     if PhotoDepthEngine.hasDepth(source) { return ["eligible": false, "canRevert": false, "reason": "Esta foto já possui profundidade."] }
-    _ = try PhotoDepthPortraitEncoding.projection(source)
-    return ["eligible": true, "canRevert": false, "reason": PhotosPortraitCompatibility.generationReason]
+    let orientation = try PhotoDepthPortraitEncoding.projection(source).orientation
+    let requiresCopy = try PhotoDepthHEIF.hasStyles(url) && (orientation != 1 || asset.mediaSubtypes.contains(.photoLive))
+    return ["eligible": true, "canRevert": false, "requiresCopy": requiresCopy,
+      "reason": requiresCopy ? PhotoDepthError.stylesRequireCopy.localizedDescription : PhotosPortraitCompatibility.generationReason]
   }
 
   static func output(_ input: PHContentEditingInput, source: URL) throws -> (PHContentEditingOutput, URL) {
@@ -137,7 +138,7 @@ enum PhotoDepthService {
     guard current.modificationDate == asset.modificationDate else { throw PhotoDepthError.externalEdit }
   }
 
-  static func add(_ identifier: String, operationId: String, preview: (String) -> Void = { _ in }, progress: Progress) async throws -> String {
+  static func add(_ identifier: String, operationId: String, createCopy: Bool = false, preview: (String) -> Void = { _ in }, progress: Progress) async throws -> String {
     guard PhotosPortraitCompatibility.generationEnabled else { throw PhotoDepthError.unavailable }
     let asset = try asset(identifier)
     try PhotoDepthJobs.shared.begin(operationId, assetId: asset.localIdentifier)
@@ -150,23 +151,39 @@ enum PhotoDepthService {
     guard var url = input.fullSizeImageURL else { throw PhotoDepthError.invalidImage }
     let rating = currentRating(asset, url: url)
     var source = try PhotoDepthEngine.source(url)
-    let alreadyHasDepth = PhotoDepthEngine.hasDepth(source)
-    if alreadyHasDepth {
-      // Regenerate legacy edits from their preserved unblurred source.
-      // Never reuse a backup after an external edit replaced our marker.
-      let store = try PhotoDepthRecoveryStore()
-      guard let record = try store.read(asset.localIdentifier),
-            let marker = marker(requested.previousAdjustment),
-            marker.id == record.recoveryId, marker.phase == "applied" else { throw PhotoDepthError.externalEdit }
-      url = try store.backup(record)
-      source = try PhotoDepthEngine.source(url)
-      guard !PhotoDepthEngine.hasDepth(source) else { throw PhotoDepthError.invalidRecovery }
+    var recoveredMovie: URL?
+    let store = try PhotoDepthRecoveryStore()
+    if let record = try store.read(asset.localIdentifier) {
+      let previous = marker(requested.previousAdjustment)
+      switch PhotoDepthRecoveryDisposition.resolve(record, markerId: previous?.id, markerPhase: previous?.phase,
+        modificationTime: asset.modificationDate?.timeIntervalSince1970) {
+      case .clearReverted, .clearUncommitted:
+        try store.remove(asset.localIdentifier)
+      case .restoreAvailable:
+        guard createCopy else { throw PhotoDepthError.existingRecovery }
+        // Always regenerate from the backup, even if PhotoKit stripped the
+        // current rendered edit's depth/Styles metadata.
+        url = try store.backup(record)
+        source = try PhotoDepthEngine.source(url)
+        recoveredMovie = try store.movieBackup(record)
+      case .conflict:
+        throw PhotoDepthError.externalEdit
+      }
     }
+    guard !PhotoDepthEngine.hasDepth(source) else { throw PhotoDepthError.invalidImage }
     _ = try PhotoDepthPortraitEncoding.projection(source)
     progress(0.2, true)
     let normalizedURL = FileManager.default.temporaryDirectory.appendingPathComponent("depth-input-\(UUID().uuidString).\(url.pathExtension)")
     defer { try? FileManager.default.removeItem(at: normalizedURL) }
-    let editingSource = try PhotoDepthEditingImage.prepare(source, to: normalizedURL)
+    let preservesStyles = try PhotoDepthHEIF.hasStyles(url)
+    let propertiesBefore = CGImageSourceCopyPropertiesAtIndex(source, CGImageSourceGetPrimaryImageIndex(source), nil) as? [String: Any]
+    let orientation = (propertiesBefore?[kCGImagePropertyOrientation as String] as? NSNumber)?.intValue ?? 1
+    // PhotoKit requires upright edited pixels. Rotating with ImageIO would drop
+    // the Styles graph; copying can keep its original raster and all graph items.
+    if preservesStyles && !createCopy && (orientation != 1 || asset.mediaSubtypes.contains(.photoLive)) {
+      throw PhotoDepthError.stylesRequireCopy
+    }
+    let editingSource = createCopy ? source : try PhotoDepthEditingImage.prepare(source, to: normalizedURL)
     let destination = FileManager.default.temporaryDirectory.appendingPathComponent("depth-photo-\(UUID().uuidString).\(url.pathExtension)")
     defer { try? FileManager.default.removeItem(at: destination) }
     let model = try PhotoDepthEngine.loadModel()
@@ -175,16 +192,57 @@ enum PhotoDepthService {
     progress(0.65, true)
     try PhotoDepthEngine.write(source: editingSource, disparity: disparity, to: destination)
     if let rating { try PhotoCatalogMetadata.apply(to: destination, metadata: ["catalogMetadata": ["rating": rating]]) }
+    if preservesStyles {
+      try PhotoDepthHEIF.merge(original: url, depth: destination)
+      guard try PhotoDepthHEIF.hasStyles(destination), PhotoDepthEngine.hasDepth(try PhotoDepthEngine.source(destination)) else {
+        throw PhotoDepthError.invalidImage
+      }
+    }
     try PhotoDepthJobs.shared.check(operationId)
     try assertUnchanged(asset)
-    progress(0.9, false)
     let renderedSource = try PhotoDepthEngine.source(destination)
     let projection = try PhotoDepthPortraitEncoding.projection(renderedSource)
     let properties = CGImageSourceCopyPropertiesAtIndex(renderedSource, CGImageSourceGetPrimaryImageIndex(renderedSource), nil) as? [String: Any]
     let maker = properties?[kCGImagePropertyMakerAppleDictionary as String] as? [String: Any]
     let processingFlags = (maker?["25"] as? NSNumber)?.intValue ?? 0
     print("[PhotoDepth] commit prepared dimensions=\(projection.width)x\(projection.height) orientation=\(projection.orientation) processingFlags=\(processingFlags) depthEffectBefore=\(asset.mediaSubtypes.contains(.photoDepthEffect))")
-    let createdId = try await createPortrait(destination, from: asset, rating: rating)
+    let createdId: String
+    if createCopy {
+      let movie: URL?
+      if let recoveredMovie { movie = recoveredMovie }
+      else { movie = try await pairedMovie(asset, input: input) }
+      defer { if let movie, recoveredMovie == nil { try? FileManager.default.removeItem(at: movie) } }
+      if let movie { try await validatePair(photo: destination, movie: movie) }
+      try PhotoDepthJobs.shared.check(operationId)
+      try assertUnchanged(asset)
+      progress(0.9, false)
+      createdId = try await createPortrait(destination, movie: movie, from: asset, rating: rating)
+    } else {
+      let output: PHContentEditingOutput
+      if asset.mediaSubtypes.contains(.photoLive) {
+        output = try await liveOutput(input, depthSource: destination, operationId: operationId)
+      } else {
+        let (editingOutput, target) = try self.output(input, source: destination)
+        try FileManager.default.copyItem(at: destination, to: target)
+        output = editingOutput
+      }
+      let movie = try await pairedMovie(asset, input: input)
+      defer { if let movie { try? FileManager.default.removeItem(at: movie) } }
+      if let movie { try await validatePair(photo: url, movie: movie) }
+      if asset.mediaSubtypes.contains(.photoLive), let rating {
+        try PhotoCatalogMetadata.apply(to: output.renderedContentURL, metadata: ["catalogMetadata": ["rating": rating]])
+      }
+      var record = try store.prepare(assetId: asset.localIdentifier, source: url, movie: movie, modificationDate: asset.modificationDate)
+      output.adjustmentData = try adjustment(record)
+      try PhotoDepthJobs.shared.check(operationId)
+      try assertUnchanged(asset)
+      progress(0.9, false)
+      try await commit(output, asset: asset, rating: rating)
+      record.phase = "applied"
+      // The committed marker also recovers a crash before this write.
+      try? store.write(record)
+      createdId = asset.localIdentifier
+    }
     if let created = try? self.asset(createdId) {
       print("[PhotoDepth] original created depthEffectAfter=\(created.mediaSubtypes.contains(.photoDepthEffect))")
     }
@@ -195,7 +253,7 @@ enum PhotoDepthService {
   // Photos needs the depth-bearing file as its original resource to offer the
   // viewer's reversible Portrait control. An editing output keeps the old,
   // depthless original. Preserve that asset and create a separate portrait.
-  static func createPortrait(_ url: URL, from asset: PHAsset, rating: Int?) async throws -> String {
+  static func createPortrait(_ url: URL, movie: URL? = nil, from asset: PHAsset, rating: Int?) async throws -> String {
     let collections = PHAssetCollection.fetchAssetCollectionsContaining(asset, with: .album, options: nil)
     var albums: [PHAssetCollection] = []
     collections.enumerateObjects { collection, _, _ in
@@ -206,6 +264,7 @@ enum PhotoDepthService {
       PHPhotoLibrary.shared().performChanges {
         let request = PHAssetCreationRequest.forAsset()
         request.addResource(with: .photo, fileURL: url, options: nil)
+        if let movie { request.addResource(with: .pairedVideo, fileURL: movie, options: nil) }
         request.creationDate = asset.creationDate
         request.location = asset.location
         request.isFavorite = asset.isFavorite
@@ -239,16 +298,30 @@ enum PhotoDepthService {
     guard marker?.id == record.recoveryId, marker?.phase == "applied" else { throw PhotoDepthError.externalEdit }
     guard let currentURL = input.fullSizeImageURL else { throw PhotoDepthError.invalidImage }
     let backup = try store.backup(record)
-    let (output, destination) = try self.output(input, source: backup)
+    // A Live Photo needs an editing context even when only its still changes.
+    let output: PHContentEditingOutput
+    let destination: URL
+    if asset.mediaSubtypes.contains(.photoLive) {
+      output = try await liveOutput(input, restoredPhoto: backup, operationId: operationId)
+      destination = output.renderedContentURL
+    } else {
+      (output, destination) = try self.output(input, source: backup)
+    }
     defer { try? FileManager.default.removeItem(at: destination) }
     let rating = currentRating(asset, url: currentURL)
-    let restoredSource = try PhotoDepthEngine.source(backup)
-    let normalizedURL = FileManager.default.temporaryDirectory.appendingPathComponent("depth-restore-\(UUID().uuidString).\(backup.pathExtension)")
-    defer { try? FileManager.default.removeItem(at: normalizedURL) }
-    _ = try PhotoDepthEditingImage.prepare(restoredSource, to: normalizedURL)
-    let restoredURL = FileManager.default.fileExists(atPath: normalizedURL.path) ? normalizedURL : backup
-    if let rating { try PhotoCatalogMetadata.write(from: restoredURL, to: destination, fields: ["rating": rating]) }
-    else { try FileManager.default.copyItem(at: restoredURL, to: destination) }
+    if asset.mediaSubtypes.contains(.photoLive), let rating {
+      try PhotoCatalogMetadata.apply(to: destination, metadata: ["catalogMetadata": ["rating": rating]])
+    }
+    if !asset.mediaSubtypes.contains(.photoLive) {
+      let restoredSource = try PhotoDepthEngine.source(backup)
+      let normalizedURL = FileManager.default.temporaryDirectory.appendingPathComponent("depth-restore-\(UUID().uuidString).\(backup.pathExtension)")
+      defer { try? FileManager.default.removeItem(at: normalizedURL) }
+      _ = try PhotoDepthEditingImage.prepare(restoredSource, to: normalizedURL)
+      let restoredURL = FileManager.default.fileExists(atPath: normalizedURL.path) ? normalizedURL : backup
+      if try PhotoDepthHEIF.hasStyles(backup) { try FileManager.default.copyItem(at: backup, to: destination) }
+      else if let rating { try PhotoCatalogMetadata.write(from: restoredURL, to: destination, fields: ["rating": rating]) }
+      else { try FileManager.default.copyItem(at: restoredURL, to: destination) }
+    }
     output.adjustmentData = try adjustment(record, phase: "reverted")
     try PhotoDepthJobs.shared.check(operationId)
     try assertUnchanged(asset)

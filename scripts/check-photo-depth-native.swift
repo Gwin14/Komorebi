@@ -31,6 +31,16 @@ struct PhotoDepthChecks {
     CGImageDestinationAddImage(destination, image, [kCGImagePropertyOrientation: 1] as CFDictionary)
     try require(CGImageDestinationFinalize(destination), "fixture write")
 
+    let movieFixture = temporary.appendingPathComponent("paired.mov")
+    try Data("paired video fixture".utf8).write(to: movieFixture)
+    let movieStore = try PhotoDepthRecoveryStore(root: temporary.appendingPathComponent("live-recovery"))
+    let liveRecord = try movieStore.prepare(assetId: "live-photo", source: original, movie: movieFixture)
+    let reopened = try movieStore.read("live-photo")!
+    try require(reopened.movieFilename == "before.mov", "persist Live Photo backup association")
+    try require(Data(contentsOf: movieStore.movieBackup(reopened)!) == Data(contentsOf: movieFixture), "preserve paired movie bytes")
+    try movieStore.remove(liveRecord.assetId)
+    try require(movieStore.read(liveRecord.assetId) == nil, "remove both resources with recovery record")
+
     let root = temporary.appendingPathComponent("recovery")
     let store = try PhotoDepthRecoveryStore(root: root)
     let record = try store.prepare(assetId: "asset/a", source: original, modificationDate: Date(timeIntervalSince1970: 1))
@@ -123,6 +133,53 @@ struct PhotoDepthChecks {
     }
     try require(CGImageMetadataTagCopyValue(face["Name"]!) as? String == "Test person", "face identity is preserved")
 
+    // Opaque Styles payloads, properties and references must survive depth grafting.
+    func graphFixture(styles: Bool) -> Data {
+      let n = PhotoDepthHEIF.number, b = PhotoDepthHEIF.box
+      let payloads = [Data("primary compressed pixels".utf8), Data(styles ? "opaque style delta".utf8 : "depth pixels".utf8), Data(styles ? "opaque style recipe".utf8 : "depth metadata".utf8)]
+      var iloc = Data([1, 0, 0, 0, 0x44, 0]) + n(3, 2)
+      var offset = 0
+      for (index, payload) in payloads.enumerated() {
+        iloc += n(index + 1, 2) + n(1, 2) + n(0, 2) + n(1, 2) + n(offset, 4) + n(payload.count, 4)
+        offset += payload.count
+      }
+      var iinf = Data([0, 0, 0, 0]) + n(3, 2)
+      for id in 1...3 {
+        let type = id == 3 ? (styles ? "uri " : "mime") : "hvc1"
+        let name = id == 3 ? (styles ? "styleMetadata\0urn:com:apple:photo:2023:styleMetadata\0" : "depth\0application/rdf+xml\0") : "image\0"
+        iinf += b("infe", Data([2, 0, 0, 0]) + n(id, 2) + n(0, 2) + Data(type.utf8) + Data(name.utf8))
+      }
+      let urn = styles ? "urn:com:apple:photo:2023:aux:styledeltamap\0" : "urn:mpeg:hevc:2015:auxid:2\0"
+      let ipco = b("ipco", b("ispe", Data(repeating: 0, count: 4) + n(240, 4) + n(160, 4)) + b("auxC", Data(repeating: 0, count: 4) + Data(urn.utf8)))
+      let ipma = b("ipma", Data([0, 0, 0, 0]) + n(2, 4) + n(1, 2) + Data([1, 1]) + n(2, 2) + Data([1, 2]))
+      let iref = b("iref", Data(repeating: 0, count: 4) + b("auxl", n(2, 2) + n(1, 2) + n(1, 2)) + b("cdsc", n(3, 2) + n(1, 2) + n(styles ? 1 : 2, 2)))
+      let meta = Data(repeating: 0, count: 4) + b("pitm", Data(repeating: 0, count: 4) + n(1, 2)) + b("iloc", iloc) + b("iinf", iinf) + b("iprp", ipco + ipma) + iref + b("idat", payloads.reduce(Data(), +))
+      return b("ftyp", Data("heic".utf8) + n(0, 4) + Data("mif1heic".utf8)) + b("meta", meta)
+    }
+    let graphOriginal = temporary.appendingPathComponent("styles-graph.heic")
+    let graphDepth = temporary.appendingPathComponent("depth-graph.heic")
+    try graphFixture(styles: true).write(to: graphOriginal)
+    try graphFixture(styles: false).write(to: graphDepth)
+    try require(PhotoDepthHEIF.hasStyles(graphOriginal), "detect opaque Styles graph")
+    let beforeGraph = try PhotoDepthHEIF.parse(Data(contentsOf: graphOriginal))
+    try PhotoDepthHEIF.merge(original: graphOriginal, depth: graphDepth)
+    let afterGraph = try PhotoDepthHEIF.parse(Data(contentsOf: graphDepth))
+    try require(PhotoDepthHEIF.hasStyles(graphDepth), "Styles still present after graft")
+    try require(afterGraph.items.count == 5, "append only depth and its description")
+    for item in beforeGraph.items {
+      try require(afterGraph.items.contains { $0.id == item.id && $0.info == item.info && $0.payload == item.payload }, "preserve every original Styles/pixel item byte for byte")
+      let before = beforeGraph.associations[item.id] ?? []
+      let after = afterGraph.associations[item.id] ?? []
+      try require(before.elementsEqual(after, by: { $0.0 == $1.0 && $0.1 == $1.1 }), "preserve property associations")
+    }
+    for ref in beforeGraph.references {
+      try require(afterGraph.references.contains { $0.type == ref.type && $0.from == ref.from && $0.to == ref.to }, "preserve original graph links")
+    }
+    do {
+      _ = try PhotoDepthHEIF.parse(Data([0, 0, 0, 255, 109, 101, 116, 97]))
+      throw NSError(domain: "Checks", code: 4)
+    } catch PhotoDepthError.invalidImage {}
+
     guard CommandLine.arguments.count > 1 else {
       print("Recovery and generation availability checks passed (inference not requested)")
       return
@@ -165,6 +222,22 @@ struct PhotoDepthChecks {
 
       try require(depth.depthDataAccuracy == .relative, "synthetic depth must be relative")
       try require(CVPixelBufferGetWidth(depth.depthDataMap) == 240 && CVPixelBufferGetHeight(depth.depthDataMap) == 160, "map must align with stored raster for EXIF \(orientation)")
+      if orientation == 1 || orientation == 6 {
+        let heifURL = temporary.appendingPathComponent("source-\(orientation).heic")
+        let heifOutput = temporary.appendingPathComponent("depth-\(orientation).heic")
+        let writer = CGImageDestinationCreateWithURL(heifURL as CFURL, UTType.heic.identifier as CFString, 1, nil)!
+        CGImageDestinationAddImageFromSource(writer, source, 0, nil)
+        try require(CGImageDestinationFinalize(writer), "HEIF fixture")
+        try PhotoDepthEngine.write(source: PhotoDepthEngine.source(heifURL), disparity: depth, to: heifOutput)
+        try PhotoCatalogMetadata.apply(to: heifOutput, metadata: ["catalogMetadata": ["rating": 4]])
+        try PhotoDepthHEIF.merge(original: heifURL, depth: heifOutput)
+        let merged = try PhotoDepthEngine.source(heifOutput)
+        try require(CGImageSourceCreateImageAtIndex(merged, CGImageSourceGetPrimaryImageIndex(merged), nil) != nil, "grafted HEIF decodes")
+        try require(PhotoDepthEngine.hasDepth(merged), "grafted depth decodes")
+        try require(PhotoDepthEngine.rating(heifOutput) == 4, "graft preserves updated rating")
+        let mergedProjection = try PhotoDepthPortraitEncoding.projection(merged)
+        try require(mergedProjection.orientation == orientation, "graft preserves raster orientation")
+      }
       let outputURL = temporary.appendingPathComponent("depth-\(orientation).jpg")
       try PhotoDepthEngine.write(source: source, disparity: depth, to: outputURL)
       try PhotoCatalogMetadata.apply(to: outputURL, metadata: ["catalogMetadata": ["rating": 4]])
@@ -214,7 +287,7 @@ struct PhotoDepthChecks {
       _ = try PhotoDepthEngine.disparity(source: PhotoDepthEngine.source(original), model: model) { throw PhotoDepthError.cancelled }
       throw NSError(domain: "Checks", code: 3)
     } catch PhotoDepthError.cancelled {}
-    print("Recovery, eight EXIF orientations, upright PhotoKit pixels, auxiliary rotation, face regions, inference, disparity embedding, rating preservation and cancellation passed")
+    print("Recovery, eight EXIF orientations, upright PhotoKit pixels, auxiliary rotation, face regions, inference, disparity embedding, rating preservation, HEIF graph preservation, Live Photo backups and cancellation passed")
     print("These checks do not establish portrait-editing support in iPhone Photos.")
   }
 }
