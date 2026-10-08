@@ -120,9 +120,13 @@ ser revertidas; **Salvar cópia para Retrato** regenera a partir do backup anter
 sem apagar o asset antigo ou seus dados de recuperação. Edições externas sem o
 marcador esperado continuam bloqueadas para impedir copiar desfoque já aplicado.
 
-Pendente no dispositivo: recompilar o módulo e abrir essa nova cópia no Fotos,
-verificando ligar/desligar no próprio ícone antes de entrar em Editar. O resultado
-da amostra importada não prova o novo fluxo PhotoKit. `validated` permanece false.
+Após a mudança de salvamento, o usuário confirmou em 8 de outubro de 2026:
+"perfeito, funcionou perfeitamente". Isso confirma o objetivo desta etapa no
+iPhone: a cópia gerada pelo app permite ligar/desligar o desfoque pelo ícone
+do Fotos fora de Editar, assim como a amostra 05 importada. Modelo do dispositivo
+e versão do iOS não foram informados. `validated` permanece false enquanto a
+matriz mais ampla de formatos, metadados, permissões e recuperação não estiver
+concluída; isso não invalida o sucesso confirmado desse fluxo.
 
 Verificação desta mudança: lint sem avisos, typecheck TypeScript, typecheck
 Swift com SDK iOS/target iOS 17, suíte nativa e sete testes existentes da galeria
