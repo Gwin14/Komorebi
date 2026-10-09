@@ -54,6 +54,13 @@ const PHOTOS_PER_ROW = 4;
 const GALLERY_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 10 };
 const INFO_SWIPE_DISTANCE = 56;
 
+// Use the same current PhotoKit rendition/cache identity for the grid,
+// transition and viewer. Resolving a local file must not reload the preview.
+const getGalleryImageSource = (photo) => ({
+  uri: Platform.OS === "ios" ? `ph://${photo.id}` : photo.uri,
+  cacheKey: `${photo.id}:${photo.modificationTime || 0}`,
+});
+
 // SectionList also extracts keys for header/footer viewability tokens, whose
 // item is a section object rather than an array of photos.
 const getGalleryListItemKey = (item, index) => Array.isArray(item)
@@ -160,12 +167,15 @@ export default function Galery() {
   const infoScrollOffset = useRef(0);
   const galleryPhotoRefs = useRef(new Map());
   const closingViewerRef = useRef(false);
+  const transitionImageRef = useRef(null);
+  const transitionRunningRef = useRef(false);
   const infoAnimation = useRef(new Animated.Value(0)).current;
   const sharedProgress = useRef(new Animated.Value(0)).current;
   const viewerOpacity = useRef(new Animated.Value(0)).current;
   const [transitionSource, setTransitionSource] = useState(null);
-  const [transitionUri, setTransitionUri] = useState(null);
+  const [pendingOpeningPhoto, setPendingOpeningPhoto] = useState(null);
   const [transitionRunning, setTransitionRunning] = useState(false);
+  transitionRunningRef.current = transitionRunning;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
@@ -257,7 +267,7 @@ export default function Galery() {
   }, [depthScan, operation, loadKomorebiPhotos]);
 
   const onGalleryViewableItemsChanged = useGalleryPhotoDetails({
-    photos, setPhotos, project: viewProject, enabled: !!permission?.granted,
+    photos, setPhotos, project: viewProject, enabled: !!permission?.granted && !transitionRunning,
     revision: galleryRevision, generation: photoLoadGeneration, selectedAssetId,
   });
 
@@ -558,9 +568,8 @@ export default function Galery() {
 
     measureGalleryPhoto(selectedPhoto.id, (measuredRect) => {
       setTransitionSource((previous) => measuredRect || previous);
-      setTransitionUri(selectedPhoto.uri);
       setTransitionRunning(true);
-      viewerOpacity.setValue(0);
+      void transitionImageRef.current?.lockResourceAsync().catch(() => {});
       sharedProgress.setValue(1);
 
       requestAnimationFrame(() => {
@@ -571,6 +580,7 @@ export default function Galery() {
           useNativeDriver: false,
         }).start(() => {
           setViewerVisible(false);
+          setPendingOpeningPhoto(null);
           setTransitionRunning(false);
           closingViewerRef.current = false;
         });
@@ -581,7 +591,6 @@ export default function Galery() {
     selectedPhoto,
     setInfoPanel,
     sharedProgress,
-    viewerOpacity,
   ]);
 
   const openViewer = useCallback(
@@ -596,7 +605,7 @@ export default function Galery() {
             height: 1,
           },
         );
-        setTransitionUri(photo.uri);
+        setPendingOpeningPhoto(getGalleryImageSource(photo).cacheKey);
         setTransitionRunning(true);
         sharedProgress.setValue(0);
         viewerOpacity.setValue(0);
@@ -661,7 +670,7 @@ export default function Galery() {
   );
 
   const handleViewerShow = useCallback(() => {
-    if (selectedIndex < 0) return;
+    if (selectedIndex < 0 || closingViewerRef.current) return;
     pagerRef.current?.scrollToOffset({
       offset: selectedIndex * screenWidth,
       animated: false,
@@ -673,12 +682,15 @@ export default function Galery() {
     });
     Animated.timing(sharedProgress, {
       toValue: 1,
-      duration: 360,
+      duration: 260,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
-    }).start(() => {
+    }).start(({ finished }) => {
+      if (!finished || closingViewerRef.current || !viewerVisibleRef.current) return;
       viewerOpacity.setValue(1);
+      transitionRunningRef.current = false;
       setTransitionRunning(false);
+      void transitionImageRef.current?.unlockResourceAsync().catch(() => {});
     });
   }, [screenWidth, selectedIndex, sharedProgress, viewerOpacity]);
 
@@ -709,7 +721,7 @@ export default function Galery() {
   );
 
   useEffect(() => {
-    if (!viewerVisible || !selectedAssetId) return undefined;
+    if (!viewerVisible || !infoOpen || transitionRunning || !selectedAssetId) return undefined;
     let current = true;
     setExifData(null);
     setExifLoading(true);
@@ -721,7 +733,7 @@ export default function Galery() {
     return () => {
       current = false;
     };
-  }, [selectedAssetId, viewerVisible, metadataRevision]);
+  }, [selectedAssetId, viewerVisible, infoOpen, transitionRunning, metadataRevision]);
 
   const handleDeletePhoto = (ids = selectedAssetId ? [selectedAssetId] : []) => {
     if (!ids.length || operationRef.current) return;
@@ -900,7 +912,7 @@ export default function Galery() {
                 onPress={() => selecting ? toggleSelection(photo.id) : openViewer(photo)}
               >
                 <Image
-                  source={{ uri: Platform.OS === "ios" ? `ph://${photo.id}` : photo.uri, cacheKey: `${photo.id}:${photo.modificationTime || 0}` }}
+                  source={getGalleryImageSource(photo)}
                   contentFit="cover"
                   enforceEarlyResizing
                   cachePolicy="memory-disk"
@@ -964,7 +976,9 @@ export default function Galery() {
           />
           <Animated.View
             pointerEvents={transitionRunning ? "none" : "auto"}
-            style={[styles.viewerContent, { opacity: viewerOpacity }]}
+            // Hide the page in the same commit that reveals the transition
+            // image, and keep it hidden while the native modal is dismissed.
+            style={[styles.viewerContent, { opacity: !viewerVisible || (transitionRunning && closingViewerRef.current) ? 0 : viewerOpacity }]}
           >
             <View
               style={[
@@ -1022,6 +1036,10 @@ export default function Galery() {
                 ref={pagerRef}
                 data={orderedPhotos}
                 horizontal
+                initialScrollIndex={Math.max(selectedIndex, 0)}
+                initialNumToRender={1}
+                maxToRenderPerBatch={2}
+                windowSize={3}
                 pagingEnabled
                 directionalLockEnabled
                 disableIntervalMomentum
@@ -1044,8 +1062,15 @@ export default function Galery() {
                       {...viewerPanResponder.panHandlers}
                     >
                       <Image
-                        source={{ uri: photo.uri }}
+                        source={getGalleryImageSource(photo)}
                         contentFit="cover"
+                        enforceEarlyResizing
+                        cachePolicy="memory-disk"
+                        priority={photo.id === selectedAssetId ? "high" : "low"}
+                        recyclingKey={getGalleryImageSource(photo).cacheKey}
+                        transition={0}
+                        onDisplay={() => setPendingOpeningPhoto((pending) => pending === getGalleryImageSource(photo).cacheKey ? null : pending)}
+                        onError={() => setPendingOpeningPhoto((pending) => pending === getGalleryImageSource(photo).cacheKey ? null : pending)}
                         style={styles.viewerPhoto}
                       />
                       {viewerVisible && !infoOpen && depthScan?.ready && photo.id === selectedAssetId && depthScan.assetId === photo.id && (
@@ -1122,7 +1147,7 @@ export default function Galery() {
                       ]}
                     >
                       <Image
-                        source={{ uri: Platform.OS === "ios" ? `ph://${item.id}` : item.uri, cacheKey: `${item.id}:${item.modificationTime || 0}` }}
+                        source={getGalleryImageSource(item)}
                         contentFit="cover"
                         enforceEarlyResizing
                         recyclingKey={item.id}
@@ -1418,12 +1443,30 @@ export default function Galery() {
             </Animated.View>
           </Animated.View>
 
-          {transitionRunning && transitionUri && transitionImageStyle ? (
+          {viewerVisible && selectedPhoto && transitionImageStyle ? (
             <Animated.View
               pointerEvents="none"
-              style={[styles.viewerTransitionImage, transitionImageStyle]}
+              style={[
+                styles.viewerTransitionImage,
+                transitionImageStyle,
+                { opacity: transitionRunning || (!infoOpen && pendingOpeningPhoto === getGalleryImageSource(selectedPhoto).cacheKey) ? 1 : 0 },
+              ]}
             >
-              <Image source={{ uri: transitionUri }} contentFit="cover" transition={0} style={styles.viewerPhoto} />
+              <Image
+                ref={transitionImageRef}
+                source={getGalleryImageSource(selectedPhoto)}
+                contentFit="cover"
+                enforceEarlyResizing
+                cachePolicy="memory-disk"
+                priority="high"
+                transition={0}
+                onDisplay={() => {
+                  // Resizing the animated frame must not start another native
+                  // image request on every frame. Keep the displayed bitmap.
+                  if (transitionRunningRef.current) void transitionImageRef.current?.lockResourceAsync().catch(() => {});
+                }}
+                style={styles.viewerPhoto}
+              />
             </Animated.View>
           ) : null}
         </View>

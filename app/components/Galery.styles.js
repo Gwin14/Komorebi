@@ -118,7 +118,7 @@ export default StyleSheet.create({
   viewer: { backgroundColor: "transparent", flex: 1 },
   viewerContent: { flex: 1, zIndex: 2 },
   viewerTransitionBackdrop: {
-    backgroundColor: "#050505",
+    backgroundColor: "#000",
     bottom: 0,
     left: 0,
     position: "absolute",
@@ -127,7 +127,7 @@ export default StyleSheet.create({
     zIndex: 1,
   },
   viewerTransitionImage: {
-    backgroundColor: "#0c0c0c",
+    backgroundColor: "#000",
     overflow: "hidden",
     position: "absolute",
     zIndex: 20,
@@ -164,7 +164,7 @@ export default StyleSheet.create({
   viewerGestureArea: { flex: 1, paddingBottom: 154, paddingTop: 80 },
   viewerPhotoPage: { flex: 1, paddingHorizontal: 12, paddingVertical: 12 },
   viewerPhotoFrame: {
-    backgroundColor: "#0c0c0c",
+    backgroundColor: "#000",
     borderColor: "rgba(255,255,255,0.07)",
     borderRadius: 28,
     borderWidth: 1,
@@ -174,7 +174,7 @@ export default StyleSheet.create({
   viewerPhoto: { height: "100%", width: "100%" },
   viewerBottom: {
     alignItems: "center",
-    backgroundColor: "#050505",
+    backgroundColor: "#000",
     bottom: 0,
     left: 0,
     paddingTop: 2,

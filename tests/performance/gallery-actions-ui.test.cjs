@@ -21,17 +21,20 @@ async function fixture(rate, options = {}) {
   const alerts = [];
   let deleted = [];
   let shared = [];
+  let exifReads = 0;
+  const animations = [];
   class Value {
+    constructor(value) { this.value = value; }
     interpolate() { return 0; }
-    setValue() {}
+    setValue(value) { this.value = value; }
   }
-  const animated = { Value, View: "AnimatedView", Image: "AnimatedImage", spring: () => ({ start() {} }), timing: () => ({ start() {} }) };
+  const animated = { Value, View: "AnimatedView", Image: "AnimatedImage", spring: () => ({ start() {} }), timing: (_value, config) => ({ start(callback) { animations.push({ config, finish: (finished = true) => callback?.({ finished }) }); } }) };
   const { default: Gallery } = loadModule("app/components/Galery.jsx", {
     react: hooks.react,
     "react-native": {
       ...Object.fromEntries(["ActivityIndicator", "FlatList", "Image", "Modal", "Pressable", "ScrollView", "SectionList", "Text", "TouchableOpacity", "View"].map((name) => [name, name])),
       Animated: animated, Alert: { alert: (...args) => alerts.push(args) },
-      Platform: { OS: "ios" }, Easing: { cubic: () => {}, inOut: () => {} },
+      Platform: { OS: "ios" }, Easing: { cubic: () => {}, inOut: () => {}, out: () => {} },
       PanResponder: { create: () => ({ panHandlers: {} }) },
       useWindowDimensions: () => ({ width: 390, height: 844 }),
       AppState: { currentState: "active", addEventListener: () => ({ remove() {} }) },
@@ -50,7 +53,7 @@ async function fixture(rate, options = {}) {
     },
     "react-native-safe-area-context": { SafeAreaView: "SafeAreaView", useSafeAreaInsets: () => ({ top: 0, bottom: 0 }) },
     "../context/SettingsContext": { useSettings: () => settings },
-    "../utils/exifFormatter": { exifHandler: (id, callback) => callback({}) },
+    "../utils/exifFormatter": { exifHandler: (id, callback) => { exifReads++; callback({}); } },
     "../utils/exifSchema": { EXIF_SCHEMA: {} },
     "../utils/projects": { getProjectAlbumName: () => "Komorebi" },
     "../utils/galleryPhotos": { loadGalleryPhotos: options.load || (async () => photos) },
@@ -69,7 +72,7 @@ async function fixture(rate, options = {}) {
   });
   const render = () => hooks.render(Gallery);
   const initialTree = render(); await flush();
-  return { render, initialTree, photos, alerts, hooks, get deleted() { return deleted; }, get shared() { return shared; } };
+  return { render, initialTree, photos, alerts, hooks, animations, get exifReads() { return exifReads; }, get deleted() { return deleted; }, get shared() { return shared; } };
 }
 
 function button(tree, label) {
@@ -191,5 +194,118 @@ test("gallery viewability accepts section headers and footers as well as photo r
     }
   } finally {
     f.hooks.dispose();
+  }
+});
+
+test("viewer starts at the tapped photo and keeps its cached transition image until the page displays", async () => {
+  const previousFrame = global.requestAnimationFrame;
+  global.requestAnimationFrame = (callback) => callback();
+  const f = await fixture();
+  try {
+    let tree = f.render();
+    const pressed = tile(tree, f.photos[0]);
+    const gridImage = nodes(pressed, (node) => node.type === "Image")[0];
+    pressed.props.onPress();
+    tree = f.render();
+    const viewer = () => nodes(tree, (node) => node.type === "Modal")[1];
+    const pager = nodes(viewer(), (node) => node.type === "FlatList" && node.props.pagingEnabled)[0];
+    assert.equal(pager.props.initialScrollIndex, pager.props.data.findIndex((photo) => photo.id === f.photos[0].id));
+    assert.equal(pager.props.initialNumToRender, 1);
+    const pageImage = nodes(pager.props.renderItem({ item: f.photos[0] }), (node) => node.type === "Image")[0];
+    const overlay = () => nodes(viewer(), (node) => node.type === "AnimatedView" && nodes(node, (child) => child.type === "Image" && child.props.ref).length === 1).at(-1);
+    const transitionImage = () => nodes(overlay(), (node) => node.type === "Image")[0];
+    assert.deepEqual(pageImage.props.source, gridImage.props.source);
+    assert.deepEqual(transitionImage().props.source, gridImage.props.source);
+    assert.equal(pageImage.props.priority, "high");
+    let locks = 0, unlocks = 0;
+    transitionImage().props.ref.current = {
+      lockResourceAsync: async () => { locks++; },
+      unlockResourceAsync: async () => { unlocks++; },
+    };
+    transitionImage().props.onDisplay();
+    viewer().props.onShow();
+    f.animations.at(-1).finish();
+    tree = f.render();
+    assert.equal(locks, 1);
+    assert.equal(unlocks, 1);
+    assert.equal(overlay().props.style.at(-1).opacity, 1);
+    const neighbourImage = nodes(pager.props.renderItem({ item: f.photos[1] }), (node) => node.type === "Image")[0];
+    neighbourImage.props.onDisplay();
+    tree = f.render();
+    assert.equal(overlay().props.style.at(-1).opacity, 1);
+    pageImage.props.onDisplay();
+    tree = f.render();
+    assert.equal(overlay().props.style.at(-1).opacity, 0);
+    const content = nodes(viewer(), (node) => node.type === "AnimatedView" && node.props.pointerEvents === "auto")[0];
+    const pageOpacity = content.props.style.at(-1).opacity;
+    assert.equal(pageOpacity.value, 1);
+    nodes(viewer(), (node) => node.props?.accessibilityLabel === "Fechar foto")[0].props.onPress();
+    assert.equal(pageOpacity.value, 1, "keep the page visible until the overlay visibility commits");
+    tree = f.render();
+    assert.equal(locks, 2);
+    assert.equal(overlay().props.style.at(-1).opacity, 1);
+    assert.equal(nodes(viewer(), (node) => node.type === "AnimatedView" && node.props.pointerEvents === "none" && node.props.style?.at(-1)?.opacity === 0).length, 1);
+    assert.deepEqual(transitionImage().props.source, gridImage.props.source);
+    f.animations.at(-1).finish();
+    tree = f.render();
+    assert.equal(viewer().props.visible, false);
+    const dismissedContent = nodes(viewer(), (node) => node.type === "AnimatedView" && node.props.pointerEvents === "auto")[0];
+    assert.equal(dismissedContent.props.style.at(-1).opacity, 0, "the full-size page stays hidden while the native modal dismisses");
+  } finally {
+    f.hooks.dispose();
+    global.requestAnimationFrame = previousFrame;
+  }
+});
+
+test("opening a photo does not read EXIF until its details are requested", async () => {
+  const previousFrame = global.requestAnimationFrame;
+  global.requestAnimationFrame = (callback) => callback();
+  const f = await fixture();
+  try {
+    tile(f.render(), f.photos[0]).props.onPress();
+    let tree = f.render();
+    let viewer = nodes(tree, (node) => node.type === "Modal")[1];
+    viewer.props.onShow();
+    f.animations.at(-1).finish();
+    tree = f.render();
+    assert.equal(f.exifReads, 0);
+    viewer = nodes(tree, (node) => node.type === "Modal")[1];
+    nodes(viewer, (node) => node.props?.accessibilityLabel === "Informações da foto")[0].props.onPress();
+    f.render();
+    assert.equal(f.exifReads, 1);
+  } finally {
+    f.hooks.dispose();
+    global.requestAnimationFrame = previousFrame;
+  }
+});
+
+test("closing during the entrance animation cannot reveal the viewer again", async () => {
+  const previousFrame = global.requestAnimationFrame;
+  global.requestAnimationFrame = (callback) => callback();
+  const f = await fixture();
+  try {
+    tile(f.render(), f.photos[0]).props.onPress();
+    let tree = f.render();
+    let viewer = nodes(tree, (node) => node.type === "Modal")[1];
+    const transitionImage = nodes(viewer, (node) => node.type === "Image" && node.props.ref)[0];
+    let unlocks = 0;
+    transitionImage.props.ref.current = {
+      lockResourceAsync: async () => {},
+      unlockResourceAsync: async () => { unlocks++; },
+    };
+    viewer.props.onShow();
+    const entrance = f.animations.at(-1);
+    viewer.props.onRequestClose();
+    entrance.finish(false);
+    tree = f.render();
+    assert.equal(unlocks, 0);
+    viewer = nodes(tree, (node) => node.type === "Modal")[1];
+    assert.equal(viewer.props.visible, true);
+    f.animations.at(-1).finish();
+    tree = f.render();
+    assert.equal(nodes(tree, (node) => node.type === "Modal")[1].props.visible, false);
+  } finally {
+    f.hooks.dispose();
+    global.requestAnimationFrame = previousFrame;
   }
 });
