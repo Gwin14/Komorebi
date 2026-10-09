@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/react-native";
+import { BETA_ENABLED } from "./beta";
 
 let requestedEnabled = false;
 let active = false;
@@ -18,12 +19,16 @@ export function configureDiagnostics(enabled) {
       active = false;
     }
     if (!active && requestedEnabled) {
+      const environment = process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT ||
+        (__DEV__ ? "development" : BETA_ENABLED ? "preview" : "production");
       Sentry.init({
         dsn: process.env.EXPO_PUBLIC_SENTRY_DSN ||
           "https://cd139b926fdfcff7d0904702b844bc77@o4512165584764928.ingest.us.sentry.io/4512165639487488",
-        environment: process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT ||
-          (__DEV__ ? "development" : "production"),
-        tracesSampleRate: __DEV__ ? 1 : 0.2,
+        environment,
+        // Build type only affects performance sampling, never error reporting.
+        enabled: true,
+        sampleRate: 1,
+        tracesSampleRate: environment === "production" ? 0.2 : 1,
         sendDefaultPii: false,
         beforeSend: (event) => requestedEnabled ? event : null,
         beforeSendTransaction: (event) => requestedEnabled ? event : null,

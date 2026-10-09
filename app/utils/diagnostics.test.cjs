@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadModule } = require("../../tests/helpers/loadModule.cjs");
 
-function fixture() {
+function fixture({ dev = false, beta = false } = {}) {
   const calls = [];
   let options;
   const sdk = {
@@ -12,9 +12,51 @@ function fixture() {
   };
   const { configureDiagnostics } = loadModule("app/utils/diagnostics.js", {
     "@sentry/react-native": sdk,
-  });
+    "./beta": { BETA_ENABLED: beta },
+  }, new Map(), { dev });
   return { calls, configureDiagnostics, options: () => options };
 }
+
+for (const [environment, dev, beta, tracesSampleRate] of [
+  ["development", true, true, 1],
+  ["preview", false, true, 1],
+  ["production", false, false, 0.2],
+]) {
+  test(`${environment} reports all errors only while diagnostics are enabled`, async (t) => {
+    const savedEnvironment = process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT;
+    delete process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT;
+    t.after(() => {
+      if (savedEnvironment === undefined) delete process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT;
+      else process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT = savedEnvironment;
+    });
+    const f = fixture({ dev, beta });
+    await f.configureDiagnostics(false);
+    assert.deepEqual(f.calls, []);
+    await f.configureDiagnostics(true);
+    const options = f.options();
+    assert.ok(options.dsn.startsWith("https://"));
+    assert.equal(options.environment, environment);
+    assert.equal(options.enabled, true);
+    assert.equal(options.sampleRate, 1);
+    assert.equal(options.tracesSampleRate, tracesSampleRate);
+    assert.equal(options.sendDefaultPii, false);
+    const event = { message: `diagnostic ${environment}` };
+    assert.equal(options.beforeSend(event), event);
+    assert.equal(options.beforeSendTransaction(event), event);
+    const closing = f.configureDiagnostics(false);
+    assert.equal(options.beforeSend(event), null);
+    assert.equal(options.beforeSendTransaction(event), null);
+    await closing;
+    assert.deepEqual(f.calls, ["init", "close"]);
+  });
+}
+
+test("EAS profiles identify development, preview and production explicitly", () => {
+  const { build } = require("../../eas.json");
+  for (const environment of ["development", "preview", "production"]) {
+    assert.equal(build[environment].env.EXPO_PUBLIC_SENTRY_ENVIRONMENT, environment);
+  }
+});
 
 test("a stored opt-out does not initialize Sentry", async () => {
   const { calls, configureDiagnostics } = fixture();

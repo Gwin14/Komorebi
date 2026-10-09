@@ -1,6 +1,6 @@
 # Política de Privacidade - Komorebi
 
-**Última atualização:** setembro de 2026
+**Última atualização:** 9 de outubro de 2026
 **Versão do app:** 1.0.0
 
 ---
@@ -23,7 +23,10 @@ O app pode criar, ler ou armazenar localmente:
 - **Álbum "Komorebi":** álbum criado na biblioteca de mídia para organizar as imagens capturadas.
 - **Metadados EXIF:** dados técnicos gravados ou preservados nas fotos, como data, orientação, lente, ISO, velocidade do obturador, balanço de branco, modo de captura, filtro usado e informações próprias do Komorebi.
 - **Localização GPS nas fotos:** latitude, longitude e altitude podem ser gravadas nos metadados EXIF quando a permissão de localização estiver concedida e a opção "Salvar Localização nas Fotos" estiver ativada.
-- **Preferências do app:** configurações como estilo retrô do viewfinder, grade, som do obturador, formato HEIF/JPEG no iPhone, salvamento de localização, cópia original sem LUT, posição/ordem dos controles da TopBar e lista de LUTs personalizados.
+- **Preferências do app:** configurações como estilo retrô do viewfinder, grade, som do obturador, formato HEIF/HEIF+/JPEG no iPhone, salvamento de localização, cópia original sem LUT, posição/ordem dos controles da TopBar e lista de LUTs personalizados.
+- **Catálogo e organização:** autoria e direitos autorais informados por você, classificações de 0–5 estrelas, palavras-chave e projetos/álbuns. Metadados gravados na imagem podem acompanhar seu compartilhamento.
+- **Análise local:** o Scan e as tags inteligentes podem analisar imagens no aparelho. A geração experimental de profundidade também ocorre localmente, inclusive para Live Photos elegíveis. O modelo de profundidade vem no app; o modelo opcional do Scan é baixado separadamente.
+- **Recuperação de edições:** aplicar profundidade na original mantém arquivos de recuperação no espaço privado do app. Desinstalar o app remove esses backups; criar uma cópia preserva a foto de origem na biblioteca.
 - **LUTs personalizados:** arquivos `.cube` importados por você são lidos e salvos localmente para uso nos filtros.
 
 Esses dados permanecem no dispositivo, exceto nos casos descritos na seção "Serviços de terceiros".
@@ -37,9 +40,8 @@ O Komorebi solicita permissões do sistema operacional apenas para habilitar fun
 | Permissão                   | Finalidade                                                                                                                  |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | Câmera                      | Capturar fotos e exibir o preview da câmera.                                                                                |
-| Biblioteca de mídia / Fotos | Salvar fotos no álbum "Komorebi", exibir a galeria integrada, ler metadados e excluir fotos quando você solicitar.          |
+| Biblioteca de mídia / Fotos | Salvar fotos no álbum "Komorebi", exibir a galeria integrada, ler metadados classificar, compartilhar, editar profundidade e excluir fotos quando você solicitar.          |
 | Localização durante o uso   | Gravar GPS nas fotos, quando ativado, e buscar clima/localidade para o painel de tempo.                                     |
-| Microfone                   | Declarada na configuração nativa para compatibilidade com recursos de câmera/vídeo, mas o app atual é focado em fotografia. |
 
 Você pode revogar permissões nas configurações do iOS ou Android. A revogação pode impedir recursos correspondentes, como captura, salvamento na galeria, mapa ou clima.
 
@@ -60,7 +62,7 @@ Se você desativar "Salvar Localização nas Fotos", o Komorebi deixa de gravar 
 
 ## 5. Fotos, galeria e metadados
 
-As fotos são salvas na biblioteca de mídia do dispositivo, geralmente no álbum "Komorebi". A galeria integrada mostra fotos desse álbum, exibe metadados EXIF, pode abrir um mapa quando houver coordenadas GPS e permite excluir a foto selecionada.
+As fotos são salvas na biblioteca de mídia do dispositivo, geralmente no álbum "Komorebi". A galeria integrada mostra fotos desse álbum, exibe metadados EXIF, pode abrir um mapa quando houver coordenadas GPS e permite avaliar, compartilhar e excluir fotos individualmente ou em lote. No iOS, fotos elegíveis também podem receber profundidade na original ou em uma cópia. Uma edição posterior feita em outro app pode impedir a reversão automática para preservar essa alteração.
 
 O Komorebi não faz upload automático das suas fotos. Compartilhamentos ou envios para outros serviços acontecem apenas quando você usa recursos externos ou ações do próprio sistema.
 
@@ -76,6 +78,7 @@ Algumas funções dependem de serviços externos. Nesses casos, dados necessári
 | **BigDataCloud** (`api.bigdatacloud.net`)                        | Geocodificação reversa para cidade/região/país.    | Latitude e longitude aproximadas.                                                                                     |
 | **Leaflet / OpenStreetMap / unpkg**                              | Exibir mapa na galeria para fotos com GPS.         | Carregamento de scripts, estilos e tiles de mapa; o mapa é centrado nas coordenadas da foto.                          |
 | **Gerador de EXIF Frame** (`criador-de-exif-frame.onrender.com`) | Criar molduras com foto e metadados.               | Quando você abre uma foto nesse recurso, a imagem pode ser enviada/injetada no site em WebView para processamento.    |
+| **Hugging Face** (`huggingface.co`) | Baixar o modelo opcional MiniCPM-V do Scan. | Requisições de download e dados técnicos de rede; as imagens analisadas permanecem no aparelho. |
 | **Notion** (`fabiosantoss.notion.site`)                          | Formulário de feedback.                            | Informações que você digitar voluntariamente no formulário.                                                           |
 | **Sentry** (`sentry.io`)                                         | Diagnosticar falhas e medir o desempenho do app.   | Mensagens de erro, rastros de execução, versão do app e informações técnicas do dispositivo e das operações afetadas. |
 | **Links externos**                                               | Abrir site, GitHub, Instagram, Threads ou YouTube. | O acesso passa a ocorrer fora do app ou em WebView, conforme o serviço.                                               |
@@ -104,6 +107,7 @@ Você controla a retenção dos seus dados ao:
 
 - excluir fotos pela galeria do sistema ou pela galeria integrada;
 - remover LUTs personalizados nas configurações;
+- reverter edições de profundidade compatíveis enquanto seus backups privados estiverem disponíveis;
 - revogar permissões do app;
 - desinstalar o aplicativo, o que pode remover preferências locais do app, mas não necessariamente fotos já salvas na biblioteca de mídia.
 

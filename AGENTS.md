@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Komorebi is an Expo/React Native camera app using Expo Router. The main app lives in `app/`: screens are in `app/index.jsx` and `app/_layout.tsx`, reusable UI is in `app/components/`, hooks in `app/hooks/`, shared state in `app/context/`, and image/EXIF/LUT helpers in `app/utils/`. Static assets live in `assets/`, including LUT `.cube` files, sounds, and images. Custom Expo native modules are under `modules/` (`camera-manual-controls`, `camera-raw-capture`, `camera-control-button`) with Swift iOS implementations and TypeScript entry points. Native projects are in `ios/` and `android/`; config plugins are in `plugins/`; patch-package patches are in `patches/`; technical notes are in `docs/`.
+Komorebi is an Expo/React Native camera app using Expo Router. The main app lives in `app/`: screens are in `app/index.jsx` and `app/_layout.tsx`, reusable UI is in `app/components/`, hooks in `app/hooks/`, shared state in `app/context/`, and image/EXIF/LUT helpers in `app/utils/`. Static assets live in `assets/`, including LUT `.cube` files, sounds, and images. Custom Expo native modules are under `modules/` (manual controls, RAW/HEIF+, Live Photo, portrait, stacking, photographic styles, photo depth, composition scan, and physical camera buttons) with Swift iOS implementations and TypeScript entry points; `camera-control-button` also has Android code. Shared Swift helpers live in `modules/shared/`. Native projects are in `ios/` and `android/`; config plugins are in `plugins/`; patch-package patches are in `patches/`; technical notes are in `docs/`.
 
 ## Build, Test, and Development Commands
 
@@ -12,6 +12,13 @@ Komorebi is an Expo/React Native camera app using Expo Router. The main app live
 - `npm run android`: build and run the Android app.
 - `npm run web`: start the web target for quick UI checks where supported.
 - `npm run lint`: run Expo ESLint checks.
+- `npm test`: run Node tests for utilities, composition, hooks, and performance regressions.
+- `npm run typecheck`: run TypeScript without emitting files.
+- `npm run test:focus-native`: check native Focus Bracketing behavior.
+- `npm run test:depth-native`: check depth model integrity, inference, metadata, and recovery on macOS/Xcode.
+- `npm run setup:minicpm-ios`: prepare/validate the local iOS Scan runtime before installing Pods.
+
+Use a native development build for local modules; Expo Go does not include them.
 
 Use physical devices when validating camera, RAW capture, haptics, media library, GPS, and volume shutter behavior.
 
@@ -25,7 +32,7 @@ Use `useTopBarNotice` and the TopBar notice slot for brief informational message
 
 ## Testing Guidelines
 
-There is no dedicated automated test suite yet. For now, combine `npm run lint` with focused manual testing on iOS/Android. Validate the exact feature touched: capture flow, manual controls, LUT processing, EXIF preservation, gallery display, permissions, and error states. If adding tests later, place them near the feature as `*.test.js` or in a local `__tests__/` folder.
+The automated suite uses Node’s test runner (`npm test`), with utility tests in `app/utils/*.test.cjs` and composition/performance tests under `tests/`. Combine relevant automated checks and `npm run lint` with focused manual testing on iOS/Android. Validate the exact feature touched: capture flow, manual controls, LUT processing, EXIF preservation, gallery display, permissions, and error states. Follow the existing `*.test.cjs` convention for utility tests or the appropriate folder under `tests/`. Native checks and structural file validation do not replace physical-device validation of camera behavior and Apple Photos controls.
 
 ## Commit & Pull Request Guidelines
 

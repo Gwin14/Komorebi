@@ -86,6 +86,15 @@ Depois de recompilar o iOS, capturar novas fotos com e sem efeitos e conferir
 `ProfileName = Display P3` no Metapho para HEIC/JPEG. Fotos antigas não são
 alteradas. Validar também cores, orientação, Live Photo e profundidade.
 
+## Retrato com Live Photo
+
+Retrato e Live Photo podem ficar ativos juntos quando o módulo de retrato informa
+`supportsLivePhotoCapture` para a lente. A captura usa a sessão de retrato e salva
+a imagem com profundidade/matte e o vídeo pareado. RAW e Image Stacking continuam
+incompatíveis com essa combinação. Ao mudar para uma lente sem suporte combinado,
+Live Photo é desligada com aviso na TopBar. Veja [Retrato e Live Photo](portrait-and-live-photo.md)
+para o preview, processamento e validação.
+
 ## Estilos Fotográficos
 
 A preferência de edição no Fotos é aplicada após os efeitos à saída HEIF de

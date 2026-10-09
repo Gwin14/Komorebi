@@ -10,7 +10,7 @@ VideoToolbox público; Komorebi não incorpora x265 nem APIs privadas da Apple.
 
 A integração é aplicada depois de crop, LUT, grain, halation e EXIF em fotos
 normais, em todos os resultados de Image Stacking, Retrato e HEIF+.
-Live Photo e RAW Bayer comum suspendem a compatibilidade. ProRAW aplica os estilos à
+Live Photo, inclusive combinada com Retrato, e RAW Bayer comum suspendem a compatibilidade. ProRAW aplica os estilos à
 foto processada do par ou derivado, quando selecionada; o DNG permanece intacto.
 HEIF+ aplica os estilos à revelação HEIF, inclusive quando usa RAW Bayer como
 fonte. Nenhum DNG recebe um grafo Styles.

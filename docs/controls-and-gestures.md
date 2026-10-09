@@ -26,6 +26,17 @@ voltar retorna à página anterior, e escolher uma ação salva a preferência e
 a Controles e gestos. Configurações e galeria compartilham o cabeçalho com o mesmo
 BackButton das demais telas; o visualizador de fotos mantém suas transições.
 
+## Timer da câmera
+
+O timer geral é escolhido apenas pelo controle **Timer** da TopBar: desligado,
+3 segundos ou 10 segundos. Ele não aparece mais nas configurações de captura,
+não é persistido e começa desligado ao abrir o app. Ao entrar em segundo plano,
+a preferência temporária volta a zero.
+
+A ação **Tirar foto** dos botões físicos usa esse timer geral. As ações **Foto com
+timer de 3s/10s** continuam configuráveis e persistidas em Controles e gestos;
+substituem o tempo somente naquele disparo, sem alterar a seleção da TopBar.
+
 ## Verificação
 
 Recompilar o app nativo para incluir o módulo Android; recarregar o JavaScript não
@@ -44,6 +55,8 @@ Validar em aparelhos físicos iOS e Android:
    esperar uma ação por clique completo, sem mudanças no volume do sistema.
 5. Configurar aumentar em 3s e diminuir em 10s, com timer geral diferente; conferir
    cancelamento, segundo quadro de dupla exposição e término de Bulb/Motion Blur.
+   Ajustar o timer pela TopBar, enviar o app ao fundo e reabrir: deve estar desligado,
+   enquanto os atalhos de volume de 3s/10s continuam salvos.
 6. Trocar lentes frontal/traseira e conferir apenas dispositivos físicos disponíveis,
    sem presets de recorte; com uma só lente, não reiniciar a sessão.
 7. Durante contagem, captura e processamento, tentar mudar modos, efeitos e lentes;

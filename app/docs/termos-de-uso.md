@@ -1,6 +1,6 @@
 # Termos de Uso - Komorebi
 
-**Última atualização:** julho de 2026
+**Última atualização:** 9 de outubro de 2026
 **Versão do app:** 1.0.0
 
 ---
@@ -22,13 +22,17 @@ Entre os recursos atuais estão:
 - zoom por gesto e controle dedicado;
 - controle de exposição e flash;
 - controles manuais em dispositivos compatíveis, incluindo ISO, obturador, balanço de branco e foco;
-- modos RAW/ProRAW, Live Photo e retrato em dispositivos iOS compatíveis;
+- formatos HEIF/JPEG e modos RAW/ProRAW, HEIF+, Live Photo e retrato em dispositivos iOS compatíveis, incluindo Retrato com Live Photo nas lentes que oferecem suporte;
+- Image Stacking, grão, halation e compatibilidade experimental com Estilos Fotográficos no Fotos da Apple;
+- Scan, tags e nomes inteligentes com análise local;
 - proporção vertical ou horizontal e captura dupla;
 - detecção de sorriso para disparo automático;
 - filtros LUT incluídos e importação de LUTs `.cube`;
 - opção de salvar a foto original junto da versão com LUT;
 - gravação e leitura de metadados EXIF;
-- galeria integrada com mapa para fotos com GPS;
+- galeria com projetos, mapa para fotos com GPS, avaliação, compartilhamento e exclusão individual ou em lote;
+- geração experimental de profundidade no iOS, na original ou em uma cópia, incluindo Live Photos elegíveis;
+- autoria, direitos autorais e palavras-chave nos metadados;
 - painel de tempo baseado na localização;
 - disparo pelo botão de volume e, em iPhones compatíveis, pelo Camera Control;
 - tela de feedback e gerador de EXIF Frame.
@@ -58,9 +62,8 @@ O Komorebi pode solicitar:
 | Permissão                   | Uso                                                                                                                               |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | Câmera                      | Capturar fotos e exibir o preview.                                                                                                |
-| Biblioteca de mídia / Fotos | Salvar imagens, criar/usar o álbum "Komorebi", carregar a galeria integrada e excluir fotos quando solicitado.                    |
+| Biblioteca de mídia / Fotos | Salvar imagens, criar/usar o álbum "Komorebi", carregar a galeria, classificar, compartilhar, editar profundidade e excluir fotos quando solicitado.                    |
 | Localização durante o uso   | Gravar GPS em fotos, quando ativado, e consultar clima/localidade.                                                                |
-| Microfone                   | Declarada na configuração nativa para compatibilidade com recursos de câmera/vídeo, embora o app atual seja focado em fotografia. |
 
 Você pode gerenciar permissões nas configurações do sistema. Recursos que dependem de permissões negadas podem parar de funcionar.
 
@@ -116,6 +119,8 @@ O app integra serviços externos para funções específicas:
 - **Leaflet, OpenStreetMap e unpkg:** exibição de mapa.
 - **Gerador de EXIF Frame:** criação de molduras em WebView.
 - **Notion:** formulário de feedback.
+- **Hugging Face:** download opcional do modelo local do Scan.
+- **Sentry:** diagnósticos de erros e desempenho, desativáveis no onboarding beta ou em Configurações > Sobre, conforme a Política de Privacidade.
 - **GitHub, Instagram, Threads, YouTube e site Foto Essência:** links externos.
 
 Esses serviços podem ter seus próprios termos, políticas de privacidade, disponibilidade e regras de uso. A Equipe Komorebi não se responsabiliza por indisponibilidade, mudanças, erros ou práticas desses terceiros.
@@ -167,7 +172,7 @@ O app pode receber atualizações que adicionem, modifiquem ou removam recursos,
 
 ## 13. Encerramento de uso
 
-Você pode parar de usar o Komorebi a qualquer momento desinstalando o app. A desinstalação pode remover preferências locais, mas fotos já salvas na biblioteca de mídia podem permanecer no dispositivo até serem excluídas por você.
+Você pode parar de usar o Komorebi a qualquer momento desinstalando o app. A desinstalação remove os backups privados usados para reverter edições de profundidade e pode remover preferências locais, mas fotos já salvas na biblioteca de mídia podem permanecer no dispositivo até serem excluídas por você.
 
 ---
 

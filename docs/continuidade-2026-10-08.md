@@ -1,5 +1,7 @@
 # Continuidade do trabalho — Komorebi
 
+> Snapshot histórico de 8 de outubro, preservado para investigação. Não descreve o estado atual do workspace. A galeria já oferece aplicação na original ou criação de cópia e aceita Live Photos elegíveis; consulte [Ações da galeria](gallery-actions.md). Captura combinada e timer estão em [Retrato e Live Photo](portrait-and-live-photo.md) e [Controles e gestos](controls-and-gestures.md).
+
 Atualizado em **8 de outubro de 2026**, horário de São Paulo. Este documento registra o ponto em que o chat terminou. Leia o código atual antes de editar: há alterações locais ainda não commitadas, incluindo trabalho que já existia antes desta conversa.
 
 ## Onde retomar

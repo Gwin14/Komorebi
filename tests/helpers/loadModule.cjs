@@ -5,7 +5,7 @@ const babel = require("@babel/core");
 
 // Exercise the real modules with explicit native adapters; no Metro or device
 // is implied by these tests. Babel is already part of the Expo toolchain.
-function loadModule(filename, mocks = {}, cache = new Map()) {
+function loadModule(filename, mocks = {}, cache = new Map(), { dev = false } = {}) {
   filename = path.resolve(filename);
   if (cache.has(filename)) return cache.get(filename).exports;
   const localRequire = createRequire(filename);
@@ -27,14 +27,14 @@ function loadModule(filename, mocks = {}, cache = new Map()) {
       return { jsx, jsxs: jsx, Fragment: "Fragment" };
     }
     if (name.startsWith("."))
-      return loadModule(localRequire.resolve(name), mocks, cache);
+      return loadModule(localRequire.resolve(name), mocks, cache, { dev });
     return localRequire(name);
   };
   new Function("require", "module", "exports", "__DEV__", code)(
     requireMock,
     module,
     module.exports,
-    false,
+    dev,
   );
   return module.exports;
 }
