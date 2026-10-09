@@ -86,6 +86,7 @@ test("camera settings are available while slow album maintenance is still pendin
       createContext: () => ({ Provider: "SettingsProvider" }),
       useContext: () => null,
     },
+    "../utils/diagnostics": { configureDiagnostics: async () => {} },
     "../utils/settingsStorage": {
       loadStoredSettings: async () => saved,
       saveStoredSetting: async () => {},

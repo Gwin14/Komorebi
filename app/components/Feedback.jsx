@@ -1,3 +1,4 @@
+import { FEEDBACK_URL } from "../utils/beta";
 import { useState } from "react";
 import { View } from "react-native";
 import { WebView } from "react-native-webview";
@@ -12,7 +13,7 @@ export default function Feedback() {
     <View style={styles.container}>
       <WebView
         source={{
-          uri: "https://fabiosantoss.notion.site/2ed38f6e929680c08118da0fd3cc3b29?pvs=105",
+          uri: FEEDBACK_URL,
         }}
         javaScriptEnabled
         domStorageEnabled

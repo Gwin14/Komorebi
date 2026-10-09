@@ -173,7 +173,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
     setTopBarControls,
     topBarBelow,
     setTopBarBelow,
-    setFirstTime,
+    diagnosticsEnabled,
+    setDiagnosticsEnabled,
   } = useSettings();
 
   const [draggingControl, setDraggingControl] = useState(false);
@@ -773,10 +774,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
           description="Conheça novamente os recursos principais."
           icon="play-circle-outline"
           label="Rever apresentação"
-          onPress={() => {
-            setFirstTime(true);
-            router.back();
-          }}
+          onPress={() => router.push("/onboarding")}
         />
         <ActionRow
           icon="mail-outline"
@@ -788,6 +786,11 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
           label="Gerador de Exif Frame"
           onPress={() => router.push("components/ExifFrame")}
         />
+      </Section>
+      <Section title="Diagnósticos">
+        <CustomToggle grouped last label="Compartilhar diagnósticos"
+          description="Dados técnicos de erros e desempenho. Sem fotos ou localização."
+          value={diagnosticsEnabled} onValueChange={setDiagnosticsEnabled} />
       </Section>
       <Section title="Documentos">
         <ActionRow

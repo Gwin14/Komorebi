@@ -1,11 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
+import { BETA_ENABLED, FEEDBACK_URL } from "../utils/beta";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   Animated,
+  Alert,
   Easing,
   Image,
-  ImageBackground,
   Modal,
   Platform,
   Pressable,
@@ -32,58 +35,61 @@ import TopBarControlList from "./TopBarControlList";
 const FLOW = [
   {
     id: "welcome",
-    eyebrow: "BEM-VINDO AO KOMOREBI",
-    title: "Fotografe o que a luz revela.",
+    title: "A luz passa.\nO instante fica.",
     description:
       "Uma câmera feita para transformar instantes simples em imagens com intenção.",
   },
   {
     id: "control",
-    eyebrow: "CONTROLE CRIATIVO",
-    title: "O instante é seu. O controle também.",
+    title: "Sua câmera.\nSeu olhar.",
     description:
       "Ajuste exposição, lentes e enquadramento sem tirar os olhos da cena.",
   },
   {
     id: "style",
-    eyebrow: "ASSINATURA VISUAL",
-    title: "Dê cor à sua forma de ver.",
+    title: "Cor, textura\ne intenção.",
     description:
       "Explore LUTs, grãos e efeitos para chegar ao clima que você imaginou.",
   },
   {
     id: "viewfinder",
-    eyebrow: "SEU VIEWFINDER",
     title: "Veja a cena do seu jeito.",
     description:
       "Escolha as guias que ajudam você a compor e onde prefere acessar os controles.",
   },
   {
     id: "topbar",
-    eyebrow: "SUA TOPBAR",
     title: "Deixe por perto só o que importa.",
     description:
       "Selecione até 8 atalhos e organize a ordem em que eles aparecem.",
   },
   {
     id: "permissions",
-    eyebrow: "SUAS PERMISSÕES",
-    title: "Você decide o que compartilhar.",
+    title: "Prepare sua câmera.",
     description:
-      "Libere cada recurso quando estiver pronto. Câmera e biblioteca são essenciais para fotografar e salvar.",
+      "Escolha quais acessos ativar.",
   },
+  ...(BETA_ENABLED ? [{
+    id: "beta",
+    title: "Melhor com\nseu olhar.",
+    description: "Ajude a melhorar esta versão beta.",
+  }] : []),
   {
     id: "ready",
-    eyebrow: "FEITO PARA FOTOGRAFAR",
-    title: "Tudo pronto para o próximo instante.",
+    title: "Agora,\né com você.",
     description:
       "Suas escolhas continuam sob seu controle e podem ser alteradas nos Ajustes do dispositivo.",
   },
 ];
 
-const PHOTO = require("../../assets/images/fotoessencia.jpeg");
-const APP_ICON = require("../../assets/images/icone.png");
-const MOCKUP = require("../../assets/images/mockup.png");
+const PHOTO = require("../../assets/images/onboarding/ocean.jpg");
+const APP_ICON = require("../../assets/images/app-icons/KomorebiLogo-iOS-Default-1024.png");
+const PHOTOS = {
+  welcome: require("../../assets/images/onboarding/light.jpg"),
+  control: require("../../assets/images/onboarding/bird.jpg"),
+  style: require("../../assets/images/onboarding/motion.jpg"),
+  ready: require("../../assets/images/onboarding/palms.jpg"),
+};
 
 function Brand() {
   return (
@@ -94,84 +100,29 @@ function Brand() {
   );
 }
 
-function ControlVisual() {
+function BetaStep({ diagnosticsEnabled, onDiagnosticsChange }) {
+  const openFeedback = async () => {
+    try {
+      await WebBrowser.openBrowserAsync(FEEDBACK_URL);
+    } catch {
+      Alert.alert("Feedback", "Não foi possível abrir o formulário. Tente novamente em Configurações > Sobre.");
+    }
+  };
   return (
-    <View style={styles.mockupFrame}>
-      <Image source={MOCKUP} resizeMode="cover" style={styles.mockupImage} />
-      <LinearGradient
-        colors={["transparent", "rgba(0, 0, 0, 0.26)"]}
-        style={styles.mockupShade}
-      />
-      <View style={styles.controlBadge}>
-        <Ionicons name="options-outline" size={16} color="#ffb21d" />
-        <Text style={styles.controlBadgeText}>CONTROLES INTUITIVOS</Text>
-      </View>
-    </View>
-  );
-}
-
-function StyleVisual() {
-  return (
-    <View style={styles.styleStage}>
-      <View style={styles.photoCard}>
-        <Image source={PHOTO} style={styles.stylePhoto} />
-        <LinearGradient
-          colors={["transparent", "rgba(0, 0, 0, 0.78)"]}
-          style={styles.photoShade}
-        />
-        <View style={styles.photoMeta}>
-          <Text style={styles.photoMetaLabel}>FILME</Text>
-          <Text style={styles.photoMetaValue}>Damasco · 35mm</Text>
+    <View style={styles.betaContent}>
+      <Pressable accessibilityRole="link" onPress={openFeedback}
+        style={({ pressed }) => [styles.feedbackCard, pressed && styles.buttonPressed]}>
+        <View style={styles.feedbackCopy}>
+          <Text style={styles.feedbackTitle}>Enviar feedback</Text>
+          <Text style={styles.feedbackDescription}>Ideias, sugestões ou problemas.</Text>
         </View>
-      </View>
-
-      <View style={styles.presetRail}>
-        {[
-          ["AMEIXA", "#713d56"],
-          ["DAMASCO", "#ffad39"],
-          ["CINEMA", "#75896d"],
-        ].map(([label, color], index) => (
-          <View
-            key={label}
-            style={[styles.presetChip, index === 1 && styles.presetChipActive]}
-          >
-            <View style={[styles.presetColor, { backgroundColor: color }]} />
-            <Text
-              style={[
-                styles.presetText,
-                index === 1 && styles.presetTextActive,
-              ]}
-            >
-              {label}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function ReadyVisual() {
-  return (
-    <View style={styles.readyStage}>
-      <View style={styles.iconGlowOuter}>
-        <View style={styles.iconGlowInner}>
-          <Image source={APP_ICON} style={styles.readyIcon} />
-        </View>
-      </View>
-
-      <View style={styles.featureRow}>
-        {[
-          ["camera-outline", "Câmera"],
-          ["color-filter-outline", "Estilos"],
-          ["shield-checkmark-outline", "Privacidade"],
-        ].map(([icon, label]) => (
-          <View key={label} style={styles.featureItem}>
-            <Ionicons name={icon} size={19} color="#ffb21d" />
-            <Text style={styles.featureLabel}>{label}</Text>
-          </View>
-        ))}
-      </View>
+        <Ionicons name="arrow-forward" style={styles.feedbackArrow} size={24} color="#ffaa00" />
+      </Pressable>
+      <CustomToggle label="Compartilhar diagnósticos" grouped last
+        style={styles.betaToggle}
+        description="Erros e desempenho via Sentry."
+        value={diagnosticsEnabled} onValueChange={onDiagnosticsChange} />
+      <Text style={styles.betaNote}>Sem fotos ou localização. Altere em Configurações.</Text>
     </View>
   );
 }
@@ -181,22 +132,19 @@ const PERMISSION_ITEMS = [
     id: "camera",
     icon: "camera-outline",
     title: "Câmera",
-    description: "Essencial para visualizar a cena e fotografar.",
-    essential: true,
+    description: "Para fotografar.",
   },
   {
     id: "media",
     icon: "images-outline",
-    title: "Biblioteca de fotos",
-    description: "Essencial para salvar suas fotos e exibi-las na galeria.",
-    essential: true,
+    title: "Fotos",
+    description: "Para salvar suas fotos.",
   },
   {
     id: "location",
     icon: "location-outline",
     title: "Localização",
-    description: "Opcional. Adiciona o local da captura aos dados da foto.",
-    essential: false,
+    description: "Local da captura · opcional.",
   },
 ];
 
@@ -225,6 +173,8 @@ function PermissionsStep({ permissions }) {
 
   return (
     <ScrollView
+      bounces={false}
+      overScrollMode="never"
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.permissionsScrollContent}
@@ -243,8 +193,8 @@ function PermissionsStep({ permissions }) {
               accessibilityRole="button"
               accessibilityLabel={
                 granted
-                  ? `${item.title} permitida`
-                  : `Permitir ${item.title.toLowerCase()}`
+                  ? `${item.title}: acesso permitido`
+                  : `${denied ? "Abrir Ajustes para" : "Permitir"} ${item.title.toLowerCase()}`
               }
               disabled={granted || Boolean(requesting)}
               onPress={() => handlePermission(item.id)}
@@ -263,49 +213,29 @@ function PermissionsStep({ permissions }) {
                 <Ionicons
                   name={granted ? "checkmark" : item.icon}
                   size={22}
-                  color={granted ? "#0b160e" : "#ffb21d"}
+                  color={granted ? "#171000" : "#ffaa00"}
                 />
               </View>
               <View style={styles.permissionCopy}>
-                <View style={styles.permissionTitleRow}>
-                  <Text style={styles.permissionCardTitle}>{item.title}</Text>
-                  <Text
-                    style={[
-                      styles.permissionBadge,
-                      !item.essential && styles.permissionBadgeOptional,
-                    ]}
-                  >
-                    {item.essential ? "ESSENCIAL" : "OPCIONAL"}
-                  </Text>
-                </View>
+                <Text style={styles.permissionCardTitle}>{item.title}</Text>
                 <Text style={styles.permissionCardDescription}>
                   {item.description}
                 </Text>
-                <Text
-                  style={[
-                    styles.permissionStatus,
-                    granted && styles.permissionStatusGranted,
-                  ]}
-                >
-                  {isRequesting
-                    ? "Solicitando…"
-                    : granted
-                      ? "Permitido"
-                      : denied
-                        ? "Não permitido · toque para abrir Ajustes"
-                        : "Toque para permitir"}
-                </Text>
               </View>
-              {!granted && (
-                <Ionicons name="chevron-forward" size={20} color="#777" />
-              )}
+              <Text
+                style={[
+                  styles.permissionStatus,
+                  granted && styles.permissionStatusGranted,
+                ]}
+              >
+                {isRequesting ? "Aguarde…" : granted ? "Ativado" : denied ? "Ajustes" : "Permitir"}
+              </Text>
             </Pressable>
           );
         })}
       </View>
       <Text style={styles.permissionsNote}>
-        Você pode continuar sem conceder tudo e alterar essas escolhas depois
-        nos Ajustes do dispositivo.
+        Você pode mudar os acessos nos Ajustes.
       </Text>
     </ScrollView>
   );
@@ -314,6 +244,8 @@ function PermissionsStep({ permissions }) {
 function ViewfinderCustomizer({ draft, onChange }) {
   return (
     <ScrollView
+      bounces={false}
+      overScrollMode="never"
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
       contentContainerStyle={styles.customizerScrollContent}
@@ -388,7 +320,7 @@ function ViewfinderCustomizer({ draft, onChange }) {
   );
 }
 
-function TopBarCustomizer({ controls, onChange }) {
+function TopBarCustomizer({ controls, onChange, onDragStateChange }) {
   const selected = normalizeTopBarControls(controls);
   const available = TOP_BAR_CONTROLS.filter(
     (control) => !selected.includes(control.id),
@@ -407,6 +339,8 @@ function TopBarCustomizer({ controls, onChange }) {
 
   return (
     <ScrollView
+      bounces={false}
+      overScrollMode="never"
       scrollEnabled={!draggingControl}
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
@@ -427,7 +361,10 @@ function TopBarCustomizer({ controls, onChange }) {
         controls={selected}
         onChange={onChange}
         onRemove={remove}
-        onDragStateChange={setDraggingControl}
+        onDragStateChange={(dragging) => {
+          setDraggingControl(dragging);
+          onDragStateChange(dragging);
+        }}
       />
 
       {available.length > 0 && (
@@ -449,7 +386,7 @@ function TopBarCustomizer({ controls, onChange }) {
                     pressed && styles.buttonPressed,
                   ]}
                 >
-                  <Ionicons name={control.icon} size={18} color="#ffb21d" />
+                  <Ionicons name={control.icon} size={18} color="#ffaa00" />
                   <Text style={styles.availableControlText}>
                     {control.label}
                   </Text>
@@ -463,96 +400,53 @@ function TopBarCustomizer({ controls, onChange }) {
   );
 }
 
-function Slide({
-  item,
-  width,
-  draft,
-  onDraftChange,
-  onControlsChange,
-  permissions,
-}) {
-  if (
-    item.id === "viewfinder" ||
-    item.id === "topbar" ||
-    item.id === "permissions"
-  ) {
-    return (
-      <LinearGradient
-        colors={["#1b1208", "#080706", "#000000"]}
-        style={[styles.slide, styles.customizerSlide, { width }]}
-      >
-        <View style={styles.customizerHeading}>
-          <Text style={styles.eyebrow}>{item.eyebrow}</Text>
-          <Text style={styles.customizerTitle}>{item.title}</Text>
-          <Text style={styles.customizerDescription}>{item.description}</Text>
-        </View>
-        {item.id === "viewfinder" ? (
-          <ViewfinderCustomizer draft={draft} onChange={onDraftChange} />
-        ) : item.id === "topbar" ? (
-          <TopBarCustomizer
-            controls={draft.topBarControls}
-            onChange={onControlsChange}
-          />
-        ) : (
-          <PermissionsStep permissions={permissions} />
-        )}
-      </LinearGradient>
-    );
-  }
-
-  const content = (
-    <>
-      <View style={styles.visualArea}>
-        {item.id === "control" && <ControlVisual />}
-        {item.id === "style" && <StyleVisual />}
-        {item.id === "ready" && <ReadyVisual />}
-      </View>
-
-      <View style={styles.copyBlock}>
-        <Text style={styles.eyebrow}>{item.eyebrow}</Text>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.description}>{item.description}</Text>
-      </View>
-    </>
-  );
-
-  if (item.id === "welcome") {
-    return (
-      <ImageBackground source={PHOTO} style={[styles.slide, { width }]}>
-        <LinearGradient
-          colors={[
-            "rgba(0, 0, 0, 0.06)",
-            "rgba(0, 0, 0, 0.12)",
-            "rgba(0, 0, 0, 0.94)",
-          ]}
-          locations={[0, 0.42, 0.82]}
-          style={styles.slideBackground}
-        >
-          {content}
-        </LinearGradient>
-      </ImageBackground>
-    );
-  }
-
+function Slide({ item, width, height, safeTop, safeBottom, draft, onDraftChange,
+  onControlsChange, permissions, diagnosticsEnabled, onDiagnosticsChange }) {
+  const [draggingControl, setDraggingControl] = useState(false);
+  const editorial = Boolean(PHOTOS[item.id]);
   return (
-    <LinearGradient
-      colors={
-        item.id === "control"
-          ? ["#1d1309", "#080706", "#000000"]
-          : ["#171717", "#070707", "#000000"]
-      }
-      style={[styles.slide, { width }]}
-    >
-      {content}
-    </LinearGradient>
+    <View style={[styles.slide, { width }]}>
+      <ScrollView
+        bounces={false}
+        overScrollMode="never"
+        scrollEnabled={!draggingControl}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.pageContent, { minHeight: height, paddingBottom: safeBottom + 150 }]}>
+        {editorial && (
+          <View style={[styles.hero, { height: Math.max(220, height * 0.54) }]}>
+            {item.id === "style" ? (
+              <View style={styles.photoTriptych}>
+                {[require("../../assets/images/onboarding/gold.jpg"), PHOTOS.style, PHOTO].map((source, index) => (
+                  <Image key={index} source={source} style={[styles.triptychPhoto, index === 1 && styles.triptychCenter]} />
+                ))}
+              </View>
+            ) : <Image source={PHOTOS[item.id]} style={styles.heroPhoto} />}
+            <LinearGradient colors={["rgba(0,0,0,0.28)", "transparent", "#000"]}
+              locations={[0, 0.45, 1]} style={styles.heroShade} />
+          </View>
+        )}
+        <View style={[styles.copyBlock, !editorial && { paddingTop: safeTop + 92 }]}>
+          <Text accessibilityRole="header" style={[styles.title, !editorial && styles.customizerTitle]}>{item.title}</Text>
+          <Text style={styles.description}>{item.description}</Text>
+        </View>
+        {item.id === "viewfinder" && <ViewfinderCustomizer draft={draft} onChange={onDraftChange} />}
+        {item.id === "topbar" && <TopBarCustomizer controls={draft.topBarControls} onChange={onControlsChange} onDragStateChange={setDraggingControl} />}
+        {item.id === "permissions" && <PermissionsStep permissions={permissions} />}
+        {item.id === "beta" && <BetaStep diagnosticsEnabled={diagnosticsEnabled} onDiagnosticsChange={onDiagnosticsChange} />}
+      </ScrollView>
+    </View>
   );
 }
 
-export default function Welcome({ permissions }) {
-  const { width } = useWindowDimensions();
+export default function Welcome({ permissions, embedded = false, onComplete }) {
+  const { width, height } = useWindowDimensions();
+  const [reduceMotion, setReduceMotion] = useState(false);
   const insets = useSafeAreaInsets();
   const scrollRef = useRef(null);
   const isClosingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const indexRef = useRef(0);
   const screenOpacity = useRef(new Animated.Value(0)).current;
   const screenTranslateY = useRef(new Animated.Value(10)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -568,6 +462,8 @@ export default function Welcome({ permissions }) {
     topBarControls,
     setTopBarControls,
     setFirstTime,
+    diagnosticsEnabled,
+    setDiagnosticsEnabled,
   } = useSettings();
   const [draft, setDraft] = useState(() => ({
     gridVisible,
@@ -584,16 +480,32 @@ export default function Welcome({ permissions }) {
   const safeBottom = insets.bottom || initialWindowMetrics?.insets.bottom || 16;
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduceMotion);
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ x: indexRef.current * width, animated: false });
+  }, [width]);
+
+  useEffect(() => {
+    if (isClosingRef.current) return;
     const entranceAnimation = Animated.parallel([
       Animated.timing(screenOpacity, {
         toValue: 1,
-        duration: 420,
+        duration: reduceMotion ? 0 : 420,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(screenTranslateY, {
         toValue: 0,
-        duration: 420,
+        duration: reduceMotion ? 0 : 420,
         easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
@@ -602,7 +514,7 @@ export default function Welcome({ permissions }) {
     entranceAnimation.start();
 
     return () => entranceAnimation.stop();
-  }, [screenOpacity, screenTranslateY]);
+  }, [reduceMotion, screenOpacity, screenTranslateY]);
 
   const finish = (shouldApply = false) => {
     if (isClosingRef.current) return;
@@ -611,18 +523,19 @@ export default function Welcome({ permissions }) {
     Animated.parallel([
       Animated.timing(screenOpacity, {
         toValue: 0,
-        duration: 260,
+        duration: reduceMotion ? 0 : 260,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(screenTranslateY, {
         toValue: 6,
-        duration: 260,
+        duration: reduceMotion ? 0 : 260,
         easing: Easing.in(Easing.cubic),
         useNativeDriver: true,
       }),
-    ]).start(({ finished }) => {
-      if (!finished) return;
+    ]).start(() => {
+      // An interrupted fade must still release the presentation and its touches.
+      if (!mountedRef.current) return;
       if (shouldApply) {
         setGridVisible(draft.gridVisible);
         setLevelVisible(draft.levelVisible);
@@ -631,6 +544,7 @@ export default function Welcome({ permissions }) {
         setTopBarControls(normalizeTopBarControls(draft.topBarControls));
       }
       setFirstTime(false);
+      onComplete?.();
     });
   };
 
@@ -639,8 +553,15 @@ export default function Welcome({ permissions }) {
   };
 
   const goTo = (index) => {
-    scrollRef.current?.scrollTo({ x: index * width, animated: true });
+    scrollRef.current?.scrollTo({ x: index * width, animated: !reduceMotion });
+    indexRef.current = index;
     setCurrentIndex(index);
+  };
+
+  const skip = () => {
+    const betaIndex = FLOW.findIndex((item) => item.id === "beta");
+    if (betaIndex > currentIndex) goTo(betaIndex);
+    else finish(true);
   };
 
   const advance = () => {
@@ -654,16 +575,22 @@ export default function Welcome({ permissions }) {
 
   const handleScrollEnd = (event) => {
     const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
-    setCurrentIndex(Math.max(0, Math.min(nextIndex, FLOW.length - 1)));
+    indexRef.current = Math.max(0, Math.min(nextIndex, FLOW.length - 1));
+    setCurrentIndex(indexRef.current);
   };
 
+  const Presentation = embedded ? View : Modal;
+  const presentationProps = embedded
+    ? { style: styles.container }
+    : {
+        animationType: "none",
+        presentationStyle: "fullScreen",
+        statusBarTranslucent: true,
+        onRequestClose: skip,
+      };
+
   return (
-    <Modal
-      animationType="none"
-      presentationStyle="fullScreen"
-      statusBarTranslucent
-      onRequestClose={() => finish(false)}
-    >
+    <Presentation {...presentationProps}>
       <View style={styles.container}>
         <Animated.View
           style={[
@@ -689,6 +616,11 @@ export default function Welcome({ permissions }) {
                 key={item.id}
                 item={item}
                 width={width}
+                height={height}
+                safeTop={safeTop}
+                safeBottom={safeBottom}
+                diagnosticsEnabled={diagnosticsEnabled}
+                onDiagnosticsChange={setDiagnosticsEnabled}
                 draft={draft}
                 onDraftChange={updateDraft}
                 onControlsChange={(controls) =>
@@ -702,7 +634,10 @@ export default function Welcome({ permissions }) {
           <View pointerEvents="box-none" style={styles.chrome}>
             <LinearGradient
               pointerEvents="none"
-              colors={["rgba(0,0,0,0.76)", "transparent"]}
+              colors={PHOTOS[FLOW[currentIndex].id]
+                ? ["rgba(0,0,0,0.76)", "transparent"]
+                : ["#000", "#000", "transparent"]}
+              locations={PHOTOS[FLOW[currentIndex].id] ? [0, 1] : [0, 0.7, 1]}
               style={styles.headerShade}
             />
 
@@ -711,9 +646,9 @@ export default function Welcome({ permissions }) {
               {!isLastSlide && (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel="Pular apresentação"
+                  accessibilityLabel="Pular para a etapa final"
                   hitSlop={12}
-                  onPress={() => finish(false)}
+                  onPress={skip}
                   style={({ pressed }) => [
                     styles.skipButton,
                     pressed && styles.buttonPressed,
@@ -731,12 +666,14 @@ export default function Welcome({ permissions }) {
                 style={styles.footerShade}
               />
 
+              <View style={styles.progressRow}>
               <View style={styles.pagination}>
                 {FLOW.map((item, index) => (
                   <Pressable
                     key={item.id}
                     accessibilityRole="button"
                     accessibilityLabel={`Ir para a etapa ${index + 1}`}
+                    accessibilityState={{ selected: index === currentIndex }}
                     hitSlop={8}
                     onPress={() => goTo(index)}
                     style={[
@@ -745,6 +682,9 @@ export default function Welcome({ permissions }) {
                     ]}
                   />
                 ))}
+              </View>
+
+              <Text style={styles.stepCount}>{String(currentIndex + 1).padStart(2, "0")} <Text style={styles.stepCountMuted}>/ {String(FLOW.length).padStart(2, "0")}</Text></Text>
               </View>
 
               <View style={styles.actions}>
@@ -788,6 +728,6 @@ export default function Welcome({ permissions }) {
           </View>
         </Animated.View>
       </View>
-    </Modal>
+    </Presentation>
   );
 }

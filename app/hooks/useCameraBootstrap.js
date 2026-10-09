@@ -7,7 +7,7 @@ import { loadAllLUTs, loadCustomLUTs } from "../utils/lutProcessor";
 
 const MEDIA_PERMISSION_TYPES = ["photo", "video"];
 
-export default function useCameraBootstrap({ customLuts }) {
+export default function useCameraBootstrap({ customLuts, loadLuts = true }) {
   const [cameraPermission, setCameraPermission] = useState(null);
   const [mediaPermission, setMediaPermission] = useState(null);
   const [locationPermission, setLocationPermission] = useState(null);
@@ -111,6 +111,7 @@ export default function useCameraBootstrap({ customLuts }) {
   }, [refreshPermissions]);
 
   useEffect(() => {
+    if (!loadLuts) return;
     let isMounted = true;
 
     const prepareLuts = async () => {
@@ -128,7 +129,7 @@ export default function useCameraBootstrap({ customLuts }) {
     return () => {
       isMounted = false;
     };
-  }, [customLuts]);
+  }, [customLuts, loadLuts]);
 
   return {
     cameraPermission,

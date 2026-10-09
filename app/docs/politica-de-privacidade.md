@@ -82,7 +82,9 @@ Algumas funções dependem de serviços externos. Nesses casos, dados necessári
 
 Esses serviços têm políticas próprias. O Komorebi não controla as práticas de privacidade, disponibilidade ou segurança desses terceiros.
 
-O Sentry pode receber esses dados técnicos automaticamente quando o app apresenta uma falha ou durante a amostragem de desempenho. O Komorebi não configura o envio de fotos, arquivos RAW, LUTs ou coordenadas GPS ao Sentry. Informações técnicas de rede também podem ser processadas pelo serviço ao receber os eventos. Consulte a [política de privacidade do Sentry](https://sentry.io/privacy/) para saber como ele trata e retém esses dados.
+O compartilhamento de diagnósticos vem ativado por padrão e pode ser desativado na apresentação beta ou em **Configurações > Sobre > Compartilhar diagnósticos**. A preferência é salva no dispositivo. Quando desativado, o Komorebi não inicializa o Sentry nas próximas aberturas e encerra o monitoramento na sessão atual. Dados já enviados não são excluídos ao desativar.
+
+Quando o compartilhamento está ativado, o Sentry pode receber esses dados técnicos automaticamente quando o app apresenta uma falha ou durante a amostragem de desempenho. O Komorebi não configura o envio de fotos, arquivos RAW, LUTs ou coordenadas GPS ao Sentry. Informações técnicas de rede também podem ser processadas pelo serviço ao receber os eventos. Consulte a [política de privacidade do Sentry](https://sentry.io/privacy/) para saber como ele trata e retém esses dados.
 
 ---
 

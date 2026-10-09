@@ -1,3 +1,4 @@
+import { configureDiagnostics } from "../utils/diagnostics";
 import { DEFAULT_CONTROL_GESTURES, normalizeControlGestures } from "../utils/controlGestures";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
@@ -43,6 +44,7 @@ export const DEFAULT_SETTINGS = {
   photographicStyles3Enabled: false,
   saveOriginalWithoutEffects: false,
   firstTime: true,
+  diagnosticsEnabled: true,
   customLuts: [],
   topBarBelow: false,
   topBarControls: getDefaultTopBarControls(),
@@ -126,6 +128,11 @@ export const SettingsProvider = ({ children }) => {
   const [saveOriginalWithoutEffects, setSaveOriginalWithoutEffects] = useState(
     DEFAULT_SETTINGS.saveOriginalWithoutEffects,
   );
+  const [diagnosticsEnabled, updateDiagnosticsEnabled] = useState(DEFAULT_SETTINGS.diagnosticsEnabled);
+  const setDiagnosticsEnabled = (enabled) => {
+    configureDiagnostics(enabled);
+    updateDiagnosticsEnabled(enabled);
+  };
   const [firstTime, setFirstTime] = useState(DEFAULT_SETTINGS.firstTime);
   const [customLuts, setCustomLuts] = useState(DEFAULT_SETTINGS.customLuts);
   const [topBarBelow, setTopBarBelow] = useState(DEFAULT_SETTINGS.topBarBelow);
@@ -169,6 +176,7 @@ export const SettingsProvider = ({ children }) => {
         );
         setPhotographicStyles3Enabled(savedSettings.photographicStyles3Enabled);
         setSaveOriginalWithoutEffects(savedSettings.saveOriginalWithoutEffects);
+        setDiagnosticsEnabled(savedSettings.diagnosticsEnabled);
         setFirstTime(savedSettings.firstTime);
         setCustomLuts(savedSettings.customLuts);
         setTopBarBelow(savedSettings.topBarBelow);
@@ -388,6 +396,12 @@ export const SettingsProvider = ({ children }) => {
     }
   }, [photographicStyles3Enabled, loading]);
 
+  useEffect(() => {
+    if (!loading) {
+      saveStoredSetting(SETTINGS_STORAGE_KEYS.DIAGNOSTICS_ENABLED, diagnosticsEnabled.toString());
+    }
+  }, [diagnosticsEnabled, loading]);
+
   // 💾 Salvar "Primeira vez"
   useEffect(() => {
     if (!loading) {
@@ -527,6 +541,8 @@ export const SettingsProvider = ({ children }) => {
     setSaveOriginalWithoutEffects,
     firstTime,
     setFirstTime,
+    diagnosticsEnabled,
+    setDiagnosticsEnabled,
     customLuts,
     setCustomLuts,
     topBarControls,

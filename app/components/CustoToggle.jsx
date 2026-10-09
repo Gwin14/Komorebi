@@ -10,6 +10,7 @@ export default function CustomToggle({
   grouped = false,
   last = false,
   label,
+  style,
   value,
   onValueChange,
 }) {
@@ -43,6 +44,7 @@ export default function CustomToggle({
         grouped && styles.wrapperGrouped,
         grouped && last && styles.wrapperGroupedLast,
         disabled && styles.wrapperDisabled,
+        style,
       ]}
     >
       {label && (
