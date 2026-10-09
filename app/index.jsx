@@ -32,6 +32,8 @@ import Welcome from "./components/Welcome";
 import { useSettings } from "./context/SettingsContext";
 import useCameraActivity from "./hooks/useCameraActivity";
 import useCameraBootstrap from "./hooks/useCameraBootstrap";
+import { warmGalleryPhotos } from "./utils/galleryPhotos";
+import { clearGalleryCache } from "./utils/galleryCache";
 import useCameraControlButton from "./hooks/useCameraControlButton";
 import useCameraGestures from "./hooks/useCameraGestures";
 import useCompositionScan from "./hooks/useCompositionScan";
@@ -161,6 +163,22 @@ export default function App() {
   const { orientation: scanOrientation } = useDeviceOrientationState();
   const [pictureSize, setPictureSize] = useState(null);
   const [cameraReady, setCameraReady] = useState(false);
+  useEffect(() => {
+    if (hasMediaPermission === false) clearGalleryCache();
+    if (!cameraReady || !hasMediaPermission) return;
+    let current = true;
+    // Let the first live camera frames commit before the small library query.
+    const timer = setTimeout(() => {
+      const project = projects.find((item) => item.id === activeProjectId);
+      void warmGalleryPhotos(project, () => current).catch((error) =>
+        console.warn("Não foi possível preparar a galeria", error),
+      );
+    }, 300);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [cameraReady, hasMediaPermission, activeProjectId, projects]);
   const startup = useCameraStartup({
     loading,
     ready:

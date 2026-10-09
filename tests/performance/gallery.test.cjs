@@ -138,3 +138,102 @@ test("unavailable previews retain asset IDs so failed batch actions can be retri
     console.warn = warn;
   }
 });
+
+test("fast grid publishes its first page before a slow next page and performs no file/rating reads", async () => {
+  const next = deferred();
+  const previews = [], queries = [];
+  let infoReads = 0, ratingReads = 0;
+  const { loadGalleryPhotos } = loadModule("app/utils/galleryPhotos.js", {
+    "expo-media-library": {
+      getAlbumsAsync: async () => [{ title: "Komorebi" }],
+      getAssetsAsync: async (options) => {
+        queries.push(options);
+        return options.after ? next.promise : {
+          assets: [{ id: "a", uri: "ph://a", creationTime: 2 }], hasNextPage: true, endCursor: "next",
+        };
+      },
+      getAssetInfoAsync: async () => { infoReads++; },
+      SortBy: { creationTime: "creationTime" },
+    },
+    "./projects": { DEFAULT_ALBUM_NAME: "Komorebi" },
+    "./photoCatalogMetadata": { readPhotoRating: async () => { ratingReads++; } },
+  });
+  const result = loadGalleryPhotos(null, () => true, (photos, complete) => previews.push({ photos, complete }), false);
+  await flush();
+  assert.equal(previews.length, 1);
+  assert.equal(previews[0].photos[0].id, "a");
+  assert.equal(previews[0].complete, false);
+  assert.equal(queries[0].first, 24);
+  assert.equal(queries[1].first, 100);
+  next.resolve({ assets: [{ id: "b", uri: "ph://b", creationTime: 1 }], hasNextPage: false });
+  assert.deepEqual((await result).map((photo) => photo.id), ["a", "b"]);
+  assert.equal(previews.at(-1).complete, true);
+  assert.equal(infoReads, 0);
+  assert.equal(ratingReads, 0);
+});
+
+test("cancelled progressive load never publishes a late page", async () => {
+  const next = deferred();
+  let current = true;
+  const previews = [];
+  const { loadGalleryPhotos } = loadModule("app/utils/galleryPhotos.js", {
+    "expo-media-library": {
+      getAlbumsAsync: async () => [{ title: "Komorebi" }],
+      getAssetsAsync: () => next.promise,
+      SortBy: { creationTime: "creationTime" },
+    },
+    "./projects": { DEFAULT_ALBUM_NAME: "Komorebi" },
+    "./photoCatalogMetadata": {},
+  });
+  const result = loadGalleryPhotos(null, () => current, (photos) => previews.push(photos), false);
+  await flush();
+  current = false;
+  next.resolve({ assets: [{ id: "old", uri: "ph://old", creationTime: 1 }] });
+  assert.equal(await result, null);
+  assert.deepEqual(previews, []);
+});
+
+test("camera warm-up reads at most 24 descriptors, respects cancellation and never opens originals", async () => {
+  let queries = 0, files = 0;
+  const snapshots = new Map();
+  const { warmGalleryPhotos } = loadModule("app/utils/galleryPhotos.js", {
+    "expo-media-library": {
+      getAlbumsAsync: async () => [{ title: "Komorebi" }],
+      getAssetsAsync: async (options) => {
+        queries++;
+        assert.equal(options.first, 24);
+        return { assets: [{ id: "a", uri: "ph://a", creationTime: 1 }] };
+      },
+      getAssetInfoAsync: async () => { files++; },
+      SortBy: { creationTime: "creationTime" },
+    },
+    "./projects": { DEFAULT_ALBUM_NAME: "Komorebi" },
+    "./photoCatalogMetadata": { readPhotoRating: async () => { files++; } },
+    "./galleryCache": {
+      getCachedGalleryPhotos: (project) => snapshots.get(project),
+      cacheGalleryPhotos: (project, photos) => snapshots.set(project, photos),
+    },
+  });
+  await warmGalleryPhotos(null, () => false);
+  assert.equal(queries, 0);
+  await warmGalleryPhotos(null, () => true);
+  await warmGalleryPhotos(null, () => true);
+  assert.equal(queries, 1);
+  assert.equal(files, 0);
+  assert.equal(snapshots.get(null)[0].id, "a");
+});
+
+test("gallery snapshots are isolated by album, bounded and cleared on permission revocation", () => {
+  const cache = loadModule("app/utils/galleryCache.js", {
+    "./projects": { DEFAULT_ALBUM_NAME: "Komorebi", getProjectAlbumName: (project) => project.name },
+  });
+  const photos = Array.from({ length: 1000 }, (_, id) => ({ id }));
+  cache.cacheGalleryPhotos(null, photos);
+  cache.cacheGalleryPhotos({ name: "A" }, [{ id: "a" }]);
+  assert.equal(cache.getCachedGalleryPhotos(null).length, 240);
+  assert.deepEqual(cache.getCachedGalleryPhotos({ name: "A" }), [{ id: "a" }]);
+  for (const name of ["B", "C", "D"]) cache.cacheGalleryPhotos({ name }, []);
+  assert.equal(cache.getCachedGalleryPhotos(null), undefined);
+  cache.clearGalleryCache();
+  assert.equal(cache.getCachedGalleryPhotos({ name: "D" }), undefined);
+});

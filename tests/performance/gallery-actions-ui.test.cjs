@@ -12,7 +12,7 @@ function nodes(tree, predicate, result = []) {
   return result;
 }
 
-async function fixture(rate) {
+async function fixture(rate, options = {}) {
   const hooks = createHooks();
   const photos = ["a", "b"].map((id, index) => ({ id, uri: `file:///${id}.jpg`, creationTime: index + 1, rating: 2 }));
   const permission = { granted: true };
@@ -38,6 +38,11 @@ async function fixture(rate) {
     },
     "@expo/vector-icons": { Ionicons: "Icon" },
     "expo-blur": { BlurView: "BlurView" },
+    "expo-image": { Image: "Image" },
+    "../hooks/useGalleryPhotoDetails": () => () => {},
+    "../utils/galleryCache": { getCachedGalleryPhotos: () => options.cached, galleryCacheKey: () => "Komorebi", cacheGalleryPhotos() {}, clearGalleryCache() {} },
+    "./CustoToggle": "CustomToggle",
+    "./PhotoDepthScan": "PhotoDepthScan",
     "expo-status-bar": { StatusBar: "StatusBar" },
     "expo-router": { useRouter: () => ({ push() {} }) },
     "expo-media-library": {
@@ -48,7 +53,7 @@ async function fixture(rate) {
     "../utils/exifFormatter": { exifHandler: (id, callback) => callback({}) },
     "../utils/exifSchema": { EXIF_SCHEMA: {} },
     "../utils/projects": { getProjectAlbumName: () => "Komorebi" },
-    "../utils/galleryPhotos": { loadGalleryPhotos: async () => photos },
+    "../utils/galleryPhotos": { loadGalleryPhotos: options.load || (async () => photos) },
     "../utils/galleryActions": {
       rateGalleryPhotos: rate || (async () => ({ succeeded: ["a"], failed: [{ id: "b" }], pending: [] })),
       shareGalleryPhotos: async (ids) => { shared = ids; },
@@ -63,8 +68,8 @@ async function fixture(rate) {
     "./PhotoRatingControls": "PhotoRatingControls", "./GalleryActionProgress": "GalleryActionProgress",
   });
   const render = () => hooks.render(Gallery);
-  render(); await flush();
-  return { render, photos, alerts, hooks, get deleted() { return deleted; }, get shared() { return shared; } };
+  const initialTree = render(); await flush();
+  return { render, initialTree, photos, alerts, hooks, get deleted() { return deleted; }, get shared() { return shared; } };
 }
 
 function button(tree, label) {
@@ -98,7 +103,7 @@ test("long press selects without opening a viewer; successful ratings leave only
 
 test("batch share uses selected IDs; deletion awaits confirmation and cancellation keeps the selection", async () => {
   const f = await fixture();
-  button(f.render(), "Selecionar").props.onPress();
+  nodes(nodes(f.render(), (node) => node.type === "ScreenHeader")[0].props.right, (node) => node.type === "ProjectSwipeList")[0].props.onToggleSelection();
   tile(f.render(), f.photos[0]).props.onPress();
   await button(f.render(), "Compartilhar").props.onPress();
   assert.deepEqual(f.shared, ["a"]);
@@ -109,12 +114,12 @@ test("batch share uses selected IDs; deletion awaits confirmation and cancellati
   await dialog[2].find((choice) => choice.text === "Apagar").onPress();
   assert.deepEqual(f.deleted, ["a"]);
   assert.equal(tile(f.render(), f.photos[0]).props.accessibilityState.checked, true);
-  button(f.render(), "Cancelar seleção").props.onPress();
+  nodes(nodes(f.render(), (node) => node.type === "ScreenHeader")[0].props.right, (node) => node.type === "ProjectSwipeList")[0].props.onToggleSelection();
   assert.equal(nodes(f.render(), (node) => node.type === "ScreenHeader")[0].props.title, "Galeria");
   f.hooks.dispose();
 });
 
-test("individual rating is in Actions and switching panels keeps a single panel open", async () => {
+test("individual rating remains accessible in the consolidated photo details panel", async () => {
   const previousFrame = global.requestAnimationFrame;
   global.requestAnimationFrame = (callback) => callback();
   const f = await fixture();
@@ -123,19 +128,68 @@ test("individual rating is in Actions and switching panels keeps a single panel 
     let tree = f.render();
     const viewer = () => nodes(tree, (node) => node.type === "Modal")[1];
     assert.equal(viewer().props.visible, true);
-    nodes(viewer(), (node) => node.props?.accessibilityLabel === "Ações da foto")[0].props.onPress();
-    tree = f.render();
-    assert.equal(nodes(viewer(), (node) => node.type === "PhotoRatingControls").length, 1);
-    assert.equal(nodes(viewer(), (node) => node.type === "Text" && node.props.children === "Ações").length, 1);
     nodes(viewer(), (node) => node.props?.accessibilityLabel === "Informações da foto")[0].props.onPress();
     tree = f.render();
-    assert.equal(nodes(viewer(), (node) => node.type === "PhotoRatingControls").length, 0);
-    assert.equal(nodes(viewer(), (node) => node.type === "Text" && node.props.children === "Informações").length, 1);
+    const panel = () => nodes(viewer(), (node) => node.type === "AnimatedView" && node.props.pointerEvents && nodes(node, (child) => child.type === "PhotoRatingControls").length === 1).at(-1);
+    assert.equal(panel().props.pointerEvents, "auto");
+    assert.equal(nodes(panel(), (node) => node.type === "PhotoRatingControls").length, 1);
     viewer().props.onRequestClose();
     tree = f.render();
     assert.equal(viewer().props.visible, true);
+    assert.equal(panel().props.pointerEvents, "none");
   } finally {
     f.hooks.dispose();
     global.requestAnimationFrame = previousFrame;
+  }
+});
+
+test("a cached gallery renders on the first frame while native refresh is still pending", async () => {
+  let publish;
+  const cached = [{ id: "recent", uri: "ph://recent", creationTime: 10 }];
+  const f = await fixture(undefined, {
+    cached,
+    load: (_project, _current, onPreview) => {
+      publish = onPreview;
+      return new Promise(() => {});
+    },
+  });
+  assert.equal(nodes(f.initialTree, (node) => node.type === "LoadingScreen").length, 0);
+  const grid = nodes(f.initialTree, (node) => node.type === "SectionList")[0];
+  assert.equal(grid.props.sections[0].data[0][0].id, "recent");
+  publish([{ id: "new", uri: "ph://new", creationTime: 11 }], false);
+  let currentGrid = nodes(f.render(), (node) => node.type === "SectionList")[0];
+  assert.deepEqual(currentGrid.props.sections.flatMap((section) => section.data.flat()).map((photo) => photo.id), ["new", "recent"]);
+  publish([{ id: "new", uri: "ph://new", creationTime: 11 }], true);
+  currentGrid = nodes(f.render(), (node) => node.type === "SectionList")[0];
+  assert.deepEqual(currentGrid.props.sections.flatMap((section) => section.data.flat()).map((photo) => photo.id), ["new"]);
+  f.hooks.dispose();
+});
+
+test("gallery viewability accepts section headers and footers as well as photo rows", async () => {
+  const cached = [
+    { id: "photo-new", uri: "ph://photo-new", creationTime: Date.UTC(2025, 0, 3, 12) },
+    { id: "photo-old", uri: "ph://photo-old", creationTime: Date.UTC(2025, 0, 1, 12) },
+  ];
+  const f = await fixture(undefined, { cached, load: () => new Promise(() => {}) });
+  try {
+    const grid = nodes(f.initialTree, (node) => node.type === "SectionList")[0];
+    const keys = new Set();
+    for (const section of grid.props.sections) {
+      // VirtualizedSectionList._convertViewable passes the section object for
+      // both header/footer tokens, using index 0 when the item index is null.
+      const headerKey = grid.props.keyExtractor(section, 0);
+      assert.equal(typeof headerKey, "string");
+      assert.equal(grid.props.keyExtractor(section, 0), headerKey);
+      assert.ok(!keys.has(headerKey));
+      keys.add(headerKey);
+      for (const [index, row] of section.data.entries()) {
+        const key = grid.props.keyExtractor(row, index);
+        assert.equal(typeof key, "string");
+        assert.ok(!keys.has(key));
+        keys.add(key);
+      }
+    }
+  } finally {
+    f.hooks.dispose();
   }
 });

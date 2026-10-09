@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { Image } from "expo-image";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -11,7 +12,6 @@ import {
   Animated,
   Easing,
   FlatList,
-  Image,
   Modal,
   PanResponder,
   Platform,
@@ -34,9 +34,11 @@ import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
 import { getProjectAlbumName } from "../utils/projects";
 import { loadGalleryPhotos } from "../utils/galleryPhotos";
+import { cacheGalleryPhotos, clearGalleryCache, galleryCacheKey, getCachedGalleryPhotos } from "../utils/galleryCache";
 import ScreenHeader from "./ScreenHeader";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
+import useGalleryPhotoDetails from "../hooks/useGalleryPhotoDetails";
 import ProjectChecklist from "./ProjectChecklist";
 import CustomToggle from "./CustoToggle";
 import ProjectSwipeList from "./ProjectSwipeList";
@@ -49,7 +51,14 @@ import PhotoRatingControls from "./PhotoRatingControls";
 import GalleryActionProgress from "./GalleryActionProgress";
 
 const PHOTOS_PER_ROW = 4;
+const GALLERY_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 10 };
 const INFO_SWIPE_DISTANCE = 56;
+
+// SectionList also extracts keys for header/footer viewability tokens, whose
+// item is a section object rather than an array of photos.
+const getGalleryListItemKey = (item, index) => Array.isArray(item)
+  ? `photos:${item.map((photo) => photo.id).join("-")}`
+  : `section:${item.key ?? index}`;
 
 const startOfDay = (date) => {
   const normalizedDate = new Date(date);
@@ -107,7 +116,7 @@ const groupPhotosByDate = (photos) => {
     for (let index = 0; index < group.photos.length; index += PHOTOS_PER_ROW) {
       rows.push(group.photos.slice(index, index + PHOTOS_PER_ROW));
     }
-    return { title: getSectionTitle(group.timestamp), data: rows };
+    return { key: getDateKey(group.timestamp), title: getSectionTitle(group.timestamp), data: rows };
   });
 };
 
@@ -128,13 +137,15 @@ export default function Galery() {
   const [depthState, setDepthState] = useState(null);
   const [depthCreateCopy, setDepthCreateCopy] = useState(false);
   const [metadataRevision, setMetadataRevision] = useState(0);
+  const [galleryRevision, setGalleryRevision] = useState(0);
   const photoLoadGeneration = useRef(0);
   const depthScanRef = useRef(null);
   const pendingLibraryRefresh = useRef(false);
   depthScanRef.current = depthScan;
 
-  const [photos, setPhotos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [photos, setPhotos] = useState(() => permission?.granted ? getCachedGalleryPhotos(viewProject) || [] : []);
+  const [loading, setLoading] = useState(() => !permission?.granted || getCachedGalleryPhotos(viewProject) === undefined);
+  const displayedGalleryKey = useRef(galleryCacheKey(viewProject));
   const [viewerVisible, setViewerVisible] = useState(false);
   const viewerVisibleRef = useRef(false);
   viewerVisibleRef.current = viewerVisible;
@@ -164,10 +175,32 @@ export default function Galery() {
       const generation = ++photoLoadGeneration.current;
       const current = () => generation === photoLoadGeneration.current;
       try {
-        if (showLoading) setLoading(true);
-        const resolved = await loadGalleryPhotos(project, current);
+        const key = galleryCacheKey(project);
+        const cached = getCachedGalleryPhotos(project);
+        if (displayedGalleryKey.current !== key) {
+          displayedGalleryKey.current = key;
+          setPhotos(cached || []);
+          setLoading(cached === undefined);
+        } else if (showLoading && cached !== undefined) {
+          // Do not truncate an already open library to the bounded snapshot.
+          setPhotos((previous) => previous.length ? previous : cached);
+          setLoading(false);
+        }
+        const resolved = await loadGalleryPhotos(project, current, (preview, complete) => {
+          if (!current()) return;
+          setLoading(false);
+          setPhotos((previous) => {
+            // Keep unseen rows during refresh until the library has listed
+            // every page, preserving selections outside the first viewport.
+            const ids = new Set(preview.map((photo) => photo.id));
+            return complete ? preview : [...preview, ...previous.filter((photo) => !ids.has(photo.id))];
+          });
+          cacheGalleryPhotos(project, preview);
+        }, false);
         if (current() && resolved) {
           setPhotos(resolved);
+          cacheGalleryPhotos(project, resolved);
+          setGalleryRevision((value) => value + 1);
           void cleanupDeletedDepthBackups().catch((error) =>
             console.warn("Falha ao limpar recuperação de fotos apagadas", error),
           );
@@ -185,6 +218,8 @@ export default function Galery() {
   useEffect(() => {
     if (!permission) return;
     if (!permission.granted) {
+      clearGalleryCache();
+      setPhotos([]);
       requestPermission();
       return;
     }
@@ -220,6 +255,11 @@ export default function Galery() {
     pendingLibraryRefresh.current = false;
     void loadKomorebiPhotos(undefined, false);
   }, [depthScan, operation, loadKomorebiPhotos]);
+
+  const onGalleryViewableItemsChanged = useGalleryPhotoDetails({
+    photos, setPhotos, project: viewProject, enabled: !!permission?.granted,
+    revision: galleryRevision, generation: photoLoadGeneration, selectedAssetId,
+  });
 
   const orderedPhotos = useMemo(
     () => [...photos].sort((a, b) => b.creationTime - a.creationTime),
@@ -829,8 +869,13 @@ export default function Galery() {
       <SectionList
         sections={photoSections}
         extraData={{ selectedIds, selecting, operation }}
-        keyExtractor={(row) => row.map((photo) => photo.id).join("-")}
+        keyExtractor={getGalleryListItemKey}
         stickySectionHeadersEnabled={false}
+        onViewableItemsChanged={onGalleryViewableItemsChanged}
+        viewabilityConfig={GALLERY_VIEWABILITY_CONFIG}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         renderSectionHeader={({ section }) => (
@@ -854,7 +899,15 @@ export default function Galery() {
                 onLongPress={() => { setSelecting(true); toggleSelection(photo.id); }}
                 onPress={() => selecting ? toggleSelection(photo.id) : openViewer(photo)}
               >
-                <Image source={{ uri: photo.uri }} style={styles.image} />
+                <Image
+                  source={{ uri: Platform.OS === "ios" ? `ph://${photo.id}` : photo.uri, cacheKey: `${photo.id}:${photo.modificationTime || 0}` }}
+                  contentFit="cover"
+                  enforceEarlyResizing
+                  cachePolicy="memory-disk"
+                  recyclingKey={photo.id}
+                  transition={0}
+                  style={styles.image}
+                />
                 {selecting && <View style={styles.selectionBadge}><Ionicons name={selectedIds.has(photo.id) ? "checkmark-circle" : "ellipse-outline"} size={25} color={selectedIds.has(photo.id) ? "#ffaa00" : "#fff"} /></View>}
                 {photo.rating > 0 && (
                   <View style={styles.ratingBadge}>
@@ -992,7 +1045,7 @@ export default function Galery() {
                     >
                       <Image
                         source={{ uri: photo.uri }}
-                        resizeMode="cover"
+                        contentFit="cover"
                         style={styles.viewerPhoto}
                       />
                       {viewerVisible && !infoOpen && depthScan?.ready && photo.id === selectedAssetId && depthScan.assetId === photo.id && (
@@ -1069,7 +1122,11 @@ export default function Galery() {
                       ]}
                     >
                       <Image
-                        source={{ uri: item.uri }}
+                        source={{ uri: Platform.OS === "ios" ? `ph://${item.id}` : item.uri, cacheKey: `${item.id}:${item.modificationTime || 0}` }}
+                        contentFit="cover"
+                        enforceEarlyResizing
+                        recyclingKey={item.id}
+                        transition={0}
                         style={styles.thumbnailImage}
                       />
                     </TouchableOpacity>
@@ -1292,13 +1349,23 @@ export default function Galery() {
                       accessibilityRole="button"
                       disabled={!!operation}
                       style={[styles.actionRow, !!operation && styles.disabledAction]}
-                      onPress={() => {
-                        const photoUri = selectedPhoto?.uri;
-                        closeViewer();
-                        router.push({
-                          pathname: "components/ExifFrameWithPhoto",
-                          params: { photoUri },
-                        });
+                      onPress={async () => {
+                        if (!selectedPhoto) return;
+                        const id = selectedPhoto.id;
+                        const job = beginOperation("Preparando foto", 1, false);
+                        if (!job) return;
+                        try {
+                          const info = await MediaLibrary.getAssetInfoAsync(id, { shouldDownloadFromNetwork: true });
+                          const photoUri = info.localUri || info.uri;
+                          if (!photoUri || photoUri.startsWith("ph://")) throw new Error("Não foi possível preparar esta foto.");
+                          if (!mountedRef.current) return;
+                          closeViewer();
+                          router.push({ pathname: "components/ExifFrameWithPhoto", params: { photoUri } });
+                        } catch (error) {
+                          if (mountedRef.current) Alert.alert("Não foi possível abrir a moldura", error.message);
+                        } finally {
+                          finishOperation(job);
+                        }
                       }}
                     >
                       <View style={styles.actionIcon}><Ionicons name="image-outline" size={20} color="#ffaa00" /></View>
@@ -1352,12 +1419,12 @@ export default function Galery() {
           </Animated.View>
 
           {transitionRunning && transitionUri && transitionImageStyle ? (
-            <Animated.Image
+            <Animated.View
               pointerEvents="none"
-              resizeMode="cover"
-              source={{ uri: transitionUri }}
               style={[styles.viewerTransitionImage, transitionImageStyle]}
-            />
+            >
+              <Image source={{ uri: transitionUri }} contentFit="cover" transition={0} style={styles.viewerPhoto} />
+            </Animated.View>
           ) : null}
         </View>
       </Modal>
