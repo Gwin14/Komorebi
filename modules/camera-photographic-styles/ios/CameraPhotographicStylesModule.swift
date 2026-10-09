@@ -82,16 +82,8 @@ public final class CameraPhotographicStylesModule: Module {
       guard (0...5).contains(rating) else { throw CompatibilityError.metadataWriteFailed }
       let identifier = localIdentifier.replacingOccurrences(of: "ph://", with: "")
       guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject else { return false }
-      let options = PHContentEditingInputRequestOptions()
-      options.isNetworkAccessAllowed = true
-      // Request the current rendition, including edits made in other apps.
-      options.canHandleAdjustmentData = { _ in false }
-      let input: PHContentEditingInput = try await withCheckedThrowingContinuation { continuation in
-        asset.requestContentEditingInput(with: options) { input, _ in
-          if let input { continuation.resume(returning: input) }
-          else { continuation.resume(throwing: CompatibilityError.invalidImage) }
-        }
-      }
+      let requested = try await PhotoEditingInput.read(asset)
+      let input = requested.content
       let output = PHContentEditingOutput(contentEditingInput: input)
       if asset.mediaSubtypes.contains(.photoLive) {
         guard let context = PHLivePhotoEditingContext(livePhotoEditingInput: input) else { throw CompatibilityError.invalidImage }
@@ -124,7 +116,16 @@ public final class CameraPhotographicStylesModule: Module {
           guard CGImageDestinationFinalize(destination) else { throw CompatibilityError.metadataWriteFailed }
         }
       }
-      output.adjustmentData = PHAdjustmentData(formatIdentifier: "app.komorebi.rating", formatVersion: "1", data: Data("\(rating)".utf8))
+      // Rating changes preserve our depth lineage so recovery remains available.
+      // Other apps' adjustment data must not be claimed as a Komorebi depth edit.
+      if let adjustment = requested.previousAdjustment,
+         adjustment.formatIdentifier == "app.komorebi.depth", adjustment.formatVersion == "1",
+         let marker = try? JSONSerialization.jsonObject(with: adjustment.data) as? [String: String],
+         marker["recoveryId"] != nil, marker["phase"] == "applied" {
+        output.adjustmentData = adjustment
+      } else {
+        output.adjustmentData = PHAdjustmentData(formatIdentifier: "app.komorebi.rating", formatVersion: "1", data: Data("\(rating)".utf8))
+      }
       try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
         PHPhotoLibrary.shared().performChanges {
           let request = PHAssetChangeRequest(for: asset)

@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { useState } from "react";
 import {
   Alert,
@@ -76,7 +75,7 @@ const SwipeRow = ({ project, isActive, onSelect, onDelete }) => {
         style={[styles.swipeRow, { transform: [{ translateX: dragX }] }]}
       >
         <TouchableOpacity
-          style={styles.row}
+          style={[styles.row, styles.swipeOption, isActive && styles.rowActive]}
           onPress={() => {
             closeRow();
             onSelect(project.id);
@@ -111,6 +110,8 @@ export default function ProjectSwipeList({
   includeNoneOption = false,
   noneOptionLabel = "Todas as fotos",
   triggerIcon = "folder",
+  onToggleSelection,
+  selecting = false,
 }) {
   const [visible, setVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -142,11 +143,11 @@ export default function ProjectSwipeList({
   const trigger = (
     <TouchableOpacity
       onPress={() => setVisible(true)}
-      accessibilityLabel="Selecionar projeto"
+      accessibilityLabel={onToggleSelection ? "Opções da galeria" : "Selecionar projeto"}
       accessibilityRole="button"
     >
-      <View style={styles.trigger}>
-        <Ionicons name={triggerIcon} size={26} color="#ffaa00" />
+      <View style={onToggleSelection ? styles.menuTrigger : styles.trigger}>
+        <Ionicons name={triggerIcon} size={24} color="#ffaa00" />
       </View>
     </TouchableOpacity>
   );
@@ -163,10 +164,30 @@ export default function ProjectSwipeList({
       popoverStyle={styles.popover}
       from={trigger}
     >
-      <BlurView intensity={30} tint="dark" style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>PROJETOS</Text>
+          <Text style={styles.title}>{isCreating ? "Novo projeto" : onToggleSelection ? "Opções da galeria" : "Projetos"}</Text>
         </View>
+
+        {!isCreating && onToggleSelection && (
+          <>
+            <TouchableOpacity
+              accessibilityRole="button"
+              style={styles.row}
+              onPress={() => {
+                setVisible(false);
+                onToggleSelection();
+              }}
+            >
+              <View style={styles.rowLabelContainer}>
+                <Ionicons name={selecting ? "close-circle-outline" : "checkmark-circle-outline"} size={18} color="#ffaa00" />
+                <Text style={styles.rowLabel}>{selecting ? "Cancelar seleção" : "Selecionar fotos"}</Text>
+              </View>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <Text style={styles.menuSectionLabel}>Projetos</Text>
+          </>
+        )}
 
         {isCreating ? (
           <View style={styles.createContainer}>
@@ -209,7 +230,7 @@ export default function ProjectSwipeList({
                 const isActive = activeProjectId == null;
                 return (
                   <TouchableOpacity
-                    style={styles.row}
+                    style={[styles.row, isActive && styles.rowActive]}
                     onPress={() => onChangeProject(null)}
                   >
                     <View style={styles.rowLabelContainer}>
@@ -272,7 +293,7 @@ export default function ProjectSwipeList({
             </TouchableOpacity>
           </>
         )}
-      </BlurView>
+      </View>
     </Popover>
   );
 }

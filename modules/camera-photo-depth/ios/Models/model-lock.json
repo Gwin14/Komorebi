@@ -1,0 +1,12 @@
+{
+  "name": "DepthAnythingV2SmallF16",
+  "version": "2.0 (2024-06)",
+  "source": "https://ml-assets.apple.com/coreml/models/Image/DepthEstimation/DepthAnything/DepthAnythingV2SmallF16.mlpackage.zip",
+  "archiveSha256": "8e875979ec82fa46f292468a7567a520b2aa07c41008c32141f3396da05a4067",
+  "license": "Apache-2.0",
+  "files": {
+    "DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/model.mlmodel": "44ac97a3efcfd52113183fb2862ff59cd0368e9ec2e30a90a54980dd11407042",
+    "DepthAnythingV2SmallF16.mlpackage/Data/com.apple.CoreML/weights/weight.bin": "fa60d9b6a155734f59029ebb882fd54e549bfaee3539c1a9cbd2cbbab64a0fed",
+    "DepthAnythingV2SmallF16.mlpackage/Manifest.json": "2883ae290c48fe916dc5ececac03a7d847fa277165a49ef5652fa1d2b9cb55f7"
+  }
+}

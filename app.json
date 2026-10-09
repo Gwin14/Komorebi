@@ -5,7 +5,7 @@
     "slug": "Komorebi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.jpeg",
+    "icon": "./assets/images/app-icons/KomorebiLogo-iOS-Default-1024@1x.png",
     "scheme": "camera",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -18,15 +18,18 @@
         "UIRequiredDeviceCapabilities": ["camera"],
         "NSCameraUsageDescription": "Precisamos da câmera para tirar fotos."
       },
-      "appleTeamId": "ZHVJ9S93V4"
+      "appleTeamId": "ZHVJ9S93V4",
+      "icon": {
+        "light": "./assets/images/app-icons/KomorebiLogo-iOS-Default-1024@1x.png",
+        "dark": "./assets/images/app-icons/KomorebiLogo-iOS-Dark-1024@1x.png",
+        "tinted": "./assets/images/app-icons/KomorebiLogo-iOS-TintedDark-1024@1x.png"
+      }
     },
     "android": {
       "minSdkVersion": 26,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/logo.jpeg",
-        "backgroundImage": "./assets/images/logo.jpeg",
-        "monochromeImage": "./assets/images/logo.jpeg"
+        "foregroundImage": "./assets/images/app-icons/KomorebiLogo-iOS-Default-1024@1x.png",
+        "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -41,7 +44,8 @@
         "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
-      "package": "br.dev.fabiosantos.komorebi"
+      "package": "br.dev.fabiosantos.komorebi",
+      "icon": "./assets/images/app-icons/KomorebiLogo-iOS-Default-1024@1x.png"
     },
     "plugins": [
       "expo-router",

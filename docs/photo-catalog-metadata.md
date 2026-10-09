@@ -2,7 +2,7 @@
 
 Em **Configurações → Captura e arquivos → Autoria**, autor e direitos autorais são persistidos no aparelho e incluídos nas próximas capturas. Campos vazios não adicionam autoria. As fotos existentes não são alteradas ao mudar essas preferências.
 
-Na galeria, abra uma foto e seu painel de informações para selecionar **0–5 estrelas**. O botão com a **estrela cortada** grava explicitamente a nota zero. A miniatura mostra a classificação da biblioteca do Fotos no iOS 27 ou mais recente; nas outras plataformas, mostra a classificação lida da imagem. No catálogo do Fotos, zero significa sem classificação; miniaturas com nota zero não mostram o indicador. A interface só confirma uma mudança após a gravação; erros de permissão ou escrita são apresentados ao usuário.
+Na galeria, abra uma foto e seu painel de ações para selecionar **0–5 estrelas**. O botão com a **estrela cortada** grava explicitamente a nota zero. A miniatura mostra a classificação da biblioteca do Fotos no iOS 27 ou mais recente; nas outras plataformas, mostra a classificação lida da imagem. No catálogo do Fotos, zero significa sem classificação; miniaturas com nota zero não mostram o indicador. A interface só confirma uma mudança após a gravação; erros de permissão ou escrita são apresentados ao usuário.
 
 Com as tags inteligentes ativadas, as palavras-chave retornadas pela análise local são gravadas nos campos padronizados e também continuam disponíveis nos detalhes internos da Komorebi. Falhas na análise não impedem a captura.
 
@@ -32,3 +32,9 @@ exiftool -G1 -a -s -Rating -By-line -Creator -CopyrightNotice -Rights -Keywords 
 ```
 
 A validação de PhotoKit, permissões no Android e recursos auxiliares de câmera exige dispositivos físicos; testes de arquivos e checagem de tipos não substituem essa etapa.
+
+## Ações em lote e profundidade
+
+A grade permite selecionar fotos e aplicar uma classificação comum; gravações confirmadas são mantidas mesmo quando o lote é cancelado ou outra foto falha. O marcador de uma edição de profundidade do Komorebi é preservado ao avaliar a imagem no iOS. Veja [Ações da galeria](gallery-actions.md) para compartilhamento, seleção, reversão e a validação pendente do retrato no Fotos.
+
+A geração experimental de profundidade usa uma projeção nominal de renderização identificada nos metadados, sem afirmar calibração física da câmera e mantém a disparidade relativa. Região de foco e receita de retrato são preservadas ao avaliar posteriormente; veja os resultados de diagnóstico e os limites em [Análise de profundidade](photo-depth-device-analysis.md).

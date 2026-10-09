@@ -1,5 +1,6 @@
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { Image } from "expo-image";
 import * as MediaLibrary from "expo-media-library";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -11,9 +12,9 @@ import {
   Animated,
   Easing,
   FlatList,
-  Image,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   SectionList,
@@ -33,16 +34,38 @@ import { exifHandler } from "../utils/exifFormatter";
 import { EXIF_SCHEMA } from "../utils/exifSchema";
 import { getProjectAlbumName } from "../utils/projects";
 import { loadGalleryPhotos } from "../utils/galleryPhotos";
+import { cacheGalleryPhotos, clearGalleryCache, galleryCacheKey, getCachedGalleryPhotos } from "../utils/galleryCache";
 import ScreenHeader from "./ScreenHeader";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
+import useGalleryPhotoDetails from "../hooks/useGalleryPhotoDetails";
 import ProjectChecklist from "./ProjectChecklist";
+import CustomToggle from "./CustoToggle";
 import ProjectSwipeList from "./ProjectSwipeList";
 
-import { savePhotoRating } from "../utils/photoCatalogMetadata";
+import { deleteGalleryPhotos, rateGalleryPhotos, shareGalleryPhotos } from "../utils/galleryActions";
+import { retainPhotoSelection, togglePhotoSelection, withGalleryAssets } from "../utils/galleryActionState";
+import { addPhotoDepth, cancelPhotoDepth, getPhotoDepthState, revertPhotoDepth, cleanupDeletedDepthBackups, subscribeToPhotoDepth } from "../../modules/camera-photo-depth";
+import PhotoDepthScan from "./PhotoDepthScan";
+import PhotoRatingControls from "./PhotoRatingControls";
+import GalleryActionProgress from "./GalleryActionProgress";
 
 const PHOTOS_PER_ROW = 4;
+const GALLERY_VIEWABILITY_CONFIG = { itemVisiblePercentThreshold: 10 };
 const INFO_SWIPE_DISTANCE = 56;
+
+// Use the same current PhotoKit rendition/cache identity for the grid,
+// transition and viewer. Resolving a local file must not reload the preview.
+const getGalleryImageSource = (photo) => ({
+  uri: Platform.OS === "ios" ? `ph://${photo.id}` : photo.uri,
+  cacheKey: `${photo.id}:${photo.modificationTime || 0}`,
+});
+
+// SectionList also extracts keys for header/footer viewability tokens, whose
+// item is a section object rather than an array of photos.
+const getGalleryListItemKey = (item, index) => Array.isArray(item)
+  ? `photos:${item.map((photo) => photo.id).join("-")}`
+  : `section:${item.key ?? index}`;
 
 const startOfDay = (date) => {
   const normalizedDate = new Date(date);
@@ -100,7 +123,7 @@ const groupPhotosByDate = (photos) => {
     for (let index = 0; index < group.photos.length; index += PHOTOS_PER_ROW) {
       rows.push(group.photos.slice(index, index + PHOTOS_PER_ROW));
     }
-    return { title: getSectionTitle(group.timestamp), data: rows };
+    return { key: getDateKey(group.timestamp), title: getSectionTitle(group.timestamp), data: rows };
   });
 };
 
@@ -111,12 +134,28 @@ export default function Galery() {
     ? projects.find((project) => project.id === viewProjectId) || null
     : null;
   const [permission, requestPermission] = MediaLibrary.usePermissions();
-  const ratingSavingRef = useRef(false);
+  const operationRef = useRef(null);
+  const mountedRef = useRef(true);
+  const [operation, setOperation] = useState(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [batchRatingOpen, setBatchRatingOpen] = useState(false);
+  const [depthScan, setDepthScan] = useState(null);
+  const [depthState, setDepthState] = useState(null);
+  const [depthCreateCopy, setDepthCreateCopy] = useState(false);
+  const [metadataRevision, setMetadataRevision] = useState(0);
+  const [galleryRevision, setGalleryRevision] = useState(0);
   const photoLoadGeneration = useRef(0);
-  const [ratingSaving, setRatingSaving] = useState(false);
-  const [photos, setPhotos] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const depthScanRef = useRef(null);
+  const pendingLibraryRefresh = useRef(false);
+  depthScanRef.current = depthScan;
+
+  const [photos, setPhotos] = useState(() => permission?.granted ? getCachedGalleryPhotos(viewProject) || [] : []);
+  const [loading, setLoading] = useState(() => !permission?.granted || getCachedGalleryPhotos(viewProject) === undefined);
+  const displayedGalleryKey = useRef(galleryCacheKey(viewProject));
   const [viewerVisible, setViewerVisible] = useState(false);
+  const viewerVisibleRef = useRef(false);
+  viewerVisibleRef.current = viewerVisible;
   const [infoOpen, setInfoOpen] = useState(false);
   const [intelligentTagsOpen, setIntelligentTagsOpen] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState(null);
@@ -124,14 +163,19 @@ export default function Galery() {
   const [exifLoading, setExifLoading] = useState(false);
   const pagerRef = useRef(null);
   const thumbnailRef = useRef(null);
+  const infoScrollRef = useRef(null);
+  const infoScrollOffset = useRef(0);
   const galleryPhotoRefs = useRef(new Map());
   const closingViewerRef = useRef(false);
+  const transitionImageRef = useRef(null);
+  const transitionRunningRef = useRef(false);
   const infoAnimation = useRef(new Animated.Value(0)).current;
   const sharedProgress = useRef(new Animated.Value(0)).current;
   const viewerOpacity = useRef(new Animated.Value(0)).current;
   const [transitionSource, setTransitionSource] = useState(null);
-  const [transitionUri, setTransitionUri] = useState(null);
+  const [pendingOpeningPhoto, setPendingOpeningPhoto] = useState(null);
   const [transitionRunning, setTransitionRunning] = useState(false);
+  transitionRunningRef.current = transitionRunning;
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const safeAreaInsets = useSafeAreaInsets();
   const router = useRouter();
@@ -141,9 +185,37 @@ export default function Galery() {
       const generation = ++photoLoadGeneration.current;
       const current = () => generation === photoLoadGeneration.current;
       try {
-        if (showLoading) setLoading(true);
-        const resolved = await loadGalleryPhotos(project, current);
-        if (current() && resolved) setPhotos(resolved);
+        const key = galleryCacheKey(project);
+        const cached = getCachedGalleryPhotos(project);
+        if (displayedGalleryKey.current !== key) {
+          displayedGalleryKey.current = key;
+          setPhotos(cached || []);
+          setLoading(cached === undefined);
+        } else if (showLoading && cached !== undefined) {
+          // Do not truncate an already open library to the bounded snapshot.
+          setPhotos((previous) => previous.length ? previous : cached);
+          setLoading(false);
+        }
+        const resolved = await loadGalleryPhotos(project, current, (preview, complete) => {
+          if (!current()) return;
+          setLoading(false);
+          setPhotos((previous) => {
+            // Keep unseen rows during refresh until the library has listed
+            // every page, preserving selections outside the first viewport.
+            const ids = new Set(preview.map((photo) => photo.id));
+            return complete ? preview : [...preview, ...previous.filter((photo) => !ids.has(photo.id))];
+          });
+          cacheGalleryPhotos(project, preview);
+        }, false);
+        if (current() && resolved) {
+          setPhotos(resolved);
+          cacheGalleryPhotos(project, resolved);
+          setGalleryRevision((value) => value + 1);
+          void cleanupDeletedDepthBackups().catch((error) =>
+            console.warn("Falha ao limpar recuperação de fotos apagadas", error),
+          );
+          return resolved;
+        }
       } catch (error) {
         console.log("Erro ao carregar fotos:", error);
       } finally {
@@ -156,6 +228,8 @@ export default function Galery() {
   useEffect(() => {
     if (!permission) return;
     if (!permission.granted) {
+      clearGalleryCache();
+      setPhotos([]);
       requestPermission();
       return;
     }
@@ -169,6 +243,10 @@ export default function Galery() {
     if (!permission?.granted) return;
     let previousState = AppState.currentState;
     const refresh = () => {
+      if (operationRef.current?.depth || depthScanRef.current) {
+        pendingLibraryRefresh.current = true;
+        return;
+      }
       void loadKomorebiPhotos(undefined, false);
     };
     const appSubscription = AppState.addEventListener("change", (state) => {
@@ -181,6 +259,17 @@ export default function Galery() {
       librarySubscription.remove();
     };
   }, [permission?.granted, loadKomorebiPhotos]);
+
+  useEffect(() => {
+    if (depthScan || operation?.depth || !pendingLibraryRefresh.current) return;
+    pendingLibraryRefresh.current = false;
+    void loadKomorebiPhotos(undefined, false);
+  }, [depthScan, operation, loadKomorebiPhotos]);
+
+  const onGalleryViewableItemsChanged = useGalleryPhotoDetails({
+    photos, setPhotos, project: viewProject, enabled: !!permission?.granted && !transitionRunning,
+    revision: galleryRevision, generation: photoLoadGeneration, selectedAssetId,
+  });
 
   const orderedPhotos = useMemo(
     () => [...photos].sort((a, b) => b.creationTime - a.creationTime),
@@ -196,44 +285,184 @@ export default function Galery() {
   );
   const selectedPhoto = orderedPhotos[selectedIndex] || null;
 
-  const handleRating = async (rating) => {
-    if (!selectedPhoto || ratingSavingRef.current) return;
-    const assetId = selectedPhoto.id;
-    ratingSavingRef.current = true;
-    setRatingSaving(true);
-    try {
-      await savePhotoRating(assetId, rating);
-      let refreshedUri = null;
-      try {
-        const info = await MediaLibrary.getAssetInfoAsync(assetId);
-        refreshedUri = info.localUri || info.uri;
-      } catch (error) {
-        console.warn(
-          "Classificação salva; não foi possível atualizar a prévia",
-          error,
-        );
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (operationRef.current) {
+        operationRef.current.cancelled = true;
+        if (operationRef.current.depth) void cancelPhotoDepth(operationRef.current.id);
       }
-      setPhotos((previous) =>
-        previous.map((photo) =>
-          photo.id === assetId
-            ? { ...photo, rating, uri: refreshedUri || photo.uri }
-            : photo,
-        ),
-      );
+    };
+  }, []);
+
+  useEffect(() => {
+    setSelectedIds((ids) => retainPhotoSelection(ids, photos));
+  }, [photos]);
+
+  const clearSelection = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+    setBatchRatingOpen(false);
+  };
+
+  const toggleSelection = (id) => {
+    if (operationRef.current) return;
+    setSelectedIds((ids) => togglePhotoSelection(ids, id));
+  };
+
+  const beginOperation = (label, total, cancellable = true) => {
+    if (operationRef.current) return null;
+    const job = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, label, total, completed: 0, cancellable, cancelled: false };
+    operationRef.current = job;
+    setOperation({ ...job });
+    return job;
+  };
+  const reportProgress = (job, progress) => {
+    if (mountedRef.current && operationRef.current === job)
+      setOperation((previous) => ({ ...previous, ...progress }));
+  };
+  const finishOperation = (job) => {
+    if (operationRef.current !== job) return;
+    operationRef.current = null;
+    if (mountedRef.current) setOperation(null);
+  };
+  const cancelOperation = () => {
+    const job = operationRef.current;
+    if (!job?.cancellable) return;
+    job.cancelled = true;
+    setOperation((previous) => ({ ...previous, label: "Cancelando", cancellable: false }));
+    if (job.depth) void cancelPhotoDepth(job.id);
+  };
+
+  const handleRating = async (rating, ids = selectedPhoto ? [selectedPhoto.id] : []) => {
+    if (!ids.length) return;
+    const job = beginOperation("Salvando classificação", ids.length);
+    if (!job) return;
+    try {
+      const result = await rateGalleryPhotos(ids, rating, {
+        isCancelled: () => job.cancelled,
+        onProgress: (progress) => reportProgress(job, progress),
+        onSaved: (id, value, uri) => {
+          if (!mountedRef.current) return;
+          photoLoadGeneration.current += 1;
+          setPhotos((previous) => previous.map((photo) => photo.id === id
+            ? { ...photo, rating: value, uri: uri || photo.uri } : photo));
+        },
+      });
+      if (!mountedRef.current) return;
+      if (selecting) {
+        setSelectedIds((previous) => new Set([...previous].filter((id) => !result.succeeded.includes(id))));
+        setBatchRatingOpen(false);
+      }
+      if (result.failed.length) Alert.alert("Não foi possível salvar todas as classificações", `${result.succeeded.length} salvas; ${result.failed.length} falharam.${selecting ? " As fotos com falha continuam selecionadas." : " A nota anterior foi mantida."}`);
+      if (result.succeeded.length) setMetadataRevision((value) => value + 1);
     } catch (error) {
-      console.warn("Falha ao classificar foto", error);
-      Alert.alert(
-        "Não foi possível salvar a classificação",
-        "A nota anterior foi mantida. Verifique a permissão para editar fotos e tente novamente.",
-      );
+      Alert.alert("Não foi possível salvar a classificação", error.message);
     } finally {
-      ratingSavingRef.current = false;
-      setRatingSaving(false);
+      finishOperation(job);
+      if (mountedRef.current) void loadKomorebiPhotos(undefined, false);
+    }
+  };
+
+  const handleShare = async (ids) => {
+    if (!ids.length) return;
+    const job = beginOperation("Preparando compartilhamento", ids.length);
+    if (!job) return;
+    try {
+      await shareGalleryPhotos(ids, {
+        isCancelled: () => job.cancelled,
+        onProgress: (progress) => reportProgress(job, { ...progress, cancellable: progress.completed < progress.total }),
+      });
+    } catch (error) {
+      if (mountedRef.current) Alert.alert("Não foi possível compartilhar", error.message);
+    } finally {
+      finishOperation(job);
+    }
+  };
+
+  useEffect(() => {
+    if (operation?.id || !viewerVisible || !infoOpen || !selectedAssetId || Platform.OS !== "ios") return;
+    let current = true;
+    setDepthState(null);
+    getPhotoDepthState(selectedAssetId).then((state) => {
+      if (current) setDepthState(state);
+    }).catch((error) => {
+      if (current) setDepthState({ eligible: false, canRevert: false, reason: error.message });
+    });
+    return () => { current = false; };
+  }, [viewerVisible, infoOpen, selectedAssetId, operation?.id]);
+
+  useEffect(() => {
+    setDepthScan((scan) => viewerVisible && scan?.assetId === selectedAssetId ? scan : null);
+  }, [selectedAssetId, viewerVisible]);
+
+  const handleDepth = async (revert = false) => {
+    if (!selectedPhoto) return;
+    const assetId = selectedPhoto.id;
+    const job = beginOperation(revert ? "Revertendo profundidade" : "Gerando profundidade", 100);
+    if (!job) return;
+    job.depth = true;
+    reportProgress(job, { depth: true });
+    // Discard any grid refresh started before Photos commits the new asset.
+    photoLoadGeneration.current += 1;
+    setDepthScan(null);
+    let previewUri = null;
+    const subscription = subscribeToPhotoDepth((event) => {
+      if (event.operationId !== job.id) return;
+      if (event.previewUri) previewUri = event.previewUri;
+      reportProgress(job, { completed: Math.round(event.progress * 100), cancellable: event.cancellable });
+    });
+    try {
+      const createdId = await withGalleryAssets([assetId], () => revert ? revertPhotoDepth(assetId, job.id) : addPhotoDepth(assetId, job.id, { createCopy: depthCreateCopy || !!depthState?.canCopy }));
+      if (!mountedRef.current) return;
+      if (revert) {
+        await loadKomorebiPhotos(undefined, false);
+      } else if (createdId && !job.cancelled && viewerVisibleRef.current && !closingViewerRef.current) {
+        // The generated portrait has the same upright pixels as its source.
+        // Keep those pixels visible immediately, without enumerating the library.
+        const createdPhoto = { ...selectedPhoto, id: createdId };
+        setPhotos((previous) => createdId === assetId
+          ? previous.map((photo) => photo.id === assetId ? createdPhoto : photo)
+          : [...previous.filter((photo) => photo.id !== createdId), createdPhoto]);
+        setSelectedAssetId(createdId);
+        const scan = {
+          assetId: createdId,
+          uri: previewUri,
+          id: job.id,
+          ready: false,
+          scrollOffset: infoScrollOffset.current,
+        };
+        depthScanRef.current = scan;
+        console.info("[PhotoDepthScan] geração concluída; fechando painel", { hasDepthPreview: !!previewUri });
+        setDepthScan(scan);
+        pendingLibraryRefresh.current = true;
+        // Resolve only this asset; preview errors cannot suppress a confirmed scan.
+        void MediaLibrary.getAssetInfoAsync(createdId, { shouldDownloadFromNetwork: false })
+          .then((info) => {
+            if (!mountedRef.current) return;
+            setPhotos((previous) => previous.map((photo) => photo.id === createdId
+              ? { ...photo, ...info, id: createdId, uri: info.localUri || info.uri || photo.uri, rating: selectedPhoto.rating }
+              : photo));
+          })
+          .catch((error) => console.warn("Prévia da foto gerada indisponível", error));
+      }
+      setDepthState(null);
+      setMetadataRevision((value) => value + 1);
+    } catch (error) {
+      if (!job.cancelled && mountedRef.current) Alert.alert("Não foi possível alterar a profundidade", error.message);
+    } finally {
+      subscription?.remove();
+      finishOperation(job);
     }
   };
 
   const handleChangeViewProject = useCallback(
     (projectId) => {
+      if (operationRef.current) return;
+      setSelecting(false);
+      setSelectedIds(new Set());
+      setBatchRatingOpen(false);
       setViewProjectId(projectId);
       loadKomorebiPhotos(projects.find((project) => project.id === projectId));
     },
@@ -242,6 +471,10 @@ export default function Galery() {
 
   const handleCreateProject = useCallback(
     (project) => {
+      if (operationRef.current) return;
+      setSelecting(false);
+      setSelectedIds(new Set());
+      setBatchRatingOpen(false);
       setProjects((previous) => [...previous, project]);
       setViewProjectId(project.id);
       loadKomorebiPhotos(project);
@@ -251,6 +484,7 @@ export default function Galery() {
 
   const handleDeleteProject = useCallback(
     async (project) => {
+      if (operationRef.current) return;
       try {
         const albums = await MediaLibrary.getAlbumsAsync();
         const album = albums.find(
@@ -261,6 +495,9 @@ export default function Galery() {
           previous.filter((item) => item.id !== project.id),
         );
         if (viewProjectId === project.id) {
+          setSelecting(false);
+          setSelectedIds(new Set());
+          setBatchRatingOpen(false);
           setViewProjectId(null);
           loadKomorebiPhotos(null);
         }
@@ -272,19 +509,45 @@ export default function Galery() {
   );
 
   const setInfoPanel = useCallback(
-    (open) => {
+    (open, onFinished, preserveContents = false) => {
       setInfoOpen(open);
-      if (!open) setIntelligentTagsOpen(false);
+      if (!open && !preserveContents) setIntelligentTagsOpen(false);
       Animated.spring(infoAnimation, {
         toValue: open ? 1 : 0,
         damping: 24,
         stiffness: 230,
         mass: 0.9,
         useNativeDriver: true,
-      }).start();
+      }).start(({ finished }) => {
+        if (finished) onFinished?.();
+      });
     },
     [infoAnimation],
   );
+
+  // Wait for the panel and photo transform to settle before mounting the scan.
+  const scanId = depthScan?.id;
+  const scanAssetId = depthScan?.assetId;
+  useEffect(() => {
+    if (!scanId || !viewerVisible || scanAssetId !== selectedAssetId) return;
+    let current = true;
+    pagerRef.current?.scrollToOffset({ offset: selectedIndex * screenWidth, animated: false });
+    setInfoPanel(false, () => {
+      if (current && !closingViewerRef.current) {
+        console.info("[PhotoDepthScan] painel fechado; iniciando scan");
+        setDepthScan((scan) => scan?.id === scanId ? { ...scan, ready: true } : scan);
+      }
+    }, true);
+    return () => { current = false; };
+  }, [scanId, scanAssetId, viewerVisible, selectedAssetId, selectedIndex, screenWidth, setInfoPanel]);
+
+  const finishDepthScan = (id) => {
+    if (depthScan?.id !== id || !viewerVisible || closingViewerRef.current) return;
+    const offset = depthScan.scrollOffset;
+    console.info("[PhotoDepthScan] scan concluído; reabrindo informações");
+    setDepthScan(null);
+    setInfoPanel(true, () => infoScrollRef.current?.scrollTo({ y: offset, animated: false }));
+  };
 
   const measureGalleryPhoto = useCallback((assetId, callback) => {
     const node = galleryPhotoRefs.current.get(assetId);
@@ -300,13 +563,13 @@ export default function Galery() {
   const closeViewer = useCallback(() => {
     if (closingViewerRef.current || !selectedPhoto) return;
     closingViewerRef.current = true;
+    setDepthScan(null);
     setInfoPanel(false);
 
     measureGalleryPhoto(selectedPhoto.id, (measuredRect) => {
       setTransitionSource((previous) => measuredRect || previous);
-      setTransitionUri(selectedPhoto.uri);
       setTransitionRunning(true);
-      viewerOpacity.setValue(0);
+      void transitionImageRef.current?.lockResourceAsync().catch(() => {});
       sharedProgress.setValue(1);
 
       requestAnimationFrame(() => {
@@ -317,6 +580,7 @@ export default function Galery() {
           useNativeDriver: false,
         }).start(() => {
           setViewerVisible(false);
+          setPendingOpeningPhoto(null);
           setTransitionRunning(false);
           closingViewerRef.current = false;
         });
@@ -327,7 +591,6 @@ export default function Galery() {
     selectedPhoto,
     setInfoPanel,
     sharedProgress,
-    viewerOpacity,
   ]);
 
   const openViewer = useCallback(
@@ -342,7 +605,7 @@ export default function Galery() {
             height: 1,
           },
         );
-        setTransitionUri(photo.uri);
+        setPendingOpeningPhoto(getGalleryImageSource(photo).cacheKey);
         setTransitionRunning(true);
         sharedProgress.setValue(0);
         viewerOpacity.setValue(0);
@@ -370,7 +633,7 @@ export default function Galery() {
   const selectPhotoAtIndex = useCallback(
     (index) => {
       const photo = orderedPhotos[index];
-      if (!photo || photo.id === selectedAssetId) return;
+      if (operationRef.current || depthScan || !photo || photo.id === selectedAssetId) return;
       setInfoPanel(false);
       setIntelligentTagsOpen(false);
       setExifData(null);
@@ -381,7 +644,7 @@ export default function Galery() {
         viewPosition: 0.5,
       });
     },
-    [orderedPhotos, selectedAssetId, setInfoPanel],
+    [depthScan, orderedPhotos, selectedAssetId, setInfoPanel],
   );
 
   const handlePagerScrollEnd = useCallback(
@@ -396,6 +659,7 @@ export default function Galery() {
 
   const selectThumbnail = useCallback(
     (index) => {
+      if (operationRef.current) return;
       pagerRef.current?.scrollToOffset({
         offset: index * screenWidth,
         animated: true,
@@ -406,7 +670,7 @@ export default function Galery() {
   );
 
   const handleViewerShow = useCallback(() => {
-    if (selectedIndex < 0) return;
+    if (selectedIndex < 0 || closingViewerRef.current) return;
     pagerRef.current?.scrollToOffset({
       offset: selectedIndex * screenWidth,
       animated: false,
@@ -418,14 +682,26 @@ export default function Galery() {
     });
     Animated.timing(sharedProgress, {
       toValue: 1,
-      duration: 360,
+      duration: 260,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: false,
-    }).start(() => {
+    }).start(({ finished }) => {
+      if (!finished || closingViewerRef.current || !viewerVisibleRef.current) return;
       viewerOpacity.setValue(1);
+      transitionRunningRef.current = false;
       setTransitionRunning(false);
+      void transitionImageRef.current?.unlockResourceAsync().catch(() => {});
     });
   }, [screenWidth, selectedIndex, sharedProgress, viewerOpacity]);
+
+  useEffect(() => {
+    if (viewerVisible && selectedIndex < 0) {
+      setInfoPanel(false);
+      setViewerVisible(false);
+      setTransitionRunning(false);
+      closingViewerRef.current = false;
+    }
+  }, [viewerVisible, selectedIndex, setInfoPanel]);
 
   const viewerPanResponder = useMemo(
     () =>
@@ -437,15 +713,15 @@ export default function Galery() {
           Math.abs(gesture.dy) > 12 &&
           Math.abs(gesture.dy) > Math.abs(gesture.dx) * 1.25,
         onPanResponderRelease: (_, gesture) => {
-          if (gesture.dy < -INFO_SWIPE_DISTANCE || gesture.vy < -0.55)
+          if (!depthScan && (gesture.dy < -INFO_SWIPE_DISTANCE || gesture.vy < -0.55))
             setInfoPanel(true);
         },
       }),
-    [setInfoPanel],
+    [depthScan, setInfoPanel],
   );
 
   useEffect(() => {
-    if (!viewerVisible || !selectedAssetId) return undefined;
+    if (!viewerVisible || !infoOpen || transitionRunning || !selectedAssetId) return undefined;
     let current = true;
     setExifData(null);
     setExifLoading(true);
@@ -457,25 +733,42 @@ export default function Galery() {
     return () => {
       current = false;
     };
-  }, [selectedAssetId, viewerVisible]);
+  }, [selectedAssetId, viewerVisible, infoOpen, transitionRunning, metadataRevision]);
 
-  const handleDeletePhoto = async (assetId = selectedAssetId) => {
-    if (!assetId) return;
-    try {
-      await MediaLibrary.deleteAssetsAsync([assetId]);
-      closeViewer();
-      setSelectedAssetId(null);
-      loadKomorebiPhotos();
-    } catch (error) {
-      console.log("Erro ao excluir foto:", error);
-    }
+  const handleDeletePhoto = (ids = selectedAssetId ? [selectedAssetId] : []) => {
+    if (!ids.length || operationRef.current) return;
+    const snapshot = [...ids];
+    Alert.alert(
+      snapshot.length === 1 ? "Apagar foto?" : `Apagar ${snapshot.length} fotos?`,
+      "As fotos serão apagadas da biblioteca do dispositivo e de todos os álbuns.",
+      [{ text: "Cancelar", style: "cancel" }, { text: "Apagar", style: "destructive", onPress: async () => {
+        const job = beginOperation("Apagando fotos", snapshot.length, false);
+        if (!job) return;
+        try {
+          const deleted = await deleteGalleryPhotos(snapshot);
+          if (!deleted || !mountedRef.current) return;
+          if (snapshot.includes(selectedAssetId) && viewerVisible) closeViewer();
+          setSelectedIds((previous) => new Set([...previous].filter((id) => !snapshot.includes(id))));
+          await cleanupDeletedDepthBackups(snapshot).catch((error) => console.warn("Falha ao limpar recuperação", error));
+        } catch (error) {
+          if (mountedRef.current) Alert.alert("Não foi possível apagar", error.message);
+        } finally {
+          finishOperation(job);
+          if (mountedRef.current) void loadKomorebiPhotos(undefined, false);
+        }
+      } }],
+    );
   };
 
   const navigationHeader = (
     <ScreenHeader
-      title="Galeria"
+      title={selecting ? `${selectedIds.size} ${selectedIds.size === 1 ? "selecionada" : "selecionadas"}` : "Galeria"}
       right={permission?.granted ? (
+        <View pointerEvents={operation ? "none" : "auto"} style={operation && styles.disabledAction}>
         <ProjectSwipeList
+          triggerIcon="ellipsis-horizontal"
+          selecting={selecting}
+          onToggleSelection={selecting ? clearSelection : () => setSelecting(true)}
           projects={projects}
           activeProjectId={viewProjectId}
           onChangeProject={handleChangeViewProject}
@@ -484,6 +777,7 @@ export default function Galery() {
           includeNoneOption
           noneOptionLabel="Todas as fotos"
         />
+        </View>
       ) : null}
     />
   );
@@ -571,11 +865,29 @@ export default function Galery() {
       <StatusBar style="light" />
 
       {navigationHeader}
+      {selecting && <View style={styles.selectionToolbar}>
+        {[
+          ["Avaliar", () => setBatchRatingOpen(true)],
+          ["Compartilhar", () => handleShare([...selectedIds])],
+          ["Apagar", () => handleDeletePhoto([...selectedIds])],
+        ].map(([label, onPress]) => (
+          <TouchableOpacity key={label} accessibilityRole="button" disabled={!!operation || !selectedIds.size} onPress={onPress} style={[styles.selectionButton, (!!operation || !selectedIds.size) && styles.disabledAction]}>
+            <Text style={label === "Apagar" ? styles.dangerText : styles.infoActionText}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>}
+      {!viewerVisible && !batchRatingOpen && <GalleryActionProgress operation={operation} onCancel={cancelOperation} />}
 
       <SectionList
         sections={photoSections}
-        keyExtractor={(row) => row.map((photo) => photo.id).join("-")}
+        extraData={{ selectedIds, selecting, operation }}
+        keyExtractor={getGalleryListItemKey}
         stickySectionHeadersEnabled={false}
+        onViewableItemsChanged={onGalleryViewableItemsChanged}
+        viewabilityConfig={GALLERY_VIEWABILITY_CONFIG}
+        initialNumToRender={6}
+        maxToRenderPerBatch={6}
+        windowSize={5}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         renderSectionHeader={({ section }) => (
@@ -592,9 +904,23 @@ export default function Galery() {
                 }}
                 activeOpacity={0.82}
                 style={styles.photoItem}
-                onPress={() => openViewer(photo)}
+                accessibilityRole={selecting ? "checkbox" : "button"}
+                accessibilityLabel={selecting ? "Selecionar foto" : "Abrir foto"}
+                accessibilityState={{ checked: selecting ? selectedIds.has(photo.id) : undefined, disabled: !!operation }}
+                disabled={!!operation}
+                onLongPress={() => { setSelecting(true); toggleSelection(photo.id); }}
+                onPress={() => selecting ? toggleSelection(photo.id) : openViewer(photo)}
               >
-                <Image source={{ uri: photo.uri }} style={styles.image} />
+                <Image
+                  source={getGalleryImageSource(photo)}
+                  contentFit="cover"
+                  enforceEarlyResizing
+                  cachePolicy="memory-disk"
+                  recyclingKey={photo.id}
+                  transition={0}
+                  style={styles.image}
+                />
+                {selecting && <View style={styles.selectionBadge}><Ionicons name={selectedIds.has(photo.id) ? "checkmark-circle" : "ellipse-outline"} size={25} color={selectedIds.has(photo.id) ? "#ffaa00" : "#fff"} /></View>}
                 {photo.rating > 0 && (
                   <View style={styles.ratingBadge}>
                     <Ionicons name="star" size={10} color="#ffaa00" />
@@ -620,6 +946,17 @@ export default function Galery() {
         }
       />
 
+      <Modal visible={batchRatingOpen} transparent animationType="fade" onRequestClose={() => !operation && setBatchRatingOpen(false)}>
+        <View style={styles.batchModalBackdrop}>
+          <View style={styles.batchModalContent}>
+            <Text style={styles.infoTitle}>Avaliar {selectedIds.size} fotos</Text>
+            <PhotoRatingControls disabled={!!operation || !selectedIds.size} onRate={(rating) => handleRating(rating, [...selectedIds])} />
+            <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
+            <TouchableOpacity disabled={!!operation} onPress={() => setBatchRatingOpen(false)} style={styles.selectionButton}><Text style={styles.infoActionText}>Fechar</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         animationType="none"
         onRequestClose={infoOpen ? () => setInfoPanel(false) : closeViewer}
@@ -639,7 +976,9 @@ export default function Galery() {
           />
           <Animated.View
             pointerEvents={transitionRunning ? "none" : "auto"}
-            style={[styles.viewerContent, { opacity: viewerOpacity }]}
+            // Hide the page in the same commit that reveals the transition
+            // image, and keep it hidden while the native modal is dismissed.
+            style={[styles.viewerContent, { opacity: !viewerVisible || (transitionRunning && closingViewerRef.current) ? 0 : viewerOpacity }]}
           >
             <View
               style={[
@@ -647,6 +986,11 @@ export default function Galery() {
                 { paddingTop: safeAreaInsets.top + 8 },
               ]}
             >
+              {operation && !infoOpen && (
+                <View style={[styles.viewerOperation, { top: safeAreaInsets.top + 60 }]}>
+                  <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
+                </View>
+              )}
               <TouchableOpacity
                 accessibilityLabel="Fechar foto"
                 accessibilityRole="button"
@@ -668,6 +1012,7 @@ export default function Galery() {
               <TouchableOpacity
                 accessibilityLabel="Informações da foto"
                 accessibilityRole="button"
+                disabled={!!depthScan}
                 onPress={() => setInfoPanel(true)}
                 style={styles.viewerRoundButton}
               >
@@ -691,10 +1036,15 @@ export default function Galery() {
                 ref={pagerRef}
                 data={orderedPhotos}
                 horizontal
+                initialScrollIndex={Math.max(selectedIndex, 0)}
+                initialNumToRender={1}
+                maxToRenderPerBatch={2}
+                windowSize={3}
                 pagingEnabled
                 directionalLockEnabled
                 disableIntervalMomentum
-                scrollEnabled={orderedPhotos.length > 1}
+                scrollEnabled={!operation && !depthScan && orderedPhotos.length > 1}
+                extraData={depthScan}
                 showsHorizontalScrollIndicator={false}
                 keyExtractor={(photo) => photo.id}
                 getItemLayout={(_, index) => ({
@@ -712,10 +1062,24 @@ export default function Galery() {
                       {...viewerPanResponder.panHandlers}
                     >
                       <Image
-                        source={{ uri: photo.uri }}
-                        resizeMode="cover"
+                        source={getGalleryImageSource(photo)}
+                        contentFit="cover"
+                        enforceEarlyResizing
+                        cachePolicy="memory-disk"
+                        priority={photo.id === selectedAssetId ? "high" : "low"}
+                        recyclingKey={getGalleryImageSource(photo).cacheKey}
+                        transition={0}
+                        onDisplay={() => setPendingOpeningPhoto((pending) => pending === getGalleryImageSource(photo).cacheKey ? null : pending)}
+                        onError={() => setPendingOpeningPhoto((pending) => pending === getGalleryImageSource(photo).cacheKey ? null : pending)}
                         style={styles.viewerPhoto}
                       />
+                      {viewerVisible && !infoOpen && depthScan?.ready && photo.id === selectedAssetId && depthScan.assetId === photo.id && (
+                        <PhotoDepthScan
+                          key={depthScan.id}
+                          uri={depthScan.uri}
+                          onComplete={() => finishDepthScan(depthScan.id)}
+                        />
+                      )}
                     </View>
                   </View>
                 )}
@@ -739,6 +1103,7 @@ export default function Galery() {
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => setInfoPanel(true)}
+                disabled={!!depthScan}
                 style={styles.infoHandleButton}
               >
                 <View style={styles.infoHandle} />
@@ -774,6 +1139,7 @@ export default function Galery() {
                   return (
                     <TouchableOpacity
                       activeOpacity={0.8}
+                      disabled={!!operation || !!depthScan}
                       onPress={() => selectThumbnail(index)}
                       style={[
                         styles.thumbnailButton,
@@ -781,7 +1147,11 @@ export default function Galery() {
                       ]}
                     >
                       <Image
-                        source={{ uri: item.uri }}
+                        source={getGalleryImageSource(item)}
+                        contentFit="cover"
+                        enforceEarlyResizing
+                        recyclingKey={item.id}
+                        transition={0}
                         style={styles.thumbnailImage}
                       />
                     </TouchableOpacity>
@@ -806,7 +1176,6 @@ export default function Galery() {
               style={[
                 styles.infoPanel,
                 {
-                  paddingBottom: Math.max(safeAreaInsets.bottom, 18),
                   transform: [{ translateY: panelTranslateY }],
                 },
               ]}
@@ -814,13 +1183,18 @@ export default function Galery() {
               <BlurView intensity={72} tint="dark" style={styles.infoPanelBlur}>
                 <View style={styles.infoPanelHandle} />
                 <View style={styles.infoHeader}>
-                  <View>
+                  <View style={styles.infoHeaderCopy}>
                     <Text style={styles.infoEyebrow}>
                       FOTO {selectedIndex + 1}
                     </Text>
-                    <Text style={styles.infoTitle}>Informações</Text>
+                    <Text style={styles.infoTitle}>Detalhes da foto</Text>
+                    <Text style={styles.infoSubtitle}>
+                      {selectedPhoto?.creationTime ? getViewerDate(selectedPhoto.creationTime) : "Informações e ações"}
+                    </Text>
                   </View>
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Fechar informações"
                     onPress={() => setInfoPanel(false)}
                     style={styles.infoCloseButton}
                   >
@@ -828,66 +1202,25 @@ export default function Galery() {
                   </TouchableOpacity>
                 </View>
 
+                <GalleryActionProgress operation={operation} onCancel={cancelOperation} />
                 <ScrollView
-                  contentContainerStyle={styles.infoScrollContent}
+                  ref={infoScrollRef}
+                  onScroll={(event) => { infoScrollOffset.current = event.nativeEvent.contentOffset.y; }}
+                  scrollEventThrottle={16}
+                  contentContainerStyle={[styles.infoScrollContent, { paddingBottom: Math.max(safeAreaInsets.bottom, 20) + 16 }]}
                   showsVerticalScrollIndicator={false}
                 >
-                  <View style={styles.ratingSection}>
-                    <Text style={styles.ratingLabel}>
-                      Classificação
-                      {selectedPhoto?.rating != null
-                        ? ` · ${selectedPhoto.rating}/5`
-                        : ""}
-                    </Text>
-                    <View style={styles.ratingControls}>
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        accessibilityLabel="Remover classificação"
-                        accessibilityState={{
-                          disabled: ratingSaving,
-                          selected: selectedPhoto?.rating === 0,
-                        }}
-                        disabled={ratingSaving}
-                        onPress={() => handleRating(0)}
-                        style={styles.ratingClear}
-                      >
-                        <MaterialCommunityIcons
-                          name="star-off-outline"
-                          size={28}
-                          color={
-                            selectedPhoto?.rating === 0 ? "#ffaa00" : "#aaa"
-                          }
-                        />
-                      </TouchableOpacity>
-                      {[1, 2, 3, 4, 5].map((rating) => (
-                        <TouchableOpacity
-                          key={rating}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Classificar com ${rating} estrelas`}
-                          accessibilityState={{
-                            disabled: ratingSaving,
-                            selected: selectedPhoto?.rating === rating,
-                          }}
-                          disabled={ratingSaving}
-                          onPress={() => handleRating(rating)}
-                          style={styles.ratingStar}
-                        >
-                          <Ionicons
-                            name={
-                              (selectedPhoto?.rating ?? 0) >= rating
-                                ? "star"
-                                : "star-outline"
-                            }
-                            size={28}
-                            color="#ffaa00"
-                          />
-                        </TouchableOpacity>
-                      ))}
-                      {ratingSaving && (
-                        <ActivityIndicator size="small" color="#ffaa00" />
-                      )}
-                    </View>
-                  </View>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    disabled={!!operation}
+                    style={[styles.primaryPhotoAction, !!operation && styles.disabledAction]}
+                    onPress={() => selectedPhoto && handleShare([selectedPhoto.id])}
+                  >
+                    <Ionicons name="share-outline" size={20} color="#171717" />
+                    <Text style={styles.primaryPhotoActionText}>Compartilhar foto</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#171717" />
+                  </TouchableOpacity>
+                  <Text style={styles.infoSectionLabel}>CAPTURA</Text>
                   {exifLoading ? (
                     <View style={styles.photoDataLoading}>
                       <ActivityIndicator color="#ffaa00" size="small" />
@@ -904,6 +1237,46 @@ export default function Galery() {
                           ))}
                         </View>
                       ) : null}
+
+                      {["iso", "aperture", "shutter"].some((key) => exifData[key] != null && exifData[key] !== "") && (
+                        <View style={styles.captureMetrics}>
+                          {["iso", "aperture", "shutter"].map((key, index) => (
+                            <View key={key} style={[styles.captureMetric, index > 0 && styles.captureMetricDivider]}>
+                              <Text style={styles.captureMetricLabel}>{EXIF_SCHEMA[key].label}</Text>
+                              <Text style={styles.captureMetricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+                                {exifData[key] == null || exifData[key] === "" ? "—" : String(exifData[key])}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      <View style={styles.exifContainer}>
+                        {Object.entries(EXIF_SCHEMA).map(([key, config]) => {
+                          const value = exifData[key];
+                          if (
+                            value == null || value === "" ||
+                            ["iso", "aperture", "shutter"].includes(key) ||
+                            key === "latitude" ||
+                            key === "longitude"
+                          )
+                            return null;
+                          return (
+                            <View
+                              key={key}
+                              style={[
+                                styles.exifItemWrapper,
+                                ["date", "lens"].includes(key) && styles.exifItemWide,
+                              ]}
+                            >
+                              <ExifItem
+                                icon={config.icon}
+                                label={config.label}
+                                value={String(value)}
+                              />
+                            </View>
+                          );
+                        })}
+                      </View>
 
                       {exifData.intelligentTags?.length ? (
                         <View style={styles.intelligentTagsSection}>
@@ -959,33 +1332,6 @@ export default function Galery() {
                         </View>
                       ) : null}
 
-                      <View style={styles.exifContainer}>
-                        {Object.entries(EXIF_SCHEMA).map(([key, config]) => {
-                          const value = exifData[key];
-                          if (
-                            !value ||
-                            key === "latitude" ||
-                            key === "longitude"
-                          )
-                            return null;
-                          return (
-                            <View
-                              key={key}
-                              style={[
-                                styles.exifItemWrapper,
-                                key === "date" && styles.exifItemWide,
-                              ]}
-                            >
-                              <ExifItem
-                                icon={config.icon}
-                                label={config.label}
-                                value={String(value)}
-                              />
-                            </View>
-                          );
-                        })}
-                      </View>
-
                       {(exifData.latitude ?? exifData.GPSLatitude) != null &&
                       (exifData.longitude ?? exifData.GPSLongitude) != null ? (
                         <View pointerEvents="none" style={styles.mapContainer}>
@@ -1006,7 +1352,9 @@ export default function Galery() {
                     </Text>
                   )}
 
-                  <View style={styles.infoActions}>
+                  <Text style={styles.infoSectionLabel}>ORGANIZAR</Text>
+                  <View style={styles.photoActionGroup}>
+                    <PhotoRatingControls rating={selectedPhoto?.rating} disabled={!!operation} onRate={handleRating} />
                     <ProjectChecklist
                       assetId={selectedPhoto?.id}
                       projects={projects}
@@ -1014,46 +1362,112 @@ export default function Galery() {
                       onCreateProject={(project) =>
                         setProjects((previous) => [...previous, project])
                       }
-                      triggerText="Projetos"
-                      triggerStyle={styles.infoActionButton}
-                      triggerTextStyle={styles.infoActionText}
+                      triggerText="Adicionar a um projeto"
+                      disabled={!!operation}
+                      triggerStyle={[styles.infoActionButton, !!operation && styles.disabledAction]}
+                      triggerTextStyle={styles.projectActionText}
                     />
+                  </View>
+                  <Text style={styles.infoSectionLabel}>CRIAR E EDITAR</Text>
+                  <View style={styles.photoActionGroup}>
                     <TouchableOpacity
-                      style={styles.infoActionButton}
-                      onPress={() => {
-                        const photoUri = selectedPhoto?.uri;
-                        closeViewer();
-                        router.push({
-                          pathname: "components/ExifFrameWithPhoto",
-                          params: { photoUri },
-                        });
+                      accessibilityRole="button"
+                      disabled={!!operation}
+                      style={[styles.actionRow, !!operation && styles.disabledAction]}
+                      onPress={async () => {
+                        if (!selectedPhoto) return;
+                        const id = selectedPhoto.id;
+                        const job = beginOperation("Preparando foto", 1, false);
+                        if (!job) return;
+                        try {
+                          const info = await MediaLibrary.getAssetInfoAsync(id, { shouldDownloadFromNetwork: true });
+                          const photoUri = info.localUri || info.uri;
+                          if (!photoUri || photoUri.startsWith("ph://")) throw new Error("Não foi possível preparar esta foto.");
+                          if (!mountedRef.current) return;
+                          closeViewer();
+                          router.push({ pathname: "components/ExifFrameWithPhoto", params: { photoUri } });
+                        } catch (error) {
+                          if (mountedRef.current) Alert.alert("Não foi possível abrir a moldura", error.message);
+                        } finally {
+                          finishOperation(job);
+                        }
                       }}
                     >
-                      <Text style={styles.infoActionText}>EXIF Frame</Text>
+                      <View style={styles.actionIcon}><Ionicons name="image-outline" size={20} color="#ffaa00" /></View>
+                      <View style={styles.actionCopy}>
+                        <Text style={styles.actionLabel}>Moldura EXIF</Text>
+                        <Text style={styles.actionSubtitle}>Componha a foto com os dados da captura</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={17} color="#777777" />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.infoActionDanger}
-                      onPress={() => handleDeletePhoto(selectedPhoto?.id)}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={18}
-                        color="#ff6868"
-                      />
-                    </TouchableOpacity>
+
+                      {Platform.OS === "ios" && <>
+                        {depthState?.eligible && <View style={styles.copyOption}>
+                          <CustomToggle
+                            grouped
+                            last
+                            label="Criar uma cópia"
+                            description={depthCreateCopy ? "Mantém a original e salva uma nova foto." : "Aplica na original, com opção de reverter."}
+                            value={depthCreateCopy}
+                            onValueChange={setDepthCreateCopy}
+                            disabled={!!operation}
+                          />
+                        </View>}
+                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, styles.actionDivider, (!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)) && styles.disabledAction]} onPress={() => {
+                          if (depthState?.canRevert && !depthState?.canCopy) Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }]);
+                          else void handleDepth();
+                        }}>
+                          <View style={styles.actionIcon}><Ionicons name="layers-outline" size={20} color="#ffaa00" /></View>
+                          <Text style={styles.actionLabel}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : depthCreateCopy ? "Criar cópia com profundidade" : "Aplicar profundidade na original"}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.actionExplanation}>{depthState?.reason || "Verificando disponibilidade…"}</Text>
+                        {depthState?.canCopy && <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={[styles.actionRow, !!operation && styles.disabledAction]} onPress={() => Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }])}>
+                          <View style={styles.actionIcon}><Ionicons name="arrow-undo-outline" size={20} color="#ffaa00" /></View>
+                          <Text style={styles.actionLabel}>Reverter profundidade</Text>
+                        </TouchableOpacity>}
+                        {depthState?.canRevert && <Text style={styles.actionExplanation}>A recuperação da versão anterior depende dos dados deste app. Desinstalar o Komorebi remove essa recuperação.</Text>}
+                      </>}
                   </View>
+
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    disabled={!!operation}
+                    style={[styles.deletePhotoButton, !!operation && styles.disabledAction]}
+                    onPress={() => selectedPhoto && handleDeletePhoto([selectedPhoto.id])}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ff6868" />
+                    <Text style={styles.dangerText}>Excluir foto</Text>
+                  </TouchableOpacity>
                 </ScrollView>
               </BlurView>
             </Animated.View>
           </Animated.View>
 
-          {transitionRunning && transitionUri && transitionImageStyle ? (
-            <Animated.Image
+          {viewerVisible && selectedPhoto && transitionImageStyle ? (
+            <Animated.View
               pointerEvents="none"
-              resizeMode="cover"
-              source={{ uri: transitionUri }}
-              style={[styles.viewerTransitionImage, transitionImageStyle]}
-            />
+              style={[
+                styles.viewerTransitionImage,
+                transitionImageStyle,
+                { opacity: transitionRunning || (!infoOpen && pendingOpeningPhoto === getGalleryImageSource(selectedPhoto).cacheKey) ? 1 : 0 },
+              ]}
+            >
+              <Image
+                ref={transitionImageRef}
+                source={getGalleryImageSource(selectedPhoto)}
+                contentFit="cover"
+                enforceEarlyResizing
+                cachePolicy="memory-disk"
+                priority="high"
+                transition={0}
+                onDisplay={() => {
+                  // Resizing the animated frame must not start another native
+                  // image request on every frame. Keep the displayed bitmap.
+                  if (transitionRunningRef.current) void transitionImageRef.current?.lockResourceAsync().catch(() => {});
+                }}
+                style={styles.viewerPhoto}
+              />
+            </Animated.View>
           ) : null}
         </View>
       </Modal>
