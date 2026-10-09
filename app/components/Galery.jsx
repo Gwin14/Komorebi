@@ -18,7 +18,6 @@ import {
   Pressable,
   ScrollView,
   SectionList,
-  Switch,
   Text,
   TouchableOpacity,
   useWindowDimensions,
@@ -39,6 +38,7 @@ import ScreenHeader from "./ScreenHeader";
 import styles from "./Galery.styles";
 import LoadingScreen from "./LoadingScreen";
 import ProjectChecklist from "./ProjectChecklist";
+import CustomToggle from "./CustoToggle";
 import ProjectSwipeList from "./ProjectSwipeList";
 
 import { deleteGalleryPhotos, rateGalleryPhotos, shareGalleryPhotos } from "../utils/galleryActions";
@@ -1094,7 +1094,6 @@ export default function Galery() {
               style={[
                 styles.infoPanel,
                 {
-                  paddingBottom: Math.max(safeAreaInsets.bottom, 18),
                   transform: [{ translateY: panelTranslateY }],
                 },
               ]}
@@ -1102,11 +1101,14 @@ export default function Galery() {
               <BlurView intensity={72} tint="dark" style={styles.infoPanelBlur}>
                 <View style={styles.infoPanelHandle} />
                 <View style={styles.infoHeader}>
-                  <View>
+                  <View style={styles.infoHeaderCopy}>
                     <Text style={styles.infoEyebrow}>
                       FOTO {selectedIndex + 1}
                     </Text>
-                    <Text style={styles.infoTitle}>Informações</Text>
+                    <Text style={styles.infoTitle}>Detalhes da foto</Text>
+                    <Text style={styles.infoSubtitle}>
+                      {selectedPhoto?.creationTime ? getViewerDate(selectedPhoto.creationTime) : "Informações e ações"}
+                    </Text>
                   </View>
                   <TouchableOpacity
                     accessibilityRole="button"
@@ -1123,7 +1125,7 @@ export default function Galery() {
                   ref={infoScrollRef}
                   onScroll={(event) => { infoScrollOffset.current = event.nativeEvent.contentOffset.y; }}
                   scrollEventThrottle={16}
-                  contentContainerStyle={styles.infoScrollContent}
+                  contentContainerStyle={[styles.infoScrollContent, { paddingBottom: Math.max(safeAreaInsets.bottom, 20) + 16 }]}
                   showsVerticalScrollIndicator={false}
                 >
                   <TouchableOpacity
@@ -1132,74 +1134,11 @@ export default function Galery() {
                     style={[styles.primaryPhotoAction, !!operation && styles.disabledAction]}
                     onPress={() => selectedPhoto && handleShare([selectedPhoto.id])}
                   >
-                    <Ionicons name="share-outline" size={22} color="#ffaa00" />
-                    <Text style={styles.infoActionText}>Compartilhar</Text>
+                    <Ionicons name="share-outline" size={20} color="#171717" />
+                    <Text style={styles.primaryPhotoActionText}>Compartilhar foto</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#171717" />
                   </TouchableOpacity>
-                  <Text style={styles.infoSectionLabel}>ORGANIZAR</Text>
-                  <View style={styles.photoActionGroup}>
-                    <PhotoRatingControls rating={selectedPhoto?.rating} disabled={!!operation} onRate={handleRating} />
-                    <ProjectChecklist
-                      assetId={selectedPhoto?.id}
-                      projects={projects}
-                      onProjectsChange={loadKomorebiPhotos}
-                      onCreateProject={(project) =>
-                        setProjects((previous) => [...previous, project])
-                      }
-                      triggerText="Projetos"
-                      triggerStyle={styles.infoActionButton}
-                      triggerTextStyle={styles.infoActionText}
-                    />
-                  </View>
-                  <Text style={styles.infoSectionLabel}>CRIAR E EDITAR</Text>
-                  <View style={styles.photoActionGroup}>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      disabled={!!operation}
-                      style={[styles.actionRow, !!operation && styles.disabledAction]}
-                      onPress={() => {
-                        const photoUri = selectedPhoto?.uri;
-                        closeViewer();
-                        router.push({
-                          pathname: "components/ExifFrameWithPhoto",
-                          params: { photoUri },
-                        });
-                      }}
-                    >
-                      <Ionicons name="image-outline" size={22} color="#ffaa00" />
-                      <Text style={styles.actionLabel}>EXIF Frame</Text>
-                    </TouchableOpacity>
-
-                      {Platform.OS === "ios" && <>
-                        {depthState?.eligible && <View style={styles.actionRow}>
-                          <Text style={styles.actionLabel}>Criar uma cópia</Text>
-                          <Switch
-                            accessibilityLabel="Criar uma cópia ao aplicar profundidade"
-                            accessibilityHint="Desativado: aplica na foto original. Ativado: mantém a original e cria outra foto."
-                            value={depthCreateCopy}
-                            onValueChange={setDepthCreateCopy}
-                            disabled={!!operation}
-                            trackColor={{ true: "#ffaa00" }}
-                          />
-                        </View>}
-                        {depthState?.eligible && <Text style={styles.actionExplanation}>
-                          {depthCreateCopy ? "Mantém a original e salva uma nova foto." : "Aplica na original, com opção de reverter."}
-                        </Text>}
-                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, styles.actionDivider, (!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)) && styles.disabledAction]} onPress={() => {
-                          if (depthState?.canRevert && !depthState?.canCopy) Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }]);
-                          else void handleDepth();
-                        }}>
-                          <Ionicons name="layers-outline" size={22} color="#ffaa00" />
-                          <Text style={styles.actionLabel}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : depthCreateCopy ? "Criar cópia com profundidade" : "Aplicar profundidade na original"}</Text>
-                        </TouchableOpacity>
-                        <Text style={styles.actionExplanation}>{depthState?.reason || "Verificando disponibilidade…"}</Text>
-                        {depthState?.canCopy && <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={[styles.actionRow, !!operation && styles.disabledAction]} onPress={() => Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }])}>
-                          <Ionicons name="arrow-undo-outline" size={22} color="#ffaa00" />
-                          <Text style={styles.actionLabel}>Reverter profundidade</Text>
-                        </TouchableOpacity>}
-                        {depthState?.canRevert && <Text style={styles.actionExplanation}>A recuperação da versão anterior depende dos dados deste app. Desinstalar o Komorebi remove essa recuperação.</Text>}
-                      </>}
-                  </View>
-                  <Text style={styles.infoSectionLabel}>SOBRE A FOTO</Text>
+                  <Text style={styles.infoSectionLabel}>CAPTURA</Text>
                   {exifLoading ? (
                     <View style={styles.photoDataLoading}>
                       <ActivityIndicator color="#ffaa00" size="small" />
@@ -1216,6 +1155,46 @@ export default function Galery() {
                           ))}
                         </View>
                       ) : null}
+
+                      {["iso", "aperture", "shutter"].some((key) => exifData[key] != null && exifData[key] !== "") && (
+                        <View style={styles.captureMetrics}>
+                          {["iso", "aperture", "shutter"].map((key, index) => (
+                            <View key={key} style={[styles.captureMetric, index > 0 && styles.captureMetricDivider]}>
+                              <Text style={styles.captureMetricLabel}>{EXIF_SCHEMA[key].label}</Text>
+                              <Text style={styles.captureMetricValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+                                {exifData[key] == null || exifData[key] === "" ? "—" : String(exifData[key])}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      <View style={styles.exifContainer}>
+                        {Object.entries(EXIF_SCHEMA).map(([key, config]) => {
+                          const value = exifData[key];
+                          if (
+                            value == null || value === "" ||
+                            ["iso", "aperture", "shutter"].includes(key) ||
+                            key === "latitude" ||
+                            key === "longitude"
+                          )
+                            return null;
+                          return (
+                            <View
+                              key={key}
+                              style={[
+                                styles.exifItemWrapper,
+                                ["date", "lens"].includes(key) && styles.exifItemWide,
+                              ]}
+                            >
+                              <ExifItem
+                                icon={config.icon}
+                                label={config.label}
+                                value={String(value)}
+                              />
+                            </View>
+                          );
+                        })}
+                      </View>
 
                       {exifData.intelligentTags?.length ? (
                         <View style={styles.intelligentTagsSection}>
@@ -1271,33 +1250,6 @@ export default function Galery() {
                         </View>
                       ) : null}
 
-                      <View style={styles.exifContainer}>
-                        {Object.entries(EXIF_SCHEMA).map(([key, config]) => {
-                          const value = exifData[key];
-                          if (
-                            !value ||
-                            key === "latitude" ||
-                            key === "longitude"
-                          )
-                            return null;
-                          return (
-                            <View
-                              key={key}
-                              style={[
-                                styles.exifItemWrapper,
-                                key === "date" && styles.exifItemWide,
-                              ]}
-                            >
-                              <ExifItem
-                                icon={config.icon}
-                                label={config.label}
-                                value={String(value)}
-                              />
-                            </View>
-                          );
-                        })}
-                      </View>
-
                       {(exifData.latitude ?? exifData.GPSLatitude) != null &&
                       (exifData.longitude ?? exifData.GPSLongitude) != null ? (
                         <View pointerEvents="none" style={styles.mapContainer}>
@@ -1317,6 +1269,73 @@ export default function Galery() {
                       Nenhum metadado disponível para esta foto.
                     </Text>
                   )}
+
+                  <Text style={styles.infoSectionLabel}>ORGANIZAR</Text>
+                  <View style={styles.photoActionGroup}>
+                    <PhotoRatingControls rating={selectedPhoto?.rating} disabled={!!operation} onRate={handleRating} />
+                    <ProjectChecklist
+                      assetId={selectedPhoto?.id}
+                      projects={projects}
+                      onProjectsChange={loadKomorebiPhotos}
+                      onCreateProject={(project) =>
+                        setProjects((previous) => [...previous, project])
+                      }
+                      triggerText="Adicionar a um projeto"
+                      disabled={!!operation}
+                      triggerStyle={[styles.infoActionButton, !!operation && styles.disabledAction]}
+                      triggerTextStyle={styles.projectActionText}
+                    />
+                  </View>
+                  <Text style={styles.infoSectionLabel}>CRIAR E EDITAR</Text>
+                  <View style={styles.photoActionGroup}>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      disabled={!!operation}
+                      style={[styles.actionRow, !!operation && styles.disabledAction]}
+                      onPress={() => {
+                        const photoUri = selectedPhoto?.uri;
+                        closeViewer();
+                        router.push({
+                          pathname: "components/ExifFrameWithPhoto",
+                          params: { photoUri },
+                        });
+                      }}
+                    >
+                      <View style={styles.actionIcon}><Ionicons name="image-outline" size={20} color="#ffaa00" /></View>
+                      <View style={styles.actionCopy}>
+                        <Text style={styles.actionLabel}>Moldura EXIF</Text>
+                        <Text style={styles.actionSubtitle}>Componha a foto com os dados da captura</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={17} color="#777777" />
+                    </TouchableOpacity>
+
+                      {Platform.OS === "ios" && <>
+                        {depthState?.eligible && <View style={styles.copyOption}>
+                          <CustomToggle
+                            grouped
+                            last
+                            label="Criar uma cópia"
+                            description={depthCreateCopy ? "Mantém a original e salva uma nova foto." : "Aplica na original, com opção de reverter."}
+                            value={depthCreateCopy}
+                            onValueChange={setDepthCreateCopy}
+                            disabled={!!operation}
+                          />
+                        </View>}
+                        <TouchableOpacity accessibilityRole="button" disabled={!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)} style={[styles.actionRow, styles.actionDivider, (!!operation || (depthState?.requiresCopy && !depthCreateCopy) || !(depthState?.eligible || depthState?.canRevert || depthState?.canCopy)) && styles.disabledAction]} onPress={() => {
+                          if (depthState?.canRevert && !depthState?.canCopy) Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }]);
+                          else void handleDepth();
+                        }}>
+                          <View style={styles.actionIcon}><Ionicons name="layers-outline" size={20} color="#ffaa00" /></View>
+                          <Text style={styles.actionLabel}>{depthState?.canCopy ? "Salvar cópia para Retrato" : depthState?.canRevert ? "Reverter profundidade" : depthCreateCopy ? "Criar cópia com profundidade" : "Aplicar profundidade na original"}</Text>
+                        </TouchableOpacity>
+                        <Text style={styles.actionExplanation}>{depthState?.reason || "Verificando disponibilidade…"}</Text>
+                        {depthState?.canCopy && <TouchableOpacity accessibilityRole="button" disabled={!!operation} style={[styles.actionRow, !!operation && styles.disabledAction]} onPress={() => Alert.alert("Reverter profundidade?", "A versão anterior será restaurada, mantendo a classificação atual.", [{ text: "Cancelar", style: "cancel" }, { text: "Reverter", onPress: () => handleDepth(true) }])}>
+                          <View style={styles.actionIcon}><Ionicons name="arrow-undo-outline" size={20} color="#ffaa00" /></View>
+                          <Text style={styles.actionLabel}>Reverter profundidade</Text>
+                        </TouchableOpacity>}
+                        {depthState?.canRevert && <Text style={styles.actionExplanation}>A recuperação da versão anterior depende dos dados deste app. Desinstalar o Komorebi remove essa recuperação.</Text>}
+                      </>}
+                  </View>
 
                   <TouchableOpacity
                     accessibilityRole="button"

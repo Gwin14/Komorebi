@@ -9,7 +9,7 @@ enum PhotosPortraitCompatibility {
   static var generationReason: String {
     validated
       ? "Abra Editar no Fotos para ajustar Retrato após salvar."
-      : "Profundidade experimental. Abra Editar no Fotos para ajustar Retrato."
+      : "Abra Editar no Fotos para ajustar Retrato."
   }
   static let reason = "Profundidade aguardando validação do desfoque no Fotos."
 }

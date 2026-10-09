@@ -78,7 +78,7 @@ enum PhotoDepthService {
         _ = try store.backup(record)
         let reason = PhotosPortraitCompatibility.validated
           ? "Profundidade adicionada. Abra Editar no Fotos para ajustar Retrato. Você pode reverter."
-          : "Profundidade experimental salva. Abra Editar no Fotos para ajustar Retrato. Você pode reverter."
+          : "Profundidade salva. Abra Editar no Fotos para ajustar Retrato. Você pode reverter."
         return ["eligible": false, "canRevert": true, "canCopy": true, "reason": reason + " Salve uma cópia para usar o botão Retrato fora do editor."]
       case .conflict:
         // A prepared record can also be a committed edit followed by an external

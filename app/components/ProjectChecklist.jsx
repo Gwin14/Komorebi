@@ -27,6 +27,7 @@ export default function ProjectChecklist({
   triggerText,
   triggerStyle,
   triggerTextStyle,
+  disabled = false,
 }) {
   const [visible, setVisible] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -88,6 +89,8 @@ export default function ProjectChecklist({
 
   const trigger = (
     <TouchableOpacity
+      disabled={disabled}
+      accessibilityState={{ disabled }}
       onPress={() => setVisible(true)}
       accessibilityLabel="Selecionar projetos"
       accessibilityRole="button"

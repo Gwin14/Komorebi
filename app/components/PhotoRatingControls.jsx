@@ -4,7 +4,7 @@ import styles from "./Galery.styles";
 
 export default function PhotoRatingControls({ rating, disabled, onRate }) {
   return (
-    <View style={styles.ratingSection}>
+    <View style={[styles.ratingSection, disabled && styles.disabledAction]}>
       <Text style={styles.ratingLabel}>
         Classificação{rating != null ? ` · ${rating}/5` : ""}
       </Text>
@@ -17,7 +17,7 @@ export default function PhotoRatingControls({ rating, disabled, onRate }) {
           onPress={() => onRate(0)}
           style={styles.ratingClear}
         >
-          <MaterialCommunityIcons name="star-off-outline" size={28} color={rating === 0 ? "#ffaa00" : "#aaa"} />
+          <MaterialCommunityIcons name="star-off-outline" size={23} color={rating === 0 ? "#ffaa00" : "#aaa"} />
         </TouchableOpacity>
         {[1, 2, 3, 4, 5].map((value) => (
           <TouchableOpacity
@@ -29,7 +29,7 @@ export default function PhotoRatingControls({ rating, disabled, onRate }) {
             onPress={() => onRate(value)}
             style={styles.ratingStar}
           >
-            <Ionicons name={(rating ?? 0) >= value ? "star" : "star-outline"} size={28} color="#ffaa00" />
+            <Ionicons name={(rating ?? 0) >= value ? "star" : "star-outline"} size={23} color={(rating ?? 0) >= value ? "#ffaa00" : "#747474"} />
           </TouchableOpacity>
         ))}
       </View>
