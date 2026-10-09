@@ -42,7 +42,6 @@ export default function NativeCapturePreview({
   zebraHighlightsEnabled,
   zebraShadowsEnabled,
   exposure,
-  portraitAperture = 4.5,
   aspectRatio,
   availableHeight = 0,
   doubleCaptureMode,
@@ -289,7 +288,6 @@ export default function NativeCapturePreview({
           {...(mode === "stacking"
             ? { previewDoubleExposure, previewStacking }
             : {})}
-          {...(mode === "portrait" ? { portraitAperture } : {})}
           {...(mode === "stacking" || mode === "portrait"
             ? { exposureBias: exposure }
             : {})}

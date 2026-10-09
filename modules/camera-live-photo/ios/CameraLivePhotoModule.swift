@@ -193,6 +193,21 @@ public class CameraLivePhotoModule: Module {
       defer {
         if preparedPhotoURL != photoURL { try? FileManager.default.removeItem(at: preparedPhotoURL) }
       }
+      if let originalPhotoURL,
+         let original = CGImageSourceCreateWithURL(originalPhotoURL as CFURL, nil) {
+        let depthTypes = [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth]
+        let hasDepth = depthTypes.contains {
+          CGImageSourceCopyAuxiliaryDataInfoAtIndex(original, CGImageSourceGetPrimaryImageIndex(original), $0) != nil
+        }
+        if hasDepth {
+          guard let prepared = CGImageSourceCreateWithURL(preparedPhotoURL as CFURL, nil),
+                depthTypes.contains(where: {
+                  CGImageSourceCopyAuxiliaryDataInfoAtIndex(prepared, CGImageSourceGetPrimaryImageIndex(prepared), $0) != nil
+                }) else {
+            throw LivePhotoError.captureFailed
+          }
+        }
+      }
       try PhotoCatalogMetadata.apply(to: preparedPhotoURL, metadata: options["metadata"] as? [String: Any])
       // Save the prepared native photo/video pair without a synthetic Styles
       // graph. Such graphs currently fail in Photos' Live Photo editor even
@@ -312,6 +327,18 @@ public class CameraLivePhotoModule: Module {
     }
 
     CGImageDestinationAddImage(destination, processedImage, properties as CFDictionary)
+    // Portrait Live Photos use the same native still/video pair. Restore
+    // sensor depth and the subject matte after LUT processing and cropping.
+    if let metadataSource {
+      for type in [kCGImageAuxiliaryDataTypeDisparity, kCGImageAuxiliaryDataTypeDepth,
+                   kCGImageAuxiliaryDataTypePortraitEffectsMatte] {
+        if let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(
+          metadataSource, CGImageSourceGetPrimaryImageIndex(metadataSource), type
+        ) {
+          CGImageDestinationAddAuxiliaryDataInfo(destination, type, info)
+        }
+      }
+    }
     return CGImageDestinationFinalize(destination) ? destinationURL : nil
   }
 

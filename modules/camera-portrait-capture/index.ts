@@ -5,12 +5,14 @@ import { Platform, View, type ViewProps } from "react-native";
 export type PortraitCaptureCapabilities = {
   supportsPortraitCapture: boolean;
   supportsDepthData: boolean;
+  supportsLivePhotoCapture: boolean;
   supportsPortraitEffectsMatte: boolean;
   canSaveToPhotoLibrary: boolean;
 };
 
 export type PortraitCaptureOptions = {
   aperture?: number;
+  livePhotoEnabled?: boolean;
   deviceId: string;
   flashMode?: "off" | "on" | "auto";
   outputFormat?: "heif" | "jpeg";
@@ -20,7 +22,6 @@ export type PortraitCameraViewProps = ViewProps & {
   deviceId?: string | null;
   zoomFactor?: number;
   exposureBias?: number;
-  portraitAperture?: number;
   flashMode?: "off" | "on" | "auto";
   isActive?: boolean;
   smileDetectionEnabled?: boolean;
@@ -44,6 +45,7 @@ export type PortraitCameraViewProps = ViewProps & {
 export type PortraitCaptureResult = {
   photoUri: string;
   originalPhotoUri: string;
+  movieUri: string | null;
   localIdentifier: string | null;
   savedToLibrary: boolean;
   depthDataEmbedded: boolean;
@@ -84,6 +86,7 @@ export type SaveProcessedPortraitPhotoResult = {
 const DEFAULT_CAPABILITIES: PortraitCaptureCapabilities = {
   supportsPortraitCapture: false,
   supportsDepthData: false,
+  supportsLivePhotoCapture: false,
   supportsPortraitEffectsMatte: false,
   canSaveToPhotoLibrary: false,
 };
@@ -118,6 +121,7 @@ export async function getPortraitCaptureCapabilities(
   return {
     supportsPortraitCapture: Boolean(capabilities.supportsPortraitCapture),
     supportsDepthData: Boolean(capabilities.supportsDepthData),
+    supportsLivePhotoCapture: Boolean(capabilities.supportsLivePhotoCapture),
     supportsPortraitEffectsMatte: Boolean(
       capabilities.supportsPortraitEffectsMatte,
     ),
@@ -135,6 +139,7 @@ export async function capturePortraitPhoto(
   const result = await nativeModule.capturePortraitPhoto({
     deviceId: options.deviceId,
     aperture: options.aperture ?? 4.5,
+    livePhotoEnabled: options.livePhotoEnabled ?? false,
     flashMode: options.flashMode ?? "off",
     outputFormat: options.outputFormat ?? "heif",
   });
@@ -142,6 +147,7 @@ export async function capturePortraitPhoto(
   return {
     photoUri: result.photoUri,
     originalPhotoUri: result.originalPhotoUri ?? result.photoUri,
+    movieUri: result.movieUri ?? null,
     localIdentifier: result.localIdentifier ?? null,
     savedToLibrary: Boolean(result.savedToLibrary),
     depthDataEmbedded: Boolean(result.depthDataEmbedded),

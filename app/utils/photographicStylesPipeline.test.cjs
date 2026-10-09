@@ -191,8 +191,9 @@ for (const [enabled, styles3Verified, shouldSave] of [
   });
 }
 
-for (const captureMode of ["live", "portrait"]) {
+for (const captureMode of ["live", "portrait", "portraitLive"]) {
   test(`${captureMode} uses the correct Styles policy at save time`, async () => {
+    const isLive = captureMode !== "portrait";
     const hooks = createHooks();
     const calls = [];
     const stills = [];
@@ -232,21 +233,22 @@ for (const captureMode of ["live", "portrait"]) {
     await queue.handleProcessed("file:///effect.jpg", {
       captureMode,
       originalUri: "file:///original.heic",
-      ...(captureMode === "live" ? { livePhotoMovieUri: "file:///paired.mov" } : { depthDataEmbedded: true }),
+      ...(isLive ? { livePhotoMovieUri: "file:///paired.mov" } : {}),
+      depthDataEmbedded: captureMode !== "live",
       // Simulate a Live Photo queued before styles were paused.
-      doubleCaptureMode: captureMode === "live",
-      saveOriginalWithoutEffects: captureMode === "live",
+      doubleCaptureMode: isLive,
+      saveOriginalWithoutEffects: isLive,
       outputFormat: "heif",
       preserveApplePhotographicStyles: true,
       photographicStyles3Enabled: true,
       cameraPosition: "front",
     });
     assert.equal(calls.length, 1);
-    assert.equal(calls[0].preserveApplePhotographicStyles, captureMode === "live" ? undefined : true);
-    assert.equal(calls[0].photographicStyles3Enabled, captureMode === "live" ? undefined : true);
-    assert.equal(calls[0].cameraPosition, captureMode === "live" ? undefined : "front");
+    assert.equal(calls[0].preserveApplePhotographicStyles, isLive ? undefined : true);
+    assert.equal(calls[0].photographicStyles3Enabled, isLive ? undefined : true);
+    assert.equal(calls[0].cameraPosition, isLive ? undefined : "front");
     assert.equal(calls[0].originalPhotoUri, "file:///original.heic");
-    if (captureMode === "live") {
+    if (isLive) {
       assert.equal(calls[0].movieUri, "file:///paired.mov");
       assert.deepEqual(stills, ["file:///inverse.jpg", "file:///original.heic"]);
     }

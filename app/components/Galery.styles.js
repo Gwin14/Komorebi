@@ -228,7 +228,6 @@ export default StyleSheet.create({
     width: 38,
   },
   infoHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", gap: 12, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 24 },
-  infoEyebrow: { color: "#ffaa00", fontSize: 9, fontWeight: "600", letterSpacing: 2.2, marginBottom: 8 },
   infoTitle: { color: "#f3f3f3", fontSize: 26, fontWeight: "600", letterSpacing: -0.8 },
   infoCloseButton: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.055)", borderRadius: 22, height: 44, justifyContent: "center", width: 44, flexShrink: 0 },
   infoScrollContent: { paddingHorizontal: 24 },
@@ -241,7 +240,7 @@ export default StyleSheet.create({
   badgeContainer: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 14 },
   badge: { backgroundColor: "rgba(255,170,0,0.07)", borderRadius: 6, paddingHorizontal: 9, paddingVertical: 5 },
   badgeText: { color: "#ffaa00", fontSize: 10, fontWeight: "500", letterSpacing: 0.3 },
-  intelligentTagsSection: { backgroundColor: "#1c1c1c", borderColor: "rgba(255,255,255,0.055)", borderRadius: 16, borderWidth: 1, marginBottom: 14, overflow: "hidden" },
+  intelligentTagsSection: { backgroundColor: "#1c1c1c", borderColor: "rgba(255,255,255,0.055)", borderRadius: 16, borderWidth: 1, marginTop: 28, overflow: "hidden" },
   intelligentTagsHeader: {
     alignItems: "center",
     flexDirection: "row",

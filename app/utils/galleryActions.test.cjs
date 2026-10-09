@@ -11,6 +11,7 @@ function fixture({ platform = "ios", exportPhoto, share, info, rate } = {}) {
       cacheDirectory: "file:///cache/",
       makeDirectoryAsync: async (uri) => calls.push(["mkdir", uri]),
       copyAsync: async (options) => calls.push(["copy", options]),
+      moveAsync: async (options) => calls.push(["move", options]),
       deleteAsync: async (uri) => calls.push(["cleanup", uri]),
     },
     "expo-media-library": { getAssetInfoAsync: info || (async (id) => ({ localUri: `file:///${id}.jpg`, filename: `${id}.jpg` })) },
@@ -34,6 +35,35 @@ test("a preparation failure never opens a partial share sheet and cleans up", as
   await assert.rejects(f.shareGalleryPhotos(["a", "b"]), /iCloud/);
   assert.equal(f.calls.some(([kind]) => kind === "share"), false);
   assert.equal(f.calls.at(-1)[0], "cleanup");
+});
+
+test("iOS shares original filenames in separate folders, including duplicate names", async () => {
+  const f = fixture({ info: async () => ({ filename: "Pôr do sol.HEIC" }) });
+  await f.shareGalleryPhotos(["a", "b"]);
+  const { urls } = f.calls.find(([kind]) => kind === "share")[1];
+  assert.equal(new Set(urls).size, 2);
+  for (const url of urls) {
+    assert.equal(decodeURIComponent(url.split("/").at(-1)), "Pôr do sol.HEIC");
+  }
+  assert.deepEqual(f.calls.filter(([kind]) => kind === "move").map(([, value]) => value.to), urls);
+});
+
+test("an edited iOS rendition keeps the original stem and its actual format", async () => {
+  const f = fixture({
+    info: async () => ({ filename: "IMG_1234.HEIC" }),
+    exportPhoto: async (_, destination) => `${destination}.jpg`,
+  });
+  await f.shareGalleryPhotos(["a"]);
+  const { urls } = f.calls.find(([kind]) => kind === "share")[1];
+  assert.equal(urls[0].split("/").at(-1), "IMG_1234.jpg");
+});
+
+test("Android shares the original filename when copying a content URI", async () => {
+  const f = fixture({ platform: "android", info: async () => ({ uri: "content://photos/a", filename: "IMG_1234.JPG" }) });
+  await f.shareGalleryPhotos(["a"]);
+  const { urls } = f.calls.find(([kind]) => kind === "share")[1];
+  assert.equal(urls[0].split("/").at(-1), "IMG_1234.JPG");
+  assert.deepEqual(f.calls.find(([kind]) => kind === "copy")[1], { from: "content://photos/a", to: urls[0] });
 });
 
 test("cancelling preparation prevents the sheet; Android copies content URIs to files", async () => {

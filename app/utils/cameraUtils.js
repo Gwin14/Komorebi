@@ -296,7 +296,7 @@ export const takePicture = async ({
   try {
     setIsProcessing(true);
 
-    if (livePhotoEnabled && livePhotoDeviceId && !rawModeEnabled) {
+    if (livePhotoEnabled && !portraitModeEnabled && livePhotoDeviceId && !rawModeEnabled) {
       console.log("[CameraUtils] live photo capture start", {
         deviceId: livePhotoDeviceId,
         flash,
@@ -352,9 +352,13 @@ export const takePicture = async ({
       const portraitPhoto = await capturePortraitPhoto({
         deviceId: portraitDeviceId,
         aperture: portraitAperture,
+        livePhotoEnabled,
         flashMode: flash === "on" ? "on" : "off",
         outputFormat,
       });
+      if (livePhotoEnabled && !portraitPhoto.movieUri) {
+        throw new Error("A captura de retrato não retornou o vídeo da Live Photo.");
+      }
       console.log("[CameraUtils] portrait capture result", {
         photoUri: portraitPhoto.photoUri,
         localIdentifier: portraitPhoto.localIdentifier,
@@ -380,7 +384,7 @@ export const takePicture = async ({
           doubleCaptureMode,
           saveOriginalWithoutEffects,
           aspectRatio,
-          captureMode: "portrait",
+          captureMode: livePhotoEnabled ? "portraitLive" : "portrait",
           originalUri: normalizeUri(portraitPhoto.originalPhotoUri),
           preserveApplePhotographicStyles,
           photographicStyles3Enabled,
@@ -389,6 +393,7 @@ export const takePicture = async ({
             outputFormat,
             localIdentifier: portraitPhoto.localIdentifier,
             nativeSavedToLibrary: portraitPhoto.savedToLibrary,
+            livePhotoMovieUri: portraitPhoto.movieUri,
             depthDataEmbedded: portraitPhoto.depthDataEmbedded,
             portraitEffectsMatteEmbedded:
               portraitPhoto.portraitEffectsMatteEmbedded,

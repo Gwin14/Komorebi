@@ -1184,9 +1184,6 @@ export default function Galery() {
                 <View style={styles.infoPanelHandle} />
                 <View style={styles.infoHeader}>
                   <View style={styles.infoHeaderCopy}>
-                    <Text style={styles.infoEyebrow}>
-                      FOTO {selectedIndex + 1}
-                    </Text>
                     <Text style={styles.infoTitle}>Detalhes da foto</Text>
                     <Text style={styles.infoSubtitle}>
                       {selectedPhoto?.creationTime ? getViewerDate(selectedPhoto.creationTime) : "Informações e ações"}
@@ -1278,59 +1275,7 @@ export default function Galery() {
                         })}
                       </View>
 
-                      {exifData.intelligentTags?.length ? (
-                        <View style={styles.intelligentTagsSection}>
-                          <TouchableOpacity
-                            accessibilityRole="button"
-                            accessibilityState={{
-                              expanded: intelligentTagsOpen,
-                            }}
-                            onPress={() =>
-                              setIntelligentTagsOpen((open) => !open)
-                            }
-                            style={styles.intelligentTagsHeader}
-                          >
-                            <View style={styles.intelligentTagsTitleRow}>
-                              <Ionicons
-                                name="sparkles-outline"
-                                size={17}
-                                color="#ffaa00"
-                              />
-                              <Text style={styles.intelligentTagsTitle}>
-                                Tags inteligentes
-                              </Text>
-                              <View style={styles.intelligentTagsCount}>
-                                <Text style={styles.intelligentTagsCountText}>
-                                  {exifData.intelligentTags.length}
-                                </Text>
-                              </View>
-                            </View>
-                            <Ionicons
-                              name={
-                                intelligentTagsOpen
-                                  ? "chevron-up"
-                                  : "chevron-down"
-                              }
-                              size={18}
-                              color="rgba(255,255,255,0.58)"
-                            />
-                          </TouchableOpacity>
-                          {intelligentTagsOpen ? (
-                            <View style={styles.intelligentTagsChips}>
-                              {exifData.intelligentTags.map((tag) => (
-                                <View
-                                  key={tag}
-                                  style={styles.intelligentTagChip}
-                                >
-                                  <Text style={styles.intelligentTagText}>
-                                    {tag}
-                                  </Text>
-                                </View>
-                              ))}
-                            </View>
-                          ) : null}
-                        </View>
-                      ) : null}
+
 
                       {(exifData.latitude ?? exifData.GPSLatitude) != null &&
                       (exifData.longitude ?? exifData.GPSLongitude) != null ? (
@@ -1428,6 +1373,60 @@ export default function Galery() {
                         {depthState?.canRevert && <Text style={styles.actionExplanation}>A recuperação da versão anterior depende dos dados deste app. Desinstalar o Komorebi remove essa recuperação.</Text>}
                       </>}
                   </View>
+
+                  {exifData?.intelligentTags?.length ? (
+                    <View style={styles.intelligentTagsSection}>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityState={{
+                          expanded: intelligentTagsOpen,
+                        }}
+                        onPress={() =>
+                          setIntelligentTagsOpen((open) => !open)
+                        }
+                        style={styles.intelligentTagsHeader}
+                      >
+                        <View style={styles.intelligentTagsTitleRow}>
+                          <Ionicons
+                            name="sparkles-outline"
+                            size={17}
+                            color="#ffaa00"
+                          />
+                          <Text style={styles.intelligentTagsTitle}>
+                            Tags inteligentes
+                          </Text>
+                          <View style={styles.intelligentTagsCount}>
+                            <Text style={styles.intelligentTagsCountText}>
+                              {exifData.intelligentTags.length}
+                            </Text>
+                          </View>
+                        </View>
+                        <Ionicons
+                          name={
+                            intelligentTagsOpen
+                              ? "chevron-up"
+                              : "chevron-down"
+                          }
+                          size={18}
+                          color="rgba(255,255,255,0.58)"
+                        />
+                      </TouchableOpacity>
+                      {intelligentTagsOpen ? (
+                        <View style={styles.intelligentTagsChips}>
+                          {exifData.intelligentTags.map((tag) => (
+                            <View
+                              key={tag}
+                              style={styles.intelligentTagChip}
+                            >
+                              <Text style={styles.intelligentTagText}>
+                                {tag}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
 
                   <TouchableOpacity
                     accessibilityRole="button"

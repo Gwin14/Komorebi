@@ -42,23 +42,39 @@ export function shareGalleryPhotos(ids, options = {}) {
       const urls = [];
       for (const id of ids) {
         if (options.isCancelled?.()) return;
-        const destination = `${directory}${urls.length}`;
+        // Separate folders preserve duplicate original names in a batch.
+        const photoDirectory = `${directory}${urls.length}/`;
+        await FileSystem.makeDirectoryAsync(photoDirectory, { intermediates: true });
+        const info = await MediaLibrary.getAssetInfoAsync(id, {
+          shouldDownloadFromNetwork: true,
+        });
+        const originalName = info.filename?.replace(/[/\\\u0000]/g, "_");
+        let uri;
+        let extension;
         if (Platform.OS === "ios") {
           // PhotoKit's editing input resolves the current full-size rendition,
           // including other apps' edits and resources stored only in iCloud.
-          urls.push(await exportCurrentPhoto(id, destination));
+          uri = await exportCurrentPhoto(id, `${photoDirectory}current`);
+          extension = uri.match(/\.([a-z0-9]+)$/i)?.[1] || "jpg";
         } else {
-          const info = await MediaLibrary.getAssetInfoAsync(id, {
-            shouldDownloadFromNetwork: true,
-          });
-          const uri = info.localUri || info.uri;
+          uri = info.localUri || info.uri;
           if (!uri || (!uri.startsWith("file://") && !uri.startsWith("content://")))
             throw new Error("Não foi possível preparar uma das fotos.");
-          const extension = info.filename?.match(/\.([a-z0-9]+)$/i)?.[1] || "jpg";
-          const target = `${destination}.${extension}`;
-          await FileSystem.copyAsync({ from: uri, to: target });
-          urls.push(target);
+          extension = originalName?.match(/\.([a-z0-9]+)$/i)?.[1] || "jpg";
         }
+        const originalExtension = originalName?.match(/\.([a-z0-9]+)$/i)?.[1];
+        const normalizedExtension = (value) => value?.toLowerCase().replace(/^jpeg$/, "jpg").replace(/^heif$/, "heic");
+        // Edited renditions can have a different format from the original.
+        const filename = originalExtension && normalizedExtension(originalExtension) === normalizedExtension(extension)
+          ? originalName
+          : `${originalName?.replace(/\.[a-z0-9]+$/i, "") || "photo"}.${extension}`;
+        const target = `${photoDirectory}${encodeURIComponent(filename)}`;
+        if (Platform.OS === "ios") {
+          if (uri !== target) await FileSystem.moveAsync({ from: uri, to: target });
+        } else {
+          await FileSystem.copyAsync({ from: uri, to: target });
+        }
+        urls.push(target);
         options.onProgress?.({ completed: urls.length, total: ids.length });
       }
       if (options.isCancelled?.()) return;

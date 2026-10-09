@@ -19,7 +19,7 @@ import BottomControls from "./components/BottomControls";
 import CameraPreview from "./components/CameraPreview";
 import CameraStartupControls from "./components/CameraStartupControls";
 import useCameraStartup from "./hooks/useCameraStartup";
-import PortraitAdjustmentSlider from "./components/PortraitAdjustmentSlider";
+import ExposureSlider from "./components/ExposureSlider";
 import FocusBracketingPanel from "./components/FocusBracketingPanel";
 import useFocusBracketing from "./hooks/useFocusBracketing";
 import ManualControlsPanel from "./components/ManualControlsPanel";
@@ -262,12 +262,21 @@ export default function App() {
     }
   }, [appleStylesCompatibility.suspensionReason, showTopBarNotice]);
 
+  useEffect(() => {
+    if (portraitCapture.enabled && livePhoto.enabled &&
+        portraitCapture.capabilities &&
+        !portraitCapture.capabilities.supportsLivePhotoCapture) {
+      livePhoto.setEnabled(false);
+      showTopBarNotice("Live indisponível com retrato nesta lente.");
+    }
+  }, [portraitCapture.enabled, portraitCapture.capabilities, livePhoto, showTopBarNotice]);
+
   const nativeCaptureMode = imageStacking.enabled
     ? "stacking"
-    : livePhoto.enabled
-      ? "live"
-      : portraitCapture.enabled
-        ? "portrait"
+    : portraitCapture.enabled
+      ? "portrait"
+      : livePhoto.enabled
+        ? "live"
         : null;
   const [renderedNativeCaptureMode, setRenderedNativeCaptureMode] =
     useState(nativeCaptureMode);
@@ -886,10 +895,11 @@ export default function App() {
             rawCapture.setRawMode(previous.rawMode);
             if (!previous.processedEnabled)
               rawCapture.toggleFormat("processed");
-          } else if (previous.livePhoto && livePhoto.available) {
-            livePhoto.setEnabled(true);
-          } else if (previous.portrait && portraitCapture.available) {
-            portraitCapture.setEnabled(true);
+          } else {
+            const restorePortrait = previous.portrait && portraitCapture.available;
+            portraitCapture.setEnabled(restorePortrait);
+            livePhoto.setEnabled(previous.livePhoto && livePhoto.available &&
+              (!restorePortrait || Boolean(portraitCapture.capabilities?.supportsLivePhotoCapture)));
           }
           if (previous.flash !== "off" && activeLens?.device?.hasFlash) {
             setFlash(previous.flash);
@@ -1103,13 +1113,13 @@ export default function App() {
     livePhotoAvailable:
       livePhoto.available &&
       !rawCapture.rawModeEnabled &&
-      !portraitCapture.enabled &&
+      (!portraitCapture.enabled || portraitCapture.capabilities?.supportsLivePhotoCapture) &&
       !imageStacking.enabled,
     livePhotoEnabled: livePhoto.enabled,
     portraitCaptureAvailable:
       portraitCapture.available &&
       !rawCapture.rawModeEnabled &&
-      !livePhoto.enabled &&
+      (!livePhoto.enabled || portraitCapture.capabilities?.supportsLivePhotoCapture) &&
       !imageStacking.enabled,
     portraitModeEnabled: portraitCapture.enabled,
     unavailableReasons: {
@@ -1131,8 +1141,8 @@ export default function App() {
           ? "Desative Image Stacking para usar Live Photo."
           : rawCapture.rawModeEnabled
             ? "Desative RAW/ProRAW para usar Live Photo."
-            : portraitCapture.enabled
-              ? "Desative o modo retrato para usar Live Photo."
+            : portraitCapture.enabled && !portraitCapture.capabilities?.supportsLivePhotoCapture
+              ? "Esta lente não suporta retrato com Live Photo."
               : null
         : "Live Photo não é suportada pela lente selecionada.",
       portrait: portraitCapture.available
@@ -1140,8 +1150,8 @@ export default function App() {
           ? "Desative Image Stacking para usar o modo retrato."
           : rawCapture.rawModeEnabled
             ? "Desative RAW/ProRAW para usar o modo retrato."
-            : livePhoto.enabled
-              ? "Desative Live Photo para usar o modo retrato."
+            : livePhoto.enabled && !portraitCapture.capabilities?.supportsLivePhotoCapture
+              ? "Esta lente não suporta retrato com Live Photo."
               : null
         : "O modo retrato não é suportado pela lente selecionada.",
     },
@@ -1175,13 +1185,11 @@ export default function App() {
     onToggleFileFormat: rawCapture.toggleFormat,
     onSelectRawMode: rawCapture.setRawMode,
     toggleLivePhotoEnabled: () => {
-      setCameraReady(false);
-      if (!livePhoto.enabled) portraitCapture.setEnabled(false);
+      if (!portraitCapture.enabled) setCameraReady(false);
       livePhoto.toggleEnabled();
     },
     togglePortraitModeEnabled: () => {
       setCameraReady(false);
-      if (!portraitCapture.enabled) livePhoto.setEnabled(false);
       portraitCapture.toggleEnabled();
     },
     toggleSmileDetectionEnabled: () =>
@@ -1293,7 +1301,6 @@ export default function App() {
                   zebraHighlightsEnabled={zebraHighlightsEnabled}
                   zebraShadowsEnabled={zebraShadowsEnabled}
                   exposure={exposure}
-                  portraitAperture={portraitCapture.aperture}
                   aspectRatio={aspectRatio}
                   availableHeight={previewAvailableHeight}
                   doubleCaptureMode={doubleCaptureMode}
@@ -1462,8 +1469,7 @@ export default function App() {
               setExposure={setExposure}
             />
           ) : (
-            <PortraitAdjustmentSlider
-              portrait={portraitCapture}
+            <ExposureSlider
               exposure={exposure}
               setExposure={setExposure}
               topBarBelow={topBarBelow}

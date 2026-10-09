@@ -44,6 +44,7 @@ const formatCaptureMode = (mode) => {
   const labels = {
     live: "live",
     portrait: "retrato",
+    portraitLive: "retrato + live",
     raw: "raw",
   };
 
