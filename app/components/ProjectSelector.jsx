@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { useState } from "react";
 import {
   Alert,
@@ -105,9 +104,9 @@ export default function ProjectSelector({
       popoverStyle={styles.popover}
       from={trigger}
     >
-      <BlurView intensity={30} tint="dark" style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>PROJETOS</Text>
+          <Text style={styles.title}>Projetos</Text>
         </View>
 
         {isCreating ? (
@@ -148,7 +147,7 @@ export default function ProjectSelector({
 
               return (
                 <TouchableOpacity
-                  style={styles.row}
+                  style={[styles.row, isActive && styles.rowActive]}
                   onPress={() => {
                     onChangeProject(item.isNone ? null : item.id);
                     setVisible(false);
@@ -191,7 +190,7 @@ export default function ProjectSelector({
             </TouchableOpacity>
           </>
         )}
-      </BlurView>
+      </View>
     </Popover>
   );
 }

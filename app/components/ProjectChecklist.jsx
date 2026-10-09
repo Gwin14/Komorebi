@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { BlurView } from "expo-blur";
 import { useEffect, useCallback, useState } from "react";
 import {
   Alert,
@@ -119,9 +118,9 @@ export default function ProjectChecklist({
       popoverStyle={styles.popover}
       from={trigger}
     >
-      <BlurView intensity={30} tint="dark" style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>PROJETOS</Text>
+          <Text style={styles.title}>Projetos</Text>
         </View>
 
         {isCreating ? (
@@ -163,7 +162,7 @@ export default function ProjectChecklist({
 
               return (
                 <TouchableOpacity
-                  style={styles.row}
+                  style={[styles.row, member && styles.rowActive]}
                   onPress={() => handleToggle(item)}
                 >
                   <View style={styles.rowLabelContainer}>
@@ -197,7 +196,7 @@ export default function ProjectChecklist({
             </TouchableOpacity>
           </>
         )}
-      </BlurView>
+      </View>
     </Popover>
   );
 }

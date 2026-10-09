@@ -714,6 +714,9 @@ export default function Galery() {
       right={permission?.granted ? (
         <View pointerEvents={operation ? "none" : "auto"} style={operation && styles.disabledAction}>
         <ProjectSwipeList
+          triggerIcon="ellipsis-horizontal"
+          selecting={selecting}
+          onToggleSelection={selecting ? clearSelection : () => setSelecting(true)}
           projects={projects}
           activeProjectId={viewProjectId}
           onChangeProject={handleChangeViewProject}
@@ -810,11 +813,8 @@ export default function Galery() {
       <StatusBar style="light" />
 
       {navigationHeader}
-      <View style={styles.selectionToolbar}>
-        <TouchableOpacity accessibilityRole="button" disabled={!!operation} onPress={selecting ? clearSelection : () => setSelecting(true)} style={styles.selectionButton}>
-          <Text style={styles.infoActionText}>{selecting ? "Cancelar seleção" : "Selecionar"}</Text>
-        </TouchableOpacity>
-        {selecting && [
+      {selecting && <View style={styles.selectionToolbar}>
+        {[
           ["Avaliar", () => setBatchRatingOpen(true)],
           ["Compartilhar", () => handleShare([...selectedIds])],
           ["Apagar", () => handleDeletePhoto([...selectedIds])],
@@ -823,7 +823,7 @@ export default function Galery() {
             <Text style={label === "Apagar" ? styles.dangerText : styles.infoActionText}>{label}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </View>}
       {!viewerVisible && !batchRatingOpen && <GalleryActionProgress operation={operation} onCancel={cancelOperation} />}
 
       <SectionList
