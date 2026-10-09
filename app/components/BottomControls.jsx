@@ -16,6 +16,7 @@ import Shutter from "./shutter";
 import styles, { BOTTOM_CONTROLS_MARGIN } from "./BottomControls.styles";
 
 export default function BottomControls({
+  retroStyle = false,
   controlsAnim,
   displayedControl,
   activeControl,
@@ -203,6 +204,7 @@ export default function BottomControls({
       <Animated.View
         style={[
           styles.lensSlot,
+          retroStyle && styles.retroLensSpacing,
           {
             opacity: shutterOpacity,
             transform: [{ translateY: shutterTranslate }],

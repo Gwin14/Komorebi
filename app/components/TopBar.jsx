@@ -17,6 +17,7 @@ import CaptureTimerSelector from "./CaptureTimerSelector";
 import styles from "./TopBar.styles";
 
 export default function TopBar({
+  retroStyle = false,
   flash,
   toggleFlash,
   toggleMode,
@@ -255,6 +256,7 @@ export default function TopBar({
       <FadeAnimated.View
         style={[
           styles.buttonsContainer,
+          retroStyle && styles.retroButtonsContainer,
           noticeVisible && {
             opacity: notice.opacity.interpolate({
               inputRange: [0, 1],

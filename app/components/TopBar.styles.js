@@ -34,6 +34,10 @@ export default StyleSheet.create({
     paddingHorizontal: 4,
     paddingVertical: 3,
   },
+  retroButtonsContainer: {
+    justifyContent: "space-between",
+    paddingHorizontal: 0,
+  },
   popoverTransparent: {
     backgroundColor: "transparent",
   },

@@ -8,6 +8,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   Platform,
   Pressable,
@@ -43,6 +44,8 @@ export const SETTINGS_PAGES = {
   CAMERA: "camera",
   PREVIEWS: "previews",
   CAPTURE: "capture",
+  HEIF_PLUS: "heifPlus",
+  PHOTO_STYLES: "photoStyles",
   INTELLIGENCE: "intelligence",
   CONTROLS: "controls",
   GESTURES: "gestures",
@@ -266,6 +269,8 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
     [SETTINGS_PAGES.CAMERA]: "Câmera",
     [SETTINGS_PAGES.PREVIEWS]: "Previews",
     [SETTINGS_PAGES.CAPTURE]: "Captura e arquivos",
+    [SETTINGS_PAGES.HEIF_PLUS]: "Revelação HEIF+",
+    [SETTINGS_PAGES.PHOTO_STYLES]: "Estilos Fotográficos",
     [SETTINGS_PAGES.INTELLIGENCE]: "Recursos inteligentes",
     [SETTINGS_PAGES.CONTROLS]: "Barra de controles",
     [SETTINGS_PAGES.GESTURES]: "Controles e gestos",
@@ -286,31 +291,24 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
 
   const renderRoot = () => (
     <>
-      <Text style={styles.intro}>
-        Ajuste a experiência da câmera e o modo como suas fotos são salvas.
-      </Text>
       <Section title="Fotografia">
         <MenuRow
-          description="Viewfinder, guias e som do obturador"
           icon="camera-outline"
           label="Câmera"
           onPress={() => openPage(SETTINGS_PAGES.CAMERA)}
         />
         <MenuRow
-          description="Visualização opcional dos efeitos durante a captura"
           icon="eye-outline"
           label="Previews"
           onPress={() => openPage(SETTINGS_PAGES.PREVIEWS)}
         />
         <MenuRow
-          description="Formato, cópias e metadados"
           icon="images-outline"
           label="Captura e arquivos"
           onPress={() => openPage(SETTINGS_PAGES.CAPTURE)}
         />
         {Platform.OS === "ios" && (
           <MenuRow
-            description="Composição, nomes e tags no aparelho"
             icon="sparkles-outline"
             label="Recursos inteligentes"
             onPress={() => openPage(SETTINGS_PAGES.INTELLIGENCE)}
@@ -320,20 +318,17 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
       </Section>
       <Section title="Personalização">
         <MenuRow
-          description="Gestos no viewfinder e atalhos dos botões de volume"
           icon="hand-left-outline"
           label="Controles e gestos"
           onPress={() => openPage(SETTINGS_PAGES.GESTURES)}
         />
         <MenuRow
-          description="Escolha e ordene os atalhos da câmera"
           icon="options-outline"
           label="Barra de controles"
           onPress={() => openPage(SETTINGS_PAGES.CONTROLS)}
           status={`${topBarControls.length}/${TOP_BAR_MAX_CONTROLS}`}
         />
         <MenuRow
-          description="Importe e gerencie arquivos .cube"
           icon="color-filter-outline"
           label="LUTs personalizados"
           onPress={() => openPage(SETTINGS_PAGES.LUTS)}
@@ -342,7 +337,6 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
       </Section>
       <Section title="Komorebi">
         <MenuRow
-          description="Ajuda, documentos e links do projeto"
           icon="information-circle-outline"
           label="Sobre e suporte"
           onPress={() => openPage(SETTINGS_PAGES.ABOUT)}
@@ -531,35 +525,69 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
           onValueChange={setLocation}
         />
         {Platform.OS === "ios" && (
-          <>
-            <CustomToggle
-              badge="experimental"
-              grouped
-              last={!preserveApplePhotographicStyles}
-              description="Prepara o HEIF para edição no Fotos, inclusive em Stacking, Retrato e HEIF+. Pausa em Live Photo e RAW comum."
-              label="Edição no Fotos da Apple"
-              value={preserveApplePhotographicStyles}
-              onValueChange={(enabled) => {
-                setPreserveApplePhotographicStyles(enabled);
-                if (enabled) setSaveAsJpeg(false);
-              }}
-            />
-            {preserveApplePhotographicStyles && (
-              <CustomToggle
-                badge="experimental"
-                grouped
-                last
-                label="Compatibilidade com Estilos Fotográficos 3"
-                description="Prepara o HEIF para textura e grão no Fotos. Disponibilidade depende do iPhone e do iOS."
-                value={photographicStyles3Enabled}
-                onValueChange={setPhotographicStyles3Enabled}
-              />
-            )}
-          </>
+          <MenuRow
+            icon="color-palette-outline"
+            label="Estilos Fotográficos"
+            onPress={() => openPage(SETTINGS_PAGES.PHOTO_STYLES)}
+          />
         )}
       </Section>
-      {Platform.OS === "ios" && <HeifPlusSettings />}
+      {Platform.OS === "ios" && (
+        <Section>
+          <MenuRow
+            icon="options-outline"
+            label="Revelação HEIF+"
+            onPress={() => openPage(SETTINGS_PAGES.HEIF_PLUS)}
+          />
+        </Section>
+      )}
     </>
+  );
+
+  const renderPhotoStyles = () => (
+    <Section description="Edite o estilo da foto no app Fotos da Apple.">
+      <CustomToggle
+        badge="experimental"
+        grouped
+        last={!preserveApplePhotographicStyles}
+        label="Edição no Fotos da Apple"
+        description="Indisponível em Live Photo e RAW comum."
+        value={preserveApplePhotographicStyles}
+        onValueChange={(enabled) => {
+          setPreserveApplePhotographicStyles(enabled);
+          if (enabled) setSaveAsJpeg(false);
+        }}
+      />
+      <View style={[styles.photoStylesImageFrame, { aspectRatio: 1206 / 828 }]}>
+        <Image
+          source={require("../../assets/images/photographic-styles-2.jpg")}
+          accessibilityLabel="Exemplo dos Estilos Fotográficos no Fotos da Apple"
+          resizeMode="contain"
+          style={styles.photoStylesImage}
+        />
+      </View>
+      {preserveApplePhotographicStyles && (
+        <>
+          <CustomToggle
+            badge="experimental"
+            grouped
+            last
+            label="Estilos Fotográficos 3"
+            description="Textura e grão em iPhones e versões do iOS compatíveis."
+            value={photographicStyles3Enabled}
+            onValueChange={setPhotographicStyles3Enabled}
+          />
+          <View style={[styles.photoStylesImageFrame, { aspectRatio: 1206 / 772 }]}>
+            <Image
+              source={require("../../assets/images/photographic-styles-3.jpg")}
+              accessibilityLabel="Exemplo das opções de textura dos Estilos Fotográficos 3"
+              resizeMode="contain"
+              style={styles.photoStylesImage}
+            />
+          </View>
+        </>
+      )}
+    </Section>
   );
 
   const renderIntelligence = () => (
@@ -577,6 +605,14 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
           value={compositionScanEnabled}
           onValueChange={setCompositionScanEnabled}
         />
+        <View style={[styles.photoStylesImageFrame, styles.scannerImageFrame]}>
+          <Image
+            source={require("../../assets/images/composition-scanner.jpg")}
+            accessibilityLabel="Exemplo do scanner de composição sugerindo um enquadramento"
+            resizeMode="contain"
+            style={styles.photoStylesImage}
+          />
+        </View>
         <CustomToggle
           grouped
           description="Grava palavras-chave em português nos metadados IPTC e XMP da foto."
@@ -858,6 +894,10 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
         return renderPreviews();
       case SETTINGS_PAGES.CAPTURE:
         return renderCapture();
+      case SETTINGS_PAGES.HEIF_PLUS:
+        return <HeifPlusSettings />;
+      case SETTINGS_PAGES.PHOTO_STYLES:
+        return renderPhotoStyles();
       case SETTINGS_PAGES.INTELLIGENCE:
         return renderIntelligence();
       case SETTINGS_PAGES.GESTURES:

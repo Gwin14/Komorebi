@@ -26,12 +26,15 @@ export default StyleSheet.create({
     opacity: 0.48,
   },
   label: {
+    flexShrink: 1,
     color: "#fff",
     fontSize: 16,
     fontWeight: "500",
     letterSpacing: 0.1,
   },
   labelRow: {
+    flexWrap: "wrap",
+    rowGap: 4,
     flexDirection: "row",
     alignItems: "center",
   },

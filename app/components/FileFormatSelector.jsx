@@ -95,8 +95,8 @@ export default function FileFormatSelector({
         {rawEnabled && processedEnabled
           ? photoFormat === "jpeg"
             ? "DNG + JPEG em uma única foto no Fotos."
-            : "DNG + HEIC em uma única foto no Fotos. HEIF+ preserva a revelação personalizada."
-          : "Ao desativar o último formato, o outro é ativado automaticamente."}
+            : "DNG + HEIC em uma única foto no Fotos."
+          : "Mantenha pelo menos um formato ativo."}
       </Text>
       {!rawAvailable && (
         <Text style={styles.description}>{unavailableReason}</Text>

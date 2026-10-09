@@ -41,6 +41,21 @@ export default StyleSheet.create({
     margin: "auto",
     borderRadius: 14,
   },
+  retroPreviewSpacing: {
+    marginBottom: 20,
+  },
+  retroPreviewTopSpacing: {
+    marginTop: 8,
+  },
+  retroTopBarBelow: {
+    alignSelf: "center",
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    margin: 0,
+  },
+  retroAdjustmentSpacing: {
+    marginBottom: 12,
+  },
   adjustmentControlsSlot: {
     width: "100%",
     height: 64,

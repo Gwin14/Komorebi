@@ -57,6 +57,9 @@ export default StyleSheet.create({
     right: 0,
     justifyContent: "center",
   },
+  retroLensSpacing: {
+    marginTop: 12,
+  },
   lensSlot: {
     width: "100%",
     height: 34,

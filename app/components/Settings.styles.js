@@ -1,6 +1,21 @@
 import { StyleSheet } from "react-native";
 
 export default StyleSheet.create({
+  photoStylesImage: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  photoStylesImageFrame: {
+    width: "70%",
+    maxWidth: 280,
+    alignSelf: "center",
+    marginVertical: 12,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: "#000",
+  },
+  scannerImageFrame: {
+    width: 200,
+    height: (200 * 1405) / 1032,
+    maxWidth: "100%",
+  },
   metadataField: {
     padding: 16,
     borderBottomColor: "#252525",

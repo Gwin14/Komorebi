@@ -1237,8 +1237,9 @@ export default function App() {
           startup={startup}
           kind="top"
           controlCount={topBarControls.length}
+          style={retroStyle && { width: previewDimensions.width, alignSelf: "center" }}
         >
-          <TopBar {...topBarProps} />
+          <TopBar {...topBarProps} retroStyle={retroStyle} />
         </CameraStartupControls>
       )}
 
@@ -1248,7 +1249,10 @@ export default function App() {
         <CameraStartupControls
           startup={startup}
           kind="viewfinder"
-          style={retroStyle && !topBarBelow && { marginTop: 8 }}
+          style={retroStyle && [
+            styles.retroPreviewSpacing,
+            !topBarBelow && styles.retroPreviewTopSpacing,
+          ]}
           viewfinderStyle={{
             width: previewDimensions.width,
             height: previewDimensions.height,
@@ -1409,18 +1413,23 @@ export default function App() {
         )}
 
       {topBarBelow && (
-        <View style={[styles.topBarBelow, retroStyle && { marginTop: 8 }]}>
+        <View style={[
+          styles.topBarBelow,
+          retroStyle && [styles.retroTopBarBelow, { width: previewDimensions.width }],
+        ]}>
           <CameraStartupControls
             startup={startup}
             kind="top"
             controlCount={topBarControls.length}
           >
-            <TopBar {...topBarProps} />
+            <TopBar {...topBarProps} retroStyle={retroStyle} />
           </CameraStartupControls>
         </View>
       )}
 
-      <CameraStartupControls startup={startup} kind="adjustment">
+      <CameraStartupControls startup={startup} kind="adjustment"
+        style={retroStyle && styles.retroAdjustmentSpacing}
+      >
         <Animated.View
           style={[
             styles.adjustmentControlsSlot,
@@ -1469,6 +1478,7 @@ export default function App() {
         lensCount={lenses.length}
       >
         <BottomControls
+          retroStyle={retroStyle}
           controlsAnim={controlsAnim}
           displayedControl={displayedControl}
           activeControl={activeControl}
