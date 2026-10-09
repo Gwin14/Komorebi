@@ -1,3 +1,4 @@
+import { AppState } from "react-native";
 import { configureDiagnostics } from "../utils/diagnostics";
 import { DEFAULT_CONTROL_GESTURES, normalizeControlGestures } from "../utils/controlGestures";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
@@ -167,7 +168,6 @@ export const SettingsProvider = ({ children }) => {
         setPhotoAuthor(savedSettings.photoAuthor);
         setPhotoCopyright(savedSettings.photoCopyright);
         setShutterSound(savedSettings.shutterSound);
-        setCaptureTimerSeconds(savedSettings.captureTimerSeconds);
         setLocation(savedSettings.location);
         setPhotoFormat(savedSettings.photoFormat);
         setHeifPlusSettings(savedSettings.heifPlusSettings);
@@ -331,13 +331,13 @@ export const SettingsProvider = ({ children }) => {
   }, [shutterSound, loading]);
 
   useEffect(() => {
-    if (!loading) {
-      void saveStoredSetting(
-        SETTINGS_STORAGE_KEYS.CAPTURE_TIMER_SECONDS,
-        String(captureTimerSeconds),
-      );
-    }
-  }, [captureTimerSeconds, loading]);
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "background") {
+        setCaptureTimerSeconds(0);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   // Preserva a chave legada para manter a preferência dos usuários atuais.
   useEffect(() => {
