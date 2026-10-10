@@ -9,12 +9,12 @@ function nodes(tree) {
   return [tree, ...nodes(tree.props?.children)];
 }
 
-function welcomeFixture(t, embedded = true) {
+function welcomeFixture(t, embedded = true, firstTime = false) {
   const hooks = createHooks();
   t.after(() => hooks.dispose());
   const animations = [];
   const calls = [];
-  const settings = { topBarControls: ["settings"], diagnosticsEnabled: true };
+  const settings = { firstTime, topBarControls: ["settings"], diagnosticsEnabled: true };
   for (const key of ["FirstTime", "GridVisible", "LevelVisible", "HistogramVisible", "TopBarBelow", "TopBarControls"])
     settings[`set${key}`] = value => calls.push([key, value]);
   const mocks = {
@@ -40,7 +40,7 @@ function welcomeFixture(t, embedded = true) {
     "react-native-safe-area-context": { useSafeAreaInsets: () => ({ top: 47, bottom: 34 }) },
     "../context/SettingsContext": { useSettings: () => settings },
     "./CustoToggle": { __esModule: true, default: "Toggle" },
-    "./TopBarControlList": { __esModule: true, default: "Controls" },
+    "./OnboardingControls": { __esModule: true, default: "OnboardingControls" },
     "./Welcome.styles": { __esModule: true, default: {} },
   };
   for (const name of ["ocean", "light", "bird", "motion", "palms"])
@@ -70,6 +70,18 @@ test("an interrupted closing fade still saves choices and completes replay once"
   assert.equal(f.calls.filter(([name]) => name === "complete").length, 1);
   assert.deepEqual(f.calls.find(([name]) => name === "FirstTime"), ["FirstTime", false]);
   assert.ok(f.calls.some(([name]) => name === "TopBarControls"));
+});
+
+test("first launch saves creative defaults while replay preserves the saved shortcuts", t => {
+  for (const firstTime of [true, false]) {
+    const f = welcomeFixture(t, true, firstTime);
+    f.finish()();
+    f.animations.at(-1).complete({ finished: true });
+    const saved = f.calls.find(([name]) => name === "TopBarControls")[1];
+    assert.deepEqual(saved, firstTime
+      ? ["luts", "vertical", "doubleCapture", "livePhoto", "timer", "settings"]
+      : ["settings"]);
+  }
 });
 
 test("leaving the screen cancels stale completion instead of navigating again", t => {
@@ -143,7 +155,7 @@ test("Rever apresentação opens its own route without changing first-launch sta
     "./ControlGestureSettings": { __esModule: true, default: "Gestures", CONTROL_GESTURE_FIELDS: [] },
     "./Settings.styles": { __esModule: true, default: {} },
   };
-  for (const name of ["ScreenHeader", "HeifPlusSettings", "CustomLUTItem", "CustoToggle", "TopBarControlList"])
+  for (const name of ["ScreenHeader", "HeifPlusSettings", "CustomLUTItem", "CustoToggle", "TopBarControlList", "SettingsTutorialCard"])
     mocks[`./${name}`] = { __esModule: true, default: name };
   const Settings = loadModule("app/components/Settings.jsx", mocks).default;
   const tree = hooks.render(() => Settings({ initialPage: "about" }));

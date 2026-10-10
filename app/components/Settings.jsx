@@ -36,6 +36,7 @@ import CustomLUTItem from "./CustomLUTItem";
 import CustomToggle from "./CustoToggle";
 import styles from "./Settings.styles";
 import TopBarControlList from "./TopBarControlList";
+import SettingsTutorialCard from "./SettingsTutorialCard";
 
 const ACCENT = "#ffaa00";
 export const SETTINGS_PAGES = {
@@ -264,7 +265,7 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
   const pageTitles = {
     [SETTINGS_PAGES.ROOT]: "Configurações",
     [SETTINGS_PAGES.CAMERA]: "Câmera",
-    [SETTINGS_PAGES.PREVIEWS]: "Previews",
+    [SETTINGS_PAGES.PREVIEWS]: "Prévia de efeitos",
     [SETTINGS_PAGES.CAPTURE]: "Captura e arquivos",
     [SETTINGS_PAGES.HEIF_PLUS]: "Revelação HEIF+",
     [SETTINGS_PAGES.PHOTO_STYLES]: "Estilos Fotográficos",
@@ -288,20 +289,24 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
 
   const renderRoot = () => (
     <>
+      <SettingsTutorialCard />
       <Section title="Fotografia">
         <MenuRow
           icon="camera-outline"
           label="Câmera"
+          description="Grade, nível e histograma"
           onPress={() => openPage(SETTINGS_PAGES.CAMERA)}
         />
         <MenuRow
           icon="eye-outline"
-          label="Previews"
+          label="Prévia de efeitos"
+          description="Efeitos na imagem ao vivo"
           onPress={() => openPage(SETTINGS_PAGES.PREVIEWS)}
         />
         <MenuRow
           icon="images-outline"
           label="Captura e arquivos"
+          description="Cópias, localização e autoria"
           onPress={() => openPage(SETTINGS_PAGES.CAPTURE)}
         />
         {Platform.OS === "ios" && (
@@ -309,7 +314,6 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
             icon="sparkles-outline"
             label="Recursos inteligentes"
             onPress={() => openPage(SETTINGS_PAGES.INTELLIGENCE)}
-            status={modelReady ? "Ativo" : "Opcional"}
           />
         )}
       </Section>
@@ -323,13 +327,11 @@ export default function Settings({ initialPage = SETTINGS_PAGES.ROOT, gestureFie
           icon="options-outline"
           label="Barra de controles"
           onPress={() => openPage(SETTINGS_PAGES.CONTROLS)}
-          status={`${topBarControls.length}/${TOP_BAR_MAX_CONTROLS}`}
         />
         <MenuRow
           icon="color-filter-outline"
           label="LUTs personalizados"
           onPress={() => openPage(SETTINGS_PAGES.LUTS)}
-          status={`${customLuts.length}`}
         />
       </Section>
       <Section title="Komorebi">

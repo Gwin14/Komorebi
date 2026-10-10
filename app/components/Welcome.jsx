@@ -23,14 +23,11 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { useSettings } from "../context/SettingsContext";
-import {
-  TOP_BAR_CONTROLS,
-  TOP_BAR_MAX_CONTROLS,
-  normalizeTopBarControls,
-} from "../utils/topBarControls";
+import { normalizeTopBarControls } from "../utils/topBarControls";
 import CustomToggle from "./CustoToggle";
 import styles from "./Welcome.styles";
-import TopBarControlList from "./TopBarControlList";
+import OnboardingControls from "./OnboardingControls";
+import { getOnboardingControlPresets } from "../utils/onboardingControlPresets";
 
 const FLOW = [
   {
@@ -59,9 +56,9 @@ const FLOW = [
   },
   {
     id: "topbar",
-    title: "Deixe por perto só o que importa.",
+    title: "Como você quer fotografar?",
     description:
-      "Selecione até 8 atalhos e organize a ordem em que eles aparecem.",
+      "Escolha um ponto de partida. Os atalhos ficam prontos para o seu jeito de criar.",
   },
   {
     id: "permissions",
@@ -320,88 +317,8 @@ function ViewfinderCustomizer({ draft, onChange }) {
   );
 }
 
-function TopBarCustomizer({ controls, onChange, onDragStateChange }) {
-  const selected = normalizeTopBarControls(controls);
-  const available = TOP_BAR_CONTROLS.filter(
-    (control) => !selected.includes(control.id),
-  );
-  const [draggingControl, setDraggingControl] = useState(false);
-
-  const remove = (controlId) => {
-    if (controlId === "settings") return;
-    onChange(selected.filter((id) => id !== controlId));
-  };
-
-  const add = (controlId) => {
-    if (selected.length >= TOP_BAR_MAX_CONTROLS) return;
-    onChange(normalizeTopBarControls([...selected, controlId]));
-  };
-
-  return (
-    <ScrollView
-      bounces={false}
-      overScrollMode="never"
-      scrollEnabled={!draggingControl}
-      nestedScrollEnabled
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.topBarScrollContent}
-      style={styles.customizerScroll}
-    >
-      <View style={styles.topBarCountRow}>
-        <Text style={styles.topBarSectionLabel}>ORDEM DOS ATALHOS</Text>
-        <Text style={styles.topBarCount}>
-          {selected.length}/{TOP_BAR_MAX_CONTROLS}
-        </Text>
-      </View>
-
-      <Text style={styles.reorderHint}>
-        Arraste pela alça à direita para mudar a ordem.
-      </Text>
-      <TopBarControlList
-        controls={selected}
-        onChange={onChange}
-        onRemove={remove}
-        onDragStateChange={(dragging) => {
-          setDraggingControl(dragging);
-          onDragStateChange(dragging);
-        }}
-      />
-
-      {available.length > 0 && (
-        <>
-          <Text style={styles.availableLabel}>ADICIONAR CONTROLES</Text>
-          <View style={styles.availableControls}>
-            {available.map((control) => {
-              const disabled = selected.length >= TOP_BAR_MAX_CONTROLS;
-              return (
-                <Pressable
-                  key={control.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Adicionar ${control.label}`}
-                  disabled={disabled}
-                  onPress={() => add(control.id)}
-                  style={({ pressed }) => [
-                    styles.availableControl,
-                    disabled && styles.availableControlDisabled,
-                    pressed && styles.buttonPressed,
-                  ]}
-                >
-                  <Ionicons name={control.icon} size={18} color="#ffaa00" />
-                  <Text style={styles.availableControlText}>
-                    {control.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </>
-      )}
-    </ScrollView>
-  );
-}
-
 function Slide({ item, width, height, safeTop, safeBottom, draft, onDraftChange,
-  onControlsChange, permissions, diagnosticsEnabled, onDiagnosticsChange }) {
+  onControlsChange, permissions, diagnosticsEnabled, onDiagnosticsChange, reduceMotion }) {
   const [draggingControl, setDraggingControl] = useState(false);
   const editorial = Boolean(PHOTOS[item.id]);
   return (
@@ -431,7 +348,7 @@ function Slide({ item, width, height, safeTop, safeBottom, draft, onDraftChange,
           <Text style={styles.description}>{item.description}</Text>
         </View>
         {item.id === "viewfinder" && <ViewfinderCustomizer draft={draft} onChange={onDraftChange} />}
-        {item.id === "topbar" && <TopBarCustomizer controls={draft.topBarControls} onChange={onControlsChange} onDragStateChange={setDraggingControl} />}
+        {item.id === "topbar" && <OnboardingControls reduceMotion={reduceMotion} controls={draft.topBarControls} onChange={onControlsChange} onDragStateChange={setDraggingControl} />}
         {item.id === "permissions" && <PermissionsStep permissions={permissions} />}
         {item.id === "beta" && <BetaStep diagnosticsEnabled={diagnosticsEnabled} onDiagnosticsChange={onDiagnosticsChange} />}
       </ScrollView>
@@ -451,6 +368,7 @@ export default function Welcome({ permissions, embedded = false, onComplete }) {
   const screenTranslateY = useRef(new Animated.Value(10)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
   const {
+    firstTime,
     gridVisible,
     setGridVisible,
     levelVisible,
@@ -470,7 +388,9 @@ export default function Welcome({ permissions, embedded = false, onComplete }) {
     levelVisible,
     histogramVisible,
     topBarBelow,
-    topBarControls: normalizeTopBarControls(topBarControls),
+    topBarControls: firstTime
+      ? [...getOnboardingControlPresets().find((preset) => preset.id === "creative").controls]
+      : normalizeTopBarControls(topBarControls),
   }));
   const isLastSlide = currentIndex === FLOW.length - 1;
   const safeTop =
@@ -617,6 +537,7 @@ export default function Welcome({ permissions, embedded = false, onComplete }) {
                 item={item}
                 width={width}
                 height={height}
+                reduceMotion={reduceMotion}
                 safeTop={safeTop}
                 safeBottom={safeBottom}
                 diagnosticsEnabled={diagnosticsEnabled}
